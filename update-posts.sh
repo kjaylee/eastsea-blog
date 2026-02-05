@@ -38,13 +38,36 @@ const posts = files.map(filename => {
     w.charAt(0).toUpperCase() + w.slice(1)
   ).join(' ');
   
-  // Read first meaningful line for excerpt
+  // Read content and skip front matter
   const content = fs.readFileSync(path.join(postsDir, filename), 'utf8');
-  const lines = content.split('\n')
-    .map(l => l.trim())
-    .filter(l => l && !l.startsWith('#') && !l.startsWith('---'));
+  let lines = content.split('\n');
   
-  const excerpt = lines[0] ? lines[0].substring(0, 150) + '...' : 'Read more...';
+  // Remove front matter (between --- and ---)
+  let inFrontMatter = false;
+  let frontMatterEnded = false;
+  const contentLines = [];
+  
+  for (const line of lines) {
+    if (line.trim() === '---') {
+      if (!frontMatterEnded) {
+        inFrontMatter = !inFrontMatter;
+        if (!inFrontMatter) frontMatterEnded = true;
+      }
+      continue;
+    }
+    if (!inFrontMatter && frontMatterEnded) {
+      contentLines.push(line);
+    }
+  }
+  
+  // Get first meaningful line for excerpt
+  const meaningfulLines = contentLines
+    .map(l => l.trim())
+    .filter(l => l && !l.startsWith('#'));
+  
+  const excerpt = meaningfulLines[0] 
+    ? meaningfulLines[0].substring(0, 150).replace(/[*_]/g, '') + '...'
+    : '더 읽기...';
   
   return { filename, date, category, title, excerpt };
 }).filter(p => p !== null);

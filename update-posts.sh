@@ -26,29 +26,38 @@ const posts = files.map(filename => {
   const [, year, month, day, rest] = match;
   const date = `${year}-${month}-${day}`;
   
-  const parts = rest.split('-');
-  let category = 'journal';
-  let slug = rest;
+  // Detect category from filename (search for keywords anywhere)
+  let category = 'journal'; // default
+  if (rest.includes('briefing')) category = 'briefing';
+  else if (rest.includes('digest')) category = 'digest';
+  else if (rest.includes('report')) category = 'report';
+  else if (rest.includes('diary')) category = 'journal';
   
-  if (['briefing', 'report', 'journal', 'digest'].includes(parts[0])) {
-    category = parts[0];
-    slug = rest;
-  }
-  
+  // Convert slug to title
   const title = rest.split('-').map(w => 
     w.charAt(0).toUpperCase() + w.slice(1)
   ).join(' ');
   
-  // Read first 200 chars for excerpt
+  // Read first meaningful line for excerpt
   const content = fs.readFileSync(path.join(postsDir, filename), 'utf8');
-  const lines = content.split('\n').filter(l => l.trim() && !l.startsWith('#'));
+  const lines = content.split('\n')
+    .map(l => l.trim())
+    .filter(l => l && !l.startsWith('#') && !l.startsWith('---'));
+  
   const excerpt = lines[0] ? lines[0].substring(0, 150) + '...' : 'Read more...';
   
-  return { filename, date, category, title, slug, excerpt };
+  return { filename, date, category, title, excerpt };
 }).filter(p => p !== null);
 
 fs.writeFileSync('posts.json', JSON.stringify(posts, null, 2));
 console.log(`✅ Generated posts.json with ${posts.length} posts`);
+
+// Category stats
+const stats = posts.reduce((acc, p) => {
+  acc[p.category] = (acc[p.category] || 0) + 1;
+  return acc;
+}, {});
+console.log('📊 Categories:', JSON.stringify(stats));
 EOF
 
 echo "📦 Git add + commit + push..."

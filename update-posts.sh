@@ -30,28 +30,32 @@ const posts = files.map(filename => {
   const content = fs.readFileSync(path.join(postsDir, filename), 'utf8');
   let lines = content.split('\n');
   
-  // Parse front matter
+  // Parse front matter - handle both simple and array formats
   let frontMatter = {};
   let inFrontMatter = false;
-  let frontMatterEnded = false;
+  let frontMatterCount = 0;
   const contentLines = [];
   
   for (const line of lines) {
     if (line.trim() === '---') {
-      if (!frontMatterEnded) {
-        inFrontMatter = !inFrontMatter;
-        if (!inFrontMatter) frontMatterEnded = true;
+      frontMatterCount++;
+      if (frontMatterCount === 1) {
+        inFrontMatter = true;
+      } else if (frontMatterCount === 2) {
+        inFrontMatter = false;
       }
       continue;
     }
     
     if (inFrontMatter) {
+      // Parse YAML front matter (handle both simple and array)
       const fmMatch = line.match(/^(\w+):\s*(.+)$/);
       if (fmMatch) {
         const [, key, value] = fmMatch;
-        frontMatter[key] = value.replace(/^["']|["']$/g, '');
+        // Remove quotes and brackets
+        frontMatter[key] = value.replace(/^["'\[]|["'\]]$/g, '').split(',')[0].trim();
       }
-    } else if (frontMatterEnded) {
+    } else if (frontMatterCount >= 2) {
       contentLines.push(line);
     }
   }
@@ -85,14 +89,34 @@ const posts = files.map(filename => {
     w.charAt(0).toUpperCase() + w.slice(1)
   ).join(' ');
   
-  // Get first meaningful line for excerpt
+  // Get first meaningful paragraph (skip headers and short lines)
   const meaningfulLines = contentLines
     .map(l => l.trim())
-    .filter(l => l && !l.startsWith('#') && l.length > 20);
+    .filter(l => {
+      // Skip empty, headers, hr, and very short lines
+      if (!l || l.startsWith('#') || l === '---' || l.length < 30) return false;
+      // Skip lines that look like metadata
+      if (l.match(/^(layout|title|date|categories|tags):/)) return false;
+      return true;
+    });
   
-  const excerpt = meaningfulLines[0] 
-    ? meaningfulLines[0].substring(0, 120).replace(/[*_`]/g, '').trim() + '...'
-    : '더 읽기...';
+  // Get first paragraph or blockquote
+  let excerpt = '더 읽기...';
+  for (const line of meaningfulLines) {
+    if (line.startsWith('>')) {
+      excerpt = line.substring(1).trim();
+      break;
+    } else if (line.length > 30) {
+      excerpt = line;
+      break;
+    }
+  }
+  
+  // Clean up and truncate
+  excerpt = excerpt
+    .substring(0, 120)
+    .replace(/[*_`\[\]]/g, '')
+    .trim() + '...';
   
   return { filename, date, category, title, excerpt };
 }).filter(p => p !== null);

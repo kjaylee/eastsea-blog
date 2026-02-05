@@ -46,7 +46,6 @@ const posts = files.map(filename => {
     }
     
     if (inFrontMatter) {
-      // Parse front matter key-value
       const fmMatch = line.match(/^(\w+):\s*(.+)$/);
       if (fmMatch) {
         const [, key, value] = fmMatch;
@@ -57,23 +56,31 @@ const posts = files.map(filename => {
     }
   }
   
-  // Detect category
-  let category = 'journal'; // default
+  // Detect category with more granularity
+  let category = 'other'; // default
+  
+  // Check front matter first
   if (frontMatter.categories) {
     const cats = frontMatter.categories.toLowerCase();
     if (cats.includes('briefing')) category = 'briefing';
     else if (cats.includes('digest')) category = 'digest';
     else if (cats.includes('report')) category = 'report';
     else if (cats.includes('diary') || cats.includes('journal')) category = 'journal';
-  } else {
-    // Fallback to filename
+    else if (cats.includes('research')) category = 'research';
+  }
+  
+  // If not found in front matter, check filename
+  if (category === 'other') {
     if (rest.includes('briefing')) category = 'briefing';
     else if (rest.includes('digest')) category = 'digest';
     else if (rest.includes('report')) category = 'report';
     else if (rest.includes('diary')) category = 'journal';
+    else if (rest.includes('polish')) category = 'polish';
+    else if (rest.includes('upgrade')) category = 'upgrade';
+    else if (rest.includes('research')) category = 'research';
   }
   
-  // Use front matter title if available, otherwise convert filename
+  // Use front matter title if available
   let title = frontMatter.title || rest.split('-').map(w => 
     w.charAt(0).toUpperCase() + w.slice(1)
   ).join(' ');
@@ -98,7 +105,7 @@ const stats = posts.reduce((acc, p) => {
   acc[p.category] = (acc[p.category] || 0) + 1;
   return acc;
 }, {});
-console.log('📊 Categories:', JSON.stringify(stats));
+console.log('📊 Categories:', JSON.stringify(stats, null, 4));
 EOF
 
 echo "📦 Git add + commit + push..."

@@ -232,7 +232,7 @@ end
 ## 4. Python 자동 감지 구현
 
 ### 4.1 구현 위치
-- **프로토타입**: `/Users/kjaylee/clawd/scripts/auto-9slice.py`
+- **프로토타입**: `~/workspace/scripts/auto-9slice.py`
 - **의존성**: Pillow (PIL), numpy (선택: OpenCV)
 
 ### 4.2 핵심 함수

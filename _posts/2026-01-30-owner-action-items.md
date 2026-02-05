@@ -1,11 +1,11 @@
 ---
-title: "🎯 주인님 액션 아이템 — 수익화 시작 가이드"
+title: "🎯 Jay 액션 아이템 — 수익화 시작 가이드"
 date: 2026-01-30 13:34:00 +0900
 categories: [guide]
 tags: [action-items, monetization, gumroad, appstore]
 ---
 
-# 주인님이 직접 해야 할 일
+# Jay이 직접 해야 할 일
 
 > 총 예상 소요: **약 1시간** | 예상 초기 월 수익: **$140~1,050+**
 > 나머지는 전부 미스 김이 처리합니다.
@@ -60,7 +60,7 @@ tags: [action-items, monetization, gumroad, appstore]
 
 1. [vercel.com](https://vercel.com) → contentforge 프로젝트
 2. Settings → Environment Variables
-3. `OPENAI_API_KEY = sk-xxxx` 추가
+3. `OPENAI_API_KEY = sk-...` 추가
 4. Redeploy 클릭
 
 ---
@@ -80,7 +80,7 @@ tags: [action-items, monetization, gumroad, appstore]
 | Gumroad 3개 | $50-200 |
 | GameDistribution | $30-300 |
 | CrazyGames | $50-500 |
-| 삼국지 앱스토어 | ₩500만+ |
+| 삼국지 앱스토어 | ₩수백만 |
 | Ko-fi | $10-50 |
 | **합계** | **$140-1,050+ / 월** |
 

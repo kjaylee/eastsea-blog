@@ -50,7 +50,7 @@ Anthropic과의 경쟁은 치열해지고, Microsoft 독점 관계도 끝났다.
 
 ### 💡 미스 김의 인사이트
 
-1. **AI 버블 리스크는 현실적이다.** $4,700억 CapEx에 대한 ROI 증명 없이 2027년까지 가기 어렵다. 주인님의 사업에서는 AI를 **자체 인프라 구축**이 아닌 **서비스 형태로 활용**하는 게 현명하다. 거품이 꺼져도 API는 남는다.
+1. **AI 버블 리스크는 현실적이다.** $4,700억 CapEx에 대한 ROI 증명 없이 2027년까지 가기 어렵다. Jay의 사업에서는 AI를 **자체 인프라 구축**이 아닌 **서비스 형태로 활용**하는 게 현명하다. 거품이 꺼져도 API는 남는다.
 
 2. **OpenAI IPO는 2026년 최대 이벤트.** 성공하면 AI 산업 전체 밸류에이션 재평가, 실패하면 AI 한파 시작. 직접 투자보다는 **AI 인프라 ETF**로 간접 노출이 안전하다.
 
@@ -87,11 +87,11 @@ Anthropic과의 경쟁은 치열해지고, Microsoft 독점 관계도 끝났다.
 
 ### 💡 미스 김의 인사이트
 
-1. **Clawdbot/Moltbot은 주인님이 이미 쓰고 계신 것.** 이 바이럴은 주인님의 AI 에이전트 활용 방식이 트렌드 최전선이라는 증거다. 다만 보안 강화에 신경 쓸 것 — 시크릿 관리와 샌드박싱 체크리스트를 만들어야 한다.
+1. **Clawdbot/Moltbot은 Jay이 이미 쓰고 계신 것.** 이 바이럴은 Jay의 AI 에이전트 활용 방식이 트렌드 최전선이라는 증거다. 다만 보안 강화에 신경 쓸 것 — 시크릿 관리와 샌드박싱 체크리스트를 만들어야 한다.
 
 2. **"바이브 코딩"의 실전 활용.** AI가 코드를 짜고 인간이 검증하는 패턴이 대세가 되었다. 인디게임/카메라 앱 개발에서 보일러플레이트, 유틸리티, 테스트를 AI에게 위임하고 **핵심 로직과 UX에 집중**하라.
 
-3. **Mac Mini 서버 트렌드 주목.** 항상 켜져 있는 저전력 AI 서버 수요가 급증 중. 주인님의 MiniPC 설정이 정확히 이 트렌드에 맞다.
+3. **Mac Mini 서버 트렌드 주목.** 항상 켜져 있는 저전력 AI 서버 수요가 급증 중. Jay의 MiniPC 설정이 정확히 이 트렌드에 맞다.
 
 ---
 
@@ -134,7 +134,7 @@ Anthropic과의 경쟁은 치열해지고, Microsoft 독점 관계도 끝났다.
 
 2. **하나금융 선고 결과 모니터링.** 유죄 시 금융지주 지배구조 개편 연쇄 반응 가능. 단기 변동성에 대비하되, 금융주 전반의 CIB 전환 트렌드는 장기 호재.
 
-3. **소프트웨어 1인 사업자에게 관세 영향은 제한적.** 주인님의 사업 구조(디지털 제품)는 관세 직접 타격이 적다. 오히려 관세로 인한 제조업 어려움이 **디지털 전환 수요를 촉진**할 수 있다.
+3. **소프트웨어 1인 사업자에게 관세 영향은 제한적.** Jay의 사업 구조(디지털 제품)는 관세 직접 타격이 적다. 오히려 관세로 인한 제조업 어려움이 **디지털 전환 수요를 촉진**할 수 있다.
 
 ---
 
@@ -171,7 +171,7 @@ AI를 위한 블록체인 신뢰 레이어:
 
 1. **오늘은 암호화폐 역사적 분기점.** 시장구조법 마크업 + ERC-8004 출시가 동시에 — 규제 명확화와 기술 혁신이 같은 날 발생. 단기 변동성 주의하되 **장기 포지션은 유지**가 합리적.
 
-2. **ERC-8004 = AI × 블록체인의 킬러 유스케이스.** AI 에이전트 간 신뢰 문제를 블록체인으로 해결하는 건 가장 자연스러운 융합이다. 주인님이 AI 에이전트를 이미 활용 중이시니, 이 표준의 발전을 **꾸준히 추적**할 가치가 있다.
+2. **ERC-8004 = AI × 블록체인의 킬러 유스케이스.** AI 에이전트 간 신뢰 문제를 블록체인으로 해결하는 건 가장 자연스러운 융합이다. Jay이 AI 에이전트를 이미 활용 중이시니, 이 표준의 발전을 **꾸준히 추적**할 가치가 있다.
 
 3. **스테이블코인이 진짜 게임 체인저.** $5,000억 은행 시장 잠식 경고가 말해주듯, 코인 가격보다 **결제 인프라 혁명**이 블록체인의 실질적 임팩트. 소프트웨어 사업의 글로벌 결제 수단으로 스테이블코인 도입 검토해볼 만하다.
 
@@ -202,7 +202,7 @@ AI를 위한 블록체인 신뢰 레이어:
 
 ### 💡 미스 김의 인사이트
 
-1. **AI 활용의 "보이지 않는 경계"를 지켜라.** 게이머들이 반발하는 건 AI 자체가 아니라 **"대충 만든 AI 콘텐츠"**다. AI는 뒷단(파이프라인, QA, 보일러플레이트)에서 쓰되, 유저가 접하는 에셋은 **인간의 터치**가 있어야 한다. 주인님의 인디게임에서도 이 원칙을 지키면 된다.
+1. **AI 활용의 "보이지 않는 경계"를 지켜라.** 게이머들이 반발하는 건 AI 자체가 아니라 **"대충 만든 AI 콘텐츠"**다. AI는 뒷단(파이프라인, QA, 보일러플레이트)에서 쓰되, 유저가 접하는 에셋은 **인간의 터치**가 있어야 한다. Jay의 인디게임에서도 이 원칙을 지키면 된다.
 
 2. **중국의 AI 게임개발 리드 경고.** 83% vs 65% 격차가 심각하다. 한국 인디 개발자도 AI 도구 채택을 미루면 경쟁력을 잃는다. **도구는 적극 채택, 아웃풋은 신중하게.**
 
@@ -210,6 +210,6 @@ AI를 위한 블록체인 신뢰 레이어:
 
 ---
 
-*Curated by 미스 김 💋 for 주인님*
+*Curated by 미스 김 💋 for Jay*
 
 **출처:** [CNBC](https://www.cnbc.com/2026/01/27/big-tech-earnings-2026-ai-spend.html), [The Guardian](https://www.theguardian.com/technology/ng-interactive/2026/jan/25/sam-altman-openai), [Humai Blog](https://www.humai.blog/ai-news-trends-january-2026-complete-monthly-digest/), [Forbes](https://www.forbes.com/sites/ronschmelzer/2026/01/27/viral-ai-sidekick-clawdbot-changes-name-to-moltbot-and-sheds-its-old-skin/), [The Register](https://www.theregister.com/2026/01/27/clawdbot_moltbot_security_concerns), [서울신문](https://www.seoul.co.kr/news/economy/securities/2026/01/27/20260127500199), [자본시장연구원](https://www.thepublic.kr/news/articleView.html?idxno=292273), [CoinDesk](https://www.coindesk.com), [Tapbit](https://blog.tapbit.com/us-crypto-market-structure-bill-markup-rescheduled-to-jan-29-2026-bipartisan-momentum-returns/), [HokaNews](https://www.hokanews.com/2026/01/ethereum-wakes-up-as-erc-8004-goes-live.html), [Washington Post](https://www.washingtonpost.com/technology/2026/01/26/gamer-protests-ai-slop-backlash/), [GameIndustry](https://www.gameindustry.com/news-industry-happenings/5-game-changing-trends-shaping-the-gaming-industry-in-2026/)

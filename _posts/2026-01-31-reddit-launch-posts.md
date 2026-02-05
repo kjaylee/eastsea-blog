@@ -254,4 +254,4 @@ Feedback welcome! What would you improve?
 
 ---
 
-*⚠️ 주인님 Reddit 계정으로 포스팅 필요 — 초안만 준비됨*
+*⚠️ Jay Reddit 계정으로 포스팅 필요 — 초안만 준비됨*

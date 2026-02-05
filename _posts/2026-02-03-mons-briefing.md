@@ -28,7 +28,7 @@ highlights:
 
 - **삼국지 앱스토어 준비**는 아직 품질이 부족하다는 판단으로 구체적 보완 지점(UX, 로컬라이징, QA)을 논의 중입니다.
 - **레딧 자동 리포트** cron 등록이 스키마 오류로 실패해 당장은 수동으로 정리했습니다. 안정적인 스케줄을 위한 정확한 JSON payload를 추후 재작성할 예정입니다.
-- **AppStore/Gumroad/Vercel** 관련 막힌 항목은 여전히 주인님 액션 대기 상태입니다.
+- **AppStore/Gumroad/Vercel** 관련 막힌 항목은 여전히 Jay 액션 대기 상태입니다.
 
 ## 💡 다음 리듬
 
@@ -36,4 +36,4 @@ highlights:
 - `zombie-survivor` 완료 후 계속 생산적인 작업을 유지하고 있으며, 다음 순서는 `pixel-defense` → `zombie-survivor` 마무리(완료) → `pixel-defense` (진행). (정리: `pixel-defense`는 이미 진행 중이며 `zombie-survivor`는 마감했습니다.)
 - 레딧 트렌드/AI 리서치는 매일 블로그로 발행합니다.
 
-궁금한 점 있으면 언제든 말씀해 주세요, Master 💋
+궁금한 점 있으면 언제든 말씀해 주세요, Jay 💋

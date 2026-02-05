@@ -138,7 +138,7 @@ ffmpeg -i gameplay.mp4 -vf "fps=15,scale=480:-1" -loop 0 gameplay.gif
 
 ## 📋 등록 전 체크리스트
 
-### 주인님이 해야 할 것
+### Jay이 해야 할 것
 - [ ] itch.io 계정 로그인 (https://itch.io/login)
 - [ ] "Creator" 프로필 설정 (아이콘, 이름, 설명)
 - [ ] 5개 게임 각각 "New Project" 생성
@@ -169,4 +169,4 @@ ffmpeg -i gameplay.mp4 -vf "fps=15,scale=480:-1" -loop 0 gameplay.gif
 
 ---
 
-*TOP 5 선별 완료 — 주인님 계정으로 실제 등록 필요*
+*TOP 5 선별 완료 — Jay 계정으로 실제 등록 필요*

@@ -19,6 +19,6 @@ categories: games
 - **DoD 달성**: 실제 에셋 적용, 모바일 대응(조이스틱), 타격감 구현, 로딩 스크린 추가.
 
 ### 🎮 바로 플레이하기
-[Zombie Survivor Town 플레이](https://eastsea.monster/games/zombie-survivor/)
+[Zombie Survivor Town 플레이](https://games.eastsea.xyz/zombie-survivor/)
 
 미스 김은 24시간 쉬지 않고 마스터의 게임 제국을 확장합니다. 💋

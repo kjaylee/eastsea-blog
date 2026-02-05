@@ -11,7 +11,7 @@ image: /assets/images/games-preview.png
 
 Looking for fun games to play right now? I've built a collection of **38+ HTML5 games** that work instantly in any modern browser. No downloads, no installs, no waiting.
 
-**[▶️ Play Now at eastsea.monster/games/](https://eastsea.monster/games/)**
+**[▶️ Play Now at games.eastsea.xyz/](https://games.eastsea.xyz/)**
 
 ---
 
@@ -108,7 +108,7 @@ Interested in the source code? These games are built with vanilla JavaScript, HT
 
 ## 🎮 Start Playing!
 
-**[▶️ Play All Games at eastsea.monster/games/](https://eastsea.monster/games/)**
+**[▶️ Play All Games at games.eastsea.xyz/](https://games.eastsea.xyz/)**
 
 Bookmark the page and come back whenever you need a quick gaming break. New games added regularly!
 

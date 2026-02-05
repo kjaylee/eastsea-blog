@@ -38,7 +38,7 @@ Hey r/WebGames!
 
 I've been building HTML5 games as a solo dev and just hit 42 games on my arcade:
 
-🎮 **Play here:** https://eastsea.monster/games/
+🎮 **Play here:** https://games.eastsea.xyz/
 
 All games are:
 - 100% free, no ads, no login
@@ -48,19 +48,19 @@ All games are:
 **My top 5 picks to start with:**
 
 🗡️ **Slime Survivor Premium** — Vampire Survivors in your browser. Full progression, boss fights, daily challenges
-→ https://eastsea.monster/games/slime-survivor-premium/
+→ https://games.eastsea.xyz/slime-survivor-premium/
 
 🔵 **Ball Sort Puzzle** — 150+ procedurally generated levels. Surprisingly addictive color sorting
-→ https://eastsea.monster/games/ball-sort/
+→ https://games.eastsea.xyz/ball-sort/
 
 🍣 **Sushi Sprint** — Run a sushi bar! 11 recipes, wave system, shop upgrades
-→ https://eastsea.monster/games/sushi-sprint/
+→ https://games.eastsea.xyz/sushi-sprint/
 
 🔢 **Power 2048** — Classic 2048 with 5 powerups (bomb, freeze, double, undo, sniper). 3 game modes
-→ https://eastsea.monster/games/power-2048/
+→ https://games.eastsea.xyz/power-2048/
 
 🍉 **Fruit Merge Drop** — Suika-style physics merge puzzle. Can you make the watermelon?
-→ https://eastsea.monster/games/fruit-merge-drop/
+→ https://games.eastsea.xyz/fruit-merge-drop/
 
 **Other genres covered:** Tower defense, rhythm, mahjong, idle/merge, fishing sim, factory builder, golf, and more.
 
@@ -90,7 +90,7 @@ Hey r/IndieGaming!
 
 I just released my flagship game — **Slime Survivor Premium**, a Vampire Survivors-style roguelike that runs entirely in your browser.
 
-🎮 **Play now:** https://eastsea.monster/games/slime-survivor-premium/
+🎮 **Play now:** https://games.eastsea.xyz/slime-survivor-premium/
 
 **Features:**
 - 🗡️ Auto-attack roguelike — survive waves of enemies
@@ -103,7 +103,7 @@ I just released my flagship game — **Slime Survivor Premium**, a Vampire Survi
 
 **Tech:** Single HTML file, vanilla JS + Canvas. No frameworks, no build tools.
 
-It's part of my 42-game arcade (https://eastsea.monster/games/) — all free, no ads.
+It's part of my 42-game arcade (https://games.eastsea.xyz/) — all free, no ads.
 
 **I'd love feedback on:**
 - Difficulty curve — too easy/hard?
@@ -130,7 +130,7 @@ Hi everyone!
 
 I'm a solo dev who's been making HTML5 casual games. I've built 42 so far and I honestly need outside perspective on which ones are worth developing further.
 
-🎮 **Full arcade:** https://eastsea.monster/games/
+🎮 **Full arcade:** https://games.eastsea.xyz/
 
 All free, no install, no login — just click and play in your browser.
 
@@ -163,7 +163,7 @@ Thanks in advance! 🙏
 ```
 Built 42 casual games, each as a single HTML file using vanilla JavaScript and Canvas API. No React, no Phaser, no build step.
 
-🎮 https://eastsea.monster/games/
+🎮 https://games.eastsea.xyz/
 
 **Tech highlights:**
 - Single HTML file per game (everything inlined)
@@ -194,7 +194,7 @@ Been building HTML5 casual games as a solo dev hobby. Each game is a single HTML
 
 [Screenshot/GIF collage of 4-6 games]
 
-🎮 Play all 42: https://eastsea.monster/games/
+🎮 Play all 42: https://games.eastsea.xyz/
 
 Highlights:
 - Slime Survivor Premium (Vampire Survivors-style)

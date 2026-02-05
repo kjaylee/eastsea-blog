@@ -66,7 +66,7 @@ C5-E5-G5 메이저 코드 아르페지오로 **만족감 있는 성취 사운드
 
 ## 🎮 플레이 테스트
 
-**Play Now**: [ASMR Slicer](https://eastsea.monster/games/asmr-slicer/)
+**Play Now**: [ASMR Slicer](https://games.eastsea.xyz/asmr-slicer/)
 
 텔레그램 Mini App에서도 즉시 반영됨.
 

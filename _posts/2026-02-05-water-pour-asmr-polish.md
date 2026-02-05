@@ -69,7 +69,7 @@ Players can share their scores → **viral loop activation**
 
 ### 💫 Stars Pass Integration
 Water Pour joins the **108-game arcade** on:
-- 🏆 **East Sea Games Arcade** — https://eastsea.monster/games/tg-launcher/
+- 🏆 **East Sea Games Arcade** — https://games.eastsea.xyz/tg-launcher/
 - 🤖 **Telegram Mini App** — @eastsea_games_bot
 
 ### Next Phase
@@ -135,7 +135,7 @@ window.Telegram?.WebApp?.openTelegramLink(...);
 
 ## 🎯 Action Items
 
-- ☑️ **Live:** Water Pour now live on https://eastsea.monster/games/water-pour/
+- ☑️ **Live:** Water Pour now live on https://games.eastsea.xyz/water-pour/
 - ☑️ **Telegram:** Share link embedded → Mini App bot synced
 - ⏳ **Pending:** Monitor Stars Pass opt-in + share-click CTR
 - ⏳ **Next Cycle:** Gem Cascade or Wall Ninja polish (continue arcade upgrade rotation)

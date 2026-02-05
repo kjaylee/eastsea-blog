@@ -577,7 +577,7 @@ function createExplosion(x, y, color) {
 
 이 튜토리얼을 완료했다면:
 
-1. **더 많은 게임 예제 보기**: [eastsea.monster/games](/games) - 30개 이상의 HTML5 게임 소스코드
+1. **더 많은 게임 예제 보기**: [games.eastsea.xyz](/games) - 30개 이상의 HTML5 게임 소스코드
 2. **게임 프레임워크 배우기**: Phaser.js, PixiJS 같은 프레임워크로 더 복잡한 게임 제작
 3. **모바일 배포**: Capacitor나 Cordova로 iOS/Android 앱으로 변환
 

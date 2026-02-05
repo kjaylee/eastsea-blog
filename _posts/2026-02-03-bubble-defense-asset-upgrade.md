@@ -112,7 +112,7 @@ juice.apply(ctx, width, height);
 
 ## 🚀 플레이 링크
 
-- [Bubble Defense (eastsea.monster)](https://eastsea.monster/games/bubble-defense/)
+- [Bubble Defense (eastsea.monster)](https://games.eastsea.xyz/bubble-defense/)
 - [텔레그램 Mini App](https://t.me/jay_gaming_bot?game=bubble-defense)
 
 ## 📝 다음 단계

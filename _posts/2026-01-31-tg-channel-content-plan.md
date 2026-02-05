@@ -27,7 +27,7 @@ layout: post
 📱 No install needed · Mobile friendly
 🎯 New games & updates every week
 
-▶️ Play now: eastsea.monster/games
+▶️ Play now: games.eastsea.xyz
 🤖 Bot: @EastSeaGamesBot
 ```
 - **아이콘:** 게임 아케이드 로고 (현재 사이트 아이콘 활용)
@@ -55,7 +55,7 @@ layout: post
 🔢 Power 2048 — 2048 with superpowers
 🍉 Fruit Merge Drop — Suika-style physics puzzle
 
-▶️ Play all: eastsea.monster/games
+▶️ Play all: games.eastsea.xyz
 🤖 Or start from our bot: @EastSeaGamesBot
 
 Genres: Puzzle, Action, Arcade, Simulation, Rhythm, Strategy, Sports
@@ -67,7 +67,7 @@ All games are FREE • No ads • Mobile friendly
 
 **인라인 버튼:**
 ```
-[🎮 Play Now] → https://eastsea.monster/games/
+[🎮 Play Now] → https://games.eastsea.xyz/
 [🤖 Start Bot] → https://t.me/EastSeaGamesBot
 ```
 
@@ -86,7 +86,7 @@ Our flagship game! A Vampire Survivors-style roguelike in your browser.
 📅 Daily challenges
 🏆 Leaderboard — compete with friends!
 
-▶️ Play: eastsea.monster/games/slime-survivor-premium/
+▶️ Play: games.eastsea.xyz/slime-survivor-premium/
 
 💬 What's your highest wave? Share below!
 
@@ -195,7 +195,7 @@ Happy weekend! 🎉
 
 📈 Growing! Thank you all! 💙
 
-Did you miss any? ▶️ eastsea.monster/games/
+Did you miss any? ▶️ games.eastsea.xyz/
 ```
 
 ### 일요일 — 쉬는 날 또는 가벼운 콘텐츠
@@ -209,7 +209,7 @@ Perfect games for a relaxing Sunday:
 🎣 Fishing Tycoon — Cast your line
 🌸 Rope Untangle — ASMR vibes
 
-▶️ eastsea.monster/games/
+▶️ games.eastsea.xyz/
 
 #SundayGaming
 ```

@@ -38,7 +38,7 @@ tags: [idle-hero, asset-upgrade, pixel-art, fantasy]
 
 ## 🎮 플레이
 
-[Idle Hero 바로 플레이](https://eastsea.monster/games/idle-hero/)
+[Idle Hero 바로 플레이](https://games.eastsea.xyz/idle-hero/)
 
 ---
 

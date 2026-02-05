@@ -372,7 +372,7 @@ Reddit의 게임 관련 서브레딧에 런칭 포스트를 올립니다.
 ---
 
 **관련 링크**:
-- [East Sea Games 포트폴리오](https://eastsea.monster/games)
+- [East Sea Games 포트폴리오](https://games.eastsea.xyz)
 - [텔레그램 게임 봇](https://t.me/EastSeaGamesBot)
 
 **태그**: #indie-game-dev #monetization #html5-games #action-plan

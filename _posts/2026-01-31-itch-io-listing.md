@@ -30,7 +30,7 @@ layout: post
 
 | 항목 | 내용 |
 |------|------|
-| **URL** | `https://eastsea.monster/games/slime-survivor-premium/` |
+| **URL** | `https://games.eastsea.xyz/slime-survivor-premium/` |
 | **장르** | Action / Roguelike / Vampire Survivors-like |
 | **설명 (EN)** | ⭐ Flagship title! A premium Vampire Survivors-style game with full progression, character unlocks, boss fights, daily challenges, sound, leaderboard, and sharing. Survive waves of enemies, level up, and become the ultimate Slime Survivor! |
 | **설명 (KO)** | ⭐ 플래그십! 뱀서라이크 프리미엄 에디션 — 프로그레션, 캐릭터 해금, 보스, 데일리 챌린지, 사운드, 리더보드, 공유 기능까지! |
@@ -56,7 +56,7 @@ layout: post
 
 | 항목 | 내용 |
 |------|------|
-| **URL** | `https://eastsea.monster/games/ball-sort/` |
+| **URL** | `https://games.eastsea.xyz/ball-sort/` |
 | **장르** | Puzzle / Casual |
 | **설명 (EN)** | Addictive ball sorting puzzle with 150+ procedurally generated levels! Sort colored balls into tubes — simple rules, deep strategy. Pastel healing design, undo/hint/star system. Perfect for relaxing puzzle sessions. |
 | **설명 (KO)** | 같은 색 공을 한 튜브에 모으는 중독성 정렬 퍼즐! 150+ 레벨, 프로시저럴 생성, Undo/힌트/별 시스템. 파스텔톤 힐링 디자인. |
@@ -71,7 +71,7 @@ layout: post
 
 | 항목 | 내용 |
 |------|------|
-| **URL** | `https://eastsea.monster/games/sushi-sprint/` |
+| **URL** | `https://games.eastsea.xyz/sushi-sprint/` |
 | **장르** | Simulation / Time Management |
 | **설명 (EN)** | Run your own sushi bar! Read customer orders, combine ingredients, and serve sushi before time runs out. 11 unique recipes, wave system, shop upgrades, combo bonuses. A delicious time-management challenge! |
 | **설명 (KO)** | 스시 바에서 손님 주문을 읽고 재료를 조합해 서빙하는 타임매니지먼트! 11종 레시피, 웨이브 시스템, 가게 업그레이드, 콤보 보너스! |
@@ -86,7 +86,7 @@ layout: post
 
 | 항목 | 내용 |
 |------|------|
-| **URL** | `https://eastsea.monster/games/power-2048/` |
+| **URL** | `https://games.eastsea.xyz/power-2048/` |
 | **장르** | Puzzle / Strategy |
 | **설명 (EN)** | 2048 with superpowers! 💣Bomb, ❄️Freeze, ⚡Double, 🔄Undo, 🎯Sniper — 5 unique power-ups transform the classic. Classic mode, Stage mode, and Daily Challenge. Neon visuals with satisfying merge animations! |
 | **설명 (KO)** | 2048 + 파워업! 💣폭탄, ❄️동결, ⚡더블, 🔄되돌리기, 🎯스나이퍼. 클래식/스테이지/일일 챌린지 3모드! 네온 비주얼! |
@@ -101,7 +101,7 @@ layout: post
 
 | 항목 | 내용 |
 |------|------|
-| **URL** | `https://eastsea.monster/games/fruit-merge-drop/` |
+| **URL** | `https://games.eastsea.xyz/fruit-merge-drop/` |
 | **장르** | Puzzle / Physics / Casual |
 | **설명 (EN)** | Drop and merge matching fruits to create bigger ones! Physics-based Suika Game style — watch fruits bounce, roll, and combine. Simple to play, surprisingly addictive. Can you make the legendary Watermelon? 🍉 |
 | **설명 (KO)** | 같은 과일을 합쳐 더 큰 과일을 만드세요! 물리 기반 드롭 머지 퍼즐, 수박 게임 스타일! |

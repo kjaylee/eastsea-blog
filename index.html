@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>East Sea Blog – Daily Briefings & Reports</title>
-<meta name="description" content="Technical insights, progress reports, and daily briefings from the East Sea development team.">
+<title>East Sea Blog – 일일 브리핑 & 리포트</title>
+<meta name="description" content="기술 인사이트, 진행 리포트, 일일 브리핑">
 <style>
 * {
   margin: 0;
@@ -190,6 +190,12 @@ header {
   color: var(--accent-pink);
 }
 
+.post-category.digest {
+  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+}
+
 .post-title {
   font-size: 1.5rem;
   font-weight: 600;
@@ -290,130 +296,59 @@ footer {
 <div class="container">
   <header>
     <h1 class="logo">East Sea Blog</h1>
-    <p class="tagline">Daily Briefings · Technical Reports · Progress Insights</p>
+    <p class="tagline">일일 브리핑 · 기술 리포트 · 개발 인사이트</p>
   </header>
 
   <div class="filter-bar">
-    <button class="filter-btn active" data-filter="all">All Posts</button>
-    <button class="filter-btn" data-filter="briefing">Briefings</button>
-    <button class="filter-btn" data-filter="report">Reports</button>
-    <button class="filter-btn" data-filter="journal">Journals</button>
+    <button class="filter-btn active" data-filter="all">전체</button>
+    <button class="filter-btn" data-filter="briefing">브리핑</button>
+    <button class="filter-btn" data-filter="report">리포트</button>
+    <button class="filter-btn" data-filter="journal">일기</button>
+    <button class="filter-btn" data-filter="digest">다이제스트</button>
   </div>
 
   <div id="posts-container">
-    <div class="loading">Loading posts</div>
+    <div class="loading">포스트 로딩 중</div>
   </div>
 </div>
 
 <footer>
   <p>© 2026 East Sea Games · Built with passion</p>
-  <p class="version">v0.2.0</p>
+  <p class="version">v0.3.0</p>
 </footer>
 
 <script>
-// Parse markdown filename to extract metadata
-function parsePostFilename(filename) {
-  // Format: YYYY-MM-DD-title.md or YYYY-MM-DD-category-title.md
-  const match = filename.match(/^(\d{4})-(\d{2})-(\d{2})-(.+)\.md$/);
-  if (!match) return null;
-  
-  const [, year, month, day, rest] = match;
-  const date = `${year}-${month}-${day}`;
-  
-  // Check if rest contains category prefix
-  const parts = rest.split('-');
-  let category = 'journal';
-  let title = rest;
-  
-  if (['briefing', 'report', 'journal'].includes(parts[0])) {
-    category = parts[0];
-    title = parts.slice(1).join('-');
-  }
-  
-  // Convert slug to title
-  title = title.split('-').map(word => 
-    word.charAt(0).toUpperCase() + word.slice(1)
-  ).join(' ');
-  
-  return { date, category, title, filename };
-}
-
-// Fetch post content
-async function fetchPostContent(filename) {
-  try {
-    const response = await fetch(`_posts/${filename}`);
-    if (!response.ok) return null;
-    const content = await response.text();
-    
-    // Extract first paragraph as excerpt
-    const lines = content.split('\n').filter(line => line.trim());
-    let excerpt = '';
-    for (const line of lines) {
-      if (line.startsWith('#')) continue; // Skip headers
-      if (line.length > 20) {
-        excerpt = line.substring(0, 150) + (line.length > 150 ? '...' : '');
-        break;
-      }
-    }
-    
-    return excerpt || 'Read more...';
-  } catch (error) {
-    return 'Read more...';
-  }
-}
-
-// Render posts
+// Load posts from posts.json
 async function renderPosts(filter = 'all') {
   const container = document.getElementById('posts-container');
   
   try {
-    // Fetch directory listing (GitHub Pages serves this)
-    const response = await fetch('_posts/');
-    const html = await response.text();
+    const response = await fetch('posts.json');
+    if (!response.ok) throw new Error('Failed to load posts.json');
     
-    // Parse links from directory listing
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(html, 'text/html');
-    const links = Array.from(doc.querySelectorAll('a'))
-      .map(a => a.getAttribute('href'))
-      .filter(href => href && href.endsWith('.md'));
-    
-    if (links.length === 0) {
-      container.innerHTML = '<div class="empty-state">No posts found yet. Check back soon!</div>';
-      return;
-    }
-    
-    // Parse and sort posts
-    const posts = links
-      .map(parsePostFilename)
-      .filter(post => post !== null)
-      .filter(post => filter === 'all' || post.category === filter)
-      .sort((a, b) => b.date.localeCompare(a.date));
+    const allPosts = await response.json();
+    const posts = allPosts.filter(post => filter === 'all' || post.category === filter);
     
     if (posts.length === 0) {
-      container.innerHTML = '<div class="empty-state">No posts in this category.</div>';
+      container.innerHTML = '<div class="empty-state">이 카테고리에 포스트가 없습니다.</div>';
       return;
     }
     
-    // Render posts grid
-    const postsHTML = await Promise.all(posts.map(async post => {
-      const excerpt = await fetchPostContent(post.filename);
-      return `
-        <article class="post-card" onclick="window.location.href='_posts/${post.filename}'">
-          <div class="post-meta">
-            <span class="post-date">${post.date}</span>
-            <span class="post-category ${post.category}">${post.category}</span>
-          </div>
-          <h2 class="post-title">${post.title}</h2>
-          <p class="post-excerpt">${excerpt}</p>
-          <a href="_posts/${post.filename}" class="post-link">Read full post</a>
-        </article>
-      `;
-    }));
+    const postsHTML = posts.map(post => `
+      <article class="post-card" onclick="window.location.href='_posts/${post.filename}'">
+        <div class="post-meta">
+          <span class="post-date">${post.date}</span>
+          <span class="post-category ${post.category}">${post.category}</span>
+        </div>
+        <h2 class="post-title">${post.title}</h2>
+        <p class="post-excerpt">${post.excerpt}</p>
+        <a href="_posts/${post.filename}" class="post-link">전체 보기</a>
+      </article>
+    `).join('');
     
-    container.innerHTML = `<div class="posts-grid">${postsHTML.join('')}</div>`;
+    container.innerHTML = `<div class="posts-grid">${postsHTML}</div>`;
   } catch (error) {
-    container.innerHTML = '<div class="empty-state">Unable to load posts. Please try again later.</div>';
+    container.innerHTML = '<div class="empty-state">포스트를 불러올 수 없습니다. 잠시 후 다시 시도해주세요.</div>';
     console.error('Error loading posts:', error);
   }
 }

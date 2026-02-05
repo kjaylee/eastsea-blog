@@ -26,23 +26,12 @@ const posts = files.map(filename => {
   const [, year, month, day, rest] = match;
   const date = `${year}-${month}-${day}`;
   
-  // Detect category from filename (search for keywords anywhere)
-  let category = 'journal'; // default
-  if (rest.includes('briefing')) category = 'briefing';
-  else if (rest.includes('digest')) category = 'digest';
-  else if (rest.includes('report')) category = 'report';
-  else if (rest.includes('diary')) category = 'journal';
-  
-  // Convert slug to title
-  const title = rest.split('-').map(w => 
-    w.charAt(0).toUpperCase() + w.slice(1)
-  ).join(' ');
-  
-  // Read content and skip front matter
+  // Read content
   const content = fs.readFileSync(path.join(postsDir, filename), 'utf8');
   let lines = content.split('\n');
   
-  // Remove front matter (between --- and ---)
+  // Parse front matter
+  let frontMatter = {};
   let inFrontMatter = false;
   let frontMatterEnded = false;
   const contentLines = [];
@@ -55,18 +44,47 @@ const posts = files.map(filename => {
       }
       continue;
     }
-    if (!inFrontMatter && frontMatterEnded) {
+    
+    if (inFrontMatter) {
+      // Parse front matter key-value
+      const fmMatch = line.match(/^(\w+):\s*(.+)$/);
+      if (fmMatch) {
+        const [, key, value] = fmMatch;
+        frontMatter[key] = value.replace(/^["']|["']$/g, '');
+      }
+    } else if (frontMatterEnded) {
       contentLines.push(line);
     }
   }
   
+  // Detect category
+  let category = 'journal'; // default
+  if (frontMatter.categories) {
+    const cats = frontMatter.categories.toLowerCase();
+    if (cats.includes('briefing')) category = 'briefing';
+    else if (cats.includes('digest')) category = 'digest';
+    else if (cats.includes('report')) category = 'report';
+    else if (cats.includes('diary') || cats.includes('journal')) category = 'journal';
+  } else {
+    // Fallback to filename
+    if (rest.includes('briefing')) category = 'briefing';
+    else if (rest.includes('digest')) category = 'digest';
+    else if (rest.includes('report')) category = 'report';
+    else if (rest.includes('diary')) category = 'journal';
+  }
+  
+  // Use front matter title if available, otherwise convert filename
+  let title = frontMatter.title || rest.split('-').map(w => 
+    w.charAt(0).toUpperCase() + w.slice(1)
+  ).join(' ');
+  
   // Get first meaningful line for excerpt
   const meaningfulLines = contentLines
     .map(l => l.trim())
-    .filter(l => l && !l.startsWith('#'));
+    .filter(l => l && !l.startsWith('#') && l.length > 20);
   
   const excerpt = meaningfulLines[0] 
-    ? meaningfulLines[0].substring(0, 150).replace(/[*_]/g, '') + '...'
+    ? meaningfulLines[0].substring(0, 120).replace(/[*_`]/g, '').trim() + '...'
     : '더 읽기...';
   
   return { filename, date, category, title, excerpt };

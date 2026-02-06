@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>오디오 시각화 | 웹 도구 모음</title>
+    <style>
+        :root {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8f9fa;
+            --text-primary: #212529;
+            --text-secondary: #6c757d;
+            --accent: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --border: #dee2e6;
+            --shadow: rgba(0, 0, 0, 0.1);
+            --card-bg: #ffffff;
+        }
+
+        [data-theme="dark"] {
+            --bg-primary: #1a1a1a;
+            --bg-secondary: #121212;
+            --text-primary: #f8f9fa;
+            --text-secondary: #adb5bd;
+            --border: #444;
+            --shadow: rgba(0, 0, 0, 0.3);
+            --card-bg: #2d2d2d;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR', sans-serif;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container { max-width: 900px; margin: 0 auto; }
+        
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 30px;
+        }
+
+        .back-btn {
+            text-decoration: none;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+        .back-btn:hover { color: var(--text-primary); }
+
+        .theme-toggle {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 1.5rem;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 30px var(--shadow);
+            border: 1px solid var(--border);
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            margin-bottom: 20px;
+            background: var(--accent);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        canvas {
+            width: 100%;
+            height: 300px;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            margin-bottom: 20px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 10px;
+            background: var(--accent);
+            color: white;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, opacity 0.2s;
+        }
+
+        button:active { transform: scale(0.98); }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+        }
+
+        .file-input-wrapper input[type=file] {
+            position: absolute;
+            left: -9999px;
+        }
+
+        .status {
+            padding: 15px;
+            background: var(--bg-secondary);
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        @media (max-width: 600px) {
+            .controls { flex-direction: column; }
+            button { width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <a href="../" class="back-btn">← 목록으로</a>
+            <button class="theme-toggle" onclick="toggleTheme()">🌓</button>
+        </header>
+
+        <div class="card">
+            <h1>🎵 오디오 시각화</h1>
+            
+            <canvas id="visualizer"></canvas>
+
+            <div class="controls">
+                <button id="micBtn" onclick="toggleMic()">🎤 마이크 시작</button>
+                <div class="file-input-wrapper">
+                    <button>📁 파일 선택</button>
+                    <input type="file" id="fileInput" accept="audio/*" onchange="loadFile(event)">
+                </div>
+                <button id="playBtn" onclick="togglePlay()" disabled>▶️ 재생</button>
+            </div>
+
+            <div class="status" id="status">마이크 또는 오디오 파일을 선택하세요</div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('visualizer');
+        const ctx = canvas.getContext('2d');
+        const statusEl = document.getElementById('status');
+        const playBtn = document.getElementById('playBtn');
+        const micBtn = document.getElementById('micBtn');
+
+        let audioContext;
+        let analyser;
+        let dataArray;
+        let bufferLength;
+        let source;
+        let audioElement;
+        let micStream;
+        let animationId;
+
+        function initAudio() {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 256;
+                bufferLength = analyser.frequencyBinCount;
+                dataArray = new Uint8Array(bufferLength);
+            }
+        }
+
+        async function toggleMic() {
+            if (micStream) {
+                stopMic();
+            } else {
+                try {
+                    initAudio();
+                    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    source = audioContext.createMediaStreamSource(micStream);
+                    source.connect(analyser);
+                    visualize();
+                    statusEl.textContent = '🎤 마이크 입력 중...';
+                    micBtn.textContent = '⏹️ 마이크 정지';
+                    if (audioElement) {
+                        audioElement.pause();
+                        playBtn.textContent = '▶️ 재생';
+                    }
+                } catch (error) {
+                    statusEl.textContent = '❌ 마이크 접근 권한이 필요합니다';
+                }
+            }
+        }
+
+        function stopMic() {
+            if (micStream) {
+                micStream.getTracks().forEach(track => track.stop());
+                micStream = null;
+                if (source) {
+                    source.disconnect();
+                    source = null;
+                }
+                cancelAnimationFrame(animationId);
+                statusEl.textContent = '마이크가 정지되었습니다';
+                micBtn.textContent = '🎤 마이크 시작';
+            }
+        }
+
+        function loadFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            stopMic();
+            initAudio();
+
+            if (audioElement) {
+                audioElement.pause();
+            }
+
+            audioElement = new Audio();
+            audioElement.src = URL.createObjectURL(file);
+            
+            if (source) {
+                source.disconnect();
+            }
+
+            source = audioContext.createMediaElementSource(audioElement);
+            source.connect(analyser);
+            analyser.connect(audioContext.destination);
+
+            statusEl.textContent = `📁 ${file.name} 로드됨`;
+            playBtn.disabled = false;
+            playBtn.textContent = '▶️ 재생';
+        }
+
+        function togglePlay() {
+            if (!audioElement) return;
+
+            if (audioElement.paused) {
+                audioElement.play();
+                visualize();
+                playBtn.textContent = '⏸️ 일시정지';
+                statusEl.textContent = '▶️ 재생 중...';
+            } else {
+                audioElement.pause();
+                playBtn.textContent = '▶️ 재생';
+                statusEl.textContent = '⏸️ 일시정지됨';
+                cancelAnimationFrame(animationId);
+            }
+        }
+
+        function visualize() {
+            // Set canvas size
+            canvas.width = canvas.offsetWidth * window.devicePixelRatio;
+            canvas.height = canvas.offsetHeight * window.devicePixelRatio;
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+
+            function draw() {
+                animationId = requestAnimationFrame(draw);
+
+                analyser.getByteFrequencyData(dataArray);
+
+                const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+                ctx.fillStyle = isDark ? '#121212' : '#f8f9fa';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                const barWidth = (canvas.offsetWidth / bufferLength) * 2.5;
+                let barHeight;
+                let x = 0;
+
+                for (let i = 0; i < bufferLength; i++) {
+                    barHeight = (dataArray[i] / 255) * (canvas.offsetHeight - 20);
+
+                    const r = (dataArray[i] + 100) % 255;
+                    const g = (i * 5) % 255;
+                    const b = 200;
+
+                    ctx.fillStyle = `rgb(${r},${g},${b})`;
+                    ctx.fillRect(x, canvas.offsetHeight - barHeight, barWidth, barHeight);
+
+                    x += barWidth + 1;
+                }
+            }
+
+            draw();
+        }
+
+        function toggleTheme() {
+            const html = document.documentElement;
+            const currentTheme = html.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            html.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+        }
+
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            stopMic();
+            if (audioElement) audioElement.pause();
+            if (audioContext) audioContext.close();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JWT 토큰 디코더 | JWT Decoder</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8f9fa;
+            --text-primary: #212529;
+            --text-secondary: #6c757d;
+            --accent: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --border: #dee2e6;
+            --shadow: rgba(0, 0, 0, 0.1);
+            --success: #28a745;
+            --warning: #ffc107;
+            --danger: #dc3545;
+        }
+
+        [data-theme="dark"] {
+            --bg-primary: #1a1a1a;
+            --bg-secondary: #2d2d2d;
+            --text-primary: #f8f9fa;
+            --text-secondary: #adb5bd;
+            --border: #495057;
+            --shadow: rgba(0, 0, 0, 0.3);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR', sans-serif;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            padding: 20px;
+            min-height: 100vh;
+            transition: background 0.3s ease, color 0.3s ease;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            background: var(--accent);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+
+        .back-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            background: var(--bg-primary);
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            color: var(--text-primary);
+            text-decoration: none;
+            font-weight: 500;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            box-shadow: 0 4px 6px var(--shadow);
+            margin-bottom: 20px;
+        }
+
+        .back-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px var(--shadow);
+        }
+
+        .theme-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--bg-primary);
+            border: 2px solid var(--border);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            box-shadow: 0 4px 6px var(--shadow);
+            transition: transform 0.2s ease;
+        }
+
+        .theme-toggle:hover {
+            transform: scale(1.1);
+        }
+
+        .card {
+            background: var(--bg-primary);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 30px var(--shadow);
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: var(--text-primary);
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 150px;
+            padding: 15px;
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            resize: vertical;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .section {
+            margin-bottom: 25px;
+        }
+
+        .section h3 {
+            font-size: 1.1rem;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .badge.header {
+            background: #d63384;
+            color: white;
+        }
+
+        .badge.payload {
+            background: #0dcaf0;
+            color: white;
+        }
+
+        .badge.signature {
+            background: #198754;
+            color: white;
+        }
+
+        pre {
+            background: var(--bg-secondary);
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            overflow-x: auto;
+            font-size: 0.85rem;
+            line-height: 1.6;
+            color: var(--text-primary);
+        }
+
+        .status-box {
+            padding: 15px 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 600;
+        }
+
+        .status-box.valid {
+            background: #d1e7dd;
+            color: #0f5132;
+            border: 2px solid #badbcc;
+        }
+
+        .status-box.expired {
+            background: #f8d7da;
+            color: #842029;
+            border: 2px solid #f5c2c7;
+        }
+
+        [data-theme="dark"] .status-box.valid {
+            background: #0f5132;
+            color: #d1e7dd;
+        }
+
+        [data-theme="dark"] .status-box.expired {
+            background: #842029;
+            color: #f8d7da;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .info-item {
+            background: var(--bg-secondary);
+            padding: 15px;
+            border-radius: 12px;
+            border: 2px solid var(--border);
+        }
+
+        .info-label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+
+        .info-value {
+            font-size: 1rem;
+            font-weight: 600;
+            word-break: break-all;
+        }
+
+        .warning-box {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            color: #856404;
+            padding: 15px 20px;
+            border-radius: 12px;
+            margin-top: 20px;
+            font-size: 0.9rem;
+        }
+
+        [data-theme="dark"] .warning-box {
+            background: #332701;
+            border-color: #997404;
+            color: #ffc107;
+        }
+
+        button {
+            padding: 12px 24px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+            margin-top: 10px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        @media (max-width: 768px) {
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <button class="theme-toggle" onclick="toggleTheme()">🌓</button>
+
+    <div class="container">
+        <a href="../" class="back-button">← 뒤로 가기</a>
+
+        <header>
+            <h1>🔓 JWT 토큰 디코더</h1>
+            <p style="color: var(--text-secondary);">JWT 토큰을 디코딩하고 내용을 확인하세요</p>
+        </header>
+
+        <div class="card">
+            <label>JWT 토큰 입력</label>
+            <textarea id="jwt-input" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"></textarea>
+            <button onclick="decodeJWT()">🔍 디코딩</button>
+        </div>
+
+        <div id="result" style="display: none;">
+            <div class="card">
+                <div id="status"></div>
+                
+                <div class="section">
+                    <h3><span class="badge header">HEADER</span> 헤더</h3>
+                    <pre id="header"></pre>
+                </div>
+
+                <div class="section">
+                    <h3><span class="badge payload">PAYLOAD</span> 페이로드</h3>
+                    <pre id="payload"></pre>
+                    
+                    <div class="info-grid" id="claims-grid"></div>
+                </div>
+
+                <div class="section">
+                    <h3><span class="badge signature">SIGNATURE</span> 서명</h3>
+                    <pre id="signature"></pre>
+                </div>
+
+                <div class="warning-box">
+                    ⚠️ <strong>보안 경고:</strong> 이 도구는 클라이언트에서만 실행되며, 토큰은 서버로 전송되지 않습니다. 
+                    하지만 민감한 프로덕션 토큰은 신뢰할 수 있는 환경에서만 디코딩하세요.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleTheme() {
+            const html = document.documentElement;
+            const currentTheme = html.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            html.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+        }
+
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+
+        function base64UrlDecode(str) {
+            let base64 = str.replace(/-/g, '+').replace(/_/g, '/');
+            const pad = base64.length % 4;
+            if (pad) {
+                base64 += '='.repeat(4 - pad);
+            }
+            return decodeURIComponent(atob(base64).split('').map(c => 
+                '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
+            ).join(''));
+        }
+
+        function decodeJWT() {
+            const token = document.getElementById('jwt-input').value.trim();
+
+            if (!token) {
+                alert('⚠️ JWT 토큰을 입력해주세요');
+                return;
+            }
+
+            const parts = token.split('.');
+
+            if (parts.length !== 3) {
+                alert('⚠️ 유효하지 않은 JWT 형식입니다. JWT는 3개의 부분(헤더.페이로드.서명)으로 구성되어야 합니다.');
+                return;
+            }
+
+            try {
+                const [headerB64, payloadB64, signatureB64] = parts;
+
+                // 디코딩
+                const header = JSON.parse(base64UrlDecode(headerB64));
+                const payload = JSON.parse(base64UrlDecode(payloadB64));
+
+                // 헤더 표시
+                document.getElementById('header').textContent = JSON.stringify(header, null, 2);
+
+                // 페이로드 표시
+                document.getElementById('payload').textContent = JSON.stringify(payload, null, 2);
+
+                // 서명 표시
+                document.getElementById('signature').textContent = signatureB64;
+
+                // Claims 분석
+                const claims = [];
+
+                if (payload.iss) claims.push({ label: '발급자 (Issuer)', value: payload.iss });
+                if (payload.sub) claims.push({ label: '주체 (Subject)', value: payload.sub });
+                if (payload.aud) claims.push({ label: '대상 (Audience)', value: payload.aud });
+                if (payload.exp) {
+                    const expDate = new Date(payload.exp * 1000);
+                    claims.push({ 
+                        label: '만료 시간 (Expiration)', 
+                        value: `${expDate.toLocaleString('ko-KR')} (${payload.exp})`
+                    });
+                }
+                if (payload.nbf) {
+                    const nbfDate = new Date(payload.nbf * 1000);
+                    claims.push({ 
+                        label: '유효 시작 시간 (Not Before)', 
+                        value: `${nbfDate.toLocaleString('ko-KR')} (${payload.nbf})`
+                    });
+                }
+                if (payload.iat) {
+                    const iatDate = new Date(payload.iat * 1000);
+                    claims.push({ 
+                        label: '발급 시간 (Issued At)', 
+                        value: `${iatDate.toLocaleString('ko-KR')} (${payload.iat})`
+                    });
+                }
+                if (payload.jti) claims.push({ label: 'JWT ID', value: payload.jti });
+
+                const claimsHTML = claims.map(c => `
+                    <div class="info-item">
+                        <div class="info-label">${c.label}</div>
+                        <div class="info-value">${c.value}</div>
+                    </div>
+                `).join('');
+
+                document.getElementById('claims-grid').innerHTML = claimsHTML || '<p style="color: var(--text-secondary);">표준 클레임이 없습니다</p>';
+
+                // 만료 여부 확인
+                const now = Math.floor(Date.now() / 1000);
+                let statusHTML = '';
+
+                if (payload.exp) {
+                    if (now > payload.exp) {
+                        statusHTML = '<div class="status-box expired">⚠️ 이 토큰은 만료되었습니다</div>';
+                    } else {
+                        const remaining = payload.exp - now;
+                        const hours = Math.floor(remaining / 3600);
+                        const minutes = Math.floor((remaining % 3600) / 60);
+                        statusHTML = `<div class="status-box valid">✅ 토큰이 유효합니다 (남은 시간: ${hours}시간 ${minutes}분)</div>`;
+                    }
+                } else {
+                    statusHTML = '<div class="status-box valid">ℹ️ 만료 시간이 설정되지 않았습니다</div>';
+                }
+
+                document.getElementById('status').innerHTML = statusHTML;
+
+                // 결과 표시
+                document.getElementById('result').style.display = 'block';
+
+            } catch (e) {
+                alert('⚠️ 토큰 디코딩 중 오류가 발생했습니다: ' + e.message);
+            }
+        }
+
+        // 샘플 토큰
+        document.getElementById('jwt-input').value = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJleHAiOjE5OTk5OTk5OTl9.4Adcj0vTreFRzwjmIwY_pidoJVzGSNoSxEi0RwMf6lA';
+    </script>
+</body>
+</html>

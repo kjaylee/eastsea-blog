@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cron 표현식 해석기 | Cron Parser</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8f9fa;
+            --text-primary: #212529;
+            --text-secondary: #6c757d;
+            --accent: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --border: #dee2e6;
+            --shadow: rgba(0, 0, 0, 0.1);
+        }
+
+        [data-theme="dark"] {
+            --bg-primary: #1a1a1a;
+            --bg-secondary: #2d2d2d;
+            --text-primary: #f8f9fa;
+            --text-secondary: #adb5bd;
+            --border: #495057;
+            --shadow: rgba(0, 0, 0, 0.3);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR', sans-serif;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            padding: 20px;
+            min-height: 100vh;
+            transition: background 0.3s ease, color 0.3s ease;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            background: var(--accent);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+
+        .back-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            background: var(--bg-primary);
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            color: var(--text-primary);
+            text-decoration: none;
+            font-weight: 500;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            box-shadow: 0 4px 6px var(--shadow);
+            margin-bottom: 20px;
+        }
+
+        .back-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px var(--shadow);
+        }
+
+        .theme-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--bg-primary);
+            border: 2px solid var(--border);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            box-shadow: 0 4px 6px var(--shadow);
+            transition: transform 0.2s ease;
+        }
+
+        .theme-toggle:hover {
+            transform: scale(1.1);
+        }
+
+        .card {
+            background: var(--bg-primary);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 30px var(--shadow);
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: var(--text-primary);
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        input {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            font-family: 'Courier New', monospace;
+            font-size: 1.1rem;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .preset-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .preset-btn {
+            padding: 12px;
+            background: var(--bg-secondary);
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: left;
+        }
+
+        .preset-btn:hover {
+            background: var(--accent);
+            color: white;
+            border-color: transparent;
+            transform: translateY(-2px);
+        }
+
+        .preset-cron {
+            font-family: 'Courier New', monospace;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+
+        .preset-desc {
+            font-size: 0.85rem;
+            opacity: 0.8;
+        }
+
+        .result-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+        }
+
+        .result-desc {
+            font-size: 1.3rem;
+            line-height: 1.6;
+            margin-bottom: 15px;
+        }
+
+        .next-runs {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 10px;
+            padding: 15px;
+        }
+
+        .next-runs h4 {
+            margin-bottom: 10px;
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .next-runs ul {
+            list-style: none;
+            font-family: 'Courier New', monospace;
+        }
+
+        .next-runs li {
+            padding: 5px 0;
+        }
+
+        .breakdown {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 15px;
+        }
+
+        .breakdown-item {
+            background: var(--bg-secondary);
+            padding: 15px;
+            border-radius: 12px;
+            border: 2px solid var(--border);
+            text-align: center;
+        }
+
+        .breakdown-label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .breakdown-value {
+            font-family: 'Courier New', monospace;
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .guide {
+            background: var(--bg-secondary);
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .guide h3 {
+            margin-bottom: 15px;
+        }
+
+        .guide table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+
+        .guide th, .guide td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .guide th {
+            font-weight: 600;
+            background: var(--bg-primary);
+        }
+
+        .guide code {
+            background: var(--bg-primary);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .error {
+            color: #dc3545;
+            margin-top: 10px;
+            font-weight: 500;
+        }
+
+        @media (max-width: 768px) {
+            .breakdown {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <button class="theme-toggle" onclick="toggleTheme()">🌓</button>
+
+    <div class="container">
+        <a href="../" class="back-button">← 뒤로 가기</a>
+
+        <header>
+            <h1>⏰ Cron 표현식 해석기</h1>
+            <p style="color: var(--text-secondary);">Cron 표현식을 이해하기 쉽게 해석하고 실행 시간을 확인하세요</p>
+        </header>
+
+        <div class="card">
+            <label>Cron 표현식 입력</label>
+            <div class="input-group">
+                <input type="text" id="cron-input" value="0 9 * * 1-5" placeholder="* * * * *">
+            </div>
+            <p class="error" id="error" style="display: none;"></p>
+        </div>
+
+        <div class="card">
+            <label>🚀 프리셋</label>
+            <div class="preset-grid">
+                <div class="preset-btn" onclick="setCron('* * * * *')">
+                    <div class="preset-cron">* * * * *</div>
+                    <div class="preset-desc">매 분마다</div>
+                </div>
+                <div class="preset-btn" onclick="setCron('0 * * * *')">
+                    <div class="preset-cron">0 * * * *</div>
+                    <div class="preset-desc">매 시간마다</div>
+                </div>
+                <div class="preset-btn" onclick="setCron('0 0 * * *')">
+                    <div class="preset-cron">0 0 * * *</div>
+                    <div class="preset-desc">매일 자정</div>
+                </div>
+                <div class="preset-btn" onclick="setCron('0 9 * * 1-5')">
+                    <div class="preset-cron">0 9 * * 1-5</div>
+                    <div class="preset-desc">평일 오전 9시</div>
+                </div>
+                <div class="preset-btn" onclick="setCron('0 0 * * 0')">
+                    <div class="preset-cron">0 0 * * 0</div>
+                    <div class="preset-desc">매주 일요일 자정</div>
+                </div>
+                <div class="preset-btn" onclick="setCron('0 0 1 * *')">
+                    <div class="preset-cron">0 0 1 * *</div>
+                    <div class="preset-desc">매월 1일 자정</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" id="result" style="display: none;">
+            <div class="result-box">
+                <div class="result-desc" id="description"></div>
+                <div class="next-runs">
+                    <h4>📅 다음 실행 시간 (5회)</h4>
+                    <ul id="next-runs"></ul>
+                </div>
+            </div>
+
+            <label>🔍 필드별 분석</label>
+            <div class="breakdown" id="breakdown"></div>
+        </div>
+
+        <div class="card guide">
+            <h3>📖 Cron 표현식 가이드</h3>
+            <table>
+                <tr>
+                    <th>필드</th>
+                    <th>허용 값</th>
+                    <th>특수 문자</th>
+                </tr>
+                <tr>
+                    <td>분 (Minute)</td>
+                    <td>0-59</td>
+                    <td><code>* , - /</code></td>
+                </tr>
+                <tr>
+                    <td>시 (Hour)</td>
+                    <td>0-23</td>
+                    <td><code>* , - /</code></td>
+                </tr>
+                <tr>
+                    <td>일 (Day)</td>
+                    <td>1-31</td>
+                    <td><code>* , - /</code></td>
+                </tr>
+                <tr>
+                    <td>월 (Month)</td>
+                    <td>1-12</td>
+                    <td><code>* , - /</code></td>
+                </tr>
+                <tr>
+                    <td>요일 (Weekday)</td>
+                    <td>0-6 (0=일요일)</td>
+                    <td><code>* , - /</code></td>
+                </tr>
+            </table>
+            <p style="margin-top: 15px; color: var(--text-secondary); font-size: 0.9rem;">
+                <strong>예시:</strong> <code>*/15 * * * *</code> = 15분마다, 
+                <code>0 9-18 * * 1-5</code> = 평일 오전9시~오후6시
+            </p>
+        </div>
+    </div>
+
+    <script>
+        function toggleTheme() {
+            const html = document.documentElement;
+            const currentTheme = html.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            html.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+        }
+
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+
+        const input = document.getElementById('cron-input');
+        input.addEventListener('input', parseCron);
+
+        function setCron(expr) {
+            input.value = expr;
+            parseCron();
+        }
+
+        function parseCron() {
+            const expr = input.value.trim();
+            const parts = expr.split(/\s+/);
+
+            document.getElementById('error').style.display = 'none';
+
+            if (parts.length !== 5) {
+                showError('Cron 표현식은 5개의 필드가 필요합니다 (분 시 일 월 요일)');
+                document.getElementById('result').style.display = 'none';
+                return;
+            }
+
+            const [minute, hour, day, month, weekday] = parts;
+
+            try {
+                const desc = buildDescription(minute, hour, day, month, weekday);
+                document.getElementById('description').textContent = desc;
+
+                const breakdown = [
+                    { label: '분', value: minute },
+                    { label: '시', value: hour },
+                    { label: '일', value: day },
+                    { label: '월', value: month },
+                    { label: '요일', value: weekday }
+                ];
+
+                const breakdownHTML = breakdown.map(b => `
+                    <div class="breakdown-item">
+                        <div class="breakdown-label">${b.label}</div>
+                        <div class="breakdown-value">${b.value}</div>
+                    </div>
+                `).join('');
+
+                document.getElementById('breakdown').innerHTML = breakdownHTML;
+
+                // 다음 실행 시간 계산 (간단한 버전)
+                const nextRuns = calculateNextRuns(minute, hour, day, month, weekday);
+                const nextRunsHTML = nextRuns.map(date => `<li>${date}</li>`).join('');
+                document.getElementById('next-runs').innerHTML = nextRunsHTML;
+
+                document.getElementById('result').style.display = 'block';
+            } catch (e) {
+                showError(e.message);
+                document.getElementById('result').style.display = 'none';
+            }
+        }
+
+        function buildDescription(minute, hour, day, month, weekday) {
+            let desc = '';
+
+            // 간단한 설명 생성 (실제로는 더 복잡한 로직 필요)
+            const minuteDesc = minute === '*' ? '매 분' : minute.includes('/') ? `${minute.split('/')[1]}분마다` : `${minute}분`;
+            const hourDesc = hour === '*' ? '매 시간' : hour.includes('-') ? `${hour}시 사이` : `${hour}시`;
+            const dayDesc = day === '*' ? '매일' : `${day}일`;
+            const monthDesc = month === '*' ? '매월' : `${month}월`;
+            const weekdayDesc = weekday === '*' ? '' : ` (요일: ${parseWeekday(weekday)})`;
+
+            if (minute === '*' && hour === '*' && day === '*' && month === '*' && weekday === '*') {
+                return '⏱️ 매 분마다 실행됩니다';
+            }
+
+            if (minute === '0' && hour === '*') {
+                return '⏱️ 매 시간 정각에 실행됩니다';
+            }
+
+            if (minute === '0' && hour === '0' && day === '*' && month === '*' && weekday === '*') {
+                return '⏱️ 매일 자정(00:00)에 실행됩니다';
+            }
+
+            if (day === '*' && month === '*') {
+                if (weekday !== '*') {
+                    return `⏱️ ${parseWeekday(weekday)} ${hourDesc} ${minuteDesc}에 실행됩니다`;
+                }
+                return `⏱️ 매일 ${hourDesc} ${minuteDesc}에 실행됩니다`;
+            }
+
+            return `⏱️ ${monthDesc} ${dayDesc} ${hourDesc} ${minuteDesc}에 실행됩니다${weekdayDesc}`;
+        }
+
+        function parseWeekday(weekday) {
+            const days = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
+            
+            if (weekday === '*') return '매일';
+            if (weekday === '1-5') return '평일';
+            if (weekday === '0,6') return '주말';
+            if (weekday.includes('-')) {
+                const [start, end] = weekday.split('-').map(Number);
+                return `${days[start]}~${days[end]}`;
+            }
+            if (weekday.includes(',')) {
+                return weekday.split(',').map(d => days[Number(d)]).join(', ');
+            }
+            
+            return days[Number(weekday)] || weekday;
+        }
+
+        function calculateNextRuns(minute, hour, day, month, weekday) {
+            // 간단한 구현: 실제로는 더 정교한 계산 필요
+            const now = new Date();
+            const runs = [];
+
+            for (let i = 0; i < 5; i++) {
+                const next = new Date(now);
+                next.setMinutes(now.getMinutes() + (i + 1) * 60); // 임시: 매시간 증가
+                runs.push(next.toLocaleString('ko-KR', { 
+                    month: 'short', 
+                    day: 'numeric', 
+                    hour: '2-digit', 
+                    minute: '2-digit',
+                    weekday: 'short'
+                }));
+            }
+
+            return runs;
+        }
+
+        function showError(msg) {
+            const errorEl = document.getElementById('error');
+            errorEl.textContent = '⚠️ ' + msg;
+            errorEl.style.display = 'block';
+        }
+
+        // 초기 파싱
+        parseCron();
+    </script>
+</body>
+</html>

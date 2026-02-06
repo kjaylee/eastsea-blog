@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>버블 슈터 - Bubble Shooter</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+            touch-action: none;
+        }
+        #gameContainer {
+            position: relative;
+            max-width: 100vw;
+            max-height: 100vh;
+        }
+        canvas {
+            display: block;
+            background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+            border: 3px solid #fff;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+        }
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            display: flex;
+            justify-content: space-between;
+            color: white;
+            font-size: 20px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            pointer-events: none;
+        }
+        #gameOver {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.9);
+            color: white;
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
+            display: none;
+            box-shadow: 0 0 50px rgba(255,255,255,0.3);
+        }
+        #gameOver h2 {
+            font-size: 36px;
+            margin-bottom: 20px;
+            color: #ff6b6b;
+        }
+        #gameOver p {
+            font-size: 24px;
+            margin: 10px 0;
+        }
+        #gameOver button {
+            margin-top: 20px;
+            padding: 15px 40px;
+            font-size: 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        #gameOver button:hover {
+            background: #764ba2;
+            transform: scale(1.05);
+        }
+        @media (max-width: 600px) {
+            #ui {
+                font-size: 16px;
+            }
+            #gameOver h2 {
+                font-size: 28px;
+            }
+            #gameOver p {
+                font-size: 18px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        <div id="ui">
+            <div>점수: <span id="score">0</span></div>
+            <div>레벨: <span id="level">1</span></div>
+        </div>
+        <div id="gameOver">
+            <h2>게임 오버!</h2>
+            <p>최종 점수: <span id="finalScore">0</span></p>
+            <p>도달 레벨: <span id="finalLevel">1</span></p>
+            <button onclick="restartGame()">다시 시작</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // 반응형 캔버스 크기 설정
+        function resizeCanvas() {
+            const maxWidth = Math.min(600, window.innerWidth - 20);
+            const maxHeight = Math.min(800, window.innerHeight - 20);
+            canvas.width = maxWidth;
+            canvas.height = maxHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // 게임 상수
+        const COLORS = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24', '#a29bfe'];
+        const BUBBLE_RADIUS = 20;
+        const COLS = Math.floor(canvas.width / (BUBBLE_RADIUS * 2));
+        const SHOOTER_Y = canvas.height - 60;
+        
+        // 게임 상태
+        let bubbles = [];
+        let shooter = {
+            x: canvas.width / 2,
+            y: SHOOTER_Y,
+            angle: -Math.PI / 2,
+            currentBubble: null,
+            nextBubble: null
+        };
+        let projectile = null;
+        let score = 0;
+        let level = 1;
+        let gameRunning = true;
+        let bubblesCleared = 0;
+
+        // Web Audio API 초기화
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        function playSound(type) {
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            
+            if (type === 'shoot') {
+                oscillator.frequency.value = 300;
+                gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+                oscillator.start(audioCtx.currentTime);
+                oscillator.stop(audioCtx.currentTime + 0.1);
+            } else if (type === 'pop') {
+                oscillator.frequency.value = 600;
+                gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+                oscillator.start(audioCtx.currentTime);
+                oscillator.stop(audioCtx.currentTime + 0.15);
+            } else if (type === 'gameover') {
+                oscillator.frequency.value = 200;
+                oscillator.type = 'sawtooth';
+                gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+                oscillator.start(audioCtx.currentTime);
+                oscillator.stop(audioCtx.currentTime + 0.5);
+            }
+        }
+
+        // 버블 생성
+        function createBubble(col, row, color) {
+            const offsetX = row % 2 === 1 ? BUBBLE_RADIUS : 0;
+            return {
+                x: col * BUBBLE_RADIUS * 2 + BUBBLE_RADIUS + offsetX,
+                y: row * BUBBLE_RADIUS * 2 + BUBBLE_RADIUS,
+                color: color || COLORS[Math.floor(Math.random() * COLORS.length)],
+                col: col,
+                row: row
+            };
+        }
+
+        // 초기 버블 생성
+        function initBubbles() {
+            bubbles = [];
+            const rows = 5 + level;
+            for (let row = 0; row < rows; row++) {
+                const colsInRow = row % 2 === 0 ? COLS : COLS - 1;
+                for (let col = 0; col < colsInRow; col++) {
+                    bubbles.push(createBubble(col, row));
+                }
+            }
+        }
+
+        // 새로운 줄 추가
+        function addNewRow() {
+            const maxRow = Math.max(...bubbles.map(b => b.row));
+            bubbles.forEach(b => b.row++);
+            
+            const colsInRow = maxRow % 2 === 0 ? COLS - 1 : COLS;
+            for (let col = 0; col < colsInRow; col++) {
+                bubbles.push(createBubble(col, 0));
+            }
+            
+            bubbles.forEach(b => {
+                const offsetX = b.row % 2 === 1 ? BUBBLE_RADIUS : 0;
+                b.x = b.col * BUBBLE_RADIUS * 2 + BUBBLE_RADIUS + offsetX;
+                b.y = b.row * BUBBLE_RADIUS * 2 + BUBBLE_RADIUS;
+            });
+        }
+
+        // 랜덤 버블 생성
+        function getRandomBubble() {
+            const existingColors = [...new Set(bubbles.map(b => b.color))];
+            const color = existingColors.length > 0 ? 
+                existingColors[Math.floor(Math.random() * existingColors.length)] :
+                COLORS[Math.floor(Math.random() * COLORS.length)];
+            return { color: color };
+        }
+
+        // 슈터 초기화
+        function initShooter() {
+            shooter.currentBubble = getRandomBubble();
+            shooter.nextBubble = getRandomBubble();
+        }
+
+        // 버블 그리기
+        function drawBubble(x, y, color, radius = BUBBLE_RADIUS) {
+            ctx.beginPath();
+            ctx.arc(x, y, radius, 0, Math.PI * 2);
+            ctx.fillStyle = color;
+            ctx.fill();
+            
+            // 하이라이트
+            const gradient = ctx.createRadialGradient(x - radius/3, y - radius/3, 0, x, y, radius);
+            gradient.addColorStop(0, 'rgba(255,255,255,0.5)');
+            gradient.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.fillStyle = gradient;
+            ctx.fill();
+            
+            ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+
+        // 조준선 그리기
+        function drawAimLine() {
+            ctx.save();
+            ctx.translate(shooter.x, shooter.y);
+            ctx.rotate(shooter.angle);
+            
+            ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 5]);
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(0, -200);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            ctx.restore();
+        }
+
+        // 렌더링
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // 버블 그리기
+            bubbles.forEach(bubble => {
+                drawBubble(bubble.x, bubble.y, bubble.color);
+            });
+            
+            // 발사된 버블
+            if (projectile) {
+                drawBubble(projectile.x, projectile.y, projectile.color);
+            }
+            
+            // 조준선
+            if (!projectile) {
+                drawAimLine();
+            }
+            
+            // 슈터
+            ctx.fillStyle = '#2c3e50';
+            ctx.beginPath();
+            ctx.arc(shooter.x, shooter.y, 25, 0, Math.PI * 2);
+            ctx.fill();
+            
+            if (shooter.currentBubble) {
+                drawBubble(shooter.x, shooter.y, shooter.currentBubble.color, 18);
+            }
+            
+            // 다음 버블 표시
+            if (shooter.nextBubble) {
+                drawBubble(canvas.width - 40, canvas.height - 40, shooter.nextBubble.color, 15);
+                ctx.fillStyle = 'white';
+                ctx.font = '12px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('다음', canvas.width - 40, canvas.height - 70);
+            }
+        }
+
+        // 가장 가까운 버블 찾기
+        function findNearestBubble(x, y) {
+            let nearest = null;
+            let minDist = Infinity;
+            
+            bubbles.forEach(bubble => {
+                const dist = Math.hypot(bubble.x - x, bubble.y - y);
+                if (dist < minDist) {
+                    minDist = dist;
+                    nearest = bubble;
+                }
+            });
+            
+            return nearest;
+        }
+
+        // 인접 버블 찾기
+        function getNeighbors(bubble) {
+            const neighbors = [];
+            const isOddRow = bubble.row % 2 === 1;
+            
+            const offsets = isOddRow ? [
+                [-1, -1], [0, -1], [-1, 0], [1, 0], [-1, 1], [0, 1]
+            ] : [
+                [0, -1], [1, -1], [-1, 0], [1, 0], [0, 1], [1, 1]
+            ];
+            
+            offsets.forEach(([dc, dr]) => {
+                const neighbor = bubbles.find(b => 
+                    b.col === bubble.col + dc && b.row === bubble.row + dr
+                );
+                if (neighbor) neighbors.push(neighbor);
+            });
+            
+            return neighbors;
+        }
+
+        // 같은 색 버블 찾기 (BFS)
+        function findConnectedBubbles(bubble) {
+            const connected = [bubble];
+            const queue = [bubble];
+            const visited = new Set([bubble]);
+            
+            while (queue.length > 0) {
+                const current = queue.shift();
+                const neighbors = getNeighbors(current);
+                
+                neighbors.forEach(neighbor => {
+                    if (!visited.has(neighbor) && neighbor.color === bubble.color) {
+                        visited.add(neighbor);
+                        connected.push(neighbor);
+                        queue.push(neighbor);
+                    }
+                });
+            }
+            
+            return connected;
+        }
+
+        // 떠있는 버블 찾기
+        function findFloatingBubbles() {
+            const attached = new Set();
+            const queue = bubbles.filter(b => b.row === 0);
+            queue.forEach(b => attached.add(b));
+            
+            while (queue.length > 0) {
+                const current = queue.shift();
+                const neighbors = getNeighbors(current);
+                
+                neighbors.forEach(neighbor => {
+                    if (!attached.has(neighbor)) {
+                        attached.add(neighbor);
+                        queue.push(neighbor);
+                    }
+                });
+            }
+            
+            return bubbles.filter(b => !attached.has(b));
+        }
+
+        // 버블 제거
+        function removeBubbles(toRemove) {
+            toRemove.forEach(bubble => {
+                const index = bubbles.indexOf(bubble);
+                if (index > -1) {
+                    bubbles.splice(index, 1);
+                    score += 10;
+                    bubblesCleared++;
+                }
+            });
+            
+            playSound('pop');
+            updateScore();
+            
+            // 레벨업 체크
+            if (bubblesCleared >= 50 * level) {
+                level++;
+                document.getElementById('level').textContent = level;
+                addNewRow();
+            }
+        }
+
+        // 발사
+        function shoot() {
+            if (!projectile && shooter.currentBubble) {
+                projectile = {
+                    x: shooter.x,
+                    y: shooter.y,
+                    vx: Math.sin(shooter.angle) * 10,
+                    vy: Math.cos(shooter.angle) * -10,
+                    color: shooter.currentBubble.color
+                };
+                playSound('shoot');
+            }
+        }
+
+        // 발사체 업데이트
+        function updateProjectile() {
+            if (!projectile) return;
+            
+            projectile.x += projectile.vx;
+            projectile.y += projectile.vy;
+            
+            // 벽 충돌
+            if (projectile.x - BUBBLE_RADIUS <= 0 || projectile.x + BUBBLE_RADIUS >= canvas.width) {
+                projectile.vx *= -1;
+                projectile.x = Math.max(BUBBLE_RADIUS, Math.min(canvas.width - BUBBLE_RADIUS, projectile.x));
+            }
+            
+            // 버블 충돌 체크
+            const nearest = findNearestBubble(projectile.x, projectile.y);
+            if (nearest && Math.hypot(nearest.x - projectile.x, nearest.y - projectile.y) < BUBBLE_RADIUS * 2) {
+                // 버블 추가
+                const newBubble = createBubble(nearest.col, nearest.row, projectile.color);
+                
+                // 빈 공간 찾기
+                const neighbors = getNeighbors(nearest);
+                const emptySpots = [];
+                const isOddRow = nearest.row % 2 === 1;
+                
+                const offsets = isOddRow ? [
+                    [-1, -1], [0, -1], [-1, 0], [1, 0], [-1, 1], [0, 1]
+                ] : [
+                    [0, -1], [1, -1], [-1, 0], [1, 0], [0, 1], [1, 1]
+                ];
+                
+                offsets.forEach(([dc, dr]) => {
+                    const col = nearest.col + dc;
+                    const row = nearest.row + dr;
+                    if (!bubbles.find(b => b.col === col && b.row === row) && row >= 0) {
+                        emptySpots.push({col, row});
+                    }
+                });
+                
+                if (emptySpots.length > 0) {
+                    // 가장 가까운 빈 공간에 추가
+                    const closest = emptySpots.reduce((prev, curr) => {
+                        const prevDist = Math.hypot(
+                            prev.col * BUBBLE_RADIUS * 2 - projectile.x,
+                            prev.row * BUBBLE_RADIUS * 2 - projectile.y
+                        );
+                        const currDist = Math.hypot(
+                            curr.col * BUBBLE_RADIUS * 2 - projectile.x,
+                            curr.row * BUBBLE_RADIUS * 2 - projectile.y
+                        );
+                        return currDist < prevDist ? curr : prev;
+                    });
+                    
+                    const bubble = createBubble(closest.col, closest.row, projectile.color);
+                    bubbles.push(bubble);
+                    
+                    // 매치 체크
+                    const connected = findConnectedBubbles(bubble);
+                    if (connected.length >= 3) {
+                        removeBubbles(connected);
+                        
+                        // 떠있는 버블 제거
+                        const floating = findFloatingBubbles();
+                        if (floating.length > 0) {
+                            removeBubbles(floating);
+                        }
+                    }
+                }
+                
+                projectile = null;
+                shooter.currentBubble = shooter.nextBubble;
+                shooter.nextBubble = getRandomBubble();
+                
+                // 정기적으로 새 줄 추가
+                if (Math.random() < 0.15) {
+                    addNewRow();
+                }
+            }
+            
+            // 천장 충돌
+            if (projectile && projectile.y - BUBBLE_RADIUS <= 0) {
+                const col = Math.floor(projectile.x / (BUBBLE_RADIUS * 2));
+                const bubble = createBubble(col, 0, projectile.color);
+                bubbles.push(bubble);
+                
+                const connected = findConnectedBubbles(bubble);
+                if (connected.length >= 3) {
+                    removeBubbles(connected);
+                }
+                
+                projectile = null;
+                shooter.currentBubble = shooter.nextBubble;
+                shooter.nextBubble = getRandomBubble();
+            }
+            
+            // 게임오버 체크
+            const lowestBubble = Math.max(...bubbles.map(b => b.y));
+            if (lowestBubble >= SHOOTER_Y - BUBBLE_RADIUS * 2) {
+                endGame();
+            }
+        }
+
+        // 조준
+        function updateAim(x, y) {
+            const dx = x - shooter.x;
+            const dy = y - shooter.y;
+            shooter.angle = Math.atan2(dx, -dy);
+            
+            // 각도 제한
+            shooter.angle = Math.max(-Math.PI * 0.9, Math.min(Math.PI * 0.9, shooter.angle));
+        }
+
+        // 점수 업데이트
+        function updateScore() {
+            document.getElementById('score').textContent = score;
+        }
+
+        // 게임 종료
+        function endGame() {
+            if (!gameRunning) return;
+            gameRunning = false;
+            playSound('gameover');
+            document.getElementById('finalScore').textContent = score;
+            document.getElementById('finalLevel').textContent = level;
+            document.getElementById('gameOver').style.display = 'block';
+        }
+
+        // 게임 재시작
+        function restartGame() {
+            gameRunning = true;
+            score = 0;
+            level = 1;
+            bubblesCleared = 0;
+            projectile = null;
+            document.getElementById('gameOver').style.display = 'none';
+            updateScore();
+            document.getElementById('level').textContent = level;
+            initBubbles();
+            initShooter();
+        }
+
+        // 이벤트 리스너
+        canvas.addEventListener('mousemove', (e) => {
+            if (!projectile && gameRunning) {
+                const rect = canvas.getBoundingClientRect();
+                updateAim(e.clientX - rect.left, e.clientY - rect.top);
+            }
+        });
+
+        canvas.addEventListener('click', (e) => {
+            if (gameRunning) shoot();
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            if (!projectile && gameRunning) {
+                e.preventDefault();
+                const rect = canvas.getBoundingClientRect();
+                const touch = e.touches[0];
+                updateAim(touch.clientX - rect.left, touch.clientY - rect.top);
+            }
+        }, { passive: false });
+
+        canvas.addEventListener('touchstart', (e) => {
+            if (gameRunning) {
+                e.preventDefault();
+                shoot();
+            }
+        }, { passive: false });
+
+        // 게임 루프
+        function gameLoop() {
+            if (gameRunning) {
+                updateProjectile();
+            }
+            render();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // 게임 시작
+        initBubbles();
+        initShooter();
+        updateScore();
+        gameLoop();
+    </script>
+</body>
+</html>

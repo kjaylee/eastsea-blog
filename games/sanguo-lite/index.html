@@ -604,10 +604,29 @@
 <body>
   <!-- 로딩 화면 -->
   <div id="loading-screen">
-    <div class="loading-content">
+    <div class="loading-content" id="loading-content">
       <h1>⚔️ 삼국지 Lite</h1>
       <div class="spinner"></div>
       <p>불러오는 중...</p>
+    </div>
+    <!-- 시나리오 선택 (로딩 화면 내) -->
+    <div id="pregame-scenario" style="display:none; max-width:500px; width:90%; text-align:center;">
+      <h2 style="color:#ffa500; margin-bottom:20px; font-size:24px;">⚔️ 시나리오 선택</h2>
+      <div style="display:flex; flex-direction:column; gap:16px;">
+        <button id="btn-190" style="background:#1a1a1a; border:2px solid #555; border-radius:12px; padding:20px; color:#fff; cursor:pointer; font-size:16px; text-align:left;">
+          <span style="color:#ffa500; font-size:20px; font-weight:bold;">190년 - 군웅할거</span><br><br>
+          <span style="color:#ccc; font-size:14px;">동탁이 낙양을 장악하고 각지의 군웅들이 일어나는 시대. 조조, 유비, 손책, 원소 등이 활약합니다.</span>
+        </button>
+        <button id="btn-208" style="background:#1a1a1a; border:2px solid #555; border-radius:12px; padding:20px; color:#fff; cursor:pointer; font-size:16px; text-align:left;">
+          <span style="color:#ffa500; font-size:20px; font-weight:bold;">208년 - 삼국정립</span><br><br>
+          <span style="color:#ccc; font-size:14px;">위(조조), 촉(유비), 오(손권) 삼국이 정립한 시대. 적벽대전을 앞두고 있습니다.</span>
+        </button>
+      </div>
+    </div>
+    <!-- 세력 선택 (로딩 화면 내) -->
+    <div id="pregame-lord" style="display:none; max-width:500px; width:90%; text-align:center;">
+      <h2 style="color:#ffa500; margin-bottom:20px; font-size:24px;">🏯 세력 선택</h2>
+      <div id="pregame-lord-list" style="display:flex; flex-direction:column; gap:12px;"></div>
     </div>
   </div>
   
@@ -3337,12 +3356,12 @@
       
       // 게임 시작
       start() {
-        // 로딩 화면 숨기기
-        document.getElementById('loading-screen').classList.add('hidden');
+        // 프리게임에서 이미 처리됨 - 세이브 로드 시 사용
+        document.getElementById('loading-screen').style.display = 'none';
         document.getElementById('game-container').style.display = 'flex';
-        
-        // 시나리오 선택 모달 표시
-        this.showModal('scenario-modal');
+        this.running = true;
+        this.render();
+        this.gameLoop();
       }
       
       // 시나리오 선택
@@ -4514,43 +4533,87 @@
     
     window.addEventListener('DOMContentLoaded', () => {
       // 0.5초 후 게임 시작
-      setTimeout(() => {
-        try {
-          console.log('Creating Game...');
-          game = new Game();
-          console.log('Game created, setting global...');
-          window.Game = game;
-          console.log('Starting game...');
-          game.start();
-          console.log('Game started successfully, Game =', typeof window.Game);
-        } catch(e) {
-          document.getElementById('loading-screen').innerHTML = '<div style="color:red;padding:20px;font-size:18px;text-align:left;">게임 초기화 오류: ' + e.message + '<br><br>Stack:<br>' + (e.stack||'').replace(/\n/g,'<br>') + '</div>';
-          console.error('GAME INIT ERROR:', e);
-        }
+      // ===== 프리게임: 시나리오/세력 선택 (Game 생성 전) =====
+      var selectedScenario = null;
+      var selectedLord = null;
+      
+      setTimeout(function() {
+        // 로딩 완료 → 시나리오 선택 표시
+        document.getElementById('loading-content').style.display = 'none';
+        document.getElementById('pregame-scenario').style.display = 'block';
       }, 500);
       
-      // 시나리오 선택 이벤트 바인딩 (onclick 대신 addEventListener)
-      document.addEventListener('DOMContentLoaded', function() {
-        document.getElementById('scenario-190').addEventListener('click', function() {
-          console.log('190 clicked, Game:', typeof window.Game);
-          if (window.Game) window.Game.selectScenario('190');
-          else alert('Game not ready');
+      // 시나리오 선택
+      document.getElementById('btn-190').addEventListener('click', function() { pickScenario('190'); });
+      document.getElementById('btn-208').addEventListener('click', function() { pickScenario('208'); });
+      
+      function pickScenario(s) {
+        selectedScenario = s;
+        document.getElementById('pregame-scenario').style.display = 'none';
+        
+        // 세력 선택 표시
+        var lords = s === '190' ? [
+          {id:'cao_cao',name:'조조',desc:'위 (魏) — 허창 기반'},
+          {id:'liu_bei',name:'유비',desc:'촉 (蜀) — 서주 기반'},
+          {id:'sun_ce',name:'손책',desc:'오 (吳) — 회계 기반'},
+          {id:'yuan_shao',name:'원소',desc:'업, 북해 기반'},
+          {id:'dong_zhuo',name:'동탁',desc:'낙양, 장안 기반'},
+        ] : [
+          {id:'cao_cao',name:'조조',desc:'위 (魏) — 9개 도시'},
+          {id:'liu_bei',name:'유비',desc:'촉 (蜀) — 4개 도시'},
+          {id:'sun_quan',name:'손권',desc:'오 (吳) — 4개 도시'},
+        ];
+        
+        var list = document.getElementById('pregame-lord-list');
+        list.innerHTML = '';
+        lords.forEach(function(lord) {
+          var btn = document.createElement('button');
+          btn.style.cssText = 'background:#1a1a1a; border:2px solid #555; border-radius:12px; padding:16px; color:#fff; cursor:pointer; font-size:16px; text-align:left; width:100%;';
+          btn.innerHTML = '<span style="color:#ffa500; font-size:18px; font-weight:bold;">' + lord.name + '</span><br><span style="color:#ccc; font-size:13px;">' + lord.desc + '</span>';
+          btn.addEventListener('click', function() { pickLord(lord.id); });
+          list.appendChild(btn);
         });
-        document.getElementById('scenario-208').addEventListener('click', function() {
-          console.log('208 clicked, Game:', typeof window.Game);
-          if (window.Game) window.Game.selectScenario('208');
-          else alert('Game not ready');
-        });
-        // 터치 지원
-        document.getElementById('scenario-190').addEventListener('touchend', function(e) {
-          e.preventDefault();
-          if (window.Game) window.Game.selectScenario('190');
-        });
-        document.getElementById('scenario-208').addEventListener('touchend', function(e) {
-          e.preventDefault();
-          if (window.Game) window.Game.selectScenario('208');
-        });
-      });
+        
+        document.getElementById('pregame-lord').style.display = 'block';
+      }
+      
+      function pickLord(lordId) {
+        selectedLord = lordId;
+        document.getElementById('pregame-lord').style.display = 'none';
+        document.getElementById('loading-content').style.display = 'block';
+        document.getElementById('loading-content').querySelector('p').textContent = '게임을 시작합니다...';
+        
+        // 이제 Game 생성
+        setTimeout(function() {
+          try {
+            game = new Game();
+            window.Game = game;
+            
+            // 선택값 설정
+            game.state.scenario = selectedScenario;
+            game.state.year = parseInt(selectedScenario);
+            game.state.month = 1;
+            game.state.turn = 1;
+            game.state.playerLord = selectedLord;
+            
+            // 게임 초기화
+            game.initGame();
+            game.updateUI();
+            
+            // 화면 전환
+            document.getElementById('loading-screen').style.display = 'none';
+            document.getElementById('game-container').style.display = 'flex';
+            
+            // 렌더링 시작
+            game.running = true;
+            game.render();
+            game.gameLoop();
+            
+          } catch(e) {
+            document.getElementById('loading-content').innerHTML = '<h2 style="color:red;">오류 발생</h2><p style="color:#ccc;">' + e.message + '</p><pre style="color:#888;font-size:11px;text-align:left;max-height:300px;overflow:auto;">' + (e.stack||'') + '</pre>';
+          }
+        }, 100);
+      }
     });
   </script>
 </body>

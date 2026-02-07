@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>포모도로 타이머 | Pomodoro Timer</title>
+    <title>Pomodoro Timer</title>
     <style>
         * {
             margin: 0;
@@ -12,14 +12,24 @@
         }
 
         :root {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8f9fa;
+            --bg-tertiary: #e9ecef;
+            --text-primary: #212529;
+            --text-secondary: #6c757d;
+            --accent-work: #ef4444;
+            --accent-break: #22c55e;
+            --accent-long: #3b82f6;
+            --border: #dee2e6;
+            --shadow: rgba(0, 0, 0, 0.1);
+        }
+
+        [data-theme="dark"] {
             --bg-primary: #0f0f23;
             --bg-secondary: #1a1a2e;
             --bg-tertiary: #16213e;
             --text-primary: #e4e4e7;
             --text-secondary: #a1a1aa;
-            --accent-work: #ef4444;
-            --accent-break: #22c55e;
-            --accent-long: #3b82f6;
             --border: #27272a;
             --shadow: rgba(0, 0, 0, 0.5);
         }
@@ -33,6 +43,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            transition: background 0.3s, color 0.3s;
         }
 
         .container {
@@ -56,12 +67,36 @@
             font-size: 0.9rem;
         }
 
+        .theme-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: var(--bg-secondary);
+            border: 2px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            z-index: 1000;
+            box-shadow: 0 4px 6px var(--shadow);
+        }
+
+        .theme-toggle:hover {
+            transform: scale(1.1);
+        }
+
         .card {
             background: var(--bg-secondary);
             border-radius: 20px;
             padding: 40px;
             border: 1px solid var(--border);
             text-align: center;
+            box-shadow: 0 4px 15px var(--shadow);
         }
 
         .status-badge {
@@ -255,6 +290,25 @@
             cursor: pointer;
         }
 
+        .weekly-chart {
+            background: var(--bg-tertiary);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            border: 1px solid var(--border);
+        }
+
+        .chart-title {
+            font-weight: 700;
+            margin-bottom: 15px;
+            color: var(--text-primary);
+        }
+
+        .chart-canvas {
+            width: 100%;
+            height: 150px;
+        }
+
         @media (max-width: 768px) {
             .card {
                 padding: 30px 20px;
@@ -280,13 +334,23 @@
             .btn {
                 width: 100%;
             }
+
+            .theme-toggle {
+                top: 10px;
+                right: 10px;
+                width: 40px;
+                height: 40px;
+                font-size: 1.2rem;
+            }
         }
     </style>
 </head>
 <body>
+    <button class="theme-toggle" onclick="toggleTheme()" id="theme-btn">🌙</button>
+
     <div class="container">
         <header>
-            <h1>🍅 포모도로 타이머</h1>
+            <h1>🍅 Pomodoro Timer</h1>
             <p class="subtitle">집중과 휴식의 균형, 25분 작업 + 5분 휴식</p>
         </header>
 
@@ -321,6 +385,11 @@
                     <div class="stat-label">총 완료</div>
                     <div id="total-count" class="stat-value">0</div>
                 </div>
+            </div>
+
+            <div class="weekly-chart">
+                <div class="chart-title">📊 주간 통계</div>
+                <canvas id="weekly-canvas" class="chart-canvas"></canvas>
             </div>
 
             <div class="settings-toggle" onclick="toggleSettings()">
@@ -370,17 +439,41 @@
             autoStart: false,
             todayCount: 0,
             totalCount: 0,
-            lastDate: new Date().toDateString()
+            lastDate: new Date().toDateString(),
+            weeklyData: {}
         };
 
         const circumference = 2 * Math.PI * 130;
         const progressCircle = document.getElementById('progress-circle');
 
+        // Theme management
+        function initTheme() {
+            const saved = localStorage.getItem('pomodoro-theme') || 'light';
+            document.documentElement.setAttribute('data-theme', saved);
+            updateThemeIcon();
+        }
+
+        function toggleTheme() {
+            const current = document.documentElement.getAttribute('data-theme') || 'light';
+            const next = current === 'light' ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-theme', next);
+            localStorage.setItem('pomodoro-theme', next);
+            updateThemeIcon();
+            drawWeeklyChart(); // Redraw chart with new theme
+        }
+
+        function updateThemeIcon() {
+            const theme = document.documentElement.getAttribute('data-theme');
+            document.getElementById('theme-btn').textContent = theme === 'light' ? '🌙' : '☀️';
+        }
+
         // Initialize
         function init() {
+            initTheme();
             loadSettings();
             loadStats();
             updateDisplay();
+            drawWeeklyChart();
             requestNotificationPermission();
         }
 
@@ -436,7 +529,7 @@
             const secs = timeLeft % 60;
             const timeStr = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
             document.getElementById('timer').textContent = timeStr;
-            document.title = `${timeStr} - ${isWorking ? '작업' : '휴식'} | 포모도로`;
+            document.title = `${timeStr} - ${isWorking ? '작업' : '휴식'} | Pomodoro`;
             
             // Update progress circle
             const progress = (timeLeft / totalTime) * circumference;
@@ -492,7 +585,13 @@
                 settings.todayCount++;
                 settings.totalCount++;
                 currentCycle++;
+                
+                // Update weekly data
+                const date = new Date().toISOString().split('T')[0];
+                settings.weeklyData[date] = (settings.weeklyData[date] || 0) + 1;
+                
                 localStorage.setItem('pomodoroSettings', JSON.stringify(settings));
+                drawWeeklyChart();
 
                 if (currentCycle >= 4) {
                     // Long break
@@ -541,6 +640,67 @@
             }
         }
 
+        function drawWeeklyChart() {
+            const canvas = document.getElementById('weekly-canvas');
+            const ctx = canvas.getContext('2d');
+            const dpr = window.devicePixelRatio || 1;
+            
+            // Set canvas size
+            canvas.width = canvas.offsetWidth * dpr;
+            canvas.height = canvas.offsetHeight * dpr;
+            ctx.scale(dpr, dpr);
+
+            const width = canvas.offsetWidth;
+            const height = canvas.offsetHeight;
+
+            // Get last 7 days data
+            const days = [];
+            const counts = [];
+            const today = new Date();
+            
+            for (let i = 6; i >= 0; i--) {
+                const date = new Date(today);
+                date.setDate(date.getDate() - i);
+                const dateStr = date.toISOString().split('T')[0];
+                const dayName = ['일', '월', '화', '수', '목', '금', '토'][date.getDay()];
+                days.push(dayName);
+                counts.push(settings.weeklyData[dateStr] || 0);
+            }
+
+            const maxCount = Math.max(...counts, 1);
+            const barWidth = width / 7;
+            const maxBarHeight = height - 40;
+
+            // Get theme colors
+            const theme = document.documentElement.getAttribute('data-theme') || 'light';
+            const textColor = theme === 'light' ? '#212529' : '#e4e4e7';
+            const barColor = theme === 'light' ? '#ef4444' : '#ef4444';
+
+            // Clear canvas
+            ctx.clearRect(0, 0, width, height);
+
+            // Draw bars
+            counts.forEach((count, i) => {
+                const barHeight = (count / maxCount) * maxBarHeight;
+                const x = i * barWidth + barWidth * 0.2;
+                const y = height - 20 - barHeight;
+                const w = barWidth * 0.6;
+
+                // Bar
+                ctx.fillStyle = barColor;
+                ctx.fillRect(x, y, w, barHeight);
+
+                // Count label
+                ctx.fillStyle = textColor;
+                ctx.font = '12px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(count, x + w / 2, y - 5);
+
+                // Day label
+                ctx.fillText(days[i], x + w / 2, height - 5);
+            });
+        }
+
         function playBeep(volume = 0.3) {
             try {
                 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -583,6 +743,9 @@
                 });
             }
         }
+
+        // Redraw chart on resize
+        window.addEventListener('resize', drawWeeklyChart);
 
         // Initialize on load
         init();

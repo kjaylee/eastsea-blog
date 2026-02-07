@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Fruit Catch | eastsea.monster</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
+            color: #eee; display: flex; justify-content: center; align-items: center;
+            min-height: 100vh; padding: 20px; touch-action: none;
+        }
+        #game { text-align: center; max-width: 600px; width: 100%; }
+        h1 { font-size: 2rem; margin-bottom: 10px; background: linear-gradient(135deg, #e94560, #0f3460); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        #info { display: flex; justify-content: space-around; margin: 15px 0; font-size: 0.9rem; }
+        #info div { background: rgba(255,255,255,0.05); padding: 8px 16px; border-radius: 8px; }
+        #info span { color: #e94560; font-weight: bold; font-size: 1.1rem; }
+        canvas { border: 2px solid #e94560; border-radius: 8px; display: block; margin: 0 auto; background: linear-gradient(180deg, #87CEEB 0%, #E0F6FF 100%); box-shadow: 0 4px 30px rgba(233,69,96,0.3); max-width: 100%; }
+        .btn {
+            background: #e94560; border: none; color: #eee;
+            padding: 15px 30px; border-radius: 8px; font-size: 1rem; cursor: pointer; transition: all 0.2s;
+            user-select: none; -webkit-tap-highlight-color: transparent; font-weight: bold; margin-top: 15px;
+        }
+        .btn:active { background: #c7354a; transform: scale(0.95); }
+        #menu { text-align: center; }
+        #menu p { color: #aaa; font-size: 0.85rem; margin: 10px 0; line-height: 1.6; }
+        .hidden { display: none; }
+        @media (max-width: 600px) {
+            h1 { font-size: 1.5rem; }
+        }
+    </style>
+</head>
+<body>
+    <div id="game">
+        <h1>🧺 과일 캐치</h1>
+        <div id="menu">
+            <p>떨어지는 과일을 바구니로 받으세요!<br>💣 폭탄은 피하세요<br>Mouse/Touch to move basket</p>
+            <button id="start" class="btn">게임 시작</button>
+        </div>
+        <div id="play" class="hidden">
+            <div id="info">
+                <div>점수 <span id="score">0</span></div>
+                <div>생명 <span id="lives">❤️❤️❤️</span></div>
+            </div>
+            <canvas id="canvas" width="400" height="600"></canvas>
+            <button id="restart" class="btn">다시 시작</button>
+        </div>
+    </div>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const W = canvas.width, H = canvas.height;
+
+        const FRUITS = ['🍎', '🍊', '🍋', '🍌', '🍇', '🍓', '🍒', '🥝', '🍑'];
+        const BOMB = '💣';
+        const BASKET = '🧺';
+
+        let basket, items, score, lives, gameOver, lastTime, spawnTime;
+
+        function init() {
+            basket = { x: W / 2, y: H - 80, w: 60, h: 60 };
+            items = [];
+            score = 0; lives = 3; gameOver = false;
+            lastTime = 0; spawnTime = 0;
+            updateUI();
+        }
+
+        function spawnItem() {
+            const isBomb = Math.random() < 0.15;
+            items.push({
+                x: Math.random() * (W - 40) + 20,
+                y: -40,
+                speed: 2 + Math.random() * 3 + score / 500,
+                emoji: isBomb ? BOMB : FRUITS[Math.floor(Math.random() * FRUITS.length)],
+                isBomb
+            });
+        }
+
+        function draw() {
+            // Sky gradient
+            const grad = ctx.createLinearGradient(0, 0, 0, H);
+            grad.addColorStop(0, '#87CEEB');
+            grad.addColorStop(1, '#E0F6FF');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, W, H);
+
+            // Ground
+            ctx.fillStyle = '#8B4513';
+            ctx.fillRect(0, H - 60, W, 60);
+            ctx.fillStyle = '#228B22';
+            ctx.fillRect(0, H - 65, W, 5);
+
+            // Basket
+            ctx.font = '50px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(BASKET, basket.x, basket.y);
+
+            // Items
+            ctx.font = '36px Arial';
+            items.forEach(item => {
+                ctx.fillText(item.emoji, item.x, item.y);
+            });
+        }
+
+        function update(dt) {
+            items.forEach((item, idx) => {
+                item.y += item.speed;
+                // Check catch
+                if (item.y > basket.y - 40 && item.y < basket.y + 20 &&
+                    Math.abs(item.x - basket.x) < 50) {
+                    if (item.isBomb) {
+                        lives--;
+                        if (lives <= 0) { gameOver = true; }
+                        updateUI();
+                    } else {
+                        score += 10;
+                        updateUI();
+                    }
+                    items.splice(idx, 1);
+                } else if (item.y > H) {
+                    items.splice(idx, 1);
+                }
+            });
+        }
+
+        function updateUI() {
+            document.getElementById('score').textContent = score;
+            document.getElementById('lives').textContent = '❤️'.repeat(lives);
+        }
+
+        function endGame() {
+            alert(`게임 오버!\n점수: ${score}`);
+            showMenu();
+        }
+
+        function showMenu() {
+            document.getElementById('menu').classList.remove('hidden');
+            document.getElementById('play').classList.add('hidden');
+        }
+
+        function startGame() {
+            document.getElementById('menu').classList.add('hidden');
+            document.getElementById('play').classList.remove('hidden');
+            init(); draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function gameLoop(time) {
+            if (gameOver) { endGame(); return; }
+            const dt = time - lastTime;
+            lastTime = time;
+
+            spawnTime += dt;
+            if (spawnTime > Math.max(600, 1200 - score * 2)) {
+                spawnItem(); spawnTime = 0;
+            }
+
+            update(dt);
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Mouse/Touch controls
+        function moveBasket(clientX) {
+            const rect = canvas.getBoundingClientRect();
+            const x = (clientX - rect.left) * (W / rect.width);
+            basket.x = Math.max(30, Math.min(W - 30, x));
+            if (!gameOver) draw();
+        }
+
+        canvas.addEventListener('mousemove', e => moveBasket(e.clientX));
+        canvas.addEventListener('touchmove', e => {
+            e.preventDefault();
+            moveBasket(e.touches[0].clientX);
+        });
+
+        document.getElementById('start').addEventListener('click', startGame);
+        document.getElementById('restart').addEventListener('click', startGame);
+    </script>
+</body>
+</html>

@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Tetris Classic | eastsea.monster</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
+            color: #eee; display: flex; justify-content: center; align-items: center;
+            min-height: 100vh; padding: 20px; touch-action: none;
+        }
+        #game { text-align: center; max-width: 400px; width: 100%; }
+        h1 { font-size: 2rem; margin-bottom: 10px; background: linear-gradient(135deg, #e94560, #0f3460); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        #info { display: flex; justify-content: space-around; margin: 15px 0; font-size: 0.9rem; }
+        #info div { background: rgba(255,255,255,0.05); padding: 8px 16px; border-radius: 8px; }
+        #info span { color: #e94560; font-weight: bold; font-size: 1.1rem; }
+        canvas { border: 2px solid #e94560; border-radius: 8px; display: block; margin: 0 auto; background: #0a0a0a; box-shadow: 0 4px 30px rgba(233,69,96,0.3); }
+        #controls { margin-top: 15px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-width: 300px; margin: 15px auto; }
+        .btn {
+            background: rgba(233,69,96,0.2); border: 1px solid #e94560; color: #eee;
+            padding: 15px; border-radius: 8px; font-size: 1.2rem; cursor: pointer; transition: all 0.2s;
+            user-select: none; -webkit-tap-highlight-color: transparent;
+        }
+        .btn:active { background: #e94560; transform: scale(0.95); }
+        #start { background: #e94560; border: none; width: 100%; margin-top: 10px; font-weight: bold; }
+        #start:active { background: #c7354a; }
+        #menu { text-align: center; }
+        #menu p { color: #aaa; font-size: 0.85rem; margin: 10px 0; line-height: 1.6; }
+        .hidden { display: none; }
+        @media (max-width: 600px) {
+            h1 { font-size: 1.5rem; }
+            canvas { max-width: 280px; }
+        }
+    </style>
+</head>
+<body>
+    <div id="game">
+        <h1>🧱 테트리스 클래식</h1>
+        <div id="menu">
+            <p>7가지 블록을 쌓아 줄을 완성하세요!<br>Arrow keys or touch controls</p>
+            <button id="start" class="btn">게임 시작</button>
+        </div>
+        <div id="play" class="hidden">
+            <div id="info">
+                <div>점수 <span id="score">0</span></div>
+                <div>레벨 <span id="level">1</span></div>
+                <div>줄 <span id="lines">0</span></div>
+            </div>
+            <canvas id="canvas" width="300" height="600"></canvas>
+            <div id="controls">
+                <div></div>
+                <button class="btn" id="up">↻</button>
+                <div></div>
+                <button class="btn" id="left">←</button>
+                <button class="btn" id="down">↓</button>
+                <button class="btn" id="right">→</button>
+            </div>
+            <button id="restart" class="btn" style="margin-top:10px; width:100%;">다시 시작</button>
+        </div>
+    </div>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const COLS = 10, ROWS = 20, BLOCK = 30;
+        canvas.width = COLS * BLOCK; canvas.height = ROWS * BLOCK;
+
+        const SHAPES = [
+            [[1,1,1,1]], // I
+            [[1,1],[1,1]], // O
+            [[0,1,0],[1,1,1]], // T
+            [[1,0,0],[1,1,1]], // L
+            [[0,0,1],[1,1,1]], // J
+            [[0,1,1],[1,1,0]], // S
+            [[1,1,0],[0,1,1]]  // Z
+        ];
+        const COLORS = ['#00f0f0', '#f0f000', '#a000f0', '#f0a000', '#0000f0', '#00f000', '#f00000'];
+
+        let board, current, score, level, lines, gameOver, dropTime, lastTime;
+
+        function init() {
+            board = Array(ROWS).fill(0).map(() => Array(COLS).fill(0));
+            score = 0; level = 1; lines = 0; gameOver = false;
+            dropTime = 1000; lastTime = 0;
+            current = newPiece();
+            updateUI();
+        }
+
+        function newPiece() {
+            const idx = Math.floor(Math.random() * SHAPES.length);
+            return {
+                shape: SHAPES[idx],
+                color: COLORS[idx],
+                x: Math.floor(COLS / 2) - 1,
+                y: 0
+            };
+        }
+
+        function draw() {
+            ctx.fillStyle = '#0a0a0a'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            // Board
+            for (let y = 0; y < ROWS; y++) {
+                for (let x = 0; x < COLS; x++) {
+                    if (board[y][x]) {
+                        ctx.fillStyle = board[y][x];
+                        ctx.fillRect(x * BLOCK, y * BLOCK, BLOCK - 1, BLOCK - 1);
+                    }
+                }
+            }
+            // Current piece
+            if (current) {
+                ctx.fillStyle = current.color;
+                for (let y = 0; y < current.shape.length; y++) {
+                    for (let x = 0; x < current.shape[y].length; x++) {
+                        if (current.shape[y][x]) {
+                            ctx.fillRect((current.x + x) * BLOCK, (current.y + y) * BLOCK, BLOCK - 1, BLOCK - 1);
+                        }
+                    }
+                }
+            }
+        }
+
+        function collide(x, y, shape) {
+            for (let row = 0; row < shape.length; row++) {
+                for (let col = 0; col < shape[row].length; col++) {
+                    if (shape[row][col]) {
+                        const newX = x + col, newY = y + row;
+                        if (newX < 0 || newX >= COLS || newY >= ROWS || (newY >= 0 && board[newY][newX])) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        function merge() {
+            for (let y = 0; y < current.shape.length; y++) {
+                for (let x = 0; x < current.shape[y].length; x++) {
+                    if (current.shape[y][x]) {
+                        if (current.y + y < 0) { gameOver = true; return; }
+                        board[current.y + y][current.x + x] = current.color;
+                    }
+                }
+            }
+        }
+
+        function clearLines() {
+            let cleared = 0;
+            for (let y = ROWS - 1; y >= 0; y--) {
+                if (board[y].every(cell => cell)) {
+                    board.splice(y, 1);
+                    board.unshift(Array(COLS).fill(0));
+                    cleared++; y++;
+                }
+            }
+            if (cleared > 0) {
+                lines += cleared;
+                score += [0, 40, 100, 300, 1200][cleared] * level;
+                level = Math.floor(lines / 10) + 1;
+                dropTime = Math.max(100, 1000 - (level - 1) * 50);
+                updateUI();
+            }
+        }
+
+        function move(dx) {
+            if (!collide(current.x + dx, current.y, current.shape)) {
+                current.x += dx; draw();
+            }
+        }
+
+        function drop() {
+            if (!collide(current.x, current.y + 1, current.shape)) {
+                current.y++;
+            } else {
+                merge();
+                if (gameOver) { endGame(); return; }
+                clearLines();
+                current = newPiece();
+                if (collide(current.x, current.y, current.shape)) { gameOver = true; endGame(); return; }
+            }
+            draw();
+        }
+
+        function rotate() {
+            const rotated = current.shape[0].map((_, i) => current.shape.map(row => row[i]).reverse());
+            if (!collide(current.x, current.y, rotated)) {
+                current.shape = rotated; draw();
+            }
+        }
+
+        function hardDrop() {
+            while (!collide(current.x, current.y + 1, current.shape)) { current.y++; }
+            drop();
+        }
+
+        function updateUI() {
+            document.getElementById('score').textContent = score;
+            document.getElementById('level').textContent = level;
+            document.getElementById('lines').textContent = lines;
+        }
+
+        function endGame() {
+            alert(`게임 오버!\n점수: ${score}\n레벨: ${level}\n줄: ${lines}`);
+            showMenu();
+        }
+
+        function showMenu() {
+            document.getElementById('menu').classList.remove('hidden');
+            document.getElementById('play').classList.add('hidden');
+        }
+
+        function startGame() {
+            document.getElementById('menu').classList.add('hidden');
+            document.getElementById('play').classList.remove('hidden');
+            init(); draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function gameLoop(time) {
+            if (gameOver) return;
+            if (time - lastTime > dropTime) {
+                drop(); lastTime = time;
+            }
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Controls
+        document.addEventListener('keydown', e => {
+            if (gameOver || document.getElementById('play').classList.contains('hidden')) return;
+            if (e.key === 'ArrowLeft') move(-1);
+            else if (e.key === 'ArrowRight') move(1);
+            else if (e.key === 'ArrowDown') drop();
+            else if (e.key === 'ArrowUp') rotate();
+            else if (e.key === ' ') { e.preventDefault(); hardDrop(); }
+        });
+
+        document.getElementById('left').addEventListener('click', () => move(-1));
+        document.getElementById('right').addEventListener('click', () => move(1));
+        document.getElementById('down').addEventListener('click', () => drop());
+        document.getElementById('up').addEventListener('click', () => rotate());
+        document.getElementById('start').addEventListener('click', startGame);
+        document.getElementById('restart').addEventListener('click', startGame);
+    </script>
+</body>
+</html>

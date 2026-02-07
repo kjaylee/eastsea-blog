@@ -135,10 +135,55 @@
             font-size: 0.9em;
         }
         
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin-top: 30px;
+            flex-wrap: wrap;
+        }
+        
+        .pagination button {
+            padding: 10px 18px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        
+        .pagination button:hover:not(:disabled) {
+            background: #764ba2;
+            transform: scale(1.05);
+        }
+        
+        .pagination button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .pagination .page-info {
+            color: #666;
+            font-weight: 600;
+            padding: 0 10px;
+        }
+        
         .loading {
             text-align: center;
             padding: 60px 20px;
             color: #666;
+        }
+        
+        .description {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            color: #555;
+            line-height: 1.6;
         }
         
         @media (max-width: 768px) {
@@ -178,12 +223,17 @@
             <div id="episodes-list" class="loading">
                 <p>에피소드 목록을 불러오는 중...</p>
             </div>
+            <div id="pagination" class="pagination" style="display: none;"></div>
         </div>
     </div>
     
     <script>
         const params = new URLSearchParams(window.location.search);
         const series = params.get('series');
+        const EPISODES_PER_PAGE = 20;
+        let currentPage = 1;
+        let allEpisodes = [];
+        let currentSlug = '';
         
         if (!series) {
             document.getElementById('episodes-list').innerHTML = `
@@ -230,7 +280,17 @@
                 `;
                 document.getElementById('series-stats').innerHTML = statsHtml;
                 
-                renderEpisodes(seriesInfo.episodes, seriesInfo.slug);
+                // Add description if available
+                if (seriesInfo.description) {
+                    const descHtml = `<div class="description">${seriesInfo.description}</div>`;
+                    document.getElementById('series-stats').insertAdjacentHTML('afterend', descHtml);
+                }
+                
+                // Store for pagination
+                allEpisodes = [...seriesInfo.episodes].reverse(); // Latest first
+                currentSlug = seriesInfo.slug;
+                
+                renderEpisodesPage(1);
                 
             } catch (error) {
                 document.getElementById('episodes-list').innerHTML = `
@@ -241,8 +301,8 @@
             }
         }
         
-        function renderEpisodes(episodes, slug) {
-            if (episodes.length === 0) {
+        function renderEpisodesPage(page) {
+            if (allEpisodes.length === 0) {
                 document.getElementById('episodes-list').innerHTML = `
                     <div class="loading">
                         <p style="color: #999;">아직 연재된 에피소드가 없습니다.</p>
@@ -251,15 +311,17 @@
                 return;
             }
             
-            // Reverse to show latest first
-            const reversedEpisodes = [...episodes].reverse();
+            currentPage = page;
+            const startIdx = (page - 1) * EPISODES_PER_PAGE;
+            const endIdx = startIdx + EPISODES_PER_PAGE;
+            const pageEpisodes = allEpisodes.slice(startIdx, endIdx);
             
-            const html = reversedEpisodes.map(ep => {
+            const html = pageEpisodes.map(ep => {
                 const isNewEp = isNew(ep.date);
                 const newBadge = isNewEp ? '<span class="new-badge">NEW</span>' : '';
                 
                 return `
-                    <div class="episode-item" onclick="location.href='view.html?series=${slug}&episode=${ep.num}'">
+                    <div class="episode-item" onclick="location.href='view.html?series=${currentSlug}&episode=${ep.num}'">
                         <span class="episode-title">
                             제${parseInt(ep.num)}화
                             ${newBadge}
@@ -270,6 +332,26 @@
             }).join('');
             
             document.getElementById('episodes-list').innerHTML = html;
+            
+            // Render pagination if needed
+            const totalPages = Math.ceil(allEpisodes.length / EPISODES_PER_PAGE);
+            if (totalPages > 1) {
+                renderPagination(page, totalPages);
+            }
+        }
+        
+        function renderPagination(currentPage, totalPages) {
+            const paginationEl = document.getElementById('pagination');
+            
+            const prevDisabled = currentPage === 1 ? 'disabled' : '';
+            const nextDisabled = currentPage === totalPages ? 'disabled' : '';
+            
+            paginationEl.innerHTML = `
+                <button onclick="renderEpisodesPage(${currentPage - 1})" ${prevDisabled}>← 이전</button>
+                <span class="page-info">${currentPage} / ${totalPages}</span>
+                <button onclick="renderEpisodesPage(${currentPage + 1})" ${nextDisabled}>다음 →</button>
+            `;
+            paginationEl.style.display = 'flex';
         }
     </script>
 </body>

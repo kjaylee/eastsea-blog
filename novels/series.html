@@ -41,6 +41,31 @@
         .header .meta {
             color: #666;
             font-size: 1em;
+            margin-bottom: 15px;
+        }
+        
+        .header .genre {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        .genre-tag {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 6px 15px;
+            border-radius: 15px;
+            font-size: 0.85em;
+        }
+        
+        .stats {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-top: 15px;
+            color: #888;
+            font-size: 0.9em;
         }
         
         .back-btn {
@@ -91,6 +116,18 @@
             font-weight: 600;
             color: #333;
             font-size: 1.05em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .new-badge {
+            background: #ff4757;
+            color: white;
+            padding: 3px 10px;
+            border-radius: 10px;
+            font-size: 0.7em;
+            font-weight: 700;
         }
         
         .episode-date {
@@ -118,6 +155,11 @@
                 align-items: flex-start;
                 gap: 8px;
             }
+            
+            .stats {
+                flex-direction: column;
+                gap: 5px;
+            }
         }
     </style>
 </head>
@@ -125,9 +167,11 @@
     <div class="container">
         <a href="index.html" class="back-btn">← 전체 소설 목록</a>
         
-        <div class="header">
+        <div class="header" id="series-header">
             <h1 id="series-title">시리즈 에피소드</h1>
             <p class="meta" id="series-author">작가: </p>
+            <div class="genre" id="series-genre"></div>
+            <div class="stats" id="series-stats"></div>
         </div>
         
         <div class="episodes-container">
@@ -141,46 +185,31 @@
         const params = new URLSearchParams(window.location.search);
         const series = params.get('series');
         
-        // Auto-generated series data
-        const seriesData = {
-            'F급짐꾼이랭킹1위의스승님': {
-                title: 'F급 짐꾼이 랭킹 1위의 스승님',
-                author: '박도윤',
-                episodes: [{"series":"F급 짐꾼이 랭킹 1위의 스승님","episode":1,"title":"[웹소설] F급 짐꾼이 랭킹 1위의 스승님 - 1화","date":"2026-02-05","author":"박도윤","genre":["regression","academy","munchkin","mentor"]}]
-            }
-,
-            '금융의게임': {
-                title: '금융의 게임',
-                author: '김서현 (Author-01)',
-                episodes: [{"series":"금융의 게임","episode":1,"title":"각성","date":"2026-02-05","author":"김서현 (Author-01)","genre":["현대판타지","경영","전문가","AI"]}]
-            }
-,
-            '내성좌가전여친이다': {
-                title: '내 성좌가 전여친이다',
-                author: '박도윤',
-                episodes: [{"series":"내 성좌가 전여친이다","episode":1,"title":"[웹소설] 내 성좌가 전여친이다 - 1화","date":"2026-02-05","author":"박도윤","genre":["hunter","comedy","constellation","romance"]}]
-            }
-,
-            '던전에서나만편의점합니다': {
-                title: '던전에서 나만 편의점 합니다',
-                author: '박도윤',
-                episodes: [{"series":"던전에서 나만 편의점 합니다","episode":1,"title":"[웹소설] 던전에서 나만 편의점 합니다 - 1화","date":"2026-02-05","author":"박도윤","genre":["fantasy","management","healing","dungeon"]}]
-            }
-        };
+        if (!series) {
+            document.getElementById('episodes-list').innerHTML = `
+                <div class="loading">
+                    <p style="color: #d9534f;">❌ 시리즈를 지정해주세요.</p>
+                </div>
+            `;
+        } else {
+            loadSeries();
+        }
         
-        // Series aliases for shortened URLs
-        const seriesAliases = {
-            'F급짐꾼이랭킹1위': 'F급짐꾼이랭킹1위의스승님',
-            '던전에서나만편의점': '던전에서나만편의점합니다',
-            '금융의게임': '금융의게임',
-            '내성좌가전여친이다': '내성좌가전여친이다'
-        };
+        // Check if episode is "NEW" (within 24 hours)
+        function isNew(dateStr) {
+            const episodeDate = new Date(dateStr);
+            const now = new Date();
+            const diffHours = (now - episodeDate) / (1000 * 60 * 60);
+            return diffHours <= 24;
+        }
         
-        function loadEpisodes() {
+        async function loadSeries() {
             try {
-                // Resolve alias to full series key
-                const resolvedSeries = seriesAliases[series] || series;
-                const seriesInfo = seriesData[resolvedSeries];
+                const response = await fetch('manifest.json');
+                if (!response.ok) throw new Error('소설 목록을 불러올 수 없습니다.');
+                
+                const data = await response.json();
+                const seriesInfo = data.novels.find(n => n.slug === series);
                 
                 if (!seriesInfo) throw new Error('시리즈를 찾을 수 없습니다.');
                 
@@ -188,7 +217,20 @@
                 document.getElementById('series-author').textContent = '작가: ' + seriesInfo.author;
                 document.getElementById('page-title').textContent = `${seriesInfo.title} - eastsea`;
                 
-                renderEpisodes(seriesInfo.episodes, resolvedSeries);
+                // Render genres
+                const genresHtml = seriesInfo.genre.map(g => 
+                    `<span class="genre-tag">${g}</span>`
+                ).join('');
+                document.getElementById('series-genre').innerHTML = genresHtml;
+                
+                // Render stats
+                const statsHtml = `
+                    <div>📖 총 ${seriesInfo.totalEpisodes}화</div>
+                    <div>📅 최신 업데이트: ${seriesInfo.latestDate}</div>
+                `;
+                document.getElementById('series-stats').innerHTML = statsHtml;
+                
+                renderEpisodes(seriesInfo.episodes, seriesInfo.slug);
                 
             } catch (error) {
                 document.getElementById('episodes-list').innerHTML = `
@@ -199,7 +241,7 @@
             }
         }
         
-        function renderEpisodes(episodes, resolvedSeries) {
+        function renderEpisodes(episodes, slug) {
             if (episodes.length === 0) {
                 document.getElementById('episodes-list').innerHTML = `
                     <div class="loading">
@@ -209,12 +251,19 @@
                 return;
             }
             
-            const html = episodes.map(ep => {
-                const epNum = String(ep.episode).padStart(3, '0');
-                const title = ep.title.replace(/^\[웹소설\]\s*/, '').replace(/\s*-\s*\d+화$/, '');
+            // Reverse to show latest first
+            const reversedEpisodes = [...episodes].reverse();
+            
+            const html = reversedEpisodes.map(ep => {
+                const isNewEp = isNew(ep.date);
+                const newBadge = isNewEp ? '<span class="new-badge">NEW</span>' : '';
+                
                 return `
-                    <div class="episode-item" onclick="location.href='view.html?series=${resolvedSeries}&episode=${epNum}'">
-                        <span class="episode-title">제${ep.episode}화${title ? ': ' + title : ''}</span>
+                    <div class="episode-item" onclick="location.href='view.html?series=${slug}&episode=${ep.num}'">
+                        <span class="episode-title">
+                            제${parseInt(ep.num)}화
+                            ${newBadge}
+                        </span>
                         <span class="episode-date">${ep.date}</span>
                     </div>
                 `;
@@ -222,9 +271,6 @@
             
             document.getElementById('episodes-list').innerHTML = html;
         }
-        
-        // Load on page load
-        loadEpisodes();
     </script>
 </body>
 </html>

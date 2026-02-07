@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>json-diff</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --surface: #1e293b;
+            --border: #334155;
+            --text: #f1f5f9;
+            --text-dim: #94a3b8;
+            --primary: #06b6d4;
+            --added: #10b981;
+            --deleted: #ef4444;
+            --changed: #f59e0b;
+            --added-bg: rgba(16, 185, 129, 0.1);
+            --deleted-bg: rgba(239, 68, 68, 0.1);
+            --changed-bg: rgba(245, 158, 11, 0.1);
+        }
+
+        [data-theme="light"] {
+            --bg: #f8fafc;
+            --surface: #ffffff;
+            --border: #e2e8f0;
+            --text: #0f172a;
+            --text-dim: #64748b;
+            --primary: #0891b2;
+            --added: #059669;
+            --deleted: #dc2626;
+            --changed: #d97706;
+            --added-bg: rgba(16, 185, 129, 0.15);
+            --deleted-bg: rgba(239, 68, 68, 0.15);
+            --changed-bg: rgba(245, 158, 11, 0.15);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        .toolbar {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: 16px 20px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .toolbar h1 {
+            font-size: 20px;
+            font-weight: 600;
+            margin-right: auto;
+        }
+
+        .btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+            opacity: 0.9;
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border);
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            padding: 20px;
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .panel {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .panel-header {
+            padding: 12px 16px;
+            background: var(--border);
+            font-weight: 600;
+            font-size: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .panel-header .label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        textarea {
+            flex: 1;
+            padding: 16px;
+            background: var(--surface);
+            color: var(--text);
+            border: none;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            resize: none;
+            outline: none;
+            min-height: 400px;
+        }
+
+        .diff-result {
+            grid-column: 1 / -1;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .diff-content {
+            padding: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.8;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .diff-line {
+            padding: 4px 8px;
+            margin: 2px 0;
+            border-radius: 4px;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .diff-line .path {
+            color: var(--text-dim);
+            min-width: 200px;
+            font-weight: 600;
+        }
+
+        .diff-line .value {
+            flex: 1;
+        }
+
+        .diff-added {
+            background: var(--added-bg);
+            border-left: 3px solid var(--added);
+        }
+
+        .diff-deleted {
+            background: var(--deleted-bg);
+            border-left: 3px solid var(--deleted);
+        }
+
+        .diff-changed {
+            background: var(--changed-bg);
+            border-left: 3px solid var(--changed);
+        }
+
+        .diff-added .marker { color: var(--added); font-weight: bold; }
+        .diff-deleted .marker { color: var(--deleted); font-weight: bold; }
+        .diff-changed .marker { color: var(--changed); font-weight: bold; }
+
+        .legend {
+            display: flex;
+            gap: 20px;
+            padding: 12px 16px;
+            background: var(--border);
+            font-size: 12px;
+            flex-wrap: wrap;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .legend-badge {
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+        }
+
+        .badge-added { background: var(--added); }
+        .badge-deleted { background: var(--deleted); }
+        .badge-changed { background: var(--changed); }
+
+        .error-msg {
+            color: var(--deleted);
+            padding: 20px;
+            text-align: center;
+            font-weight: 500;
+        }
+
+        .empty-msg {
+            color: var(--text-dim);
+            padding: 40px 20px;
+            text-align: center;
+        }
+
+        @media (max-width: 1024px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+            .diff-result {
+                grid-column: 1;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .toolbar {
+                padding: 12px;
+            }
+            .toolbar h1 {
+                font-size: 16px;
+            }
+            .container {
+                padding: 12px;
+                gap: 12px;
+            }
+            .diff-line .path {
+                min-width: 120px;
+                font-size: 11px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <h1>🔍 JSON Diff Viewer</h1>
+        <button class="btn" id="compareBtn">Compare</button>
+        <button class="btn btn-secondary" id="clearBtn">Clear</button>
+        <button class="btn btn-secondary" id="formatBtn">Format Both</button>
+        <button class="btn btn-secondary" id="themeBtn">🌙</button>
+    </div>
+
+    <div class="container">
+        <div class="panel">
+            <div class="panel-header">
+                <div class="label">📄 JSON A (Original)</div>
+                <button class="btn btn-secondary" style="padding: 4px 12px; font-size: 12px;" id="formatA">Format</button>
+            </div>
+            <textarea id="jsonA" placeholder='{
+  "name": "John",
+  "age": 30,
+  "city": "Seoul"
+}'></textarea>
+        </div>
+
+        <div class="panel">
+            <div class="panel-header">
+                <div class="label">📄 JSON B (Modified)</div>
+                <button class="btn btn-secondary" style="padding: 4px 12px; font-size: 12px;" id="formatB">Format</button>
+            </div>
+            <textarea id="jsonB" placeholder='{
+  "name": "John",
+  "age": 31,
+  "country": "Korea"
+}'></textarea>
+        </div>
+
+        <div class="diff-result">
+            <div class="panel-header">
+                <div class="label">📊 Differences</div>
+                <div class="legend">
+                    <div class="legend-item">
+                        <div class="legend-badge badge-added"></div>
+                        <span>Added</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-badge badge-deleted"></div>
+                        <span>Deleted</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-badge badge-changed"></div>
+                        <span>Changed</span>
+                    </div>
+                </div>
+            </div>
+            <div class="diff-content" id="diffResult">
+                <div class="empty-msg">👆 Enter JSON in both panels and click <strong>Compare</strong></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const jsonA = document.getElementById('jsonA');
+        const jsonB = document.getElementById('jsonB');
+        const diffResult = document.getElementById('diffResult');
+        const compareBtn = document.getElementById('compareBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const formatBtn = document.getElementById('formatBtn');
+        const formatA = document.getElementById('formatA');
+        const formatB = document.getElementById('formatB');
+        const themeBtn = document.getElementById('themeBtn');
+
+        function formatJSON(textarea) {
+            try {
+                const parsed = JSON.parse(textarea.value);
+                textarea.value = JSON.stringify(parsed, null, 2);
+            } catch (e) {
+                alert('Invalid JSON: ' + e.message);
+            }
+        }
+
+        function flattenObject(obj, prefix = '') {
+            const result = {};
+            for (const key in obj) {
+                const path = prefix ? `${prefix}.${key}` : key;
+                if (obj[key] !== null && typeof obj[key] === 'object' && !Array.isArray(obj[key])) {
+                    Object.assign(result, flattenObject(obj[key], path));
+                } else {
+                    result[path] = obj[key];
+                }
+            }
+            return result;
+        }
+
+        function compareJSON() {
+            try {
+                const objA = JSON.parse(jsonA.value || '{}');
+                const objB = JSON.parse(jsonB.value || '{}');
+
+                const flatA = flattenObject(objA);
+                const flatB = flattenObject(objB);
+
+                const allKeys = new Set([...Object.keys(flatA), ...Object.keys(flatB)]);
+                
+                let html = '';
+                let hasChanges = false;
+
+                allKeys.forEach(key => {
+                    const valueA = flatA[key];
+                    const valueB = flatB[key];
+
+                    if (!(key in flatA)) {
+                        hasChanges = true;
+                        html += `
+                            <div class="diff-line diff-added">
+                                <span class="marker">+</span>
+                                <span class="path">${escapeHtml(key)}</span>
+                                <span class="value">${escapeHtml(JSON.stringify(valueB))}</span>
+                            </div>
+                        `;
+                    } else if (!(key in flatB)) {
+                        hasChanges = true;
+                        html += `
+                            <div class="diff-line diff-deleted">
+                                <span class="marker">−</span>
+                                <span class="path">${escapeHtml(key)}</span>
+                                <span class="value">${escapeHtml(JSON.stringify(valueA))}</span>
+                            </div>
+                        `;
+                    } else if (JSON.stringify(valueA) !== JSON.stringify(valueB)) {
+                        hasChanges = true;
+                        html += `
+                            <div class="diff-line diff-changed">
+                                <span class="marker">~</span>
+                                <span class="path">${escapeHtml(key)}</span>
+                                <span class="value">
+                                    ${escapeHtml(JSON.stringify(valueA))} → ${escapeHtml(JSON.stringify(valueB))}
+                                </span>
+                            </div>
+                        `;
+                    }
+                });
+
+                if (!hasChanges) {
+                    diffResult.innerHTML = '<div class="empty-msg">✅ No differences found</div>';
+                } else {
+                    diffResult.innerHTML = html;
+                }
+
+            } catch (e) {
+                diffResult.innerHTML = `<div class="error-msg">❌ Error: ${escapeHtml(e.message)}</div>`;
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        formatA.addEventListener('click', () => formatJSON(jsonA));
+        formatB.addEventListener('click', () => formatJSON(jsonB));
+        formatBtn.addEventListener('click', () => {
+            formatJSON(jsonA);
+            formatJSON(jsonB);
+        });
+
+        compareBtn.addEventListener('click', compareJSON);
+
+        clearBtn.addEventListener('click', () => {
+            jsonA.value = '';
+            jsonB.value = '';
+            diffResult.innerHTML = '<div class="empty-msg">👆 Enter JSON in both panels and click <strong>Compare</strong></div>';
+        });
+
+        // Auto-compare on input (debounced)
+        let timeout;
+        function debouncedCompare() {
+            clearTimeout(timeout);
+            timeout = setTimeout(compareJSON, 500);
+        }
+
+        jsonA.addEventListener('input', debouncedCompare);
+        jsonB.addEventListener('input', debouncedCompare);
+
+        // Theme toggle
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)');
+        let currentTheme = localStorage.getItem('theme') || (prefersDark.matches ? 'dark' : 'light');
+
+        function applyTheme(theme) {
+            if (theme === 'light') {
+                document.documentElement.setAttribute('data-theme', 'light');
+                themeBtn.textContent = '☀️';
+            } else {
+                document.documentElement.removeAttribute('data-theme');
+                themeBtn.textContent = '🌙';
+            }
+            currentTheme = theme;
+            localStorage.setItem('theme', theme);
+        }
+
+        applyTheme(currentTheme);
+
+        themeBtn.addEventListener('click', () => {
+            applyTheme(currentTheme === 'dark' ? 'light' : 'dark');
+        });
+
+        // Load sample data
+        window.addEventListener('load', () => {
+            if (!jsonA.value && !jsonB.value) {
+                jsonA.value = JSON.stringify({
+                    "name": "John Doe",
+                    "age": 30,
+                    "email": "john@example.com",
+                    "address": {
+                        "city": "Seoul",
+                        "country": "Korea"
+                    }
+                }, null, 2);
+
+                jsonB.value = JSON.stringify({
+                    "name": "John Doe",
+                    "age": 31,
+                    "email": "johndoe@example.com",
+                    "address": {
+                        "city": "Busan",
+                        "country": "Korea"
+                    },
+                    "phone": "+82-10-1234-5678"
+                }, null, 2);
+
+                compareJSON();
+            }
+        });
+    </script>
+</body>
+</html>

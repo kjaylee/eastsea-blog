@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Status Checker - API 상태 모니터링 도구</title>
+    <meta name="description" content="여러 API 엔드포인트의 응답 시간, 상태 코드, 헤더를 실시간으로 모니터링하고 그래프로 확인하세요">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8f9fa;
+            --bg-card: #ffffff;
+            --text-primary: #212529;
+            --text-secondary: #6c757d;
+            --border: #dee2e6;
+            --accent: #667eea;
+            --accent-dark: #5568d3;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --shadow: rgba(0, 0, 0, 0.1);
+            --glass-bg: rgba(255, 255, 255, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.3);
+        }
+
+        [data-theme="dark"] {
+            --bg-primary: #1a1a1a;
+            --bg-secondary: #2d2d2d;
+            --bg-card: #252525;
+            --text-primary: #f8f9fa;
+            --text-secondary: #adb5bd;
+            --border: #404040;
+            --shadow: rgba(0, 0, 0, 0.4);
+            --glass-bg: rgba(37, 37, 37, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.1);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR', sans-serif;
+            background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+            color: var(--text-primary);
+            padding: 20px;
+            min-height: 100vh;
+            transition: all 0.3s ease;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 30px 20px;
+            backdrop-filter: blur(10px);
+            background: var(--glass-bg);
+            border-radius: 20px;
+            border: 1px solid var(--glass-border);
+            box-shadow: 0 8px 32px var(--shadow);
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(135deg, var(--accent) 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+        }
+
+        .theme-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--bg-card);
+            border: 2px solid var(--border);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            box-shadow: 0 4px 15px var(--shadow);
+            transition: transform 0.2s ease;
+            z-index: 100;
+        }
+
+        .theme-toggle:hover {
+            transform: scale(1.1);
+        }
+
+        .input-section {
+            backdrop-filter: blur(10px);
+            background: var(--glass-bg);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            border: 1px solid var(--glass-border);
+            box-shadow: 0 8px 32px var(--shadow);
+        }
+
+        .url-input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .url-input-group input {
+            flex: 1;
+            padding: 15px;
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            background: var(--bg-card);
+            color: var(--text-primary);
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+
+        .url-input-group input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .btn {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: var(--bg-card);
+            color: var(--text-primary);
+            border: 2px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--bg-secondary);
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .endpoints-list {
+            margin-top: 30px;
+        }
+
+        .endpoint-item {
+            backdrop-filter: blur(10px);
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 32px var(--shadow);
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .endpoint-item:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 40px var(--shadow);
+        }
+
+        .endpoint-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .endpoint-url {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            word-break: break-all;
+            flex: 1;
+        }
+
+        .endpoint-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .endpoint-actions button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-check {
+            background: var(--accent);
+            color: white;
+        }
+
+        .btn-check:hover {
+            background: var(--accent-dark);
+        }
+
+        .btn-delete {
+            background: var(--danger);
+            color: white;
+        }
+
+        .btn-delete:hover {
+            opacity: 0.8;
+        }
+
+        .endpoint-status {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .status-box {
+            background: var(--bg-card);
+            padding: 15px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+        }
+
+        .status-label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 5px;
+        }
+
+        .status-value {
+            font-size: 1.3rem;
+            font-weight: 700;
+        }
+
+        .status-success {
+            color: var(--success);
+        }
+
+        .status-warning {
+            color: var(--warning);
+        }
+
+        .status-error {
+            color: var(--danger);
+        }
+
+        .chart-container {
+            background: var(--bg-card);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            margin-top: 15px;
+            min-height: 200px;
+        }
+
+        .chart-title {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: var(--text-primary);
+        }
+
+        .chart {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-around;
+            height: 150px;
+            gap: 5px;
+        }
+
+        .chart-bar {
+            flex: 1;
+            background: linear-gradient(to top, var(--accent), var(--accent-dark));
+            border-radius: 5px 5px 0 0;
+            position: relative;
+            min-height: 5px;
+            transition: all 0.3s ease;
+        }
+
+        .chart-bar:hover {
+            opacity: 0.8;
+        }
+
+        .chart-value {
+            position: absolute;
+            top: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+
+        .headers-section {
+            margin-top: 15px;
+        }
+
+        .headers-toggle {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            padding: 10px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            width: 100%;
+            text-align: left;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .headers-content {
+            display: none;
+            margin-top: 10px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .headers-content.show {
+            display: block;
+        }
+
+        .header-item {
+            display: grid;
+            grid-template-columns: 200px 1fr;
+            gap: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.9rem;
+        }
+
+        .header-item:last-child {
+            border-bottom: none;
+        }
+
+        .header-key {
+            font-weight: 600;
+            color: var(--accent);
+        }
+
+        .header-value {
+            color: var(--text-secondary);
+            word-break: break-all;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-secondary);
+        }
+
+        .empty-state-icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2rem;
+            }
+
+            .url-input-group {
+                flex-direction: column;
+            }
+
+            .endpoint-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .endpoint-status {
+                grid-template-columns: 1fr;
+            }
+
+            .header-item {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <button class="theme-toggle" onclick="toggleTheme()" aria-label="테마 전환">🌓</button>
+
+    <div class="container">
+        <header>
+            <h1>🌐 API Status Checker</h1>
+            <p class="subtitle">API 엔드포인트 상태 실시간 모니터링</p>
+        </header>
+
+        <div class="input-section">
+            <div class="url-input-group">
+                <input type="url" id="urlInput" placeholder="https://api.example.com/endpoint" />
+                <button class="btn btn-primary" onclick="addEndpoint()">
+                    ➕ 추가
+                </button>
+            </div>
+            <div class="button-group">
+                <button class="btn btn-secondary" onclick="checkAll()">
+                    🔄 전체 확인
+                </button>
+                <button class="btn btn-secondary" onclick="clearAll()">
+                    🗑️ 전체 삭제
+                </button>
+            </div>
+        </div>
+
+        <div class="endpoints-list" id="endpointsList">
+            <div class="empty-state">
+                <div class="empty-state-icon">🌐</div>
+                <h3>모니터링할 API를 추가하세요</h3>
+                <p>URL을 입력하고 추가 버튼을 클릭하세요</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let endpoints = JSON.parse(localStorage.getItem('api-endpoints') || '[]');
+
+        function toggleTheme() {
+            const html = document.documentElement;
+            const currentTheme = html.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            html.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+        }
+
+        // 초기 테마 설정
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+
+        function addEndpoint() {
+            const input = document.getElementById('urlInput');
+            const url = input.value.trim();
+
+            if (!url) {
+                alert('URL을 입력해주세요');
+                return;
+            }
+
+            if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                alert('올바른 URL 형식이 아닙니다 (http:// 또는 https://로 시작해야 합니다)');
+                return;
+            }
+
+            if (endpoints.some(e => e.url === url)) {
+                alert('이미 추가된 URL입니다');
+                return;
+            }
+
+            const endpoint = {
+                id: Date.now(),
+                url: url,
+                history: []
+            };
+
+            endpoints.push(endpoint);
+            saveEndpoints();
+            input.value = '';
+            renderEndpoints();
+            checkEndpoint(endpoint.id);
+        }
+
+        function saveEndpoints() {
+            localStorage.setItem('api-endpoints', JSON.stringify(endpoints));
+        }
+
+        function deleteEndpoint(id) {
+            if (confirm('이 엔드포인트를 삭제하시겠습니까?')) {
+                endpoints = endpoints.filter(e => e.id !== id);
+                saveEndpoints();
+                renderEndpoints();
+            }
+        }
+
+        function clearAll() {
+            if (endpoints.length === 0) return;
+            if (confirm('모든 엔드포인트를 삭제하시겠습니까?')) {
+                endpoints = [];
+                saveEndpoints();
+                renderEndpoints();
+            }
+        }
+
+        async function checkEndpoint(id) {
+            const endpoint = endpoints.find(e => e.id === id);
+            if (!endpoint) return;
+
+            const card = document.querySelector(`[data-id="${id}"]`);
+            const statusEl = card.querySelector('.status-value');
+            const timeEl = card.querySelector('.time-value');
+            const checkBtn = card.querySelector('.btn-check');
+
+            checkBtn.innerHTML = '<span class="loading"></span>';
+            checkBtn.disabled = true;
+
+            const startTime = performance.now();
+
+            try {
+                // CORS 우회를 위해 fetch with no-cors 시도
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+                const response = await fetch(endpoint.url, {
+                    method: 'HEAD',
+                    mode: 'no-cors',
+                    signal: controller.signal
+                });
+
+                clearTimeout(timeoutId);
+                const endTime = performance.now();
+                const duration = Math.round(endTime - startTime);
+
+                // no-cors 모드에서는 status가 0이므로 성공으로 간주
+                const status = response.type === 'opaque' ? 200 : response.status;
+
+                endpoint.lastCheck = {
+                    status: status,
+                    time: duration,
+                    timestamp: Date.now(),
+                    headers: {}
+                };
+
+                // 히스토리에 추가 (최대 10개)
+                endpoint.history = endpoint.history || [];
+                endpoint.history.push({ time: duration, timestamp: Date.now() });
+                if (endpoint.history.length > 10) {
+                    endpoint.history.shift();
+                }
+
+                saveEndpoints();
+                renderEndpoint(endpoint);
+
+            } catch (error) {
+                const endTime = performance.now();
+                const duration = Math.round(endTime - startTime);
+
+                endpoint.lastCheck = {
+                    status: 0,
+                    time: duration,
+                    timestamp: Date.now(),
+                    error: error.message,
+                    headers: {}
+                };
+
+                endpoint.history = endpoint.history || [];
+                endpoint.history.push({ time: duration, timestamp: Date.now(), error: true });
+                if (endpoint.history.length > 10) {
+                    endpoint.history.shift();
+                }
+
+                saveEndpoints();
+                renderEndpoint(endpoint);
+            }
+
+            checkBtn.innerHTML = '🔄 확인';
+            checkBtn.disabled = false;
+        }
+
+        function checkAll() {
+            endpoints.forEach(endpoint => checkEndpoint(endpoint.id));
+        }
+
+        function toggleHeaders(id) {
+            const content = document.querySelector(`[data-headers-id="${id}"]`);
+            if (content) {
+                content.classList.toggle('show');
+            }
+        }
+
+        function renderEndpoint(endpoint) {
+            const card = document.querySelector(`[data-id="${endpoint.id}"]`);
+            if (!card) return;
+
+            const lastCheck = endpoint.lastCheck;
+            let statusClass = 'status-error';
+            let statusText = '미확인';
+            let timeText = '-';
+
+            if (lastCheck) {
+                if (lastCheck.error) {
+                    statusClass = 'status-error';
+                    statusText = 'Error';
+                } else if (lastCheck.status === 200 || lastCheck.status === 0) {
+                    statusClass = 'status-success';
+                    statusText = lastCheck.status === 0 ? 'OK (no-cors)' : `${lastCheck.status} OK`;
+                } else if (lastCheck.status >= 400) {
+                    statusClass = 'status-error';
+                    statusText = lastCheck.status;
+                } else if (lastCheck.status >= 300) {
+                    statusClass = 'status-warning';
+                    statusText = lastCheck.status;
+                }
+                timeText = `${lastCheck.time}ms`;
+            }
+
+            card.querySelector('.status-value').className = `status-value ${statusClass}`;
+            card.querySelector('.status-value').textContent = statusText;
+            card.querySelector('.time-value').textContent = timeText;
+
+            // 차트 업데이트
+            if (endpoint.history && endpoint.history.length > 0) {
+                const chartEl = card.querySelector('.chart');
+                const maxTime = Math.max(...endpoint.history.map(h => h.time));
+
+                chartEl.innerHTML = endpoint.history.map((h, i) => {
+                    const height = (h.time / maxTime) * 100;
+                    const barClass = h.error ? 'status-error' : '';
+                    return `
+                        <div class="chart-bar ${barClass}" style="height: ${height}%">
+                            <div class="chart-value">${h.time}ms</div>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            // 헤더 업데이트
+            if (lastCheck && lastCheck.headers && Object.keys(lastCheck.headers).length > 0) {
+                const headersEl = card.querySelector(`[data-headers-id="${endpoint.id}"]`);
+                headersEl.innerHTML = Object.entries(lastCheck.headers).map(([key, value]) => `
+                    <div class="header-item">
+                        <div class="header-key">${key}</div>
+                        <div class="header-value">${value}</div>
+                    </div>
+                `).join('');
+            }
+        }
+
+        function renderEndpoints() {
+            const container = document.getElementById('endpointsList');
+
+            if (endpoints.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">🌐</div>
+                        <h3>모니터링할 API를 추가하세요</h3>
+                        <p>URL을 입력하고 추가 버튼을 클릭하세요</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = endpoints.map(endpoint => {
+                const lastCheck = endpoint.lastCheck;
+                let statusClass = 'status-error';
+                let statusText = '미확인';
+                let timeText = '-';
+
+                if (lastCheck) {
+                    if (lastCheck.error) {
+                        statusClass = 'status-error';
+                        statusText = 'Error';
+                    } else if (lastCheck.status === 200 || lastCheck.status === 0) {
+                        statusClass = 'status-success';
+                        statusText = lastCheck.status === 0 ? 'OK (no-cors)' : `${lastCheck.status} OK`;
+                    } else if (lastCheck.status >= 400) {
+                        statusClass = 'status-error';
+                        statusText = lastCheck.status;
+                    } else if (lastCheck.status >= 300) {
+                        statusClass = 'status-warning';
+                        statusText = lastCheck.status;
+                    }
+                    timeText = `${lastCheck.time}ms`;
+                }
+
+                const chartHtml = endpoint.history && endpoint.history.length > 0 ? (() => {
+                    const maxTime = Math.max(...endpoint.history.map(h => h.time));
+                    return endpoint.history.map((h, i) => {
+                        const height = (h.time / maxTime) * 100;
+                        const barClass = h.error ? 'status-error' : '';
+                        return `
+                            <div class="chart-bar ${barClass}" style="height: ${height}%">
+                                <div class="chart-value">${h.time}ms</div>
+                            </div>
+                        `;
+                    }).join('');
+                })() : '<p style="text-align: center; color: var(--text-secondary);">데이터 없음</p>';
+
+                return `
+                    <div class="endpoint-item" data-id="${endpoint.id}">
+                        <div class="endpoint-header">
+                            <div class="endpoint-url">${endpoint.url}</div>
+                            <div class="endpoint-actions">
+                                <button class="btn-check" onclick="checkEndpoint(${endpoint.id})">🔄 확인</button>
+                                <button class="btn-delete" onclick="deleteEndpoint(${endpoint.id})">🗑️</button>
+                            </div>
+                        </div>
+                        <div class="endpoint-status">
+                            <div class="status-box">
+                                <div class="status-label">상태</div>
+                                <div class="status-value ${statusClass}">${statusText}</div>
+                            </div>
+                            <div class="status-box">
+                                <div class="status-label">응답 시간</div>
+                                <div class="status-value time-value">${timeText}</div>
+                            </div>
+                            <div class="status-box">
+                                <div class="status-label">마지막 확인</div>
+                                <div class="status-value" style="font-size: 1rem; color: var(--text-secondary);">
+                                    ${lastCheck ? new Date(lastCheck.timestamp).toLocaleTimeString('ko-KR') : '-'}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="chart-container">
+                            <div class="chart-title">응답 시간 그래프 (최근 10회)</div>
+                            <div class="chart">${chartHtml}</div>
+                        </div>
+                        <div class="headers-section">
+                            <button class="headers-toggle" onclick="toggleHeaders(${endpoint.id})">
+                                <span>응답 헤더</span>
+                                <span>▼</span>
+                            </button>
+                            <div class="headers-content" data-headers-id="${endpoint.id}">
+                                <p style="text-align: center; color: var(--text-secondary);">CORS 정책으로 인해 헤더 정보를 가져올 수 없습니다</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Enter 키로 추가
+        document.getElementById('urlInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') addEndpoint();
+        });
+
+        // 초기 렌더링
+        renderEndpoints();
+    </script>
+</body>
+</html>

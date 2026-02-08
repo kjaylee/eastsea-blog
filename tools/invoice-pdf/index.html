@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invoice PDF Generator - 인보이스 생성기</title>
+    <meta name="description" content="프로페셔널한 인보이스를 만들고 PDF로 다운로드하세요. 항목 추가, 세금 계산, 할인 적용">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8f9fa;
+            --text-primary: #212529;
+            --text-secondary: #6c757d;
+            --accent: #667eea;
+            --accent-hover: #5568d3;
+            --border: #dee2e6;
+            --shadow: rgba(0, 0, 0, 0.1);
+            --success: #28a745;
+            --danger: #dc3545;
+        }
+
+        [data-theme="dark"] {
+            --bg-primary: #1a1a1a;
+            --bg-secondary: #2d2d2d;
+            --text-primary: #f8f9fa;
+            --text-secondary: #adb5bd;
+            --border: #495057;
+            --shadow: rgba(0, 0, 0, 0.3);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR', sans-serif;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            padding: 20px;
+            transition: background 0.3s ease, color 0.3s ease;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            color: var(--accent);
+            margin-bottom: 10px;
+        }
+
+        .controls {
+            background: var(--bg-primary);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 15px var(--shadow);
+        }
+
+        .theme-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--bg-primary);
+            border: 2px solid var(--border);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            cursor: pointer;
+            font-size: 1.5rem;
+            z-index: 100;
+            transition: transform 0.2s;
+        }
+
+        .theme-toggle:hover {
+            transform: scale(1.1);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .field {
+            display: flex;
+            flex-direction: column;
+        }
+
+        label {
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        input, textarea {
+            padding: 10px;
+            border: 2px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .items-section {
+            margin: 20px 0;
+        }
+
+        .items-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .item-row {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr 50px;
+            gap: 10px;
+            margin-bottom: 10px;
+            align-items: end;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.95rem;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-hover);
+            transform: translateY(-2px);
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+            padding: 10px;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+        }
+
+        .invoice-preview {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px var(--shadow);
+            color: #212529;
+        }
+
+        .invoice-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 20px;
+        }
+
+        .invoice-logo {
+            max-width: 150px;
+            max-height: 80px;
+        }
+
+        .invoice-company {
+            text-align: right;
+        }
+
+        .invoice-title {
+            font-size: 2rem;
+            color: #667eea;
+            margin-bottom: 20px;
+            font-weight: 700;
+        }
+
+        .invoice-info {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .info-block h3 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+        }
+
+        .info-block p {
+            line-height: 1.6;
+            color: #495057;
+        }
+
+        .invoice-table {
+            width: 100%;
+            margin: 30px 0;
+            border-collapse: collapse;
+        }
+
+        .invoice-table th {
+            background: #667eea;
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        .invoice-table td {
+            padding: 12px;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .invoice-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .text-right {
+            text-align: right;
+        }
+
+        .invoice-summary {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 30px;
+        }
+
+        .summary-table {
+            width: 300px;
+        }
+
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+        }
+
+        .summary-row.total {
+            border-top: 2px solid #667eea;
+            padding-top: 15px;
+            margin-top: 10px;
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: #667eea;
+        }
+
+        .invoice-footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #dee2e6;
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+
+            .controls,
+            .action-buttons,
+            .theme-toggle {
+                display: none !important;
+            }
+
+            .invoice-preview {
+                box-shadow: none;
+                padding: 20px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+
+            .item-row {
+                grid-template-columns: 1fr;
+            }
+
+            .invoice-header {
+                flex-direction: column;
+                gap: 20px;
+            }
+
+            .invoice-company {
+                text-align: left;
+            }
+
+            .invoice-info {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <button class="theme-toggle" onclick="toggleTheme()">🌓</button>
+
+    <div class="container">
+        <header>
+            <h1>📄 Invoice PDF Generator</h1>
+            <p>프로페셔널한 인보이스를 만들고 PDF로 다운로드하세요</p>
+        </header>
+
+        <div class="controls">
+            <div class="grid">
+                <div class="field">
+                    <label>회사명</label>
+                    <input type="text" id="company-name" placeholder="Your Company Inc." oninput="updateInvoice()">
+                </div>
+                <div class="field">
+                    <label>로고 URL (선택)</label>
+                    <input type="text" id="logo-url" placeholder="https://example.com/logo.png" oninput="updateInvoice()">
+                </div>
+            </div>
+
+            <div class="grid">
+                <div class="field">
+                    <label>회사 주소</label>
+                    <textarea id="company-address" placeholder="주소를 입력하세요" oninput="updateInvoice()"></textarea>
+                </div>
+                <div class="field">
+                    <label>고객 정보</label>
+                    <textarea id="client-info" placeholder="고객명 및 주소" oninput="updateInvoice()"></textarea>
+                </div>
+            </div>
+
+            <div class="grid">
+                <div class="field">
+                    <label>Invoice 번호</label>
+                    <input type="text" id="invoice-no" placeholder="INV-2026-001" oninput="updateInvoice()">
+                </div>
+                <div class="field">
+                    <label>발행 날짜</label>
+                    <input type="date" id="invoice-date" oninput="updateInvoice()">
+                </div>
+            </div>
+
+            <div class="items-section">
+                <div class="items-header">
+                    <h3>항목</h3>
+                    <button class="btn-success" onclick="addItem()">+ 항목 추가</button>
+                </div>
+                <div id="items-container"></div>
+            </div>
+
+            <div class="grid">
+                <div class="field">
+                    <label>세금 (%) </label>
+                    <input type="number" id="tax-rate" value="10" min="0" max="100" oninput="updateInvoice()">
+                </div>
+                <div class="field">
+                    <label>할인 (금액)</label>
+                    <input type="number" id="discount" value="0" min="0" oninput="updateInvoice()">
+                </div>
+            </div>
+
+            <div class="field">
+                <label>비고 (선택)</label>
+                <textarea id="notes" placeholder="결제 조건, 기타 안내사항 등" oninput="updateInvoice()"></textarea>
+            </div>
+        </div>
+
+        <div class="action-buttons">
+            <button class="btn-primary" onclick="window.print()">🖨️ PDF로 다운로드</button>
+            <button class="btn-primary" onclick="resetInvoice()">🔄 초기화</button>
+        </div>
+
+        <div class="invoice-preview" id="invoice-preview">
+            <div class="invoice-header">
+                <div>
+                    <img id="preview-logo" class="invoice-logo" style="display: none;">
+                    <h2 id="preview-company">Your Company Inc.</h2>
+                    <p id="preview-address">주소를 입력하세요</p>
+                </div>
+                <div class="invoice-company">
+                    <div class="invoice-title">INVOICE</div>
+                    <p><strong>Invoice #:</strong> <span id="preview-invoice-no">INV-2026-001</span></p>
+                    <p><strong>Date:</strong> <span id="preview-date">2026-02-08</span></p>
+                </div>
+            </div>
+
+            <div class="invoice-info">
+                <div class="info-block">
+                    <h3>Bill To:</h3>
+                    <p id="preview-client">고객명 및 주소</p>
+                </div>
+            </div>
+
+            <table class="invoice-table">
+                <thead>
+                    <tr>
+                        <th>항목</th>
+                        <th class="text-right">수량</th>
+                        <th class="text-right">단가</th>
+                        <th class="text-right">합계</th>
+                    </tr>
+                </thead>
+                <tbody id="preview-items">
+                    <tr>
+                        <td colspan="4" style="text-align: center; color: #6c757d;">항목을 추가해주세요</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="invoice-summary">
+                <div class="summary-table">
+                    <div class="summary-row">
+                        <span>소계:</span>
+                        <span id="preview-subtotal">₩0</span>
+                    </div>
+                    <div class="summary-row">
+                        <span>세금 (<span id="preview-tax-rate">10</span>%):</span>
+                        <span id="preview-tax">₩0</span>
+                    </div>
+                    <div class="summary-row">
+                        <span>할인:</span>
+                        <span id="preview-discount">₩0</span>
+                    </div>
+                    <div class="summary-row total">
+                        <span>총 합계:</span>
+                        <span id="preview-total">₩0</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="invoice-footer">
+                <p id="preview-notes"></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let items = [];
+        let itemIdCounter = 0;
+
+        function initializeDate() {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('invoice-date').value = today;
+            document.getElementById('preview-date').textContent = today;
+        }
+
+        function addItem() {
+            const id = itemIdCounter++;
+            items.push({ id, description: '', quantity: 1, price: 0 });
+            renderItems();
+        }
+
+        function removeItem(id) {
+            items = items.filter(item => item.id !== id);
+            renderItems();
+            updateInvoice();
+        }
+
+        function renderItems() {
+            const container = document.getElementById('items-container');
+            container.innerHTML = items.map(item => `
+                <div class="item-row">
+                    <div class="field">
+                        <label>항목명</label>
+                        <input type="text" placeholder="제품/서비스명" value="${item.description}" 
+                               oninput="updateItemField(${item.id}, 'description', this.value)">
+                    </div>
+                    <div class="field">
+                        <label>수량</label>
+                        <input type="number" value="${item.quantity}" min="1" 
+                               oninput="updateItemField(${item.id}, 'quantity', parseFloat(this.value))">
+                    </div>
+                    <div class="field">
+                        <label>단가 (₩)</label>
+                        <input type="number" value="${item.price}" min="0" 
+                               oninput="updateItemField(${item.id}, 'price', parseFloat(this.value))">
+                    </div>
+                    <div class="field">
+                        <label>합계</label>
+                        <input type="text" value="₩${(item.quantity * item.price).toLocaleString()}" readonly style="background: #e9ecef;">
+                    </div>
+                    <button class="btn-danger" onclick="removeItem(${item.id})">🗑️</button>
+                </div>
+            `).join('');
+        }
+
+        function updateItemField(id, field, value) {
+            const item = items.find(i => i.id === id);
+            if (item) {
+                item[field] = value;
+                renderItems();
+                updateInvoice();
+            }
+        }
+
+        function updateInvoice() {
+            // Company info
+            document.getElementById('preview-company').textContent = 
+                document.getElementById('company-name').value || 'Your Company Inc.';
+            document.getElementById('preview-address').textContent = 
+                document.getElementById('company-address').value || '주소를 입력하세요';
+
+            // Logo
+            const logoUrl = document.getElementById('logo-url').value;
+            const logoImg = document.getElementById('preview-logo');
+            if (logoUrl) {
+                logoImg.src = logoUrl;
+                logoImg.style.display = 'block';
+            } else {
+                logoImg.style.display = 'none';
+            }
+
+            // Invoice info
+            document.getElementById('preview-invoice-no').textContent = 
+                document.getElementById('invoice-no').value || 'INV-2026-001';
+            document.getElementById('preview-date').textContent = 
+                document.getElementById('invoice-date').value || '';
+
+            // Client
+            document.getElementById('preview-client').textContent = 
+                document.getElementById('client-info').value || '고객명 및 주소';
+
+            // Items
+            const itemsBody = document.getElementById('preview-items');
+            if (items.length === 0) {
+                itemsBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #6c757d;">항목을 추가해주세요</td></tr>';
+            } else {
+                itemsBody.innerHTML = items.map(item => `
+                    <tr>
+                        <td>${item.description || '-'}</td>
+                        <td class="text-right">${item.quantity}</td>
+                        <td class="text-right">₩${item.price.toLocaleString()}</td>
+                        <td class="text-right">₩${(item.quantity * item.price).toLocaleString()}</td>
+                    </tr>
+                `).join('');
+            }
+
+            // Calculate totals
+            const subtotal = items.reduce((sum, item) => sum + (item.quantity * item.price), 0);
+            const taxRate = parseFloat(document.getElementById('tax-rate').value) || 0;
+            const tax = subtotal * (taxRate / 100);
+            const discount = parseFloat(document.getElementById('discount').value) || 0;
+            const total = subtotal + tax - discount;
+
+            document.getElementById('preview-subtotal').textContent = `₩${subtotal.toLocaleString()}`;
+            document.getElementById('preview-tax-rate').textContent = taxRate;
+            document.getElementById('preview-tax').textContent = `₩${Math.round(tax).toLocaleString()}`;
+            document.getElementById('preview-discount').textContent = `₩${discount.toLocaleString()}`;
+            document.getElementById('preview-total').textContent = `₩${Math.round(total).toLocaleString()}`;
+
+            // Notes
+            document.getElementById('preview-notes').textContent = 
+                document.getElementById('notes').value || '';
+        }
+
+        function resetInvoice() {
+            if (confirm('모든 입력 내용을 초기화하시겠습니까?')) {
+                document.querySelectorAll('input, textarea').forEach(el => el.value = '');
+                items = [];
+                itemIdCounter = 0;
+                initializeDate();
+                renderItems();
+                updateInvoice();
+            }
+        }
+
+        function toggleTheme() {
+            const html = document.documentElement;
+            const current = html.getAttribute('data-theme');
+            html.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
+            localStorage.setItem('theme', current === 'dark' ? 'light' : 'dark');
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            const savedTheme = localStorage.getItem('theme') || 'light';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+            
+            initializeDate();
+            addItem();
+            updateInvoice();
+        });
+    </script>
+</body>
+</html>

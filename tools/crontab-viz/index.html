@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crontab Visualizer - 크론 타임라인 시각화</title>
+    <meta name="description" content="Cron 표현식을 입력하고 다음 10회 실행 시간을 간트차트로 시각화하세요">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8f9fa;
+            --text-primary: #212529;
+            --text-secondary: #6c757d;
+            --accent: #667eea;
+            --accent-hover: #5568d3;
+            --border: #dee2e6;
+            --shadow: rgba(0, 0, 0, 0.1);
+            --success: #28a745;
+            --danger: #dc3545;
+        }
+
+        [data-theme="dark"] {
+            --bg-primary: #1a1a1a;
+            --bg-secondary: #2d2d2d;
+            --text-primary: #f8f9fa;
+            --text-secondary: #adb5bd;
+            --border: #495057;
+            --shadow: rgba(0, 0, 0, 0.3);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR', sans-serif;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            padding: 20px;
+            min-height: 100vh;
+            transition: background 0.3s ease, color 0.3s ease;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            color: var(--accent);
+            margin-bottom: 10px;
+        }
+
+        .theme-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--bg-primary);
+            border: 2px solid var(--border);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            cursor: pointer;
+            font-size: 1.5rem;
+            z-index: 100;
+            transition: transform 0.2s;
+        }
+
+        .theme-toggle:hover {
+            transform: scale(1.1);
+        }
+
+        .controls {
+            background: var(--bg-primary);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 15px var(--shadow);
+        }
+
+        .cron-input-section {
+            margin-bottom: 20px;
+        }
+
+        .cron-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+
+        .cron-row input {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            font-size: 1rem;
+            font-family: 'Courier New', monospace;
+        }
+
+        .cron-row input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .cron-row input.invalid {
+            border-color: var(--danger);
+        }
+
+        .color-picker {
+            width: 50px;
+            height: 40px;
+            border: 2px solid var(--border);
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.95rem;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-hover);
+            transform: translateY(-2px);
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        .info-box {
+            background: #e7f3ff;
+            border-left: 4px solid var(--accent);
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            color: #004085;
+        }
+
+        [data-theme="dark"] .info-box {
+            background: #1a2332;
+            color: #9db4d0;
+        }
+
+        .timeline-container {
+            background: var(--bg-primary);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px var(--shadow);
+            margin-bottom: 20px;
+        }
+
+        canvas {
+            width: 100%;
+            height: auto;
+            border-radius: 8px;
+        }
+
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin-top: 15px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+        }
+
+        .execution-list {
+            background: var(--bg-primary);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px var(--shadow);
+        }
+
+        .execution-group {
+            margin-bottom: 20px;
+        }
+
+        .execution-group h3 {
+            color: var(--accent);
+            margin-bottom: 10px;
+        }
+
+        .execution-times {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 10px;
+        }
+
+        .time-badge {
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            font-family: 'Courier New', monospace;
+        }
+
+        @media (max-width: 768px) {
+            .cron-row {
+                flex-direction: column;
+            }
+
+            .execution-times {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <button class="theme-toggle" onclick="toggleTheme()">🌓</button>
+
+    <div class="container">
+        <header>
+            <h1>📊 Crontab Visualizer</h1>
+            <p>Cron 표현식을 입력하고 다음 10회 실행 시간을 간트차트로 시각화하세요</p>
+        </header>
+
+        <div class="info-box">
+            <strong>Cron 형식:</strong> 분(0-59) 시(0-23) 일(1-31) 월(1-12) 요일(0-6, 일요일=0)<br>
+            <strong>예시:</strong> <code>0 9 * * 1-5</code> = 평일 오전 9시 | <code>*/15 * * * *</code> = 15분마다
+        </div>
+
+        <div class="controls">
+            <div class="cron-input-section">
+                <h3 style="margin-bottom: 15px;">Cron 표현식 추가</h3>
+                <div id="cron-inputs"></div>
+                <button class="btn-success" onclick="addCronInput()">+ Cron 추가</button>
+            </div>
+
+            <button class="btn-primary" onclick="visualize()">🔍 타임라인 생성</button>
+        </div>
+
+        <div class="timeline-container" id="timeline-container" style="display: none;">
+            <h2>실행 타임라인</h2>
+            <canvas id="timeline-canvas"></canvas>
+            <div class="legend" id="legend"></div>
+        </div>
+
+        <div class="execution-list" id="execution-list" style="display: none;">
+            <h2>실행 스케줄</h2>
+            <div id="schedule-details"></div>
+        </div>
+    </div>
+
+    <script>
+        let cronJobs = [];
+        let cronIdCounter = 0;
+
+        const colors = [
+            '#667eea', '#f093fb', '#4facfe', '#43e97b',
+            '#fa709a', '#fee140', '#30cfd0', '#a8edea'
+        ];
+
+        function addCronInput() {
+            const id = cronIdCounter++;
+            const color = colors[cronJobs.length % colors.length];
+            cronJobs.push({ id, expression: '', label: `Job ${id + 1}`, color });
+            renderCronInputs();
+        }
+
+        function removeCronInput(id) {
+            cronJobs = cronJobs.filter(job => job.id !== id);
+            renderCronInputs();
+        }
+
+        function renderCronInputs() {
+            const container = document.getElementById('cron-inputs');
+            container.innerHTML = cronJobs.map(job => `
+                <div class="cron-row">
+                    <input type="text" 
+                           placeholder="* * * * *" 
+                           value="${job.expression}"
+                           id="cron-${job.id}"
+                           oninput="updateCronExpression(${job.id}, this.value)">
+                    <input type="text" 
+                           placeholder="Label" 
+                           value="${job.label}"
+                           style="max-width: 150px;"
+                           oninput="updateCronLabel(${job.id}, this.value)">
+                    <input type="color" 
+                           class="color-picker" 
+                           value="${job.color}"
+                           oninput="updateCronColor(${job.id}, this.value)">
+                    <button class="btn-danger" onclick="removeCronInput(${job.id})">🗑️</button>
+                </div>
+            `).join('');
+        }
+
+        function updateCronExpression(id, value) {
+            const job = cronJobs.find(j => j.id === id);
+            if (job) job.expression = value;
+        }
+
+        function updateCronLabel(id, value) {
+            const job = cronJobs.find(j => j.id === id);
+            if (job) job.label = value;
+        }
+
+        function updateCronColor(id, value) {
+            const job = cronJobs.find(j => j.id === id);
+            if (job) job.color = value;
+        }
+
+        function parseCronExpression(expression) {
+            const parts = expression.trim().split(/\s+/);
+            if (parts.length !== 5) return null;
+
+            const [minute, hour, dayOfMonth, month, dayOfWeek] = parts;
+            return { minute, hour, dayOfMonth, month, dayOfWeek };
+        }
+
+        function getNextExecutions(cronExpr, count = 10) {
+            const parsed = parseCronExpression(cronExpr);
+            if (!parsed) return null;
+
+            const executions = [];
+            let current = new Date();
+            current.setSeconds(0, 0);
+
+            for (let i = 0; i < count * 100 && executions.length < count; i++) {
+                current = new Date(current.getTime() + 60000); // +1 minute
+
+                if (matchesCron(current, parsed)) {
+                    executions.push(new Date(current));
+                }
+            }
+
+            return executions;
+        }
+
+        function matchesCron(date, cron) {
+            const minute = date.getMinutes();
+            const hour = date.getHours();
+            const dayOfMonth = date.getDate();
+            const month = date.getMonth() + 1;
+            const dayOfWeek = date.getDay();
+
+            return matchField(minute, cron.minute, 0, 59) &&
+                   matchField(hour, cron.hour, 0, 23) &&
+                   matchField(dayOfMonth, cron.dayOfMonth, 1, 31) &&
+                   matchField(month, cron.month, 1, 12) &&
+                   matchField(dayOfWeek, cron.dayOfWeek, 0, 6);
+        }
+
+        function matchField(value, pattern, min, max) {
+            if (pattern === '*') return true;
+
+            if (pattern.includes('/')) {
+                const [range, step] = pattern.split('/');
+                const stepNum = parseInt(step);
+                if (range === '*') {
+                    return value % stepNum === 0;
+                }
+            }
+
+            if (pattern.includes('-')) {
+                const [start, end] = pattern.split('-').map(Number);
+                return value >= start && value <= end;
+            }
+
+            if (pattern.includes(',')) {
+                const values = pattern.split(',').map(Number);
+                return values.includes(value);
+            }
+
+            return value === parseInt(pattern);
+        }
+
+        function visualize() {
+            const validJobs = cronJobs.filter(job => {
+                const input = document.getElementById(`cron-${job.id}`);
+                const executions = getNextExecutions(job.expression);
+                
+                if (!executions || executions.length === 0) {
+                    input.classList.add('invalid');
+                    return false;
+                }
+                
+                input.classList.remove('invalid');
+                job.executions = executions;
+                return true;
+            });
+
+            if (validJobs.length === 0) {
+                alert('유효한 Cron 표현식을 입력해주세요.');
+                return;
+            }
+
+            drawTimeline(validJobs);
+            displaySchedule(validJobs);
+        }
+
+        function drawTimeline(jobs) {
+            const canvas = document.getElementById('timeline-canvas');
+            const ctx = canvas.getContext('2d');
+            
+            const dpr = window.devicePixelRatio || 1;
+            const width = canvas.offsetWidth;
+            const height = 60 * jobs.length + 100;
+            
+            canvas.width = width * dpr;
+            canvas.height = height * dpr;
+            canvas.style.width = width + 'px';
+            canvas.style.height = height + 'px';
+            
+            ctx.scale(dpr, dpr);
+
+            // Clear
+            ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--bg-primary');
+            ctx.fillRect(0, 0, width, height);
+
+            // Find time range
+            const allTimes = jobs.flatMap(job => job.executions);
+            const minTime = Math.min(...allTimes.map(d => d.getTime()));
+            const maxTime = Math.max(...allTimes.map(d => d.getTime()));
+            const timeRange = maxTime - minTime;
+
+            const margin = 40;
+            const chartWidth = width - margin * 2;
+            const rowHeight = 50;
+
+            // Draw time axis
+            ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--text-secondary');
+            ctx.font = '12px monospace';
+            ctx.textAlign = 'center';
+
+            for (let i = 0; i <= 5; i++) {
+                const x = margin + (chartWidth * i / 5);
+                const time = new Date(minTime + (timeRange * i / 5));
+                const label = time.toLocaleString('ko-KR', { 
+                    month: 'short', 
+                    day: 'numeric', 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                });
+                ctx.fillText(label, x, height - 20);
+                
+                // Grid line
+                ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--border');
+                ctx.beginPath();
+                ctx.moveTo(x, 40);
+                ctx.lineTo(x, height - 40);
+                ctx.stroke();
+            }
+
+            // Draw jobs
+            jobs.forEach((job, idx) => {
+                const y = 50 + idx * rowHeight;
+
+                // Job label
+                ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--text-primary');
+                ctx.textAlign = 'left';
+                ctx.font = 'bold 14px sans-serif';
+                ctx.fillText(job.label, 10, y + 5);
+
+                // Execution dots
+                job.executions.forEach(time => {
+                    const x = margin + ((time.getTime() - minTime) / timeRange) * chartWidth;
+                    
+                    ctx.fillStyle = job.color;
+                    ctx.beginPath();
+                    ctx.arc(x, y + 15, 6, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    ctx.strokeStyle = job.color + '33';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(x, y + 15, 10, 0, Math.PI * 2);
+                    ctx.stroke();
+                });
+            });
+
+            // Show containers
+            document.getElementById('timeline-container').style.display = 'block';
+            document.getElementById('execution-list').style.display = 'block';
+
+            // Update legend
+            const legend = document.getElementById('legend');
+            legend.innerHTML = jobs.map(job => `
+                <div class="legend-item">
+                    <div class="legend-color" style="background: ${job.color};"></div>
+                    <span>${job.label} (${job.expression})</span>
+                </div>
+            `).join('');
+        }
+
+        function displaySchedule(jobs) {
+            const container = document.getElementById('schedule-details');
+            container.innerHTML = jobs.map(job => `
+                <div class="execution-group">
+                    <h3 style="color: ${job.color};">${job.label} - ${job.expression}</h3>
+                    <div class="execution-times">
+                        ${job.executions.map(time => `
+                            <div class="time-badge" style="background: ${job.color}22; border: 2px solid ${job.color};">
+                                ${time.toLocaleString('ko-KR', { 
+                                    month: 'short', 
+                                    day: 'numeric', 
+                                    hour: '2-digit', 
+                                    minute: '2-digit',
+                                    second: '2-digit'
+                                })}
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function toggleTheme() {
+            const html = document.documentElement;
+            const current = html.getAttribute('data-theme');
+            html.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
+            localStorage.setItem('theme', current === 'dark' ? 'light' : 'dark');
+            
+            // Redraw canvas with new colors
+            if (cronJobs.some(job => job.executions)) {
+                const validJobs = cronJobs.filter(job => job.executions);
+                drawTimeline(validJobs);
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            const savedTheme = localStorage.getItem('theme') || 'light';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+            
+            addCronInput();
+        });
+    </script>
+</body>
+</html>

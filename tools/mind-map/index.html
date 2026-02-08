@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Mind Map | 마인드맵 에디터</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f0f2f5;--bg2:#fff;--text:#212529;--text2:#6c757d;--border:#dee2e6;--accent:#667eea;--accent2:#764ba2;--shadow:rgba(0,0,0,.08);--node-bg:#fff;--node-border:#667eea;--line:#adb5bd}
+[data-theme=dark]{--bg:#0d1117;--bg2:#161b22;--text:#e0e0e0;--text2:#8b949e;--border:#30363d;--shadow:rgba(0,0,0,.4);--node-bg:#21262d;--node-border:#667eea;--line:#484f58}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text);overflow:hidden;height:100vh;touch-action:none}
+.toolbar{position:fixed;top:0;left:0;right:0;height:56px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 16px;gap:8px;z-index:100;box-shadow:0 2px 10px var(--shadow)}
+.toolbar .title{font-weight:700;font-size:1.1rem;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-right:auto;white-space:nowrap}
+.toolbar a{text-decoration:none;color:var(--accent);font-size:1.1rem;margin-right:8px}
+.tb{padding:8px 14px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);cursor:pointer;font-size:.85rem;font-weight:600;transition:all .2s;white-space:nowrap;display:inline-flex;align-items:center;gap:4px}
+.tb:hover{border-color:var(--accent);background:rgba(102,126,234,.08)}
+.tb.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border-color:transparent}
+.tb.primary:hover{opacity:.9}
+.canvas-area{position:fixed;top:56px;left:0;right:0;bottom:0;overflow:hidden;cursor:grab}
+.canvas-area.grabbing{cursor:grabbing}
+#mindmap{position:absolute;top:0;left:0}
+.node{position:absolute;min-width:100px;padding:12px 20px;border-radius:12px;background:var(--node-bg);border:2px solid var(--node-border);cursor:move;font-size:.95rem;text-align:center;box-shadow:0 4px 12px var(--shadow);transition:box-shadow .2s;user-select:none;-webkit-user-select:none;white-space:nowrap;z-index:10}
+.node:hover{box-shadow:0 6px 20px var(--shadow)}
+.node.selected{border-width:3px;box-shadow:0 0 0 4px rgba(102,126,234,.25)}
+.node.root{font-weight:700;font-size:1.1rem;min-width:140px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border-color:transparent}
+.node .delete{position:absolute;top:-10px;right:-10px;width:22px;height:22px;border-radius:50%;background:#ff4757;color:#fff;font-size:12px;line-height:22px;text-align:center;cursor:pointer;display:none;font-weight:700}
+.node:hover .delete,.node.selected .delete{display:block}
+.node .add-child{position:absolute;bottom:-10px;right:-10px;width:22px;height:22px;border-radius:50%;background:var(--accent);color:#fff;font-size:14px;line-height:22px;text-align:center;cursor:pointer;display:none;font-weight:700}
+.node:hover .add-child,.node.selected .add-child{display:block}
+.edit-input{position:absolute;z-index:200;padding:10px 16px;border:2px solid var(--accent);border-radius:10px;font-size:.95rem;font-family:inherit;background:var(--bg2);color:var(--text);text-align:center;min-width:120px;box-shadow:0 6px 20px var(--shadow);outline:none}
+.color-picker-popup{position:fixed;z-index:300;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:12px;box-shadow:0 8px 30px var(--shadow);display:none}
+.color-picker-popup .colors{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.color-picker-popup .cbox{width:32px;height:32px;border-radius:8px;cursor:pointer;border:2px solid transparent;transition:all .2s}
+.color-picker-popup .cbox:hover,.color-picker-popup .cbox.active{border-color:var(--text);transform:scale(1.15)}
+.help{position:fixed;bottom:16px;left:16px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:12px 16px;font-size:.8rem;color:var(--text2);z-index:50;box-shadow:0 4px 15px var(--shadow);max-width:320px;line-height:1.6}
+.help b{color:var(--text)}
+@media(max-width:640px){
+  .tb span{display:none}
+  .tb{padding:8px 10px;font-size:.8rem}
+  .help{display:none}
+  .toolbar{padding:0 8px;gap:4px}
+  .toolbar .title{font-size:.95rem}
+}
+</style>
+</head>
+<body>
+<div class="toolbar">
+<a href="../">←</a>
+<div class="title">🧠 Mind Map</div>
+<button class="tb" onclick="addNode()">➕<span>추가</span></button>
+<button class="tb" onclick="showColorPicker()">🎨<span>색상</span></button>
+<button class="tb" onclick="saveMap()">💾<span>저장</span></button>
+<button class="tb" onclick="loadMap()">📂<span>불러오기</span></button>
+<button class="tb" onclick="exportPNG()">🖼️<span>PNG</span></button>
+<button class="tb" onclick="clearAll()">🗑️</button>
+<button class="tb" onclick="toggleTheme()">🌓</button>
+</div>
+<div class="canvas-area" id="canvasArea">
+<svg id="lines" style="position:absolute;top:0;left:0;width:10000px;height:10000px;z-index:1;pointer-events:none"></svg>
+<div id="mindmap"></div>
+</div>
+<div class="color-picker-popup" id="colorPicker">
+<div class="colors" id="colorGrid"></div>
+</div>
+<div class="help">
+<b>더블클릭</b> → 텍스트 편집 &nbsp;|&nbsp; <b>드래그</b> → 노드 이동<br>
+<b>➕</b> → 자식 노드 추가 &nbsp;|&nbsp; <b>❌</b> → 노드 삭제<br>
+<b>배경 드래그</b> → 캔버스 이동
+</div>
+<script>
+const NODE_COLORS=['#667eea','#764ba2','#f093fb','#4facfe','#43e97b','#fa709a','#ffd166','#06d6a0','#ff6b6b','#8338ec','#0096c7','#bc6c25','#e63946','#2ec4b6','#ff9f1c'];
+let nodes=[];
+let nextId=1;
+let selectedId=null;
+let panX=0,panY=0;
+let isDragging=false,dragNode=null,dragOffX=0,dragOffY=0;
+let isPanning=false,panStartX=0,panStartY=0;
+
+function createDefaultMap(){
+  nodes=[
+    {id:1,text:'중심 주제',x:400,y:300,parent:null,color:'#667eea',isRoot:true},
+    {id:2,text:'아이디어 1',x:650,y:180,parent:1,color:'#4facfe'},
+    {id:3,text:'아이디어 2',x:650,y:420,parent:1,color:'#43e97b'},
+    {id:4,text:'아이디어 3',x:150,y:200,parent:1,color:'#fa709a'},
+    {id:5,text:'세부 항목',x:880,y:130,parent:2,color:'#ffd166'},
+  ];
+  nextId=6;
+}
+
+function renderAll(){
+  const map=document.getElementById('mindmap');
+  map.innerHTML='';
+  nodes.forEach(n=>{
+    const el=document.createElement('div');
+    el.className='node'+(n.isRoot?' root':'')+(n.id===selectedId?' selected':'');
+    el.style.left=(n.x+panX)+'px';
+    el.style.top=(n.y+panY)+'px';
+    if(!n.isRoot){el.style.borderColor=n.color;el.style.color=n.color}
+    else{el.style.background=`linear-gradient(135deg,${n.color},${adjustColor(n.color,30)})`}
+    el.textContent=n.text;
+    el.dataset.id=n.id;
+    
+    if(!n.isRoot){
+      const del=document.createElement('div');del.className='delete';del.textContent='✕';
+      del.onclick=e=>{e.stopPropagation();deleteNode(n.id)};
+      el.appendChild(del);
+    }
+    const add=document.createElement('div');add.className='add-child';add.textContent='+';
+    add.onclick=e=>{e.stopPropagation();addChildTo(n.id)};
+    el.appendChild(add);
+    
+    el.addEventListener('mousedown',e=>startDragNode(e,n));
+    el.addEventListener('touchstart',e=>startDragNode(e,n),{passive:false});
+    el.addEventListener('dblclick',()=>editNode(n));
+    el.addEventListener('click',e=>{e.stopPropagation();selectedId=n.id;renderAll()});
+    
+    map.appendChild(el);
+  });
+  drawLines();
+}
+
+function drawLines(){
+  const svg=document.getElementById('lines');
+  svg.innerHTML='';
+  const isDark=document.documentElement.getAttribute('data-theme')==='dark';
+  nodes.forEach(n=>{
+    if(!n.parent)return;
+    const p=nodes.find(x=>x.id===n.parent);
+    if(!p)return;
+    const pEl=document.querySelector(`[data-id="${p.id}"]`);
+    const nEl=document.querySelector(`[data-id="${n.id}"]`);
+    if(!pEl||!nEl)return;
+    const px=p.x+panX+pEl.offsetWidth/2,py=p.y+panY+pEl.offsetHeight/2;
+    const nx=n.x+panX+nEl.offsetWidth/2,ny=n.y+panY+nEl.offsetHeight/2;
+    const mx=(px+nx)/2;
+    const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+    path.setAttribute('d',`M${px},${py} C${mx},${py} ${mx},${ny} ${nx},${ny}`);
+    path.setAttribute('stroke',n.color||'var(--line)');
+    path.setAttribute('stroke-width','2.5');
+    path.setAttribute('fill','none');
+    path.setAttribute('stroke-linecap','round');
+    path.setAttribute('opacity','0.6');
+    svg.appendChild(path);
+  });
+}
+
+function startDragNode(e,node){
+  e.preventDefault();e.stopPropagation();
+  const pos=getEventPos(e);
+  dragNode=node;isDragging=true;
+  dragOffX=pos.x-node.x-panX;dragOffY=pos.y-node.y-panY;
+  selectedId=node.id;renderAll();
+}
+
+function addNode(){
+  const parent=selectedId||nodes[0]?.id;
+  if(!parent)return;
+  addChildTo(parent);
+}
+
+function addChildTo(parentId){
+  const p=nodes.find(n=>n.id===parentId);
+  if(!p)return;
+  const angle=Math.random()*Math.PI*2;
+  const dist=180+Math.random()*60;
+  const n={
+    id:nextId++,
+    text:'새 노드',
+    x:p.x+Math.cos(angle)*dist,
+    y:p.y+Math.sin(angle)*dist,
+    parent:parentId,
+    color:NODE_COLORS[Math.floor(Math.random()*NODE_COLORS.length)]
+  };
+  nodes.push(n);selectedId=n.id;
+  renderAll();
+  editNode(n);
+}
+
+function deleteNode(id){
+  const toDelete=new Set();
+  function collect(nid){toDelete.add(nid);nodes.filter(n=>n.parent===nid).forEach(n=>collect(n.id))}
+  collect(id);
+  nodes=nodes.filter(n=>!toDelete.has(n.id));
+  if(selectedId===id)selectedId=null;
+  renderAll();
+}
+
+function editNode(node){
+  const el=document.querySelector(`[data-id="${node.id}"]`);
+  if(!el)return;
+  const input=document.createElement('input');
+  input.className='edit-input';
+  input.value=node.text;
+  input.style.left=el.style.left;input.style.top=el.style.top;
+  input.style.width=Math.max(el.offsetWidth,120)+'px';
+  const finish=()=>{
+    node.text=input.value||'노드';
+    if(input.parentNode)input.parentNode.removeChild(input);
+    renderAll();
+  };
+  input.addEventListener('blur',finish);
+  input.addEventListener('keydown',e=>{if(e.key==='Enter')finish()});
+  document.getElementById('canvasArea').appendChild(input);
+  input.focus();input.select();
+}
+
+function showColorPicker(){
+  if(!selectedId)return;
+  const cp=document.getElementById('colorPicker');
+  if(cp.style.display==='block'){cp.style.display='none';return}
+  const grid=document.getElementById('colorGrid');
+  grid.innerHTML='';
+  NODE_COLORS.forEach(c=>{
+    const d=document.createElement('div');d.className='cbox';d.style.background=c;
+    d.onclick=()=>{
+      const n=nodes.find(x=>x.id===selectedId);
+      if(n){n.color=c;renderAll()}
+      cp.style.display='none';
+    };
+    grid.appendChild(d);
+  });
+  cp.style.display='block';cp.style.top='64px';cp.style.right='16px';
+}
+
+function saveMap(){
+  const data=JSON.stringify({nodes,nextId});
+  localStorage.setItem('mindmap-data',data);
+  const blob=new Blob([data],{type:'application/json'});
+  const a=document.createElement('a');a.download='mindmap.json';a.href=URL.createObjectURL(blob);a.click();
+}
+
+function loadMap(){
+  const input=document.createElement('input');input.type='file';input.accept='.json';
+  input.onchange=e=>{
+    const f=e.target.files[0];if(!f)return;
+    const r=new FileReader();
+    r.onload=ev=>{
+      try{const d=JSON.parse(ev.target.result);nodes=d.nodes;nextId=d.nextId;selectedId=null;panX=0;panY=0;renderAll()}
+      catch(err){alert('유효한 JSON 파일이 아닙니다.')}
+    };r.readAsText(f);
+  };input.click();
+}
+
+function exportPNG(){
+  const minX=Math.min(...nodes.map(n=>n.x))-60;
+  const minY=Math.min(...nodes.map(n=>n.y))-60;
+  const maxX=Math.max(...nodes.map(n=>n.x))+200;
+  const maxY=Math.max(...nodes.map(n=>n.y))+100;
+  const W=maxX-minX,H=maxY-minY;
+  
+  const canvas=document.createElement('canvas');
+  canvas.width=W;canvas.height=H;
+  const ctx=canvas.getContext('2d');
+  const isDark=document.documentElement.getAttribute('data-theme')==='dark';
+  ctx.fillStyle=isDark?'#0d1117':'#f0f2f5';
+  ctx.fillRect(0,0,W,H);
+  
+  // Lines
+  nodes.forEach(n=>{
+    if(!n.parent)return;
+    const p=nodes.find(x=>x.id===n.parent);if(!p)return;
+    const px=p.x-minX+50,py=p.y-minY+20;
+    const nx=n.x-minX+50,ny=n.y-minY+20;
+    const mx=(px+nx)/2;
+    ctx.beginPath();ctx.moveTo(px,py);ctx.bezierCurveTo(mx,py,mx,ny,nx,ny);
+    ctx.strokeStyle=n.color||'#adb5bd';ctx.lineWidth=2.5;ctx.globalAlpha=0.6;ctx.stroke();ctx.globalAlpha=1;
+  });
+  
+  // Nodes
+  nodes.forEach(n=>{
+    const x=n.x-minX,y=n.y-minY;
+    ctx.font=n.isRoot?'bold 16px sans-serif':'14px sans-serif';
+    const tw=ctx.measureText(n.text).width;
+    const nw=Math.max(tw+40,100),nh=44;
+    const nx=x+50-nw/2,ny=y+20-nh/2;
+    ctx.fillStyle=n.isRoot?n.color:(isDark?'#21262d':'#fff');
+    roundRect(ctx,nx,ny,nw,nh,12);
+    if(!n.isRoot){ctx.strokeStyle=n.color;ctx.lineWidth=2;ctx.beginPath();roundRectPath(ctx,nx,ny,nw,nh,12);ctx.stroke()}
+    ctx.fillStyle=n.isRoot?'#fff':n.color;
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(n.text,x+50,y+20);
+  });
+  
+  const a=document.createElement('a');a.download='mindmap.png';a.href=canvas.toDataURL('image/png');a.click();
+}
+
+function roundRect(ctx,x,y,w,h,r){ctx.beginPath();roundRectPath(ctx,x,y,w,h,r);ctx.fill()}
+function roundRectPath(ctx,x,y,w,h,r){ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y)}
+
+function clearAll(){
+  if(!confirm('모든 노드를 삭제하시겠습니까?'))return;
+  nodes=[];nextId=1;selectedId=null;
+  createDefaultMap();renderAll();
+}
+
+function adjustColor(hex,amt){
+  let r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
+  r=Math.min(255,r+amt);g=Math.min(255,g+amt);b=Math.min(255,b+amt);
+  return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;
+}
+
+function getEventPos(e){
+  const t=e.touches?e.touches[0]:e;
+  return{x:t.clientX,y:t.clientY};
+}
+
+// Panning
+const area=document.getElementById('canvasArea');
+area.addEventListener('mousedown',e=>{
+  if(e.target===area||e.target.id==='lines'||e.target.tagName==='svg'||e.target.tagName==='path'){
+    isPanning=true;panStartX=e.clientX-panX;panStartY=e.clientY-panY;
+    area.classList.add('grabbing');selectedId=null;renderAll();
+    document.getElementById('colorPicker').style.display='none';
+  }
+});
+area.addEventListener('touchstart',e=>{
+  if(e.target===area||e.target.id==='lines'||e.target.tagName==='svg'){
+    isPanning=true;const t=e.touches[0];panStartX=t.clientX-panX;panStartY=t.clientY-panY;
+  }
+},{passive:false});
+
+function onMove(e){
+  const pos=getEventPos(e);
+  if(isDragging&&dragNode){
+    e.preventDefault();
+    dragNode.x=pos.x-dragOffX-panX;
+    dragNode.y=pos.y-dragOffY-panY;
+    renderAll();
+  }else if(isPanning){
+    e.preventDefault();
+    panX=pos.x-panStartX;panY=pos.y-panStartY;
+    renderAll();
+  }
+}
+function onEnd(){isDragging=false;dragNode=null;isPanning=false;area.classList.remove('grabbing')}
+
+document.addEventListener('mousemove',onMove);
+document.addEventListener('mouseup',onEnd);
+document.addEventListener('touchmove',onMove,{passive:false});
+document.addEventListener('touchend',onEnd);
+
+function toggleTheme(){
+  const t=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';
+  document.documentElement.setAttribute('data-theme',t);localStorage.setItem('theme',t);renderAll();
+}
+
+// Init
+document.documentElement.setAttribute('data-theme',localStorage.getItem('theme')||'light');
+const saved=localStorage.getItem('mindmap-data');
+if(saved){try{const d=JSON.parse(saved);nodes=d.nodes;nextId=d.nextId}catch(e){createDefaultMap()}}
+else createDefaultMap();
+renderAll();
+
+// Auto-save
+setInterval(()=>{localStorage.setItem('mindmap-data',JSON.stringify({nodes,nextId}))},5000);
+</script>
+</body>
+</html>

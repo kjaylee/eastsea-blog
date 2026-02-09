@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>바코드 생성기 | Barcode Generator</title>
+    <meta name="description" content="Code128, EAN-13, UPC-A, Code39 등 다양한 바코드를 생성하세요. Generate barcodes in multiple formats.">
+    <style>
+        :root {
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-card: #21262d;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --accent: #58a6ff;
+            --accent2: #bc8cff;
+            --border: #30363d;
+            --success: #3fb950;
+            --warning: #d29922;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR', sans-serif;
+            background: var(--bg-primary); color: var(--text-primary);
+            line-height: 1.6; min-height: 100vh; padding: 16px;
+        }
+        .container { max-width: 900px; margin: 0 auto; }
+        header {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 24px; flex-wrap: wrap; gap: 8px;
+        }
+        .back-btn { text-decoration: none; color: var(--text-secondary); font-size: 14px; }
+        .back-btn:hover { color: var(--accent); }
+        h1 { font-size: 1.5rem; background: linear-gradient(135deg, var(--accent), var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .lang-btn {
+            background: var(--bg-card); border: 1px solid var(--border); color: var(--text-secondary);
+            padding: 4px 12px; border-radius: 6px; cursor: pointer; font-size: 13px;
+        }
+        .card { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+        .tabs { display: flex; gap: 4px; margin-bottom: 16px; flex-wrap: wrap; }
+        .tab {
+            padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border);
+            background: transparent; color: var(--text-secondary); cursor: pointer; font-size: 13px;
+        }
+        .tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+        label { display: block; font-size: 13px; color: var(--text-secondary); margin-bottom: 4px; }
+        input, textarea, select {
+            width: 100%; background: var(--bg-card); border: 1px solid var(--border);
+            color: var(--text-primary); padding: 10px 12px; border-radius: 8px;
+            font-size: 14px; font-family: inherit;
+        }
+        textarea { resize: vertical; min-height: 80px; }
+        input:focus, textarea:focus { outline: none; border-color: var(--accent); }
+        .row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+        .row > * { flex: 1; min-width: 120px; }
+        .color-input-wrap { display: flex; align-items: center; gap: 8px; }
+        .color-input-wrap input[type="color"] { width: 40px; height: 36px; padding: 2px; border-radius: 6px; cursor: pointer; }
+        .color-input-wrap span { font-size: 13px; color: var(--text-secondary); }
+        .barcode-output {
+            background: #fff; border-radius: 10px; padding: 24px; text-align: center;
+            margin: 16px 0; min-height: 100px; display: flex; align-items: center;
+            justify-content: center; flex-direction: column;
+        }
+        .barcode-output svg { max-width: 100%; height: auto; }
+        .barcode-output canvas { max-width: 100%; height: auto; }
+        .btn {
+            background: linear-gradient(135deg, var(--accent), var(--accent2));
+            border: none; color: white; padding: 10px 20px; border-radius: 8px;
+            font-size: 14px; cursor: pointer; font-weight: 600; transition: opacity 0.2s;
+        }
+        .btn:hover { opacity: 0.85; }
+        .btn-sm { padding: 6px 14px; font-size: 12px; }
+        .btn-outline {
+            background: transparent; border: 1px solid var(--border); color: var(--text-primary);
+            padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 13px;
+        }
+        .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+        .actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 12px; }
+        .batch-results { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+        .batch-item { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 12px; text-align: center; }
+        .batch-item .barcode-output { margin: 8px 0; padding: 12px; min-height: 60px; }
+        .toast {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: var(--success); color: #fff; padding: 10px 24px; border-radius: 8px;
+            font-size: 14px; z-index: 999; opacity: 0; transition: opacity 0.3s;
+        }
+        .toast.show { opacity: 1; }
+        .error-msg { color: #f85149; font-size: 13px; margin-top: 8px; }
+        .hidden { display: none !important; }
+        footer { text-align: center; margin-top: 32px; color: var(--text-secondary); font-size: 12px; }
+        footer a { color: var(--accent); text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <a href="/tools/" class="back-btn">← <span data-i18n="back">도구 목록</span></a>
+            <h1>📊 <span data-i18n="title">바코드 생성기</span></h1>
+            <button class="lang-btn" onclick="toggleLang()">EN/KO</button>
+        </header>
+
+        <div class="tabs">
+            <button class="tab active" onclick="setMode('single')" data-i18n="single">단일 생성</button>
+            <button class="tab" onclick="setMode('batch')" data-i18n="batch">배치 생성</button>
+        </div>
+
+        <div class="card" id="singleMode">
+            <div class="row">
+                <div>
+                    <label data-i18n="barcodeType">바코드 종류</label>
+                    <select id="barcodeType" onchange="onTypeChange()">
+                        <option value="CODE128">Code 128</option>
+                        <option value="EAN13">EAN-13</option>
+                        <option value="EAN8">EAN-8</option>
+                        <option value="UPC">UPC-A</option>
+                        <option value="CODE39">Code 39</option>
+                        <option value="ITF14">ITF-14</option>
+                    </select>
+                </div>
+                <div>
+                    <label data-i18n="value">값 입력</label>
+                    <input type="text" id="barcodeValue" placeholder="1234567890128" oninput="generate()">
+                </div>
+            </div>
+            <div class="row">
+                <div>
+                    <label data-i18n="width">바 너비</label>
+                    <input type="range" id="barWidth" min="1" max="4" value="2" oninput="generate()">
+                </div>
+                <div>
+                    <label data-i18n="height">높이 (px)</label>
+                    <input type="number" id="barHeight" value="100" min="30" max="300" oninput="generate()">
+                </div>
+            </div>
+            <div class="row">
+                <div>
+                    <label data-i18n="barColor">바 색상</label>
+                    <div class="color-input-wrap">
+                        <input type="color" id="barColor" value="#000000" oninput="generate()">
+                        <span id="barColorHex">#000000</span>
+                    </div>
+                </div>
+                <div>
+                    <label data-i18n="bgColor">배경 색상</label>
+                    <div class="color-input-wrap">
+                        <input type="color" id="bgColor" value="#ffffff" oninput="generate()">
+                        <span id="bgColorHex">#ffffff</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="barcode-output" id="barcodeOutput">
+                <svg id="barcodeSvg"></svg>
+            </div>
+            <div class="error-msg hidden" id="errorMsg"></div>
+
+            <div class="actions">
+                <button class="btn" onclick="downloadPNG()" data-i18n="dlPng">PNG 다운로드</button>
+                <button class="btn-outline" onclick="downloadSVG()" data-i18n="dlSvg">SVG 다운로드</button>
+                <button class="btn-outline" onclick="copyToClipboard()" data-i18n="copy">클립보드 복사</button>
+            </div>
+        </div>
+
+        <div class="card hidden" id="batchMode">
+            <label data-i18n="batchLabel">한 줄에 하나씩 값을 입력하세요</label>
+            <textarea id="batchInput" placeholder="1234567890128&#10;9876543210987&#10;5555555555555"></textarea>
+            <div class="row" style="margin-top:12px">
+                <div>
+                    <label data-i18n="barcodeType">바코드 종류</label>
+                    <select id="batchType">
+                        <option value="CODE128">Code 128</option>
+                        <option value="EAN13">EAN-13</option>
+                        <option value="EAN8">EAN-8</option>
+                        <option value="UPC">UPC-A</option>
+                        <option value="CODE39">Code 39</option>
+                        <option value="ITF14">ITF-14</option>
+                    </select>
+                </div>
+                <div style="display:flex;align-items:flex-end">
+                    <button class="btn" onclick="batchGenerate()" data-i18n="genAll">모두 생성</button>
+                </div>
+            </div>
+            <div class="batch-results" id="batchResults"></div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+    <footer><a href="/tools/">EastSea Tools</a> · <span data-i18n="footer">모든 처리는 브라우저에서 수행됩니다</span></footer>
+
+    <script>
+    // Minimal barcode encoder (self-contained)
+    const Barcode = {
+        CODE128: {
+            CHARS: ' !"#$%&\'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~',
+            PATTERNS: [
+                '11011001100','11001101100','11001100110','10010011000','10010001100',
+                '10001001100','10011001000','10011000100','10001100100','11001001000',
+                '11001000100','11000100100','10110011100','10011011100','10011001110',
+                '10111001100','10011101100','10011100110','11001110010','11001011100',
+                '11001001110','11011100100','11001110100','11101101110','11101001100',
+                '11100101100','11100100110','11101100100','11100110100','11100110010',
+                '11011011000','11011000110','11000110110','10100011000','10001011000',
+                '10001000110','10110001000','10001101000','10001100010','11010001000',
+                '11000101000','11000100010','10110111000','10110001110','10001101110',
+                '10111011000','10111000110','10001110110','11101110110','11010001110',
+                '11000101110','11011101000','11011100010','11011101110','11101011000',
+                '11101000110','11100010110','11101101000','11101100010','11100011010',
+                '11101111010','11001000010','11110001010','10100110000','10100001100',
+                '10010110000','10010000110','10000101100','10000100110','10110010000',
+                '10110000100','10011010000','10011000010','10000110100','10000110010',
+                '11000010010','11001010000','11110111010','11000010100','10001111010',
+                '10100111100','10010111100','10010011110','10111100100','10011110100',
+                '10011110010','11110100100','11110010100','11110010010','11011011110',
+                '11011110110','11110110110','10101111000','10100011110','10001011110',
+                '10111101000','10111100010','11110101000','11110100010','10111011110',
+                '10111101110','11101011110','11110101110','11010000100','11010010000',
+                '11010011100','1100011101011'
+            ],
+            encode(text) {
+                let codes = [104]; // Start B
+                let checksum = 104;
+                for (let i = 0; i < text.length; i++) {
+                    const code = text.charCodeAt(i) - 32;
+                    codes.push(code);
+                    checksum += code * (i + 1);
+                }
+                codes.push(checksum % 103);
+                codes.push(106); // Stop
+                return codes.map(c => this.PATTERNS[c]).join('');
+            }
+        },
+        EAN13: {
+            L: ['0001101','0011001','0010011','0111101','0100011','0110001','0101111','0111011','0110111','0001011'],
+            G: ['0100111','0110011','0011011','0100001','0011101','0111001','0000101','0010001','0001001','0010111'],
+            R: ['1110010','1100110','1101100','1000010','1011100','1001110','1010000','1000100','1001000','1110100'],
+            PARITY: ['LLLLLL','LLGLGG','LLGGLG','LLGGGL','LGLLGG','LGGLLG','LGGGLL','LGLGLG','LGLGGL','LGGLGL'],
+            encode(text) {
+                text = text.replace(/\D/g,'');
+                if (text.length === 12) text += this.checkDigit(text);
+                if (text.length !== 13) return null;
+                const first = parseInt(text[0]);
+                const parity = this.PARITY[first];
+                let bits = '101'; // start
+                for (let i = 0; i < 6; i++) {
+                    const d = parseInt(text[i+1]);
+                    bits += parity[i] === 'L' ? this.L[d] : this.G[d];
+                }
+                bits += '01010'; // center
+                for (let i = 0; i < 6; i++) {
+                    bits += this.R[parseInt(text[i+7])];
+                }
+                bits += '101'; // end
+                return bits;
+            },
+            checkDigit(d) {
+                let sum = 0;
+                for (let i = 0; i < 12; i++) sum += parseInt(d[i]) * (i % 2 === 0 ? 1 : 3);
+                return ((10 - (sum % 10)) % 10).toString();
+            },
+            validate(text) { return /^\d{13}$/.test(text.replace(/\D/g,'')); }
+        },
+        EAN8: {
+            encode(text) {
+                text = text.replace(/\D/g,'');
+                if (text.length === 7) text += this.checkDigit(text);
+                if (text.length !== 8) return null;
+                const L = Barcode.EAN13.L, R = Barcode.EAN13.R;
+                let bits = '101';
+                for (let i = 0; i < 4; i++) bits += L[parseInt(text[i])];
+                bits += '01010';
+                for (let i = 4; i < 8; i++) bits += R[parseInt(text[i])];
+                bits += '101';
+                return bits;
+            },
+            checkDigit(d) {
+                let sum = 0;
+                for (let i = 0; i < 7; i++) sum += parseInt(d[i]) * (i % 2 === 0 ? 3 : 1);
+                return ((10 - (sum % 10)) % 10).toString();
+            }
+        },
+        UPC: {
+            encode(text) {
+                text = text.replace(/\D/g,'');
+                if (text.length === 11) text += this.checkDigit(text);
+                if (text.length !== 12) return null;
+                return Barcode.EAN13.encode('0' + text);
+            },
+            checkDigit(d) {
+                let sum = 0;
+                for (let i = 0; i < 11; i++) sum += parseInt(d[i]) * (i % 2 === 0 ? 3 : 1);
+                return ((10 - (sum % 10)) % 10).toString();
+            }
+        },
+        CODE39: {
+            CHARS: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-. $/+%*',
+            PATTERNS: [
+                '101001101101','110100101011','101100101011','110110010101','101001101011',
+                '110100110101','101100110101','101001011011','110100101101','101100101101',
+                '110101001011','101101001011','110110100101','101011001011','110101100101',
+                '101101100101','101010011011','110101001101','101101001101','101011001101',
+                '110101010011','101101010011','110110101001','101011010011','110101101001',
+                '101101101001','101010110011','110101011001','101101011001','101011011001',
+                '110010101011','100110101011','110011010101','100101101011','110010110101',
+                '100110110101','100101011011','110010101101','100110101101','100100100101',
+                '100100101001','100101001001','101001001001','100101101101'
+            ],
+            encode(text) {
+                text = text.toUpperCase();
+                let bits = this.PATTERNS[43] + '0'; // *
+                for (let i = 0; i < text.length; i++) {
+                    const idx = this.CHARS.indexOf(text[i]);
+                    if (idx === -1) return null;
+                    bits += this.PATTERNS[idx] + '0';
+                }
+                bits += this.PATTERNS[43];
+                return bits;
+            }
+        },
+        ITF14: {
+            NARROW: { '0':'00110','1':'10001','2':'01001','3':'11000','4':'00101','5':'10100','6':'01100','7':'00011','8':'10010','9':'01010' },
+            encode(text) {
+                text = text.replace(/\D/g,'');
+                if (text.length === 13) text += this.checkDigit(text);
+                if (text.length !== 14) return null;
+                let bits = '1010';
+                for (let i = 0; i < 14; i += 2) {
+                    const b = this.NARROW[text[i]], s = this.NARROW[text[i+1]];
+                    for (let j = 0; j < 5; j++) {
+                        bits += (b[j]==='1' ? '111' : '1');
+                        bits += (s[j]==='1' ? '000' : '0');
+                    }
+                }
+                bits += '11101';
+                return bits;
+            },
+            checkDigit(d) {
+                let sum = 0;
+                for (let i = 0; i < 13; i++) sum += parseInt(d[i]) * (i % 2 === 0 ? 3 : 1);
+                return ((10 - (sum % 10)) % 10).toString();
+            }
+        }
+    };
+
+    function encodeBits(type, value) {
+        try {
+            switch(type) {
+                case 'CODE128': return Barcode.CODE128.encode(value);
+                case 'EAN13': return Barcode.EAN13.encode(value);
+                case 'EAN8': return Barcode.EAN8.encode(value);
+                case 'UPC': return Barcode.UPC.encode(value);
+                case 'CODE39': return Barcode.CODE39.encode(value);
+                case 'ITF14': return Barcode.ITF14.encode(value);
+                default: return null;
+            }
+        } catch(e) { return null; }
+    }
+
+    function renderSVG(bits, opts = {}) {
+        const w = opts.width || 2;
+        const h = opts.height || 100;
+        const fg = opts.color || '#000000';
+        const bg = opts.background || '#ffffff';
+        const text = opts.text || '';
+        const totalW = bits.length * w + 20;
+        const totalH = h + (text ? 24 : 10);
+        let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${totalW}" height="${totalH}">`;
+        svg += `<rect width="100%" height="100%" fill="${bg}"/>`;
+        for (let i = 0; i < bits.length; i++) {
+            if (bits[i] === '1') {
+                svg += `<rect x="${10 + i * w}" y="5" width="${w}" height="${h}" fill="${fg}"/>`;
+            }
+        }
+        if (text) {
+            svg += `<text x="${totalW/2}" y="${h + 20}" text-anchor="middle" font-family="monospace" font-size="14" fill="${fg}">${text}</text>`;
+        }
+        svg += '</svg>';
+        return svg;
+    }
+
+    const i18n = {
+        ko: { back:'도구 목록', title:'바코드 생성기', single:'단일 생성', batch:'배치 생성', barcodeType:'바코드 종류', value:'값 입력', width:'바 너비', height:'높이 (px)', barColor:'바 색상', bgColor:'배경 색상', dlPng:'PNG 다운로드', dlSvg:'SVG 다운로드', copy:'클립보드 복사', batchLabel:'한 줄에 하나씩 값을 입력하세요', genAll:'모두 생성', footer:'모든 처리는 브라우저에서 수행됩니다', copied:'복사 완료!', error:'유효하지 않은 값입니다' },
+        en: { back:'Back to Tools', title:'Barcode Generator', single:'Single', batch:'Batch', barcodeType:'Barcode Type', value:'Enter Value', width:'Bar Width', height:'Height (px)', barColor:'Bar Color', bgColor:'Background', dlPng:'Download PNG', dlSvg:'Download SVG', copy:'Copy to Clipboard', batchLabel:'Enter one value per line', genAll:'Generate All', footer:'All processing is done in your browser', copied:'Copied!', error:'Invalid value' }
+    };
+    let lang = 'ko';
+    function toggleLang() {
+        lang = lang === 'ko' ? 'en' : 'ko';
+        document.querySelectorAll('[data-i18n]').forEach(el => {
+            const key = el.getAttribute('data-i18n');
+            if (i18n[lang][key]) el.textContent = i18n[lang][key];
+        });
+    }
+
+    let mode = 'single';
+    function setMode(m) {
+        mode = m;
+        document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', (i===0&&m==='single')||(i===1&&m==='batch')));
+        document.getElementById('singleMode').classList.toggle('hidden', m !== 'single');
+        document.getElementById('batchMode').classList.toggle('hidden', m !== 'batch');
+    }
+
+    function getOpts() {
+        return {
+            width: parseInt(document.getElementById('barWidth').value),
+            height: parseInt(document.getElementById('barHeight').value),
+            color: document.getElementById('barColor').value,
+            background: document.getElementById('bgColor').value
+        };
+    }
+
+    function generate() {
+        const type = document.getElementById('barcodeType').value;
+        const value = document.getElementById('barcodeValue').value.trim();
+        const errEl = document.getElementById('errorMsg');
+        errEl.classList.add('hidden');
+
+        document.getElementById('barColorHex').textContent = document.getElementById('barColor').value;
+        document.getElementById('bgColorHex').textContent = document.getElementById('bgColor').value;
+
+        if (!value) {
+            document.getElementById('barcodeOutput').innerHTML = '<span style="color:#8b949e">' + (lang==='ko'?'값을 입력하세요':'Enter a value') + '</span>';
+            return;
+        }
+        const bits = encodeBits(type, value);
+        if (!bits) {
+            errEl.textContent = i18n[lang].error;
+            errEl.classList.remove('hidden');
+            document.getElementById('barcodeOutput').innerHTML = '';
+            return;
+        }
+        const opts = getOpts();
+        opts.text = value;
+        document.getElementById('barcodeOutput').innerHTML = renderSVG(bits, opts);
+    }
+
+    function onTypeChange() {
+        const type = document.getElementById('barcodeType').value;
+        const ph = { CODE128:'Hello World', EAN13:'4006381333931', EAN8:'96385074', UPC:'012345678905', CODE39:'HELLO', ITF14:'98249880215005' };
+        document.getElementById('barcodeValue').placeholder = ph[type] || '';
+        generate();
+    }
+
+    function downloadPNG() {
+        const svg = document.querySelector('#barcodeOutput svg');
+        if (!svg) return;
+        const data = new XMLSerializer().serializeToString(svg);
+        const img = new Image();
+        img.onload = function() {
+            const c = document.createElement('canvas');
+            c.width = img.naturalWidth * 2; c.height = img.naturalHeight * 2;
+            const ctx = c.getContext('2d');
+            ctx.scale(2,2);
+            ctx.drawImage(img, 0, 0);
+            c.toBlob(blob => {
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = 'barcode.png';
+                a.click();
+            });
+        };
+        img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(data)));
+    }
+
+    function downloadSVG() {
+        const svg = document.querySelector('#barcodeOutput svg');
+        if (!svg) return;
+        const data = new XMLSerializer().serializeToString(svg);
+        const blob = new Blob([data], { type: 'image/svg+xml' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'barcode.svg';
+        a.click();
+    }
+
+    async function copyToClipboard() {
+        const svg = document.querySelector('#barcodeOutput svg');
+        if (!svg) return;
+        try {
+            const data = new XMLSerializer().serializeToString(svg);
+            const img = new Image();
+            img.onload = async function() {
+                const c = document.createElement('canvas');
+                c.width = img.naturalWidth * 2; c.height = img.naturalHeight * 2;
+                const ctx = c.getContext('2d');
+                ctx.scale(2,2);
+                ctx.drawImage(img, 0, 0);
+                c.toBlob(async blob => {
+                    try {
+                        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+                        showToast(i18n[lang].copied);
+                    } catch(e) { showToast('Failed'); }
+                });
+            };
+            img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(data)));
+        } catch(e) { showToast('Failed'); }
+    }
+
+    function batchGenerate() {
+        const values = document.getElementById('batchInput').value.trim().split('\n').filter(v => v.trim());
+        const type = document.getElementById('batchType').value;
+        const container = document.getElementById('batchResults');
+        container.innerHTML = '';
+        const opts = { width: 2, height: 80, color: '#000000', background: '#ffffff' };
+
+        values.forEach(val => {
+            val = val.trim();
+            const bits = encodeBits(type, val);
+            const div = document.createElement('div');
+            div.className = 'batch-item';
+            if (bits) {
+                opts.text = val;
+                div.innerHTML = `<div class="barcode-output">${renderSVG(bits, opts)}</div><small>${val}</small>`;
+            } else {
+                div.innerHTML = `<div class="barcode-output" style="background:#2d1b1b;color:#f85149">❌ ${val}</div>`;
+            }
+            container.appendChild(div);
+        });
+    }
+
+    function showToast(msg) {
+        const t = document.getElementById('toast');
+        t.textContent = msg;
+        t.classList.add('show');
+        setTimeout(() => t.classList.remove('show'), 2000);
+    }
+
+    generate();
+    </script>
+</body>
+</html>

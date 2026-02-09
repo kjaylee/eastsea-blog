@@ -1,0 +1,2093 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>🔮 Spell Crafter RPG - 마법 조합 로그라이크</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{
+--bg:#0a0a12;--panel:#12121f;--border:#2a2a4a;--text:#d4d4e8;--muted:#6a6a8e;
+--fire:#ff4422;--water:#2288ff;--earth:#88aa22;--air:#88ccff;--lightning:#ffcc00;--shadow:#8844cc;
+--hp:#cc2222;--mp:#2244cc;--xp:#44aa44;--gold:#ccaa22;
+--accent:#aa44ff;--accent2:#44aaff;
+}
+@font-face{font-family:'pixel';src:local('Courier New'),local('monospace');font-display:swap}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:'pixel',monospace;font-size:14px;touch-action:none;user-select:none}
+canvas{display:none}
+#app{width:100%;height:100%;display:flex;flex-direction:column;position:relative}
+
+/* Screens */
+.screen{display:none;width:100%;height:100%;flex-direction:column;position:absolute;top:0;left:0;z-index:1}
+.screen.active{display:flex}
+
+/* Title Screen */
+#title-screen{align-items:center;justify-content:center;background:radial-gradient(ellipse at center,#1a1a2f 0%,#0a0a12 70%)}
+#title-screen h1{font-size:2.5em;color:var(--accent);text-shadow:0 0 20px var(--accent),0 0 40px rgba(170,68,255,0.3);margin-bottom:10px;text-align:center}
+#title-screen .subtitle{color:var(--muted);font-size:1em;margin-bottom:30px}
+.title-runes{display:flex;gap:15px;margin-bottom:30px;font-size:2em}
+.title-runes span{animation:float 2s ease-in-out infinite}
+.title-runes span:nth-child(2){animation-delay:0.3s}
+.title-runes span:nth-child(3){animation-delay:0.6s}
+.title-runes span:nth-child(4){animation-delay:0.9s}
+.title-runes span:nth-child(5){animation-delay:1.2s}
+.title-runes span:nth-child(6){animation-delay:1.5s}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+.btn{background:linear-gradient(135deg,#2a1a4a,#1a1a3a);border:2px solid var(--accent);color:var(--text);padding:12px 30px;font-family:inherit;font-size:1.1em;cursor:pointer;border-radius:8px;margin:5px;transition:all 0.2s;min-width:200px;text-align:center}
+.btn:hover,.btn:active{background:linear-gradient(135deg,#3a2a5a,#2a2a4a);transform:scale(1.05);box-shadow:0 0 15px rgba(170,68,255,0.4)}
+.btn-sm{padding:8px 16px;font-size:0.9em;min-width:auto}
+.btn-danger{border-color:var(--fire);background:linear-gradient(135deg,#3a1a1a,#2a1a1a)}
+.btn-success{border-color:var(--xp);background:linear-gradient(135deg,#1a3a1a,#1a2a1a)}
+.meta-info{color:var(--muted);font-size:0.85em;margin-top:20px;text-align:center}
+
+/* Game Screen Layout */
+#game-screen{flex-direction:column}
+.top-bar{display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:var(--panel);border-bottom:1px solid var(--border);min-height:40px;flex-shrink:0}
+.player-stats{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.stat-bar{width:100px;height:16px;background:#111;border-radius:8px;overflow:hidden;position:relative;border:1px solid var(--border)}
+.stat-bar .fill{height:100%;transition:width 0.3s;border-radius:8px}
+.stat-bar .label{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:0.7em;color:#fff;text-shadow:1px 1px 1px #000}
+.hp-bar .fill{background:linear-gradient(90deg,#aa1111,var(--hp))}
+.mp-bar .fill{background:linear-gradient(90deg,#1133aa,var(--mp))}
+.xp-bar .fill{background:linear-gradient(90deg,#228822,var(--xp))}
+.floor-info{color:var(--muted);font-size:0.85em;text-align:right}
+
+/* Main game area */
+.game-main{flex:1;display:flex;overflow:hidden;position:relative}
+
+/* Dungeon View */
+#dungeon-view{flex:1;position:relative;overflow:hidden;background:#08080f}
+#dungeon-canvas{width:100%;height:100%}
+.minimap{position:absolute;top:5px;right:5px;width:100px;height:100px;background:rgba(0,0,0,0.7);border:1px solid var(--border);border-radius:4px}
+#minimap-canvas{width:100%;height:100%}
+
+/* Combat View */
+#combat-view{display:none;flex:1;flex-direction:column;background:radial-gradient(ellipse at center,#151520 0%,#08080f 100%);position:relative;overflow:hidden}
+#combat-view.active{display:flex}
+.combat-arena{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative}
+.monster-area{display:flex;flex-direction:column;align-items:center;margin-bottom:20px}
+.monster-sprite{font-size:4em;animation:monsterIdle 1.5s ease-in-out infinite;position:relative}
+@keyframes monsterIdle{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+.monster-name{font-size:1.1em;color:var(--fire);margin-top:5px}
+.monster-hp-bar{width:180px;height:12px;background:#111;border-radius:6px;overflow:hidden;margin-top:5px;border:1px solid var(--border)}
+.monster-hp-bar .fill{height:100%;background:linear-gradient(90deg,#881111,#cc2222);transition:width 0.3s;border-radius:6px}
+.combat-spells{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;padding:10px;max-height:40%;overflow-y:auto}
+.spell-btn{background:var(--panel);border:2px solid var(--border);border-radius:8px;padding:8px 12px;cursor:pointer;text-align:center;min-width:80px;transition:all 0.2s}
+.spell-btn:hover,.spell-btn:active{border-color:var(--accent);transform:scale(1.05)}
+.spell-btn.disabled{opacity:0.4;pointer-events:none}
+.spell-btn .spell-icon{font-size:1.5em}
+.spell-btn .spell-name{font-size:0.75em;color:var(--text);margin-top:2px}
+.spell-btn .spell-cost{font-size:0.65em;color:var(--mp)}
+.combat-log{position:absolute;bottom:0;left:0;right:0;max-height:80px;overflow-y:auto;padding:5px 10px;background:rgba(0,0,0,0.7);font-size:0.75em;color:var(--muted)}
+.combat-log .log-entry{margin:2px 0}
+.combat-log .log-damage{color:var(--fire)}
+.combat-log .log-heal{color:var(--xp)}
+.combat-log .log-info{color:var(--accent2)}
+
+/* Floating damage numbers */
+.dmg-float{position:absolute;font-weight:bold;font-size:1.2em;pointer-events:none;animation:dmgFloat 1s ease-out forwards;z-index:100;text-shadow:1px 1px 2px #000}
+@keyframes dmgFloat{0%{opacity:1;transform:translateY(0) scale(1)}50%{opacity:1;transform:translateY(-30px) scale(1.2)}100%{opacity:0;transform:translateY(-60px) scale(0.8)}}
+
+/* Bottom Panel */
+.bottom-panel{display:flex;background:var(--panel);border-top:1px solid var(--border);min-height:50px;flex-shrink:0}
+.bottom-panel .tab-btn{flex:1;padding:8px;text-align:center;cursor:pointer;border:none;background:transparent;color:var(--muted);font-family:inherit;font-size:0.85em;transition:all 0.2s;border-top:2px solid transparent}
+.bottom-panel .tab-btn.active{color:var(--accent);border-top-color:var(--accent);background:rgba(170,68,255,0.1)}
+.bottom-panel .tab-btn:hover{color:var(--text)}
+
+/* Side Panels */
+.side-panel{display:none;position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:50;flex-direction:column;animation:panelSlide 0.2s ease-out}
+.side-panel.active{display:flex}
+@keyframes panelSlide{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.panel-header{display:flex;justify-content:space-between;align-items:center;padding:10px 15px;background:var(--panel);border-bottom:1px solid var(--border)}
+.panel-header h2{font-size:1.2em;color:var(--accent)}
+.close-btn{background:none;border:none;color:var(--muted);font-size:1.5em;cursor:pointer;padding:5px}
+.panel-body{flex:1;overflow-y:auto;padding:10px}
+
+/* Spell Crafting */
+.craft-area{display:flex;flex-direction:column;align-items:center;gap:15px;padding:15px}
+.rune-palette{display:flex;flex-wrap:wrap;justify-content:center;gap:10px}
+.rune-slot{width:60px;height:60px;display:flex;align-items:center;justify-content:center;font-size:2em;background:var(--panel);border:2px solid var(--border);border-radius:10px;cursor:pointer;transition:all 0.2s;position:relative}
+.rune-slot:hover,.rune-slot:active{transform:scale(1.1);border-color:var(--accent)}
+.rune-slot.fire{border-color:var(--fire);box-shadow:0 0 10px rgba(255,68,34,0.3)}
+.rune-slot.water{border-color:var(--water);box-shadow:0 0 10px rgba(34,136,255,0.3)}
+.rune-slot.earth{border-color:var(--earth);box-shadow:0 0 10px rgba(136,170,34,0.3)}
+.rune-slot.air{border-color:var(--air);box-shadow:0 0 10px rgba(136,204,255,0.3)}
+.rune-slot.lightning{border-color:var(--lightning);box-shadow:0 0 10px rgba(255,204,0,0.3)}
+.rune-slot.shadow{border-color:var(--shadow);box-shadow:0 0 10px rgba(136,68,204,0.3)}
+.rune-slot.locked{opacity:0.3;pointer-events:none}
+.rune-count{position:absolute;bottom:-2px;right:-2px;background:var(--bg);border:1px solid var(--border);border-radius:50%;width:20px;height:20px;font-size:0.4em;display:flex;align-items:center;justify-content:center;color:var(--text)}
+.craft-slots{display:flex;gap:10px;align-items:center}
+.craft-slot{width:70px;height:70px;display:flex;align-items:center;justify-content:center;font-size:2.2em;background:rgba(170,68,255,0.1);border:2px dashed var(--accent);border-radius:12px;cursor:pointer;transition:all 0.2s}
+.craft-slot.filled{border-style:solid;background:rgba(170,68,255,0.2)}
+.craft-plus{font-size:1.5em;color:var(--muted)}
+.craft-result{min-height:80px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px;background:rgba(170,68,255,0.05);border:1px solid var(--border);border-radius:10px;width:100%;max-width:300px}
+.craft-result .spell-preview{font-size:2em;margin-bottom:5px}
+.craft-result .spell-info{text-align:center;font-size:0.85em;color:var(--muted)}
+.craft-result .spell-info .name{color:var(--accent);font-size:1.1em}
+.craft-result .spell-info .damage{color:var(--fire)}
+.craft-result .spell-info .effect{color:var(--accent2)}
+
+/* Inventory */
+.inv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(70px,1fr));gap:8px}
+.inv-item{display:flex;flex-direction:column;align-items:center;padding:8px;background:var(--panel);border:1px solid var(--border);border-radius:8px;cursor:pointer;transition:all 0.2s}
+.inv-item:hover{border-color:var(--accent)}
+.inv-item .icon{font-size:1.8em}
+.inv-item .name{font-size:0.7em;color:var(--muted);margin-top:3px;text-align:center}
+.inv-item.equipped{border-color:var(--gold);background:rgba(204,170,34,0.1)}
+
+/* Spell Book */
+.spell-list{display:flex;flex-direction:column;gap:6px}
+.spell-entry{display:flex;align-items:center;gap:10px;padding:8px;background:var(--panel);border:1px solid var(--border);border-radius:8px}
+.spell-entry .icon{font-size:1.5em}
+.spell-entry .info{flex:1}
+.spell-entry .info .name{color:var(--accent);font-size:0.9em}
+.spell-entry .info .desc{color:var(--muted);font-size:0.75em}
+.spell-entry .info .stats{font-size:0.75em;color:var(--text)}
+.spell-entry.undiscovered{opacity:0.4}
+.spell-entry.undiscovered .info .name{color:var(--muted)}
+
+/* Shop */
+.shop-items{display:flex;flex-direction:column;gap:8px}
+.shop-item{display:flex;align-items:center;gap:10px;padding:10px;background:var(--panel);border:1px solid var(--border);border-radius:8px;cursor:pointer}
+.shop-item:hover{border-color:var(--gold)}
+.shop-item .price{color:var(--gold);font-size:0.9em;margin-left:auto}
+
+/* Death Screen */
+#death-screen{align-items:center;justify-content:center;background:rgba(0,0,0,0.9)}
+#death-screen h1{font-size:2.2em;color:var(--fire);margin-bottom:10px}
+.death-stats{text-align:center;margin:15px 0;color:var(--muted)}
+.death-stats div{margin:5px 0}
+.death-unlocks{text-align:center;margin:15px 0}
+.death-unlocks h3{color:var(--accent);margin-bottom:10px}
+.death-unlocks .unlock{color:var(--xp);margin:3px 0}
+
+/* Victory Screen */
+#victory-screen{align-items:center;justify-content:center;background:radial-gradient(ellipse at center,#1a1a0f,#0a0a12)}
+#victory-screen h1{font-size:2.5em;color:var(--gold);text-shadow:0 0 20px rgba(204,170,34,0.5)}
+
+/* Effects overlay */
+#effects-layer{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:40}
+#particles-canvas{width:100%;height:100%}
+
+/* Screen shake */
+.shake{animation:shake 0.3s ease-out}
+@keyframes shake{0%,100%{transform:translate(0)}25%{transform:translate(-5px,3px)}50%{transform:translate(5px,-3px)}75%{transform:translate(-3px,5px)}}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+
+/* Toast notifications */
+.toast{position:fixed;top:50px;left:50%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--accent);padding:10px 20px;border-radius:8px;z-index:200;animation:toastIn 0.3s ease-out;font-size:0.9em}
+@keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(-20px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+
+/* Responsive */
+@media(max-width:480px){
+ .stat-bar{width:70px;height:14px}
+ .rune-slot{width:50px;height:50px;font-size:1.6em}
+ .craft-slot{width:55px;height:55px;font-size:1.8em}
+ #title-screen h1{font-size:1.8em}
+ .spell-btn{min-width:65px;padding:6px 8px}
+}
+@media(min-width:768px){
+ .game-main{max-width:800px;margin:0 auto;width:100%}
+}
+
+/* Transition overlay */
+#transition{position:fixed;top:0;left:0;width:100%;height:100%;background:#000;z-index:300;pointer-events:none;opacity:0;transition:opacity 0.3s}
+#transition.active{opacity:1}
+</style>
+</head>
+<body>
+<div id="app">
+<!-- Title Screen -->
+<div id="title-screen" class="screen active">
+ <div class="title-runes"><span>🔥</span><span>💧</span><span>🌍</span><span>💨</span><span>⚡</span><span>🌑</span></div>
+ <h1>Spell Crafter RPG</h1>
+ <div class="subtitle">마법 조합 로그라이크</div>
+ <button class="btn" onclick="G.startNewRun()">⚔️ 새로운 모험 / New Adventure</button>
+ <button class="btn" onclick="G.continuRun()" id="continue-btn" style="display:none">📜 이어하기 / Continue</button>
+ <button class="btn btn-sm" onclick="G.showRecipes()" style="margin-top:10px">📖 레시피 도감 / Recipe Book</button>
+ <div class="meta-info" id="meta-info"></div>
+</div>
+
+<!-- Game Screen -->
+<div id="game-screen" class="screen">
+ <div class="top-bar">
+  <div class="player-stats">
+   <span id="player-level" style="color:var(--accent);font-size:0.9em">Lv.1</span>
+   <div class="stat-bar hp-bar"><div class="fill" id="hp-fill" style="width:100%"></div><div class="label" id="hp-label">100/100</div></div>
+   <div class="stat-bar mp-bar"><div class="fill" id="mp-fill" style="width:100%"></div><div class="label" id="mp-label">50/50</div></div>
+   <div class="stat-bar xp-bar"><div class="fill" id="xp-fill" style="width:0%"></div><div class="label" id="xp-label">0/100</div></div>
+   <span id="gold-display" style="color:var(--gold);font-size:0.85em">💰0</span>
+  </div>
+  <div class="floor-info" id="floor-info">Zone 1 - F1</div>
+ </div>
+ <div class="game-main">
+  <div id="dungeon-view">
+   <canvas id="dungeon-canvas"></canvas>
+   <div class="minimap"><canvas id="minimap-canvas" width="100" height="100"></canvas></div>
+  </div>
+  <div id="combat-view">
+   <div class="combat-arena" id="combat-arena">
+    <div class="monster-area">
+     <div class="monster-sprite" id="monster-sprite">👹</div>
+     <div class="monster-name" id="monster-name">Goblin</div>
+     <div class="monster-hp-bar"><div class="fill" id="monster-hp-fill" style="width:100%"></div></div>
+    </div>
+    <div class="combat-spells" id="combat-spells"></div>
+   </div>
+   <div class="combat-log" id="combat-log"></div>
+  </div>
+  <!-- Effects -->
+  <div id="effects-layer"><canvas id="particles-canvas"></canvas></div>
+ </div>
+ <div class="bottom-panel">
+  <div class="tab-btn" onclick="G.togglePanel('craft')">🔮 조합</div>
+  <div class="tab-btn" onclick="G.togglePanel('inventory')">🎒 인벤</div>
+  <div class="tab-btn" onclick="G.togglePanel('spellbook')">📖 마법서</div>
+  <div class="tab-btn" onclick="G.togglePanel('stats')">📊 정보</div>
+ </div>
+
+ <!-- Craft Panel -->
+ <div class="side-panel" id="panel-craft">
+  <div class="panel-header"><h2>🔮 주문 조합 / Spell Craft</h2><button class="close-btn" onclick="G.closePanel()">&times;</button></div>
+  <div class="panel-body">
+   <div class="craft-area">
+    <div class="rune-palette" id="rune-palette"></div>
+    <div class="craft-slots" id="craft-slots">
+     <div class="craft-slot" data-idx="0" onclick="G.removeCraftSlot(0)"></div>
+     <span class="craft-plus">+</span>
+     <div class="craft-slot" data-idx="1" onclick="G.removeCraftSlot(1)"></div>
+     <span class="craft-plus">+</span>
+     <div class="craft-slot" data-idx="2" onclick="G.removeCraftSlot(2)"></div>
+    </div>
+    <button class="btn btn-sm" onclick="G.craftSpell()">✨ 조합하기 / Craft</button>
+    <button class="btn btn-sm" onclick="G.clearCraft()">🗑️ 초기화 / Clear</button>
+    <div class="craft-result" id="craft-result">
+     <div style="color:var(--muted)">룬을 선택하여 주문을 만드세요<br>Select runes to craft a spell</div>
+    </div>
+   </div>
+  </div>
+ </div>
+
+ <!-- Inventory Panel -->
+ <div class="side-panel" id="panel-inventory">
+  <div class="panel-header"><h2>🎒 인벤토리 / Inventory</h2><button class="close-btn" onclick="G.closePanel()">&times;</button></div>
+  <div class="panel-body">
+   <h3 style="color:var(--accent);margin-bottom:8px">장비 / Equipment</h3>
+   <div class="inv-grid" id="equip-grid"></div>
+   <h3 style="color:var(--accent);margin:12px 0 8px">룬 / Runes</h3>
+   <div class="inv-grid" id="rune-grid"></div>
+  </div>
+ </div>
+
+ <!-- Spell Book Panel -->
+ <div class="side-panel" id="panel-spellbook">
+  <div class="panel-header"><h2>📖 마법서 / Spell Book</h2><button class="close-btn" onclick="G.closePanel()">&times;</button></div>
+  <div class="panel-body">
+   <div class="spell-list" id="spell-list"></div>
+  </div>
+ </div>
+
+ <!-- Stats Panel -->
+ <div class="side-panel" id="panel-stats">
+  <div class="panel-header"><h2>📊 정보 / Info</h2><button class="close-btn" onclick="G.closePanel()">&times;</button></div>
+  <div class="panel-body" id="stats-body"></div>
+ </div>
+
+ <!-- Shop Overlay -->
+ <div class="side-panel" id="panel-shop">
+  <div class="panel-header"><h2>🏪 상점 / Shop</h2><button class="close-btn" onclick="G.closePanel()">&times;</button></div>
+  <div class="panel-body">
+   <div class="shop-items" id="shop-items"></div>
+  </div>
+ </div>
+</div>
+
+<!-- Death Screen -->
+<div id="death-screen" class="screen">
+ <h1>💀 사망 / You Died</h1>
+ <div class="death-stats" id="death-stats"></div>
+ <div class="death-unlocks" id="death-unlocks"></div>
+ <button class="btn" onclick="G.returnToTitle()">🏠 타이틀로 / Return</button>
+</div>
+
+<!-- Victory Screen -->
+<div id="victory-screen" class="screen">
+ <h1>🏆 승리! / Victory!</h1>
+ <div class="death-stats" id="victory-stats"></div>
+ <button class="btn" onclick="G.returnToTitle()">🏠 타이틀로 / Return</button>
+</div>
+
+<div id="transition"></div>
+</div>
+
+<script>
+"use strict";
+// ============================================================
+// SPELL CRAFTER RPG - Complete Game Engine
+// ============================================================
+
+const ELEMENTS = {
+ fire:{name:'Fire',kr:'불',emoji:'🔥',color:'#ff4422'},
+ water:{name:'Water',kr:'물',emoji:'💧',color:'#2288ff'},
+ earth:{name:'Earth',kr:'땅',emoji:'🌍',color:'#88aa22'},
+ air:{name:'Air',kr:'바람',emoji:'💨',color:'#88ccff'},
+ lightning:{name:'Lightning',kr:'번개',emoji:'⚡',color:'#ffcc00'},
+ shadow:{name:'Shadow',kr:'그림자',emoji:'🌑',color:'#8844cc'}
+};
+
+// All spell recipes: key = sorted element combo, value = spell data
+const SPELL_RECIPES = {};
+function addRecipe(elems, name, kr, emoji, dmg, mp, effect, effectDesc) {
+ const key = [...elems].sort().join('+');
+ SPELL_RECIPES[key] = {elems,name,kr,emoji,baseDmg:dmg,mpCost:mp,effect,effectDesc,key};
+}
+// Single element spells (6)
+addRecipe(['fire'],'Fireball','화염구','🔥',25,8,'burn','Burns for 3 turns');
+addRecipe(['water'],'Water Bolt','물탄','💧',20,7,'slow','Slows enemy');
+addRecipe(['earth'],'Rock Throw','돌던지기','🪨',22,6,'stun_chance','30% stun');
+addRecipe(['air'],'Wind Slash','바람베기','💨',18,5,'bleed','Causes bleed');
+addRecipe(['lightning'],'Spark','전격','⚡',28,10,'chain','Chain damage');
+addRecipe(['shadow'],'Dark Bolt','암흑탄','🌑',24,9,'drain','Drains HP');
+
+// Double combos (15)
+addRecipe(['fire','fire'],'Inferno','인페르노','🔥',45,16,'burn2','Heavy burn 5t');
+addRecipe(['fire','water'],'Steam Cloud','증기 구름','♨️',30,14,'blind','Blinds 2t');
+addRecipe(['fire','earth'],'Lava Burst','용암 폭발','🌋',40,15,'melt_armor','Melts armor');
+addRecipe(['fire','air'],'Flame Tornado','화염 회오리','🌪️',38,14,'aoe','AOE damage');
+addRecipe(['fire','lightning'],'Plasma Bolt','플라즈마','⚡',42,16,'paralyze','Paralyze 1t');
+addRecipe(['fire','shadow'],'Hellfire','지옥불','👿',44,18,'curse','Curse -20% def');
+addRecipe(['water','water'],'Tidal Wave','해일','🌊',40,15,'knockback','Knockback');
+addRecipe(['water','earth'],'Mud Trap','진흙 덫','🟤',28,12,'root','Root 2t');
+addRecipe(['water','air'],'Ice Shard','얼음 파편','🧊',35,13,'freeze','Freeze 1t');
+addRecipe(['water','lightning'],'Storm Surge','폭풍 해일','⛈️',48,18,'shock','Shock AOE');
+addRecipe(['water','shadow'],'Poison Mist','독 안개','☠️',25,14,'poison','Poison 4t');
+addRecipe(['earth','earth'],'Earthquake','지진','💥',42,16,'stun','Stun 1t');
+addRecipe(['earth','air'],'Sand Storm','모래 폭풍','🏜️',32,13,'blind','Blind 2t');
+addRecipe(['earth','lightning'],'Magnetic Pull','자력 끌기','🧲',30,14,'pull','Pull + stun');
+addRecipe(['earth','shadow'],'Grave Grip','무덤 손길','🪦',36,15,'drain2','Heavy drain');
+addRecipe(['air','air'],'Cyclone','사이클론','🌀',38,14,'aoe','AOE wind');
+addRecipe(['air','lightning'],'Thunder Strike','천둥 번개','⛈️',50,19,'crit_boost','Crit +50%');
+addRecipe(['air','shadow'],'Phantom Wind','유령 바람','👻',34,15,'phase','Ignore armor');
+addRecipe(['lightning','lightning'],'Lightning Storm','뇌격 폭풍','⚡',52,20,'chain2','Chain all');
+addRecipe(['lightning','shadow'],'Void Spark','공허 전격','✴️',46,18,'mana_burn','Burns MP');
+addRecipe(['shadow','shadow'],'Abyss','심연','🕳️',48,20,'fear','Fear 2t');
+
+// Triple combos (12)
+addRecipe(['fire','water','earth'],'Primal Eruption','원시 분출','🌋',55,22,'all_debuff','All debuffs');
+addRecipe(['fire','water','air'],'Tempest Blaze','폭풍 화염','🔥',52,20,'burn_aoe','Burn AOE');
+addRecipe(['fire','water','lightning'],'Electro Steam','전기 증기','⚡',50,20,'paralyze_aoe','Paralyze AOE');
+addRecipe(['fire','earth','lightning'],'Meteor Strike','유성 낙하','☄️',60,24,'devastate','Devastate');
+addRecipe(['fire','air','shadow'],'Infernal Phantom','지옥 유령','👻',54,22,'drain_burn','Drain+Burn');
+addRecipe(['water','earth','air'],'Nature\'s Wrath','자연의 분노','🌿',48,20,'regen_self','Heal 20%+dmg');
+addRecipe(['water','earth','shadow'],'Swamp Curse','늪 저주','🐊',45,20,'multi_poison','Triple poison');
+addRecipe(['water','air','lightning'],'Hurricane','허리케인','🌀',56,22,'aoe_stun','AOE+Stun');
+addRecipe(['earth','air','lightning'],'Seismic Thunder','지진 번개','💥',58,24,'shatter','Shatter armor');
+addRecipe(['earth','air','shadow'],'Dust Devil','먼지 악마','🌪️',44,19,'confuse','Confuse 3t');
+addRecipe(['fire','lightning','shadow'],'Dark Plasma','암흑 플라즈마','💜',62,26,'annihilate','Annihilate');
+addRecipe(['water','lightning','shadow'],'Void Storm','공허 폭풍','🌀',58,24,'void','Void dmg');
+addRecipe(['air','lightning','shadow'],'Phantom Thunder','유령 천둥','⛈️',56,23,'phase_chain','Phase chain');
+addRecipe(['fire','earth','shadow'],'Doom Magma','파멸 용암','🌋',60,25,'doom','Doom 3t');
+addRecipe(['fire','earth','air'],'Volcanic Wind','화산 바람','🌋',54,22,'eruption','Multi-hit');
+addRecipe(['fire','water','shadow'],'Blood Mist','피의 안개','🩸',50,22,'life_steal','50% lifesteal');
+addRecipe(['earth','lightning','shadow'],'Dark Quake','암흑 지진','💥',58,24,'dark_stun','Dark stun 2t');
+addRecipe(['air','water','shadow'],'Ghost Tide','유령 조수','👻',48,20,'phase_slow','Phase+Slow');
+
+// Monster definitions
+const MONSTERS = [
+ // Zone 1: Crypt
+ {name:'Goblin',kr:'고블린',emoji:'👺',hp:40,atk:8,def:2,xp:15,gold:5,zone:1,pattern:'basic'},
+ {name:'Skeleton',kr:'스켈레톤',emoji:'💀',hp:50,atk:10,def:4,xp:20,gold:8,zone:1,pattern:'defend'},
+ {name:'Bat Swarm',kr:'박쥐 떼',emoji:'🦇',hp:30,atk:12,def:1,xp:18,gold:6,zone:1,pattern:'quick'},
+ // Zone 2: Forest
+ {name:'Wolf',kr:'늑대',emoji:'🐺',hp:60,atk:14,def:5,xp:25,gold:10,zone:2,pattern:'quick'},
+ {name:'Treant',kr:'나무 정령',emoji:'🌳',hp:90,atk:10,def:12,xp:30,gold:12,zone:2,pattern:'defend'},
+ {name:'Spider Queen',kr:'거미 여왕',emoji:'🕷️',hp:70,atk:16,def:6,xp:28,gold:11,zone:2,pattern:'poison'},
+ // Zone 3: Volcano
+ {name:'Fire Imp',kr:'불 임프',emoji:'😈',hp:80,atk:20,def:8,xp:35,gold:15,zone:3,pattern:'magic'},
+ {name:'Lava Golem',kr:'용암 골렘',emoji:'🗿',hp:120,atk:18,def:18,xp:40,gold:18,zone:3,pattern:'defend'},
+ {name:'Salamander',kr:'샐러맨더',emoji:'🦎',hp:90,atk:22,def:10,xp:38,gold:16,zone:3,pattern:'quick'},
+ // Zone 4: Abyss
+ {name:'Shadow Wraith',kr:'그림자 망령',emoji:'👻',hp:100,atk:24,def:12,xp:45,gold:20,zone:4,pattern:'phase'},
+ {name:'Demon',kr:'악마',emoji:'👿',hp:130,atk:26,def:14,xp:50,gold:22,zone:4,pattern:'magic'},
+ {name:'Mimic',kr:'미믹',emoji:'📦',hp:80,atk:30,def:10,xp:55,gold:40,zone:4,pattern:'surprise'},
+ // Zone 5: Throne
+ {name:'Dark Knight',kr:'암흑 기사',emoji:'🗡️',hp:150,atk:28,def:20,xp:60,gold:25,zone:5,pattern:'combo'},
+ {name:'Lich',kr:'리치',emoji:'🧙',hp:120,atk:32,def:15,xp:65,gold:28,zone:5,pattern:'magic'},
+ {name:'Chimera',kr:'키메라',emoji:'🐲',hp:160,atk:30,def:18,xp:70,gold:30,zone:5,pattern:'multi'},
+ // Bosses
+ {name:'Crypt Lord',kr:'지하묘지 군주',emoji:'👑',hp:150,atk:20,def:10,xp:80,gold:50,zone:1,pattern:'boss_crypt',boss:true},
+ {name:'Elder Treant',kr:'고대 나무',emoji:'🌲',hp:200,atk:22,def:20,xp:100,gold:60,zone:2,pattern:'boss_forest',boss:true},
+ {name:'Magma Dragon',kr:'용암 드래곤',emoji:'🐉',hp:280,atk:30,def:18,xp:120,gold:80,zone:3,pattern:'boss_volcano',boss:true},
+ {name:'Abyss Lord',kr:'심연의 군주',emoji:'😈',hp:350,atk:35,def:22,xp:150,gold:100,zone:4,pattern:'boss_abyss',boss:true},
+ {name:'Dark Emperor',kr:'암흑 황제',emoji:'🫅',hp:500,atk:40,def:25,xp:200,gold:150,zone:5,pattern:'boss_final',boss:true},
+];
+
+// Equipment definitions
+const EQUIPMENT = [
+ // Staffs
+ {name:'Wooden Staff',kr:'나무 지팡이',emoji:'🪄',slot:'weapon',bonus:{spellPower:5},zone:1,price:30},
+ {name:'Crystal Staff',kr:'수정 지팡이',emoji:'🔮',slot:'weapon',bonus:{spellPower:12},zone:2,price:80},
+ {name:'Dragon Staff',kr:'용의 지팡이',emoji:'🐉',slot:'weapon',bonus:{spellPower:20,fire:10},zone:3,price:150},
+ {name:'Void Staff',kr:'공허의 지팡이',emoji:'✴️',slot:'weapon',bonus:{spellPower:28,shadow:15},zone:4,price:250},
+ {name:'Archmage Staff',kr:'대마법사 지팡이',emoji:'⚡',slot:'weapon',bonus:{spellPower:35,all:8},zone:5,price:400},
+ // Robes
+ {name:'Cloth Robe',kr:'천 로브',emoji:'👘',slot:'armor',bonus:{maxHp:20,def:3},zone:1,price:25},
+ {name:'Silk Robe',kr:'비단 로브',emoji:'👔',slot:'armor',bonus:{maxHp:40,def:6,maxMp:10},zone:2,price:70},
+ {name:'Arcane Robe',kr:'마법 로브',emoji:'🧥',slot:'armor',bonus:{maxHp:60,def:10,maxMp:20},zone:3,price:130},
+ {name:'Shadow Robe',kr:'그림자 로브',emoji:'🥋',slot:'armor',bonus:{maxHp:80,def:15,maxMp:30},zone:4,price:220},
+ {name:'Emperor Robe',kr:'황제의 로브',emoji:'👑',slot:'armor',bonus:{maxHp:120,def:20,maxMp:50},zone:5,price:380},
+ // Rings
+ {name:'Fire Ring',kr:'불의 반지',emoji:'💍',slot:'ring',bonus:{fire:15},zone:1,price:40},
+ {name:'Water Ring',kr:'물의 반지',emoji:'💍',slot:'ring',bonus:{water:15},zone:1,price:40},
+ {name:'Earth Ring',kr:'땅의 반지',emoji:'💍',slot:'ring',bonus:{earth:15},zone:2,price:40},
+ {name:'Air Ring',kr:'바람의 반지',emoji:'💍',slot:'ring',bonus:{air:15},zone:2,price:40},
+ {name:'Lightning Ring',kr:'번개의 반지',emoji:'💍',slot:'ring',bonus:{lightning:15},zone:3,price:40},
+ {name:'Shadow Ring',kr:'그림자의 반지',emoji:'💍',slot:'ring',bonus:{shadow:15},zone:3,price:40},
+ {name:'Elemental Ring',kr:'원소의 반지',emoji:'💍',slot:'ring',bonus:{all:10},zone:4,price:200},
+ {name:'Soul Ring',kr:'영혼의 반지',emoji:'💍',slot:'ring',bonus:{maxMp:30,drain:10},zone:5,price:300},
+];
+
+const ZONE_NAMES = [
+ {name:'Crypt of Bones',kr:'해골의 지하묘지',emoji:'💀',bg:'#0f0a0a'},
+ {name:'Whispering Forest',kr:'속삭이는 숲',emoji:'🌲',bg:'#0a0f0a'},
+ {name:'Volcanic Depths',kr:'화산 심연',emoji:'🌋',bg:'#150a0a'},
+ {name:'Shadow Abyss',kr:'그림자 심연',emoji:'🌑',bg:'#0a0a15'},
+ {name:'Emperor\'s Throne',kr:'황제의 왕좌',emoji:'👑',bg:'#15150a'},
+];
+
+// Room types
+const ROOM_TYPES = {
+ empty:  {emoji:'·',color:'#333'},
+ start:  {emoji:'🚪',color:'#44aa44'},
+ monster:{emoji:'⚔️',color:'#cc2222'},
+ treasure:{emoji:'💎',color:'#ccaa22'},
+ rune:   {emoji:'🔮',color:'#aa44ff'},
+ shop:   {emoji:'🏪',color:'#44aaff'},
+ boss:   {emoji:'👑',color:'#ff4422'},
+ stairs: {emoji:'🪜',color:'#88cc88'},
+ heal:   {emoji:'❤️',color:'#ff6688'},
+ trap:   {emoji:'⚠️',color:'#cc8822'},
+};
+
+// ============================================================
+// AUDIO ENGINE
+// ============================================================
+class AudioEngine {
+ constructor(){
+  this.ctx=null;this.enabled=true;
+  try{this.ctx=new(window.AudioContext||window.webkitAudioContext)()}catch(e){this.enabled=false}
+ }
+ resume(){if(this.ctx&&this.ctx.state==='suspended')this.ctx.resume()}
+ play(type,freq=440,dur=0.2,vol=0.15){
+  if(!this.enabled||!this.ctx)return;this.resume();
+  const t=this.ctx.currentTime,o=this.ctx.createOscillator(),g=this.ctx.createGain();
+  o.connect(g);g.connect(this.ctx.destination);
+  o.type=type;o.frequency.setValueAtTime(freq,t);
+  g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(0.001,t+dur);
+  o.start(t);o.stop(t+dur);
+ }
+ noise(dur=0.1,vol=0.1){
+  if(!this.enabled||!this.ctx)return;this.resume();
+  const t=this.ctx.currentTime,buf=this.ctx.createBuffer(1,this.ctx.sampleRate*dur,this.ctx.sampleRate);
+  const d=buf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*vol;
+  const s=this.ctx.createBufferSource(),g=this.ctx.createGain();
+  s.buffer=buf;s.connect(g);g.connect(this.ctx.destination);
+  g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(0.001,t+dur);
+  s.start(t);
+ }
+ // Specific sounds
+ fireSound(){this.noise(0.3,0.12);this.play('sawtooth',200,0.3,0.08)}
+ waterSound(){this.play('sine',600,0.15,0.1);this.play('sine',800,0.2,0.08)}
+ earthSound(){this.noise(0.15,0.15);this.play('square',100,0.2,0.1)}
+ airSound(){this.noise(0.4,0.06);this.play('sine',1200,0.3,0.06)}
+ lightningSound(){this.noise(0.05,0.2);this.play('sawtooth',1000,0.1,0.15);this.play('square',500,0.15,0.1)}
+ shadowSound(){this.play('sine',150,0.4,0.1);this.play('sine',160,0.4,0.08)}
+ hitSound(){this.noise(0.1,0.15);this.play('square',200,0.1,0.1)}
+ deathSound(){this.play('sawtooth',200,0.5,0.1);setTimeout(()=>this.play('sawtooth',150,0.5,0.08),200)}
+ levelUp(){[523,659,784,1047].forEach((f,i)=>setTimeout(()=>this.play('sine',f,0.2,0.12),i*100))}
+ pickupSound(){this.play('sine',880,0.1,0.1);setTimeout(()=>this.play('sine',1100,0.15,0.1),80)}
+ stepSound(){this.play('sine',200,0.05,0.03)}
+ bossMusic(){this.play('sawtooth',220,0.3,0.08);setTimeout(()=>this.play('sawtooth',165,0.3,0.08),300)}
+ craftSound(){[400,500,600,800,1000].forEach((f,i)=>setTimeout(()=>this.play('sine',f,0.15,0.1),i*60))}
+ spellSound(elem){
+  const m={fire:'fireSound',water:'waterSound',earth:'earthSound',air:'airSound',lightning:'lightningSound',shadow:'shadowSound'};
+  if(m[elem])this[m[elem]]();
+ }
+}
+const audio = new AudioEngine();
+
+// ============================================================
+// PARTICLE SYSTEM
+// ============================================================
+class ParticleSystem {
+ constructor(canvas){
+  this.canvas=canvas;this.ctx=canvas.getContext('2d');this.particles=[];this.running=false;
+ }
+ resize(){this.canvas.width=this.canvas.parentElement.clientWidth;this.canvas.height=this.canvas.parentElement.clientHeight}
+ emit(x,y,color,count=20,opts={}){
+  for(let i=0;i<count;i++){
+   this.particles.push({
+    x,y,vx:(Math.random()-0.5)*(opts.spread||4),vy:(Math.random()-0.5)*(opts.spread||4)-(opts.upward||0),
+    life:1,decay:0.01+Math.random()*0.02,color,size:2+Math.random()*(opts.size||3),
+    gravity:opts.gravity||0
+   });
+  }
+  if(!this.running){this.running=true;this.update()}
+ }
+ emitSpell(elem,x,y){
+  const cols={fire:'#ff4422',water:'#2288ff',earth:'#88aa22',air:'#88ccff',lightning:'#ffcc00',shadow:'#8844cc'};
+  this.emit(x||this.canvas.width/2,y||this.canvas.height*0.3,cols[elem]||'#fff',30,{spread:6,upward:2,size:4});
+ }
+ update(){
+  this.ctx.clearRect(0,0,this.canvas.width,this.canvas.height);
+  this.particles=this.particles.filter(p=>{
+   p.x+=p.vx;p.y+=p.vy;p.vy+=p.gravity;p.life-=p.decay;
+   if(p.life<=0)return false;
+   this.ctx.globalAlpha=p.life;this.ctx.fillStyle=p.color;
+   this.ctx.beginPath();this.ctx.arc(p.x,p.y,p.size*p.life,0,Math.PI*2);this.ctx.fill();
+   return true;
+  });
+  this.ctx.globalAlpha=1;
+  if(this.particles.length>0)requestAnimationFrame(()=>this.update());
+  else this.running=false;
+ }
+}
+
+// ============================================================
+// DUNGEON GENERATOR
+// ============================================================
+class DungeonGenerator {
+ static generate(zone, floor, width=12, height=12) {
+  const grid = Array.from({length:height},()=>Array(width).fill(null));
+  const rooms = [];
+
+  // Place rooms using random walk
+  let cx=Math.floor(width/2), cy=Math.floor(height/2);
+  grid[cy][cx] = {type:'start',visited:false,revealed:true,x:cx,y:cy};
+  rooms.push({x:cx,y:cy});
+
+  const totalRooms = 20 + floor * 2;
+  let placed = 1;
+  while(placed < totalRooms) {
+   const dirs = [[0,-1],[0,1],[-1,0],[1,0]];
+   const [dx,dy] = dirs[Math.floor(Math.random()*4)];
+   const nx=cx+dx, ny=cy+dy;
+   if(nx>=0 && nx<width && ny>=0 && ny<height) {
+    if(!grid[ny][nx]) {
+     grid[ny][nx] = {type:'empty',visited:false,revealed:false,x:nx,y:ny};
+     rooms.push({x:nx,y:ny});
+     placed++;
+    }
+    cx=nx;cy=ny;
+   }
+  }
+
+  // Assign room types
+  const isBossFloor = (floor % 5 === 0);
+  let farthest = rooms[0], maxDist = 0;
+  const start = rooms[0];
+  rooms.forEach(r=>{
+   const d=Math.abs(r.x-start.x)+Math.abs(r.y-start.y);
+   if(d>maxDist){maxDist=d;farthest=r}
+  });
+
+  // Place stairs or boss at farthest
+  if(isBossFloor){
+   grid[farthest.y][farthest.x].type='boss';
+  } else {
+   grid[farthest.y][farthest.x].type='stairs';
+  }
+
+  // Distribute room types among empty rooms
+  const emptyRooms=rooms.filter(r=>grid[r.y][r.x].type==='empty');
+  const shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
+  shuffle(emptyRooms);
+
+  let idx=0;
+  const monsterCount = 6 + floor;
+  const treasureCount = 2 + Math.floor(floor/2);
+  const runeCount = 2;
+  const shopCount = 1;
+  const healCount = 1;
+  const trapCount = Math.floor(floor/2);
+
+  const assign=(count,type)=>{for(let i=0;i<count&&idx<emptyRooms.length;i++,idx++)grid[emptyRooms[idx].y][emptyRooms[idx].x].type=type};
+  assign(monsterCount,'monster');
+  assign(treasureCount,'treasure');
+  assign(runeCount,'rune');
+  assign(shopCount,'shop');
+  assign(healCount,'heal');
+  assign(trapCount,'trap');
+
+  return {grid,rooms,width,height,startX:start.x,startY:start.y};
+ }
+}
+
+// ============================================================
+// MAIN GAME OBJECT
+// ============================================================
+const G = {
+ // State
+ state: null,  // current run state
+ meta: null,   // meta progression
+ screen: 'title',
+ activePanel: null,
+ craftSlots: [null,null,null],
+ dungeonCanvas: null,
+ dungeonCtx: null,
+ minimapCanvas: null,
+ minimapCtx: null,
+ particles: null,
+ combatState: null,
+ tileSize: 40,
+ touchStartX: 0,
+ touchStartY: 0,
+ swipeThreshold: 30,
+ animating: false,
+
+ // ===================== INIT =====================
+ init() {
+  this.loadMeta();
+  this.dungeonCanvas = document.getElementById('dungeon-canvas');
+  this.dungeonCtx = this.dungeonCanvas.getContext('2d');
+  this.minimapCanvas = document.getElementById('minimap-canvas');
+  this.minimapCtx = this.minimapCanvas.getContext('2d');
+  this.particles = new ParticleSystem(document.getElementById('particles-canvas'));
+
+  // Check for saved run
+  const saved = localStorage.getItem('scr_run');
+  if(saved) {
+   document.getElementById('continue-btn').style.display='';
+  }
+  this.updateMetaInfo();
+
+  // Event listeners
+  window.addEventListener('resize',()=>this.onResize());
+  document.addEventListener('keydown',e=>this.onKey(e));
+  this.dungeonCanvas.addEventListener('touchstart',e=>this.onTouchStart(e),{passive:false});
+  this.dungeonCanvas.addEventListener('touchend',e=>this.onTouchEnd(e),{passive:false});
+  this.dungeonCanvas.addEventListener('click',e=>this.onCanvasClick(e));
+
+  // Unlock audio on first interaction
+  document.addEventListener('click',()=>audio.resume(),{once:true});
+  document.addEventListener('touchstart',()=>audio.resume(),{once:true});
+
+  this.onResize();
+ },
+
+ // ===================== META PROGRESSION =====================
+ loadMeta() {
+  const saved = localStorage.getItem('scr_meta');
+  if(saved) {
+   this.meta = JSON.parse(saved);
+  } else {
+   this.meta = {
+    discoveredRecipes: [],
+    unlockedRunes: ['fire','water','earth'],  // Start with 3
+    totalRuns: 0,
+    bestFloor: 0,
+    bestZone: 0,
+    totalKills: 0,
+    totalGold: 0,
+   };
+  }
+ },
+ saveMeta() {
+  localStorage.setItem('scr_meta', JSON.stringify(this.meta));
+ },
+ saveRun() {
+  if(this.state) {
+   localStorage.setItem('scr_run', JSON.stringify(this.state));
+  }
+ },
+ clearRunSave() {
+  localStorage.removeItem('scr_run');
+ },
+ updateMetaInfo() {
+  const m = this.meta;
+  const el = document.getElementById('meta-info');
+  const recipeCount = Object.keys(SPELL_RECIPES).length;
+  el.innerHTML = `모험 ${m.totalRuns}회 | 발견 레시피 ${m.discoveredRecipes.length}/${recipeCount} | 최고 구역 ${m.bestZone}-F${m.bestFloor}<br>Runs: ${m.totalRuns} | Recipes: ${m.discoveredRecipes.length}/${recipeCount} | Best: Zone${m.bestZone}-F${m.bestFloor}`;
+ },
+
+ // ===================== SCREENS =====================
+ showScreen(name) {
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  const el = document.getElementById(name+'-screen');
+  if(el) el.classList.add('active');
+  this.screen = name;
+ },
+ transition(cb) {
+  const t = document.getElementById('transition');
+  t.classList.add('active');
+  setTimeout(()=>{
+   cb();
+   setTimeout(()=>t.classList.remove('active'),50);
+  },300);
+ },
+
+ // ===================== NEW GAME =====================
+ startNewRun() {
+  audio.resume();
+  this.clearRunSave();
+  this.meta.totalRuns++;
+  this.saveMeta();
+
+  this.state = {
+   // Player
+   level: 1,
+   hp: 100, maxHp: 100,
+   mp: 50, maxMp: 50,
+   xp: 0, xpNeeded: 100,
+   gold: 0,
+   def: 5,
+   spellPower: 10,
+   // Runes inventory: {fire: count, ...}
+   runes: {},
+   // Equipped spells (crafted) - array of spell keys
+   spells: [],
+   // Equipment
+   equipment: {weapon:null, armor:null, ring:null},
+   // Inventory (items)
+   items: [],
+   // Dungeon
+   zone: 1,
+   floor: 1,
+   dungeon: null,
+   playerX: 0,
+   playerY: 0,
+   // Stats
+   kills: 0,
+   floorsCleared: 0,
+   spellsCast: 0,
+   // Element bonuses
+   elemBonus: {fire:0,water:0,earth:0,air:0,lightning:0,shadow:0},
+   // Status effects on player
+   statusEffects: [],
+   // Shop inventory per floor
+   shopItems: [],
+  };
+
+  // Give starting runes
+  this.meta.unlockedRunes.forEach(r => {
+   this.state.runes[r] = (this.state.runes[r]||0) + 3;
+  });
+
+  // Always ensure at least basic fire spell
+  const defaultSpellKey = 'fire';
+  if(!this.state.spells.includes(defaultSpellKey)){
+   this.state.spells.push(defaultSpellKey);
+  }
+
+  this.generateFloor();
+  this.transition(()=>{
+   this.showScreen('game');
+   this.onResize();
+   this.renderDungeon();
+   this.renderMinimap();
+   this.updateUI();
+  });
+ },
+
+ continuRun() {
+  const saved = localStorage.getItem('scr_run');
+  if(!saved) return;
+  this.state = JSON.parse(saved);
+  this.transition(()=>{
+   this.showScreen('game');
+   this.onResize();
+   this.renderDungeon();
+   this.renderMinimap();
+   this.updateUI();
+  });
+ },
+
+ // ===================== DUNGEON =====================
+ generateFloor() {
+  const s = this.state;
+  s.dungeon = DungeonGenerator.generate(s.zone, s.floor);
+  s.playerX = s.dungeon.startX;
+  s.playerY = s.dungeon.startY;
+  // Generate shop items
+  s.shopItems = this.generateShopItems();
+  // Reveal starting area
+  this.revealAround(s.playerX, s.playerY);
+ },
+
+ generateShopItems() {
+  const z = this.state.zone;
+  const items = [];
+  // Random equipment from current zone
+  const zoneEquip = EQUIPMENT.filter(e=>e.zone<=z);
+  const shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
+  shuffle(zoneEquip);
+  items.push(...zoneEquip.slice(0,3));
+  // HP/MP potions
+  items.push({name:'HP Potion',kr:'HP 물약',emoji:'❤️',type:'consumable',effect:'hp',value:50,price:15});
+  items.push({name:'MP Potion',kr:'MP 물약',emoji:'💙',type:'consumable',effect:'mp',value:30,price:12});
+  // Random runes
+  const elems = Object.keys(ELEMENTS);
+  for(let i=0;i<2;i++){
+   const e=elems[Math.floor(Math.random()*elems.length)];
+   items.push({name:ELEMENTS[e].name+' Rune',kr:ELEMENTS[e].kr+' 룬',emoji:ELEMENTS[e].emoji,type:'rune',element:e,price:10+z*5});
+  }
+  return items;
+ },
+
+ revealAround(x,y) {
+  const d=this.state.dungeon;
+  for(let dy=-1;dy<=1;dy++){
+   for(let dx=-1;dx<=1;dx++){
+    const nx=x+dx,ny=y+dy;
+    if(nx>=0&&nx<d.width&&ny>=0&&ny<d.height&&d.grid[ny][nx]){
+     d.grid[ny][nx].revealed=true;
+    }
+   }
+  }
+ },
+
+ movePlayer(dx,dy) {
+  if(this.animating || this.combatState) return;
+  const s=this.state, d=s.dungeon;
+  const nx=s.playerX+dx, ny=s.playerY+dy;
+  if(nx<0||nx>=d.width||ny<0||ny>=d.height||!d.grid[ny][nx]) return;
+
+  audio.stepSound();
+  s.playerX=nx; s.playerY=ny;
+  this.revealAround(nx,ny);
+
+  const room = d.grid[ny][nx];
+  if(!room.visited) {
+   room.visited=true;
+   this.enterRoom(room);
+  }
+
+  this.renderDungeon();
+  this.renderMinimap();
+  this.updateUI();
+  this.saveRun();
+ },
+
+ enterRoom(room) {
+  switch(room.type) {
+   case 'monster': this.startCombat(false); break;
+   case 'boss': this.startCombat(true); break;
+   case 'treasure': this.openTreasure(); break;
+   case 'rune': this.findRune(); break;
+   case 'shop': this.openShop(); break;
+   case 'heal': this.healRoom(); break;
+   case 'trap': this.triggerTrap(); break;
+   case 'stairs': this.nextFloor(); break;
+  }
+ },
+
+ openTreasure() {
+  const s=this.state, z=s.zone;
+  const goldAmount = 10 + Math.floor(Math.random()*20) * z;
+  s.gold += goldAmount;
+  audio.pickupSound();
+  this.toast(`💰 금화 ${goldAmount}개 발견! / Found ${goldAmount} gold!`);
+
+  // Chance for equipment
+  if(Math.random()<0.3) {
+   const zoneEquip=EQUIPMENT.filter(e=>e.zone<=z);
+   const item=zoneEquip[Math.floor(Math.random()*zoneEquip.length)];
+   if(item) {
+    s.items.push({...item});
+    this.toast(`${item.emoji} ${item.kr} 획득! / Got ${item.name}!`);
+   }
+  }
+  this.updateUI();
+ },
+
+ findRune() {
+  const elems = Object.keys(ELEMENTS);
+  // Weight toward unlocked ones but can find new
+  let elem;
+  if(Math.random()<0.3) {
+   elem = elems[Math.floor(Math.random()*elems.length)];
+  } else {
+   const unlocked = this.meta.unlockedRunes;
+   elem = unlocked[Math.floor(Math.random()*unlocked.length)] || elems[0];
+  }
+  this.state.runes[elem] = (this.state.runes[elem]||0)+1;
+  audio.pickupSound();
+  this.toast(`${ELEMENTS[elem].emoji} ${ELEMENTS[elem].kr} 룬 발견! / Found ${ELEMENTS[elem].name} Rune!`);
+
+  // Unlock in meta if new
+  if(!this.meta.unlockedRunes.includes(elem)) {
+   this.meta.unlockedRunes.push(elem);
+   this.saveMeta();
+   this.toast(`🔓 새로운 원소 해금: ${ELEMENTS[elem].kr}! / New element unlocked: ${ELEMENTS[elem].name}!`);
+  }
+  this.updateUI();
+ },
+
+ healRoom() {
+  const s=this.state;
+  const healAmt = Math.floor(s.maxHp*0.4);
+  const manaAmt = Math.floor(s.maxMp*0.3);
+  s.hp = Math.min(s.maxHp, s.hp+healAmt);
+  s.mp = Math.min(s.maxMp, s.mp+manaAmt);
+  audio.pickupSound();
+  this.toast(`❤️ 회복! HP+${healAmt} MP+${manaAmt} / Healed!`);
+  this.updateUI();
+ },
+
+ triggerTrap() {
+  const s=this.state;
+  const dmg = 5 + s.zone*5 + Math.floor(Math.random()*10);
+  s.hp -= dmg;
+  audio.hitSound();
+  this.screenShake();
+  this.toast(`⚠️ 함정! ${dmg} 피해! / Trap! ${dmg} damage!`);
+  if(s.hp<=0) this.playerDeath();
+  this.updateUI();
+ },
+
+ nextFloor() {
+  const s=this.state;
+  s.floorsCleared++;
+  s.floor++;
+
+  if(s.floor>5) {
+   s.floor=1;
+   s.zone++;
+   if(s.zone>5) {
+    this.victory();
+    return;
+   }
+   this.toast(`🏰 새로운 구역: ${ZONE_NAMES[s.zone-1].kr}! / New Zone: ${ZONE_NAMES[s.zone-1].name}!`);
+  }
+
+  // Update meta best
+  if(s.zone>this.meta.bestZone||(s.zone===this.meta.bestZone&&s.floor>this.meta.bestFloor)){
+   this.meta.bestZone=s.zone;this.meta.bestFloor=s.floor;
+  }
+  this.saveMeta();
+
+  this.transition(()=>{
+   this.generateFloor();
+   this.renderDungeon();
+   this.renderMinimap();
+   this.updateUI();
+  });
+ },
+
+ openShop() {
+  this.showPanel('shop');
+  this.renderShop();
+ },
+
+ // ===================== COMBAT =====================
+ startCombat(isBoss) {
+  const s=this.state;
+  const zoneMonsters=MONSTERS.filter(m=>m.zone===s.zone&&(isBoss?m.boss:!m.boss));
+  const base=zoneMonsters[Math.floor(Math.random()*zoneMonsters.length)]||MONSTERS[0];
+
+  // Scale monster
+  const scale = 1 + (s.floor-1)*0.15 + (s.zone-1)*0.3;
+  const monster = {
+   ...base,
+   hp: Math.floor(base.hp*scale),
+   maxHp: Math.floor(base.hp*scale),
+   atk: Math.floor(base.atk*scale),
+   def: Math.floor(base.def*scale),
+   xp: Math.floor(base.xp*scale),
+   gold: Math.floor(base.gold*scale),
+   statusEffects: [],
+   turnCount: 0,
+  };
+
+  this.combatState = {monster, isBoss, playerTurn:true, log:[]};
+
+  // Show combat view
+  document.getElementById('dungeon-view').style.display='none';
+  document.getElementById('combat-view').style.display='flex';
+  document.getElementById('combat-view').classList.add('active');
+
+  if(isBoss) audio.bossMusic();
+
+  this.renderCombat();
+ },
+
+ endCombat(won) {
+  const s=this.state, cs=this.combatState;
+  if(won) {
+   const m=cs.monster;
+   s.xp+=m.xp; s.gold+=m.gold; s.kills++;
+   this.meta.totalKills++;
+   this.meta.totalGold+=m.gold;
+
+   // Check level up
+   while(s.xp>=s.xpNeeded) {
+    s.xp-=s.xpNeeded;
+    s.level++;
+    s.xpNeeded=Math.floor(s.xpNeeded*1.4);
+    s.maxHp+=15; s.hp=s.maxHp;
+    s.maxMp+=8; s.mp=s.maxMp;
+    s.def+=2; s.spellPower+=3;
+    audio.levelUp();
+    this.toast(`⬆️ 레벨 업! Lv.${s.level} / Level Up!`);
+   }
+
+   // Drop rune chance
+   if(Math.random()<0.4) {
+    const elems=Object.keys(ELEMENTS);
+    const e=elems[Math.floor(Math.random()*elems.length)];
+    s.runes[e]=(s.runes[e]||0)+1;
+    this.toast(`${ELEMENTS[e].emoji} 룬 드랍! / Rune drop!`);
+   }
+
+   // Drop equipment chance
+   if(Math.random()<(cs.isBoss?0.7:0.15)) {
+    const zoneEquip=EQUIPMENT.filter(e=>e.zone<=s.zone);
+    const item=zoneEquip[Math.floor(Math.random()*zoneEquip.length)];
+    if(item){s.items.push({...item});this.toast(`${item.emoji} ${item.kr} 드랍!`)}
+   }
+
+   // If boss, create stairs
+   if(cs.isBoss) {
+    const room = s.dungeon.grid[s.playerY][s.playerX];
+    room.type='stairs';
+    room.visited=false;
+    this.toast('🪜 계단이 나타났다! / Stairs appeared!');
+   }
+  }
+
+  this.combatState=null;
+
+  // Hide combat view
+  document.getElementById('combat-view').style.display='none';
+  document.getElementById('combat-view').classList.remove('active');
+  document.getElementById('dungeon-view').style.display='';
+
+  this.renderDungeon();
+  this.updateUI();
+  this.saveRun();
+  this.saveMeta();
+ },
+
+ castSpell(spellKey) {
+  if(!this.combatState||!this.combatState.playerTurn||this.animating) return;
+  const s=this.state, cs=this.combatState, m=cs.monster;
+  const recipe=SPELL_RECIPES[spellKey];
+  if(!recipe) return;
+
+  // Check MP
+  const cost=recipe.mpCost;
+  if(s.mp<cost) {
+   this.toast('❌ MP 부족! / Not enough MP!');
+   return;
+  }
+
+  this.animating=true;
+  s.mp-=cost;
+  s.spellsCast++;
+
+  // Calculate damage
+  let dmg = recipe.baseDmg + s.spellPower;
+  // Element bonuses
+  recipe.elems.forEach(e=>{
+   dmg += s.elemBonus[e]||0;
+  });
+  // Equipment spell power
+  Object.values(s.equipment).forEach(eq=>{
+   if(eq&&eq.bonus){
+    if(eq.bonus.spellPower) dmg+=eq.bonus.spellPower;
+    if(eq.bonus.all) recipe.elems.forEach(()=>dmg+=eq.bonus.all);
+    recipe.elems.forEach(e=>{if(eq.bonus[e])dmg+=eq.bonus[e]});
+   }
+  });
+
+  // Random variance
+  dmg = Math.floor(dmg * (0.9 + Math.random()*0.2));
+
+  // Apply monster defense
+  dmg = Math.max(1, dmg - m.def);
+
+  // Critical hit
+  let crit=false;
+  if(Math.random()<0.15){dmg=Math.floor(dmg*1.5);crit=true}
+
+  // Play spell sound & particles
+  audio.spellSound(recipe.elems[0]);
+  this.particles.resize();
+  this.particles.emitSpell(recipe.elems[0]);
+
+  // Apply damage
+  m.hp = Math.max(0, m.hp-dmg);
+
+  // Apply effects
+  this.applySpellEffect(recipe, m, dmg);
+
+  // Combat log
+  const logMsg = `${recipe.emoji} ${recipe.kr} → ${dmg}${crit?' 크리티컬!':''} 피해`;
+  cs.log.push({text:logMsg,type:'damage'});
+
+  // Floating damage
+  this.floatDamage(dmg, crit?'#ffcc00':'#ff4422', crit);
+
+  this.screenShake();
+
+  setTimeout(()=>{
+   this.animating=false;
+   if(m.hp<=0){
+    cs.log.push({text:`${m.name} 처치! / ${m.name} defeated!`,type:'info'});
+    audio.deathSound();
+    this.renderCombat();
+    setTimeout(()=>this.endCombat(true),500);
+    return;
+   }
+
+   // Process monster status effects
+   this.processMonsterStatuses();
+
+   // Monster turn
+   cs.playerTurn=false;
+   this.renderCombat();
+   setTimeout(()=>this.monsterTurn(),600);
+  },400);
+
+  this.renderCombat();
+  this.updateUI();
+ },
+
+ applySpellEffect(recipe, monster, dmg) {
+  const s=this.state;
+  const eff=recipe.effect;
+  switch(eff){
+   case 'burn': monster.statusEffects.push({type:'burn',dmg:Math.floor(dmg*0.2),turns:3});break;
+   case 'burn2': monster.statusEffects.push({type:'burn',dmg:Math.floor(dmg*0.3),turns:5});break;
+   case 'slow': monster.statusEffects.push({type:'slow',turns:2});break;
+   case 'stun_chance': if(Math.random()<0.3)monster.statusEffects.push({type:'stun',turns:1});break;
+   case 'stun': monster.statusEffects.push({type:'stun',turns:1});break;
+   case 'bleed': monster.statusEffects.push({type:'bleed',dmg:Math.floor(dmg*0.15),turns:3});break;
+   case 'drain': s.hp=Math.min(s.maxHp,s.hp+Math.floor(dmg*0.2));break;
+   case 'drain2': s.hp=Math.min(s.maxHp,s.hp+Math.floor(dmg*0.35));break;
+   case 'blind': monster.statusEffects.push({type:'blind',turns:2});break;
+   case 'freeze': monster.statusEffects.push({type:'stun',turns:1});break;
+   case 'paralyze': monster.statusEffects.push({type:'stun',turns:1});break;
+   case 'poison': monster.statusEffects.push({type:'poison',dmg:Math.floor(dmg*0.15),turns:4});break;
+   case 'multi_poison': monster.statusEffects.push({type:'poison',dmg:Math.floor(dmg*0.12),turns:6});break;
+   case 'root': monster.statusEffects.push({type:'stun',turns:2});break;
+   case 'curse': monster.def=Math.max(0,monster.def-Math.floor(monster.def*0.2));break;
+   case 'melt_armor': monster.def=Math.max(0,monster.def-5);break;
+   case 'shatter': monster.def=Math.max(0,Math.floor(monster.def*0.5));break;
+   case 'fear': monster.statusEffects.push({type:'fear',turns:2});break;
+   case 'confuse': monster.statusEffects.push({type:'confuse',turns:3});break;
+   case 'phase': case 'phase_chain': break; // ignore armor (already applied)
+   case 'life_steal': s.hp=Math.min(s.maxHp,s.hp+Math.floor(dmg*0.5));break;
+   case 'regen_self': s.hp=Math.min(s.maxHp,s.hp+Math.floor(s.maxHp*0.2));break;
+   case 'mana_burn': s.mp=Math.min(s.maxMp,s.mp+Math.floor(recipe.mpCost*0.5));break;
+   case 'crit_boost': break; // handled in damage calc
+   case 'doom': monster.statusEffects.push({type:'doom',turns:3,dmg:Math.floor(monster.maxHp*0.3)});break;
+  }
+ },
+
+ processMonsterStatuses() {
+  const m=this.combatState.monster;
+  const cs=this.combatState;
+  m.statusEffects=m.statusEffects.filter(se=>{
+   if(se.type==='burn'||se.type==='poison'||se.type==='bleed'){
+    m.hp=Math.max(0,m.hp-se.dmg);
+    cs.log.push({text:`${se.type} → ${se.dmg} 피해`,type:'damage'});
+   }
+   if(se.type==='doom'){
+    se.turns--;
+    if(se.turns<=0){
+     m.hp=Math.max(0,m.hp-se.dmg);
+     cs.log.push({text:`💀 Doom → ${se.dmg} 피해!`,type:'damage'});
+     return false;
+    }
+   }
+   se.turns--;
+   return se.turns>0;
+  });
+ },
+
+ monsterTurn() {
+  if(!this.combatState)return;
+  const s=this.state, cs=this.combatState, m=cs.monster;
+  m.turnCount++;
+
+  // Check stun
+  const stunned=m.statusEffects.some(se=>se.type==='stun');
+  if(stunned){
+   cs.log.push({text:`${m.emoji} ${m.name} 기절! / Stunned!`,type:'info'});
+   cs.playerTurn=true;
+   this.renderCombat();
+   return;
+  }
+
+  // Check fear (50% skip)
+  const feared=m.statusEffects.some(se=>se.type==='fear');
+  if(feared&&Math.random()<0.5){
+   cs.log.push({text:`${m.emoji} ${m.name} 공포에 질림! / Feared!`,type:'info'});
+   cs.playerTurn=true;
+   this.renderCombat();
+   return;
+  }
+
+  // Calculate damage
+  let atk = m.atk;
+  const blind=m.statusEffects.some(se=>se.type==='blind');
+  if(blind&&Math.random()<0.4){
+   cs.log.push({text:`${m.emoji} 공격 빗나감! / Miss!`,type:'info'});
+   cs.playerTurn=true;
+   this.renderCombat();
+   return;
+  }
+  const confused=m.statusEffects.some(se=>se.type==='confuse');
+  if(confused&&Math.random()<0.3){
+   const selfDmg=Math.floor(atk*0.5);
+   m.hp=Math.max(0,m.hp-selfDmg);
+   cs.log.push({text:`${m.emoji} 혼란! 자해 ${selfDmg}! / Confused! Self-hit!`,type:'info'});
+   cs.playerTurn=true;
+   this.renderCombat();
+   return;
+  }
+
+  // Monster pattern modifiers
+  const slow=m.statusEffects.some(se=>se.type==='slow');
+  if(slow) atk=Math.floor(atk*0.7);
+
+  // Boss patterns
+  if(m.pattern.startsWith('boss_')&&m.turnCount%3===0){
+   atk=Math.floor(atk*1.5);
+   cs.log.push({text:`${m.emoji} 강력한 공격! / Power attack!`,type:'damage'});
+  }
+
+  // Pattern-based modifiers
+  switch(m.pattern){
+   case 'quick': atk=Math.floor(atk*(0.8+Math.random()*0.4));break;
+   case 'defend':if(m.turnCount%2===0){cs.log.push({text:`${m.emoji} 방어 자세! / Defending!`,type:'info'});cs.playerTurn=true;this.renderCombat();return}break;
+   case 'magic':atk=Math.floor(atk*1.2);break; // magic ignores some def
+   case 'surprise':if(m.turnCount===1)atk=Math.floor(atk*2);break;
+   case 'multi':if(Math.random()<0.3){atk=Math.floor(atk*0.6);cs.log.push({text:`${m.emoji} 연속 공격! / Multi-attack!`,type:'damage'});const d2=Math.max(1,atk-Math.floor(s.def*0.5));setTimeout(()=>{s.hp-=d2;this.updateUI()},300)}break;
+  }
+
+  let def = s.def;
+  Object.values(s.equipment).forEach(eq=>{if(eq&&eq.bonus&&eq.bonus.def)def+=eq.bonus.def});
+  let dmg = Math.max(1, atk - Math.floor(def*0.5));
+  dmg = Math.floor(dmg*(0.85+Math.random()*0.3));
+
+  s.hp-=dmg;
+  audio.hitSound();
+  this.screenShake();
+  cs.log.push({text:`${m.emoji} ${m.name} → ${dmg} 피해`,type:'damage'});
+  this.floatDamage(dmg,'#ff6644',false,true);
+
+  if(s.hp<=0){
+   s.hp=0;
+   this.renderCombat();
+   this.updateUI();
+   setTimeout(()=>this.playerDeath(),500);
+   return;
+  }
+
+  // MP regen (small)
+  s.mp=Math.min(s.maxMp,s.mp+2);
+
+  cs.playerTurn=true;
+  this.renderCombat();
+  this.updateUI();
+ },
+
+ floatDamage(dmg, color, crit, onPlayer) {
+  const arena=document.getElementById('combat-arena');
+  const el=document.createElement('div');
+  el.className='dmg-float';
+  el.style.color=color;
+  el.textContent=(crit?'💥 ':'')+dmg;
+  el.style.left=onPlayer?'30%':'55%';
+  el.style.top=onPlayer?'60%':'25%';
+  el.style.fontSize=crit?'1.5em':'1.2em';
+  arena.appendChild(el);
+  setTimeout(()=>el.remove(),1000);
+ },
+
+ // ===================== SPELL CRAFTING =====================
+ addRuneToCraft(elem) {
+  for(let i=0;i<3;i++){
+   if(!this.craftSlots[i]){
+    this.craftSlots[i]=elem;
+    this.renderCraftSlots();
+    this.previewCraft();
+    audio.pickupSound();
+    return;
+   }
+  }
+ },
+
+ removeCraftSlot(idx) {
+  this.craftSlots[idx]=null;
+  this.renderCraftSlots();
+  this.previewCraft();
+ },
+
+ clearCraft() {
+  this.craftSlots=[null,null,null];
+  this.renderCraftSlots();
+  this.previewCraft();
+ },
+
+ previewCraft() {
+  const filled=this.craftSlots.filter(Boolean);
+  const result=document.getElementById('craft-result');
+  if(filled.length===0){
+   result.innerHTML='<div style="color:var(--muted)">룬을 선택하여 주문을 만드세요<br>Select runes to craft a spell</div>';
+   return;
+  }
+  const key=[...filled].sort().join('+');
+  const recipe=SPELL_RECIPES[key];
+  if(recipe){
+   result.innerHTML=`
+    <div class="spell-preview">${recipe.emoji}</div>
+    <div class="spell-info">
+     <div class="name">${recipe.kr} / ${recipe.name}</div>
+     <div class="damage">⚔️ ${recipe.baseDmg} 피해</div>
+     <div class="effect">✨ ${recipe.effectDesc}</div>
+     <div style="color:var(--mp)">💧 MP ${recipe.mpCost}</div>
+    </div>`;
+  } else {
+   result.innerHTML='<div style="color:var(--muted)">❓ 알 수 없는 조합 / Unknown combination</div>';
+  }
+ },
+
+ craftSpell() {
+  const filled=this.craftSlots.filter(Boolean);
+  if(filled.length===0) return;
+
+  const key=[...filled].sort().join('+');
+  const recipe=SPELL_RECIPES[key];
+  if(!recipe){
+   this.toast('❌ 유효하지 않은 조합! / Invalid combination!');
+   return;
+  }
+
+  // Check rune availability
+  const needed={};
+  filled.forEach(e=>{needed[e]=(needed[e]||0)+1});
+  for(const [elem,count] of Object.entries(needed)){
+   if((this.state.runes[elem]||0)<count){
+    this.toast(`❌ ${ELEMENTS[elem].kr} 룬 부족! / Not enough ${ELEMENTS[elem].name} runes!`);
+    return;
+   }
+  }
+
+  // Consume runes
+  for(const [elem,count] of Object.entries(needed)){
+   this.state.runes[elem]-=count;
+  }
+
+  // Add spell if not already known
+  if(!this.state.spells.includes(key)){
+   this.state.spells.push(key);
+  }
+
+  // Discover recipe in meta
+  if(!this.meta.discoveredRecipes.includes(key)){
+   this.meta.discoveredRecipes.push(key);
+   this.saveMeta();
+   this.toast(`📖 새 레시피 발견: ${recipe.kr}! / New recipe: ${recipe.name}!`);
+  }
+
+  audio.craftSound();
+  this.particles.resize();
+  this.particles.emitSpell(filled[0]);
+  this.toast(`✨ ${recipe.kr} 습득! / Learned ${recipe.name}!`);
+
+  this.clearCraft();
+  this.renderRunePalette();
+  this.updateUI();
+  this.saveRun();
+ },
+
+ // ===================== EQUIPMENT & ITEMS =====================
+ equipItem(itemIdx) {
+  const s=this.state;
+  const item=s.items[itemIdx];
+  if(!item||!item.slot) return;
+
+  // Unequip current
+  if(s.equipment[item.slot]){
+   s.items.push(s.equipment[item.slot]);
+   this.unapplyBonus(s.equipment[item.slot].bonus);
+  }
+
+  s.equipment[item.slot]=item;
+  s.items.splice(itemIdx,1);
+  this.applyBonus(item.bonus);
+  audio.pickupSound();
+  this.toast(`${item.emoji} ${item.kr} 장착! / Equipped ${item.name}!`);
+  this.renderInventory();
+  this.updateUI();
+  this.saveRun();
+ },
+
+ applyBonus(bonus) {
+  if(!bonus) return;
+  const s=this.state;
+  if(bonus.maxHp){s.maxHp+=bonus.maxHp;s.hp+=bonus.maxHp}
+  if(bonus.maxMp){s.maxMp+=bonus.maxMp;s.mp+=bonus.maxMp}
+  if(bonus.def)s.def+=bonus.def;
+  if(bonus.spellPower)s.spellPower+=bonus.spellPower;
+  Object.keys(ELEMENTS).forEach(e=>{
+   if(bonus[e])s.elemBonus[e]+=bonus[e];
+  });
+  if(bonus.all)Object.keys(ELEMENTS).forEach(e=>s.elemBonus[e]+=bonus.all);
+ },
+
+ unapplyBonus(bonus) {
+  if(!bonus) return;
+  const s=this.state;
+  if(bonus.maxHp){s.maxHp-=bonus.maxHp;s.hp=Math.min(s.hp,s.maxHp)}
+  if(bonus.maxMp){s.maxMp-=bonus.maxMp;s.mp=Math.min(s.mp,s.maxMp)}
+  if(bonus.def)s.def-=bonus.def;
+  if(bonus.spellPower)s.spellPower-=bonus.spellPower;
+  Object.keys(ELEMENTS).forEach(e=>{
+   if(bonus[e])s.elemBonus[e]-=bonus[e];
+  });
+  if(bonus.all)Object.keys(ELEMENTS).forEach(e=>s.elemBonus[e]-=bonus.all);
+ },
+
+ buyItem(shopIdx) {
+  const s=this.state;
+  const item=s.shopItems[shopIdx];
+  if(!item||s.gold<item.price)return;
+
+  s.gold-=item.price;
+  if(item.type==='consumable'){
+   if(item.effect==='hp')s.hp=Math.min(s.maxHp,s.hp+item.value);
+   if(item.effect==='mp')s.mp=Math.min(s.maxMp,s.mp+item.value);
+   this.toast(`${item.emoji} 사용! / Used ${item.name}!`);
+  } else if(item.type==='rune') {
+   s.runes[item.element]=(s.runes[item.element]||0)+1;
+   this.toast(`${item.emoji} 구매! / Bought ${item.name}!`);
+  } else {
+   s.items.push({...item});
+   this.toast(`${item.emoji} 구매! / Bought ${item.name}!`);
+  }
+
+  s.shopItems.splice(shopIdx,1);
+  audio.pickupSound();
+  this.renderShop();
+  this.updateUI();
+  this.saveRun();
+ },
+
+ // ===================== DEATH & VICTORY =====================
+ playerDeath() {
+  this.clearRunSave();
+  const s=this.state;
+
+  // Unlock new runes based on progress
+  const unlocks=[];
+  const allElems=Object.keys(ELEMENTS);
+  if(s.zone>=2&&!this.meta.unlockedRunes.includes('air')){
+   this.meta.unlockedRunes.push('air');unlocks.push('💨 바람 / Air');
+  }
+  if(s.zone>=3&&!this.meta.unlockedRunes.includes('lightning')){
+   this.meta.unlockedRunes.push('lightning');unlocks.push('⚡ 번개 / Lightning');
+  }
+  if(s.zone>=4&&!this.meta.unlockedRunes.includes('shadow')){
+   this.meta.unlockedRunes.push('shadow');unlocks.push('🌑 그림자 / Shadow');
+  }
+  this.saveMeta();
+
+  // Show death screen
+  document.getElementById('death-stats').innerHTML=`
+   <div>📊 레벨 ${s.level} | 구역 ${s.zone} - ${s.floor}층</div>
+   <div>Level ${s.level} | Zone ${s.zone} - Floor ${s.floor}</div>
+   <div>⚔️ 처치 ${s.kills}마리 | 💰 획득 ${s.gold}골드</div>
+   <div>Kills: ${s.kills} | Gold earned: ${s.gold}</div>
+   <div>🔮 주문 시전 ${s.spellsCast}회 | 🪜 ${s.floorsCleared}층 클리어</div>
+  `;
+
+  const unlocksEl=document.getElementById('death-unlocks');
+  if(unlocks.length>0){
+   unlocksEl.innerHTML='<h3>🔓 새로운 해금! / New Unlocks!</h3>'+unlocks.map(u=>`<div class="unlock">${u}</div>`).join('');
+  } else {
+   unlocksEl.innerHTML='';
+  }
+
+  this.transition(()=>this.showScreen('death'));
+ },
+
+ victory() {
+  this.clearRunSave();
+  const s=this.state;
+  this.meta.bestZone=5;this.meta.bestFloor=5;this.saveMeta();
+
+  document.getElementById('victory-stats').innerHTML=`
+   <div style="font-size:1.2em;margin:15px 0">🎉 모든 던전을 정복했습니다!</div>
+   <div>You conquered all dungeons!</div>
+   <div style="margin-top:15px">📊 레벨 ${s.level} | 처치 ${s.kills}마리</div>
+   <div>💰 획득 ${s.gold}골드 | 🔮 주문 ${s.spellsCast}회</div>
+  `;
+
+  this.transition(()=>this.showScreen('victory'));
+ },
+
+ returnToTitle() {
+  this.state=null;
+  this.combatState=null;
+  document.getElementById('combat-view').style.display='none';
+  document.getElementById('dungeon-view').style.display='';
+  this.updateMetaInfo();
+  const saved=localStorage.getItem('scr_run');
+  document.getElementById('continue-btn').style.display=saved?'':'none';
+  this.transition(()=>this.showScreen('title'));
+ },
+
+ // ===================== RENDERING =====================
+ renderDungeon() {
+  const c=this.dungeonCanvas, ctx=this.dungeonCtx, s=this.state, d=s.dungeon;
+  if(!c||!d) return;
+
+  const ts=this.tileSize;
+  ctx.fillStyle='#08080f';
+  ctx.fillRect(0,0,c.width,c.height);
+
+  // Camera offset to center player
+  const camX=s.playerX*ts-c.width/2+ts/2;
+  const camY=s.playerY*ts-c.height/2+ts/2;
+
+  ctx.save();
+  ctx.translate(-camX,-camY);
+
+  // Draw rooms
+  for(let y=0;y<d.height;y++){
+   for(let x=0;x<d.width;x++){
+    const room=d.grid[y][x];
+    if(!room)continue;
+    if(!room.revealed)continue;
+
+    const rx=x*ts, ry=y*ts;
+
+    // Room background
+    if(room.visited){
+     ctx.fillStyle='#1a1a2a';
+    } else {
+     ctx.fillStyle='#111122';
+    }
+    ctx.fillRect(rx+1,ry+1,ts-2,ts-2);
+
+    // Room border
+    ctx.strokeStyle=room.visited?'#2a2a3a':'#333355';
+    ctx.lineWidth=1;
+    ctx.strokeRect(rx+1,ry+1,ts-2,ts-2);
+
+    // Room type indicator (if not visited)
+    if(!room.visited && room.type!=='empty' && room.type!=='start'){
+     const rt=ROOM_TYPES[room.type];
+     if(rt){
+      ctx.fillStyle=rt.color;
+      ctx.globalAlpha=0.6;
+      ctx.font=`${ts*0.5}px serif`;
+      ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText(rt.emoji,rx+ts/2,ry+ts/2);
+      ctx.globalAlpha=1;
+     }
+    }
+
+    // Connections between rooms
+    ctx.strokeStyle='#222244';ctx.lineWidth=2;
+    [[0,-1],[0,1],[-1,0],[1,0]].forEach(([dx,dy])=>{
+     const nx=x+dx,ny=y+dy;
+     if(nx>=0&&nx<d.width&&ny>=0&&ny<d.height&&d.grid[ny][nx]&&d.grid[ny][nx].revealed){
+      ctx.beginPath();
+      ctx.moveTo(rx+ts/2,ry+ts/2);
+      ctx.lineTo((x+dx)*ts+ts/2,(y+dy)*ts+ts/2);
+      ctx.stroke();
+     }
+    });
+   }
+  }
+
+  // Draw player
+  const px=s.playerX*ts, py=s.playerY*ts;
+  ctx.font=`${ts*0.7}px serif`;
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('🧙',px+ts/2,py+ts/2);
+
+  // Player glow
+  ctx.beginPath();
+  ctx.arc(px+ts/2,py+ts/2,ts*0.4,0,Math.PI*2);
+  ctx.strokeStyle='rgba(170,68,255,0.4)';
+  ctx.lineWidth=2;
+  ctx.stroke();
+
+  ctx.restore();
+ },
+
+ renderMinimap() {
+  const c=this.minimapCanvas, ctx=this.minimapCtx, s=this.state, d=s.dungeon;
+  if(!d) return;
+  ctx.fillStyle='rgba(0,0,0,0.8)';
+  ctx.fillRect(0,0,100,100);
+
+  const scale=Math.min(100/d.width,100/d.height)*0.8;
+  const ox=(100-d.width*scale)/2, oy=(100-d.height*scale)/2;
+
+  for(let y=0;y<d.height;y++){
+   for(let x=0;x<d.width;x++){
+    const room=d.grid[y][x];
+    if(!room||!room.revealed) continue;
+    const rx=ox+x*scale, ry=oy+y*scale;
+
+    if(x===s.playerX&&y===s.playerY){
+     ctx.fillStyle='#aa44ff';
+    } else if(!room.visited){
+     const rt=ROOM_TYPES[room.type];
+     ctx.fillStyle=rt?rt.color:'#444';
+    } else {
+     ctx.fillStyle='#333';
+    }
+    ctx.fillRect(rx,ry,scale-1,scale-1);
+   }
+  }
+ },
+
+ renderCombat() {
+  if(!this.combatState)return;
+  const cs=this.combatState, m=cs.monster, s=this.state;
+
+  document.getElementById('monster-sprite').textContent=m.emoji;
+  document.getElementById('monster-name').textContent=`${m.kr} / ${m.name}${m.boss?' 👑':''}`;
+  document.getElementById('monster-hp-fill').style.width=`${(m.hp/m.maxHp)*100}%`;
+
+  // Status effects display
+  const statuses=m.statusEffects.map(se=>{
+   const icons={burn:'🔥',poison:'☠️',bleed:'🩸',stun:'💫',blind:'😵',fear:'😨',confuse:'🌀',slow:'🐌',doom:'💀'};
+   return icons[se.type]||'❓';
+  }).join(' ');
+  document.getElementById('monster-name').textContent+=` ${statuses}`;
+
+  // Render spell buttons
+  const spellsDiv=document.getElementById('combat-spells');
+  spellsDiv.innerHTML='';
+
+  // Basic attack
+  const atkBtn=document.createElement('div');
+  atkBtn.className='spell-btn'+(cs.playerTurn?'':' disabled');
+  atkBtn.innerHTML='<div class="spell-icon">⚔️</div><div class="spell-name">기본 공격</div><div class="spell-cost">MP 0</div>';
+  atkBtn.onclick=()=>{
+   if(!cs.playerTurn||this.animating)return;
+   this.animating=true;
+   let dmg=Math.max(1,s.spellPower-m.def);
+   m.hp=Math.max(0,m.hp-dmg);
+   audio.hitSound();
+   this.screenShake();
+   cs.log.push({text:`⚔️ 기본 공격 → ${dmg} 피해`,type:'damage'});
+   this.floatDamage(dmg,'#cccccc',false);
+   setTimeout(()=>{
+    this.animating=false;
+    if(m.hp<=0){this.renderCombat();setTimeout(()=>this.endCombat(true),500);return}
+    this.processMonsterStatuses();
+    cs.playerTurn=false;this.renderCombat();this.updateUI();
+    setTimeout(()=>this.monsterTurn(),600);
+   },400);
+   this.renderCombat();this.updateUI();
+  };
+  spellsDiv.appendChild(atkBtn);
+
+  // Crafted spells
+  s.spells.forEach(key=>{
+   const recipe=SPELL_RECIPES[key];
+   if(!recipe)return;
+   const btn=document.createElement('div');
+   const canCast=cs.playerTurn&&s.mp>=recipe.mpCost;
+   btn.className='spell-btn'+(canCast?'':' disabled');
+   btn.innerHTML=`<div class="spell-icon">${recipe.emoji}</div><div class="spell-name">${recipe.kr}</div><div class="spell-cost">MP ${recipe.mpCost}</div>`;
+   btn.onclick=()=>this.castSpell(key);
+   spellsDiv.appendChild(btn);
+  });
+
+  // Potion buttons
+  const hpPot=document.createElement('div');
+  hpPot.className='spell-btn'+(cs.playerTurn?'':' disabled');
+  hpPot.innerHTML='<div class="spell-icon">❤️</div><div class="spell-name">HP 물약</div><div class="spell-cost">'+((s.items||[]).filter(i=>i.type==='consumable'&&i.effect==='hp').length)+'개</div>';
+  hpPot.onclick=()=>{
+   if(!cs.playerTurn)return;
+   const idx=s.items.findIndex(i=>i.type==='consumable'&&i.effect==='hp');
+   if(idx<0){this.toast('❌ 물약 없음!');return}
+   s.hp=Math.min(s.maxHp,s.hp+s.items[idx].value);
+   s.items.splice(idx,1);
+   cs.log.push({text:'❤️ HP 물약 사용!',type:'heal'});
+   cs.playerTurn=false;this.renderCombat();this.updateUI();
+   setTimeout(()=>this.monsterTurn(),600);
+  };
+  spellsDiv.appendChild(hpPot);
+
+  // Combat log
+  const logDiv=document.getElementById('combat-log');
+  logDiv.innerHTML=cs.log.slice(-8).map(l=>`<div class="log-entry log-${l.type}">${l.text}</div>`).join('');
+  logDiv.scrollTop=logDiv.scrollHeight;
+ },
+
+ renderRunePalette() {
+  const palette=document.getElementById('rune-palette');
+  palette.innerHTML='';
+  Object.entries(ELEMENTS).forEach(([key,elem])=>{
+   const count=this.state.runes[key]||0;
+   const unlocked=this.meta.unlockedRunes.includes(key);
+   const div=document.createElement('div');
+   div.className=`rune-slot ${key}${!unlocked?' locked':''}`;
+   div.innerHTML=`${elem.emoji}<span class="rune-count">${count}</span>`;
+   if(unlocked&&count>0){
+    div.onclick=()=>this.addRuneToCraft(key);
+   }
+   palette.appendChild(div);
+  });
+ },
+
+ renderCraftSlots() {
+  const slots=document.querySelectorAll('.craft-slot');
+  slots.forEach((slot,i)=>{
+   if(this.craftSlots[i]){
+    slot.textContent=ELEMENTS[this.craftSlots[i]].emoji;
+    slot.classList.add('filled');
+   } else {
+    slot.textContent='';
+    slot.classList.remove('filled');
+   }
+  });
+ },
+
+ renderInventory() {
+  const s=this.state;
+  // Equipment
+  const equipGrid=document.getElementById('equip-grid');
+  equipGrid.innerHTML='';
+  ['weapon','armor','ring'].forEach(slot=>{
+   const item=s.equipment[slot];
+   const div=document.createElement('div');
+   div.className='inv-item equipped';
+   if(item){
+    div.innerHTML=`<span class="icon">${item.emoji}</span><span class="name">${item.kr}</span>`;
+    div.onclick=()=>{
+     // Unequip
+     this.unapplyBonus(item.bonus);
+     s.items.push(item);
+     s.equipment[slot]=null;
+     this.renderInventory();this.updateUI();this.saveRun();
+    };
+   } else {
+    const labels={weapon:'🪄 무기',armor:'👘 방어구',ring:'💍 반지'};
+    div.innerHTML=`<span class="icon" style="opacity:0.3">${labels[slot].split(' ')[0]}</span><span class="name">${labels[slot]}</span>`;
+   }
+   equipGrid.appendChild(div);
+  });
+
+  // Items
+  s.items.forEach((item,i)=>{
+   const div=document.createElement('div');
+   div.className='inv-item';
+   div.innerHTML=`<span class="icon">${item.emoji}</span><span class="name">${item.kr}</span>`;
+   if(item.slot) div.onclick=()=>this.equipItem(i);
+   equipGrid.appendChild(div);
+  });
+
+  // Runes
+  const runeGrid=document.getElementById('rune-grid');
+  runeGrid.innerHTML='';
+  Object.entries(ELEMENTS).forEach(([key,elem])=>{
+   const count=s.runes[key]||0;
+   if(count<=0)return;
+   const div=document.createElement('div');
+   div.className='inv-item';
+   div.innerHTML=`<span class="icon">${elem.emoji}</span><span class="name">${elem.kr} x${count}</span>`;
+   runeGrid.appendChild(div);
+  });
+ },
+
+ renderSpellBook() {
+  const list=document.getElementById('spell-list');
+  list.innerHTML='';
+
+  // Known spells first
+  this.state.spells.forEach(key=>{
+   const recipe=SPELL_RECIPES[key];
+   if(!recipe) return;
+   const div=document.createElement('div');
+   div.className='spell-entry';
+   div.innerHTML=`
+    <span class="icon">${recipe.emoji}</span>
+    <div class="info">
+     <div class="name">${recipe.kr} / ${recipe.name}</div>
+     <div class="desc">${recipe.effectDesc}</div>
+     <div class="stats">⚔️${recipe.baseDmg} 💧${recipe.mpCost} | ${recipe.elems.map(e=>ELEMENTS[e].emoji).join('+')}</div>
+    </div>`;
+   list.appendChild(div);
+  });
+
+  // Discovered but not equipped
+  this.meta.discoveredRecipes.forEach(key=>{
+   if(this.state.spells.includes(key)) return;
+   const recipe=SPELL_RECIPES[key];
+   if(!recipe) return;
+   const div=document.createElement('div');
+   div.className='spell-entry';
+   div.style.opacity='0.6';
+   div.innerHTML=`
+    <span class="icon">${recipe.emoji}</span>
+    <div class="info">
+     <div class="name">${recipe.kr} / ${recipe.name}</div>
+     <div class="desc">(미장착 / Not equipped)</div>
+     <div class="stats">${recipe.elems.map(e=>ELEMENTS[e].emoji).join('+')}</div>
+    </div>`;
+   list.appendChild(div);
+  });
+
+  // Undiscovered
+  Object.entries(SPELL_RECIPES).forEach(([key,recipe])=>{
+   if(this.meta.discoveredRecipes.includes(key)) return;
+   const div=document.createElement('div');
+   div.className='spell-entry undiscovered';
+   div.innerHTML=`
+    <span class="icon">❓</span>
+    <div class="info">
+     <div class="name">??? (${recipe.elems.length}룬 조합)</div>
+     <div class="desc">미발견 / Undiscovered</div>
+    </div>`;
+   list.appendChild(div);
+  });
+ },
+
+ renderShop() {
+  const items=document.getElementById('shop-items');
+  items.innerHTML='';
+  this.state.shopItems.forEach((item,i)=>{
+   const div=document.createElement('div');
+   div.className='shop-item';
+   const canBuy=this.state.gold>=item.price;
+   div.style.opacity=canBuy?'1':'0.5';
+   div.innerHTML=`
+    <span style="font-size:1.5em">${item.emoji}</span>
+    <div style="flex:1">
+     <div style="color:var(--text)">${item.kr} / ${item.name||''}</div>
+     <div style="font-size:0.75em;color:var(--muted)">${item.type==='consumable'?'소모품':item.slot||'룬'}</div>
+    </div>
+    <span class="price">💰 ${item.price}</span>`;
+   if(canBuy) div.onclick=()=>this.buyItem(i);
+   items.appendChild(div);
+  });
+  if(this.state.shopItems.length===0){
+   items.innerHTML='<div style="text-align:center;color:var(--muted);padding:20px">품절 / Sold out</div>';
+  }
+ },
+
+ renderStats() {
+  const s=this.state;
+  const body=document.getElementById('stats-body');
+  body.innerHTML=`
+   <div style="padding:10px">
+    <h3 style="color:var(--accent);margin-bottom:10px">📊 캐릭터 정보 / Character Info</h3>
+    <div style="margin:5px 0">레벨 / Level: <span style="color:var(--accent)">${s.level}</span></div>
+    <div style="margin:5px 0">❤️ HP: ${s.hp}/${s.maxHp}</div>
+    <div style="margin:5px 0">💧 MP: ${s.mp}/${s.maxMp}</div>
+    <div style="margin:5px 0">🛡️ 방어력 / DEF: ${s.def}</div>
+    <div style="margin:5px 0">⚔️ 주문력 / Spell Power: ${s.spellPower}</div>
+    <div style="margin:5px 0">💰 골드 / Gold: ${s.gold}</div>
+    <h3 style="color:var(--accent);margin:15px 0 10px">🔥 원소 보너스 / Elemental Bonus</h3>
+    ${Object.entries(ELEMENTS).map(([k,e])=>`<div style="margin:3px 0">${e.emoji} ${e.kr}: +${s.elemBonus[k]||0}</div>`).join('')}
+    <h3 style="color:var(--accent);margin:15px 0 10px">📊 통계 / Statistics</h3>
+    <div style="margin:5px 0">⚔️ 처치 / Kills: ${s.kills}</div>
+    <div style="margin:5px 0">🪜 클리어 / Floors: ${s.floorsCleared}</div>
+    <div style="margin:5px 0">🔮 주문 시전 / Spells cast: ${s.spellsCast}</div>
+    <div style="margin:5px 0">🏰 현재 / Current: Zone ${s.zone} - F${s.floor}</div>
+   </div>`;
+ },
+
+ showRecipes() {
+  // Show discovered recipes on title screen
+  let html='<div style="padding:20px;max-height:80vh;overflow-y:auto">';
+  html+='<h2 style="color:var(--accent);margin-bottom:15px">📖 발견한 레시피 / Discovered Recipes</h2>';
+  this.meta.discoveredRecipes.forEach(key=>{
+   const r=SPELL_RECIPES[key];
+   if(!r)return;
+   html+=`<div style="margin:8px 0;padding:8px;background:var(--panel);border:1px solid var(--border);border-radius:6px">
+    ${r.emoji} <span style="color:var(--accent)">${r.kr}</span> / ${r.name}
+    <span style="color:var(--muted);font-size:0.85em"> — ${r.elems.map(e=>ELEMENTS[e].emoji).join('+')} — ⚔️${r.baseDmg} 💧${r.mpCost}</span>
+   </div>`;
+  });
+  if(this.meta.discoveredRecipes.length===0){
+   html+='<div style="color:var(--muted)">아직 발견한 레시피가 없습니다. / No recipes discovered yet.</div>';
+  }
+  html+=`<div style="margin-top:15px;color:var(--muted)">${this.meta.discoveredRecipes.length}/${Object.keys(SPELL_RECIPES).length} 발견</div>`;
+  html+='<button class="btn btn-sm" onclick="this.parentElement.remove()" style="margin-top:15px">닫기 / Close</button>';
+  html+='</div>';
+
+  const overlay=document.createElement('div');
+  overlay.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:100;display:flex;align-items:center;justify-content:center';
+  overlay.innerHTML=html;
+  overlay.onclick=e=>{if(e.target===overlay)overlay.remove()};
+  document.body.appendChild(overlay);
+ },
+
+ // ===================== UI UPDATES =====================
+ updateUI() {
+  if(!this.state)return;
+  const s=this.state;
+
+  document.getElementById('player-level').textContent=`Lv.${s.level}`;
+  document.getElementById('hp-fill').style.width=`${(s.hp/s.maxHp)*100}%`;
+  document.getElementById('hp-label').textContent=`${s.hp}/${s.maxHp}`;
+  document.getElementById('mp-fill').style.width=`${(s.mp/s.maxMp)*100}%`;
+  document.getElementById('mp-label').textContent=`${s.mp}/${s.maxMp}`;
+  document.getElementById('xp-fill').style.width=`${(s.xp/s.xpNeeded)*100}%`;
+  document.getElementById('xp-label').textContent=`${s.xp}/${s.xpNeeded}`;
+  document.getElementById('gold-display').textContent=`💰${s.gold}`;
+
+  const zn=ZONE_NAMES[s.zone-1]||ZONE_NAMES[0];
+  document.getElementById('floor-info').textContent=`${zn.emoji} ${zn.kr} ${s.floor}F`;
+ },
+
+ // ===================== PANELS =====================
+ togglePanel(name) {
+  if(this.activePanel===name){
+   this.closePanel();
+  } else {
+   this.showPanel(name);
+  }
+ },
+
+ showPanel(name) {
+  this.closePanel();
+  this.activePanel=name;
+  const panel=document.getElementById('panel-'+name);
+  if(panel) {
+   panel.classList.add('active');
+   // Render panel content
+   switch(name){
+    case 'craft':this.renderRunePalette();this.renderCraftSlots();this.previewCraft();break;
+    case 'inventory':this.renderInventory();break;
+    case 'spellbook':this.renderSpellBook();break;
+    case 'stats':this.renderStats();break;
+    case 'shop':this.renderShop();break;
+   }
+  }
+  // Highlight tab
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  const tabs=document.querySelectorAll('.tab-btn');
+  const tabMap={craft:0,inventory:1,spellbook:2,stats:3};
+  if(tabMap[name]!==undefined&&tabs[tabMap[name]])tabs[tabMap[name]].classList.add('active');
+ },
+
+ closePanel() {
+  this.activePanel=null;
+  document.querySelectorAll('.side-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+ },
+
+ // ===================== INPUT =====================
+ onKey(e) {
+  if(this.screen!=='game'||this.activePanel)return;
+
+  const keyMap={
+   'ArrowUp':[0,-1],'ArrowDown':[0,1],'ArrowLeft':[-1,0],'ArrowRight':[1,0],
+   'w':[0,-1],'s':[0,1],'a':[-1,0],'d':[1,0],
+   'W':[0,-1],'S':[0,1],'A':[-1,0],'D':[1,0],
+  };
+  if(keyMap[e.key]){
+   e.preventDefault();
+   const [dx,dy]=keyMap[e.key];
+   this.movePlayer(dx,dy);
+  }
+  if(e.key==='1')this.togglePanel('craft');
+  if(e.key==='2')this.togglePanel('inventory');
+  if(e.key==='3')this.togglePanel('spellbook');
+  if(e.key==='Escape')this.closePanel();
+ },
+
+ onTouchStart(e) {
+  e.preventDefault();
+  const t=e.touches[0];
+  this.touchStartX=t.clientX;
+  this.touchStartY=t.clientY;
+ },
+
+ onTouchEnd(e) {
+  e.preventDefault();
+  if(this.screen!=='game'||this.activePanel||this.combatState)return;
+  const t=e.changedTouches[0];
+  const dx=t.clientX-this.touchStartX;
+  const dy=t.clientY-this.touchStartY;
+  const absDx=Math.abs(dx), absDy=Math.abs(dy);
+
+  if(Math.max(absDx,absDy)<this.swipeThreshold){
+   // Tap: move toward tap position
+   const c=this.dungeonCanvas;
+   const rect=c.getBoundingClientRect();
+   const tapX=t.clientX-rect.left-c.width/2;
+   const tapY=t.clientY-rect.top-c.height/2;
+   if(Math.abs(tapX)>Math.abs(tapY)){
+    this.movePlayer(tapX>0?1:-1,0);
+   } else {
+    this.movePlayer(0,tapY>0?1:-1);
+   }
+  } else {
+   // Swipe
+   if(absDx>absDy){
+    this.movePlayer(dx>0?1:-1,0);
+   } else {
+    this.movePlayer(0,dy>0?1:-1);
+   }
+  }
+ },
+
+ onCanvasClick(e) {
+  if(this.screen!=='game'||this.activePanel||this.combatState)return;
+  const c=this.dungeonCanvas;
+  const rect=c.getBoundingClientRect();
+  const clickX=e.clientX-rect.left-c.width/2;
+  const clickY=e.clientY-rect.top-c.height/2;
+  if(Math.abs(clickX)>Math.abs(clickY)){
+   this.movePlayer(clickX>0?1:-1,0);
+  } else {
+   this.movePlayer(0,clickY>0?1:-1);
+  }
+ },
+
+ onResize() {
+  const c=this.dungeonCanvas;
+  if(c){
+   const parent=c.parentElement;
+   c.width=parent.clientWidth;
+   c.height=parent.clientHeight;
+  }
+  this.particles.resize();
+  if(this.state){
+   this.renderDungeon();
+   this.renderMinimap();
+  }
+ },
+
+ // ===================== UTILITIES =====================
+ screenShake() {
+  const el=document.getElementById('combat-view').classList.contains('active')?
+   document.getElementById('combat-arena'):document.getElementById('dungeon-view');
+  el.classList.add('shake');
+  setTimeout(()=>el.classList.remove('shake'),300);
+ },
+
+ toast(msg) {
+  const el=document.createElement('div');
+  el.className='toast';
+  el.textContent=msg;
+  document.body.appendChild(el);
+  setTimeout(()=>{el.style.opacity='0';el.style.transition='opacity 0.3s';setTimeout(()=>el.remove(),300)},2000);
+ },
+};
+
+// Initialize on load
+window.addEventListener('DOMContentLoaded',()=>G.init());
+</script>
+</body>
+</html>

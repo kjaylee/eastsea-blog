@@ -3,675 +3,822 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>인보이스 생성기 - Invoice Generator</title>
+  <title>인보이스 생성기 - Invoice Generator | EastSea Tools</title>
+  <meta name="description" content="프리랜서/소규모 사업자용 인보이스 생성기. PDF 다운로드, 다국어 통화 지원, 3종 템플릿.">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
     :root {
-      --bg: #ffffff;
-      --surface: #f5f5f5;
-      --text: #1a1a1a;
-      --text-muted: #666666;
-      --primary: #3b82f6;
-      --border: #e0e0e0;
-      --shadow: rgba(0, 0, 0, 0.1);
+      --primary: #6366f1;
+      --primary-dark: #4f46e5;
+      --secondary: #8b5cf6;
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --text: #1e293b;
+      --text-light: #64748b;
+      --border: #e2e8f0;
+      --success: #10b981;
       --danger: #ef4444;
+      --warning: #f59e0b;
+      --radius: 12px;
+      --shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1);
+      --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1);
     }
-
-    [data-theme="dark"] {
-      --bg: #1a1a1a;
-      --surface: #2a2a2a;
-      --text: #e0e0e0;
-      --text-muted: #a0a0a0;
-      --primary: #3b82f6;
-      --border: #3a3a3a;
-      --shadow: rgba(0, 0, 0, 0.3);
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+    
+    .header {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+      color: white; padding: 24px 20px; text-align: center;
     }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      padding: 20px;
-      transition: all 0.3s;
+    .header h1 { font-size: 1.8rem; font-weight: 700; margin-bottom: 4px; }
+    .header p { opacity: 0.9; font-size: 0.95rem; }
+    .back-link { position: absolute; top: 20px; left: 20px; color: rgba(255,255,255,0.8); text-decoration: none; font-size: 0.9rem; }
+    .back-link:hover { color: white; }
+    
+    .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    
+    .tabs {
+      display: flex; gap: 4px; background: var(--card); border-radius: var(--radius);
+      padding: 4px; box-shadow: var(--shadow); margin-bottom: 20px; overflow-x: auto;
     }
-
-    .container {
-      max-width: 900px;
-      margin: 0 auto;
+    .tab {
+      flex: 1; padding: 10px 16px; border: none; background: transparent;
+      border-radius: 8px; cursor: pointer; font-size: 0.9rem; font-weight: 500;
+      color: var(--text-light); transition: all 0.2s; white-space: nowrap;
     }
-
-    header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 30px;
-      flex-wrap: wrap;
-      gap: 15px;
+    .tab.active { background: var(--primary); color: white; }
+    .tab:hover:not(.active) { background: #f1f5f9; }
+    
+    .section { display: none; }
+    .section.active { display: block; }
+    
+    .card {
+      background: var(--card); border-radius: var(--radius);
+      box-shadow: var(--shadow); padding: 24px; margin-bottom: 20px;
     }
-
-    h1 {
-      font-size: 28px;
-      font-weight: 700;
+    .card h3 { font-size: 1.1rem; margin-bottom: 16px; color: var(--text); display: flex; align-items: center; gap: 8px; }
+    
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .form-group.full { grid-column: 1 / -1; }
+    .form-group label { font-size: 0.85rem; font-weight: 600; color: var(--text-light); }
+    .form-group input, .form-group select, .form-group textarea {
+      padding: 10px 12px; border: 1.5px solid var(--border); border-radius: 8px;
+      font-size: 0.95rem; transition: border-color 0.2s; outline: none; font-family: inherit;
     }
-
-    .header-actions {
-      display: flex;
-      gap: 10px;
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+      border-color: var(--primary);
     }
+    
+    .items-table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    .items-table th {
+      background: #f8fafc; padding: 10px 12px; text-align: left;
+      font-size: 0.8rem; font-weight: 600; color: var(--text-light);
+      text-transform: uppercase; border-bottom: 2px solid var(--border);
+    }
+    .items-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+    .items-table input {
+      width: 100%; padding: 8px; border: 1.5px solid var(--border);
+      border-radius: 6px; font-size: 0.9rem; outline: none;
+    }
+    .items-table input:focus { border-color: var(--primary); }
+    .items-table .num-input { text-align: right; }
+    
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 10px 20px; border: none; border-radius: 8px;
+      font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.2s;
+    }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { background: var(--primary-dark); transform: translateY(-1px); }
+    .btn-success { background: var(--success); color: white; }
+    .btn-success:hover { background: #059669; }
+    .btn-danger { background: transparent; color: var(--danger); border: 1.5px solid var(--danger); }
+    .btn-danger:hover { background: var(--danger); color: white; }
+    .btn-outline { background: transparent; color: var(--primary); border: 1.5px solid var(--primary); }
+    .btn-outline:hover { background: var(--primary); color: white; }
+    .btn-sm { padding: 6px 12px; font-size: 0.8rem; }
+    
+    .btn-group { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+    
+    .template-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .template-card {
+      border: 2px solid var(--border); border-radius: var(--radius);
+      padding: 20px; text-align: center; cursor: pointer; transition: all 0.2s;
+    }
+    .template-card.selected { border-color: var(--primary); background: #f0f0ff; }
+    .template-card:hover { border-color: var(--primary); }
+    .template-card .icon { font-size: 2rem; margin-bottom: 8px; }
+    .template-card .name { font-weight: 600; margin-bottom: 4px; }
+    .template-card .desc { font-size: 0.8rem; color: var(--text-light); }
+    
+    .summary-row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 0.95rem; }
+    .summary-row.total { font-weight: 700; font-size: 1.1rem; border-top: 2px solid var(--text); padding-top: 12px; margin-top: 4px; }
+    
+    .logo-upload {
+      width: 120px; height: 120px; border: 2px dashed var(--border);
+      border-radius: var(--radius); display: flex; flex-direction: column;
+      align-items: center; justify-content: center; cursor: pointer;
+      transition: all 0.2s; overflow: hidden; position: relative;
+    }
+    .logo-upload:hover { border-color: var(--primary); }
+    .logo-upload img { width: 100%; height: 100%; object-fit: contain; }
+    .logo-upload .placeholder { text-align: center; color: var(--text-light); font-size: 0.8rem; }
+    .logo-upload .placeholder span { font-size: 1.5rem; display: block; margin-bottom: 4px; }
+    
+    /* Preview Styles */
+    .preview-container {
+      background: white; border-radius: var(--radius);
+      box-shadow: var(--shadow-lg); overflow: hidden;
+    }
+    
+    /* Modern template */
+    .inv-modern { padding: 40px; }
+    .inv-modern .inv-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; }
+    .inv-modern .inv-logo { max-height: 60px; max-width: 150px; }
+    .inv-modern .inv-title { font-size: 2rem; font-weight: 800; color: var(--primary); text-align: right; }
+    .inv-modern .inv-number { color: var(--text-light); font-size: 0.9rem; text-align: right; }
+    .inv-modern .inv-parties { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 30px; }
+    .inv-modern .inv-party-label { font-size: 0.75rem; text-transform: uppercase; color: var(--text-light); font-weight: 600; margin-bottom: 6px; letter-spacing: 1px; }
+    .inv-modern .inv-party-name { font-size: 1.1rem; font-weight: 700; margin-bottom: 4px; }
+    .inv-modern .inv-party-detail { font-size: 0.85rem; color: var(--text-light); line-height: 1.6; }
+    .inv-modern .inv-meta { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 30px; }
+    .inv-modern .inv-meta-item { background: #f8fafc; padding: 12px 16px; border-radius: 8px; }
+    .inv-modern .inv-meta-label { font-size: 0.75rem; text-transform: uppercase; color: var(--text-light); font-weight: 600; }
+    .inv-modern .inv-meta-value { font-size: 0.95rem; font-weight: 600; margin-top: 2px; }
+    .inv-modern table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+    .inv-modern thead th { background: var(--primary); color: white; padding: 12px 16px; text-align: left; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.5px; }
+    .inv-modern thead th:first-child { border-radius: 8px 0 0 0; }
+    .inv-modern thead th:last-child { border-radius: 0 8px 0 0; text-align: right; }
+    .inv-modern tbody td { padding: 12px 16px; border-bottom: 1px solid #f1f5f9; }
+    .inv-modern tbody tr:hover { background: #fafbfc; }
+    .inv-modern .text-right { text-align: right; }
+    .inv-modern .inv-totals { display: flex; justify-content: flex-end; }
+    .inv-modern .inv-totals-box { width: 280px; }
+    .inv-modern .inv-total-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 0.9rem; }
+    .inv-modern .inv-total-row.grand { font-size: 1.2rem; font-weight: 800; color: var(--primary); border-top: 2px solid var(--primary); padding-top: 12px; margin-top: 8px; }
+    .inv-modern .inv-notes { margin-top: 30px; padding: 16px; background: #f8fafc; border-radius: 8px; border-left: 4px solid var(--primary); }
+    .inv-modern .inv-notes-title { font-size: 0.8rem; text-transform: uppercase; color: var(--text-light); font-weight: 600; margin-bottom: 4px; }
+    .inv-modern .inv-notes-text { font-size: 0.85rem; color: var(--text-light); }
 
-    button {
-      background: var(--primary);
-      color: white;
-      border: none;
-      padding: 10px 20px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 14px;
-      font-weight: 600;
+    /* Classic template */
+    .inv-classic { padding: 40px; border: 3px double #333; }
+    .inv-classic .inv-header { text-align: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 2px solid #333; }
+    .inv-classic .inv-title { font-size: 2.2rem; font-weight: 700; letter-spacing: 4px; text-transform: uppercase; }
+    .inv-classic .inv-logo { max-height: 60px; margin-bottom: 12px; }
+    .inv-classic .inv-parties { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 30px; }
+    .inv-classic .inv-party-label { font-weight: 700; margin-bottom: 6px; text-transform: uppercase; font-size: 0.85rem; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
+    .inv-classic .inv-party-name { font-weight: 700; }
+    .inv-classic .inv-party-detail { font-size: 0.85rem; color: #555; line-height: 1.6; }
+    .inv-classic .inv-meta { display: flex; gap: 24px; margin-bottom: 24px; padding: 12px; background: #f5f5f5; }
+    .inv-classic .inv-meta-item { }
+    .inv-classic .inv-meta-label { font-size: 0.8rem; font-weight: 700; }
+    .inv-classic .inv-meta-value { font-size: 0.9rem; }
+    .inv-classic table { width: 100%; border-collapse: collapse; margin-bottom: 24px; border: 1px solid #333; }
+    .inv-classic thead th { background: #333; color: white; padding: 10px 12px; text-align: left; font-size: 0.85rem; }
+    .inv-classic thead th:last-child { text-align: right; }
+    .inv-classic tbody td { padding: 10px 12px; border-bottom: 1px solid #ddd; }
+    .inv-classic .text-right { text-align: right; }
+    .inv-classic .inv-totals { display: flex; justify-content: flex-end; }
+    .inv-classic .inv-totals-box { width: 280px; border: 1px solid #333; padding: 12px; }
+    .inv-classic .inv-total-row { display: flex; justify-content: space-between; padding: 4px 0; }
+    .inv-classic .inv-total-row.grand { font-weight: 700; font-size: 1.1rem; border-top: 2px solid #333; padding-top: 8px; margin-top: 4px; }
+    .inv-classic .inv-notes { margin-top: 30px; padding-top: 16px; border-top: 1px solid #ccc; }
+    .inv-classic .inv-notes-title { font-weight: 700; font-size: 0.85rem; margin-bottom: 4px; }
+    .inv-classic .inv-notes-text { font-size: 0.85rem; color: #555; }
+
+    /* Minimal template */
+    .inv-minimal { padding: 40px; }
+    .inv-minimal .inv-header { margin-bottom: 40px; }
+    .inv-minimal .inv-logo { max-height: 40px; margin-bottom: 16px; }
+    .inv-minimal .inv-title { font-size: 1rem; font-weight: 400; letter-spacing: 6px; text-transform: uppercase; color: #999; }
+    .inv-minimal .inv-parties { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 40px; }
+    .inv-minimal .inv-party-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 2px; color: #bbb; margin-bottom: 8px; }
+    .inv-minimal .inv-party-name { font-weight: 600; font-size: 1rem; }
+    .inv-minimal .inv-party-detail { font-size: 0.85rem; color: #888; line-height: 1.8; }
+    .inv-minimal .inv-meta { display: flex; gap: 40px; margin-bottom: 30px; }
+    .inv-minimal .inv-meta-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 2px; color: #bbb; }
+    .inv-minimal .inv-meta-value { font-size: 0.9rem; font-weight: 500; margin-top: 2px; }
+    .inv-minimal table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+    .inv-minimal thead th { padding: 12px 0; text-align: left; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 2px; color: #bbb; border-bottom: 1px solid #eee; }
+    .inv-minimal thead th:last-child { text-align: right; }
+    .inv-minimal tbody td { padding: 14px 0; border-bottom: 1px solid #f5f5f5; font-size: 0.9rem; }
+    .inv-minimal .text-right { text-align: right; }
+    .inv-minimal .inv-totals { display: flex; justify-content: flex-end; }
+    .inv-minimal .inv-totals-box { width: 240px; }
+    .inv-minimal .inv-total-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 0.9rem; color: #666; }
+    .inv-minimal .inv-total-row.grand { color: #000; font-weight: 700; font-size: 1.15rem; border-top: 1px solid #333; padding-top: 12px; margin-top: 8px; }
+    .inv-minimal .inv-notes { margin-top: 40px; }
+    .inv-minimal .inv-notes-title { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 2px; color: #bbb; margin-bottom: 6px; }
+    .inv-minimal .inv-notes-text { font-size: 0.85rem; color: #888; }
+
+    .inv-number { margin-top: 4px; }
+
+    .currency-selector { display: flex; gap: 8px; flex-wrap: wrap; }
+    .currency-btn {
+      padding: 8px 16px; border: 1.5px solid var(--border); border-radius: 8px;
+      background: white; cursor: pointer; font-size: 0.85rem; font-weight: 500;
       transition: all 0.2s;
     }
-
-    button:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px var(--shadow);
-    }
-
-    button.secondary {
-      background: var(--surface);
-      color: var(--text);
-      border: 1px solid var(--border);
-    }
-
-    button.danger {
-      background: var(--danger);
-    }
-
-    .theme-toggle {
-      background: var(--surface);
-      color: var(--text);
-      border: 1px solid var(--border);
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      font-size: 20px;
-    }
-
-    .invoice-container {
-      background: var(--surface);
-      padding: 40px;
-      border-radius: 12px;
-      border: 1px solid var(--border);
-      margin-bottom: 20px;
-    }
-
-    .invoice-header {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 40px;
-      flex-wrap: wrap;
-      gap: 20px;
-    }
-
-    .invoice-title {
-      font-size: 36px;
-      font-weight: 700;
-      color: var(--primary);
-    }
-
-    .invoice-number {
-      text-align: right;
-    }
-
-    .invoice-number label {
-      display: block;
-      color: var(--text-muted);
-      font-size: 14px;
-      margin-bottom: 5px;
-    }
-
-    .invoice-number input {
-      padding: 8px;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      background: var(--bg);
-      color: var(--text);
-      font-size: 16px;
-      width: 200px;
-    }
-
-    .parties {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 30px;
-      margin-bottom: 40px;
-    }
-
-    .party {
-      padding: 20px;
-      background: var(--bg);
-      border-radius: 8px;
-      border: 1px solid var(--border);
-    }
-
-    .party h3 {
-      font-size: 14px;
-      color: var(--text-muted);
-      margin-bottom: 15px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    .party input,
-    .party textarea {
-      width: 100%;
-      padding: 10px;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      background: var(--surface);
-      color: var(--text);
-      margin-bottom: 10px;
-      font-family: inherit;
-      font-size: 14px;
-    }
-
-    .party textarea {
-      resize: vertical;
-      min-height: 80px;
-    }
-
-    .items-section {
-      margin-bottom: 30px;
-    }
-
-    .items-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 15px;
-    }
-
-    .items-header h3 {
-      font-size: 18px;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-bottom: 20px;
-    }
-
-    thead {
-      background: var(--bg);
-    }
-
-    th {
-      text-align: left;
-      padding: 12px;
-      font-weight: 600;
-      color: var(--text-muted);
-      font-size: 14px;
-      border-bottom: 2px solid var(--border);
-    }
-
-    th:last-child,
-    td:last-child {
-      text-align: right;
-    }
-
-    td {
-      padding: 12px;
-      border-bottom: 1px solid var(--border);
-    }
-
-    td input {
-      width: 100%;
-      padding: 8px;
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      background: var(--surface);
-      color: var(--text);
-      font-size: 14px;
-    }
-
-    td input[type="number"] {
-      text-align: right;
-    }
-
-    .delete-btn {
-      background: transparent;
-      color: var(--danger);
-      padding: 4px 8px;
-      font-size: 18px;
-    }
-
-    .totals {
-      display: flex;
-      justify-content: flex-end;
-      margin-top: 30px;
-    }
-
-    .totals-table {
-      width: 300px;
-    }
-
-    .totals-table tr {
-      border: none;
-    }
-
-    .totals-table td {
-      padding: 8px 12px;
-      border: none;
-    }
-
-    .totals-table .total-row {
-      font-size: 20px;
-      font-weight: 700;
-      border-top: 2px solid var(--border);
-    }
-
-    .currency-select {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 20px;
-    }
-
-    .currency-select select {
-      padding: 8px 12px;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      background: var(--bg);
-      color: var(--text);
-      font-size: 14px;
-    }
-
-    .saved-invoices {
-      margin-top: 40px;
-    }
-
-    .saved-invoice-item {
-      background: var(--surface);
-      padding: 15px;
-      border-radius: 8px;
-      border: 1px solid var(--border);
-      margin-bottom: 10px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .saved-invoice-info {
-      flex: 1;
-    }
-
-    .saved-invoice-number {
-      font-weight: 600;
-      margin-bottom: 5px;
-    }
-
-    .saved-invoice-date {
-      color: var(--text-muted);
-      font-size: 12px;
-    }
-
-    .saved-invoice-actions {
-      display: flex;
-      gap: 8px;
-    }
-
-    .saved-invoice-actions button {
-      padding: 6px 12px;
-      font-size: 12px;
-    }
-
-    @media print {
-      body {
-        background: white;
-        padding: 0;
-      }
-
-      .container {
-        max-width: 100%;
-      }
-
-      header,
-      .header-actions,
-      .saved-invoices,
-      button {
-        display: none !important;
-      }
-
-      .invoice-container {
-        box-shadow: none;
-        border: none;
-        padding: 20px;
-      }
-
-      input,
-      textarea,
-      select {
-        border: none !important;
-        background: transparent !important;
-        padding: 0 !important;
-      }
-    }
-
+    .currency-btn.selected { border-color: var(--primary); background: #f0f0ff; color: var(--primary); }
+    
     @media (max-width: 768px) {
-      .parties {
-        grid-template-columns: 1fr;
-      }
-
-      table {
-        font-size: 12px;
-      }
-
-      th,
-      td {
-        padding: 8px 4px;
-      }
-
-      .totals-table {
-        width: 100%;
-      }
-
-      .invoice-header {
-        flex-direction: column;
-      }
-
-      .invoice-number {
-        text-align: left;
-      }
+      .form-grid { grid-template-columns: 1fr; }
+      .template-cards { grid-template-columns: 1fr; }
+      .inv-modern .inv-parties, .inv-classic .inv-parties, .inv-minimal .inv-parties { grid-template-columns: 1fr; }
+      .inv-modern .inv-meta { grid-template-columns: 1fr; }
+      .inv-classic .inv-meta, .inv-minimal .inv-meta { flex-direction: column; }
+      .container { padding: 12px; }
+      .card { padding: 16px; }
+    }
+    @media print {
+      .header, .tabs, .section:not(#preview-section) { display: none !important; }
+      #preview-section { display: block !important; }
+      .card { box-shadow: none; padding: 0; }
+      .btn-group { display: none !important; }
     }
   </style>
 </head>
 <body>
+  <div class="header" style="position:relative;">
+    <a href="/tools/" class="back-link">← 도구 목록</a>
+    <h1>📄 인보이스 생성기</h1>
+    <p>Invoice Generator — 전문적인 인보이스를 쉽게 만들고 PDF로 다운로드하세요</p>
+  </div>
+
   <div class="container">
-    <header>
-      <h1>📄 인보이스 생성기</h1>
-      <div class="header-actions">
-        <button onclick="saveInvoice()">💾 저장</button>
-        <button onclick="loadInvoices()" class="secondary">📂 불러오기</button>
-        <button onclick="resetInvoice()" class="secondary">🔄 새로 만들기</button>
-        <button onclick="window.print()">🖨️ 인쇄/PDF</button>
-        <button class="theme-toggle" onclick="toggleTheme()">🌙</button>
-      </div>
-    </header>
+    <div class="tabs">
+      <button class="tab active" onclick="showSection('sender')">👤 발신자</button>
+      <button class="tab" onclick="showSection('receiver')">🏢 수신자</button>
+      <button class="tab" onclick="showSection('items')">📋 항목</button>
+      <button class="tab" onclick="showSection('settings')">⚙️ 설정</button>
+      <button class="tab" onclick="showSection('preview')">👁️ 미리보기</button>
+    </div>
 
-    <div class="invoice-container">
-      <div class="invoice-header">
-        <div class="invoice-title">INVOICE</div>
-        <div class="invoice-number">
-          <label>Invoice Number</label>
-          <input type="text" id="invoiceNumber" value="">
+    <!-- Sender Section -->
+    <div id="sender-section" class="section active">
+      <div class="card">
+        <h3>👤 발신자 정보 (From)</h3>
+        <div style="display:flex;gap:24px;flex-wrap:wrap;">
+          <div>
+            <label style="font-size:0.85rem;font-weight:600;color:var(--text-light);display:block;margin-bottom:6px;">로고</label>
+            <div class="logo-upload" onclick="document.getElementById('logoInput').click()">
+              <div class="placeholder" id="logoPlaceholder"><span>📷</span>로고 업로드</div>
+              <img id="logoPreview" style="display:none;">
+            </div>
+            <input type="file" id="logoInput" accept="image/*" style="display:none;" onchange="handleLogo(event)">
+          </div>
+          <div style="flex:1;min-width:250px;">
+            <div class="form-grid">
+              <div class="form-group full">
+                <label>회사명 / 이름 *</label>
+                <input type="text" id="senderName" placeholder="EastSea Corp" oninput="saveSender()">
+              </div>
+              <div class="form-group full">
+                <label>주소</label>
+                <textarea id="senderAddress" rows="2" placeholder="서울특별시 강남구..." oninput="saveSender()"></textarea>
+              </div>
+              <div class="form-group">
+                <label>이메일</label>
+                <input type="email" id="senderEmail" placeholder="hello@example.com" oninput="saveSender()">
+              </div>
+              <div class="form-group">
+                <label>전화번호</label>
+                <input type="tel" id="senderPhone" placeholder="010-1234-5678" oninput="saveSender()">
+              </div>
+              <div class="form-group">
+                <label>사업자번호</label>
+                <input type="text" id="senderBizNum" placeholder="123-45-67890" oninput="saveSender()">
+              </div>
+              <div class="form-group">
+                <label>웹사이트</label>
+                <input type="text" id="senderWebsite" placeholder="https://example.com" oninput="saveSender()">
+              </div>
+            </div>
+          </div>
         </div>
       </div>
-
-      <div class="currency-select">
-        <label>통화:</label>
-        <select id="currency" onchange="updateTotals()">
-          <option value="USD">USD ($)</option>
-          <option value="EUR">EUR (€)</option>
-          <option value="KRW" selected>KRW (₩)</option>
-          <option value="JPY">JPY (¥)</option>
-        </select>
-      </div>
-
-      <div class="parties">
-        <div class="party">
-          <h3>발행자 (From)</h3>
-          <input type="text" id="fromName" placeholder="회사명/이름">
-          <textarea id="fromAddress" placeholder="주소&#10;이메일&#10;전화번호"></textarea>
-        </div>
-        <div class="party">
-          <h3>수신자 (To)</h3>
-          <input type="text" id="toName" placeholder="회사명/이름">
-          <textarea id="toAddress" placeholder="주소&#10;이메일&#10;전화번호"></textarea>
-        </div>
-      </div>
-
-      <div class="items-section">
-        <div class="items-header">
-          <h3>항목</h3>
-          <button onclick="addItem()">➕ 항목 추가</button>
-        </div>
-        
-        <table id="itemsTable">
-          <thead>
-            <tr>
-              <th style="width: 40%">품명</th>
-              <th style="width: 15%">수량</th>
-              <th style="width: 20%">단가</th>
-              <th style="width: 20%">금액</th>
-              <th style="width: 5%"></th>
-            </tr>
-          </thead>
-          <tbody id="itemsBody">
-          </tbody>
-        </table>
-      </div>
-
-      <div class="totals">
-        <table class="totals-table">
-          <tr>
-            <td>소계</td>
-            <td id="subtotal">0</td>
-          </tr>
-          <tr>
-            <td>세금 (10%)</td>
-            <td id="tax">0</td>
-          </tr>
-          <tr class="total-row">
-            <td>합계</td>
-            <td id="total">0</td>
-          </tr>
-        </table>
+      <div class="btn-group" style="justify-content:flex-end;">
+        <button class="btn btn-primary" onclick="showSection('receiver')">다음: 수신자 →</button>
       </div>
     </div>
 
-    <div class="saved-invoices" id="savedInvoices" style="display: none;">
-      <h2>저장된 인보이스</h2>
-      <div id="savedInvoicesList"></div>
+    <!-- Receiver Section -->
+    <div id="receiver-section" class="section">
+      <div class="card">
+        <h3>🏢 수신자 정보 (Bill To)</h3>
+        <div class="form-grid">
+          <div class="form-group full">
+            <label>회사명 / 이름 *</label>
+            <input type="text" id="receiverName" placeholder="Client Company Inc.">
+          </div>
+          <div class="form-group full">
+            <label>주소</label>
+            <textarea id="receiverAddress" rows="2" placeholder="수신자 주소..."></textarea>
+          </div>
+          <div class="form-group">
+            <label>이메일</label>
+            <input type="email" id="receiverEmail" placeholder="client@example.com">
+          </div>
+          <div class="form-group">
+            <label>전화번호</label>
+            <input type="tel" id="receiverPhone" placeholder="02-1234-5678">
+          </div>
+        </div>
+      </div>
+      <div class="btn-group" style="justify-content:space-between;">
+        <button class="btn btn-outline" onclick="showSection('sender')">← 이전</button>
+        <button class="btn btn-primary" onclick="showSection('items')">다음: 항목 →</button>
+      </div>
+    </div>
+
+    <!-- Items Section -->
+    <div id="items-section" class="section">
+      <div class="card">
+        <h3>📋 인보이스 항목</h3>
+        <div style="overflow-x:auto;">
+          <table class="items-table">
+            <thead>
+              <tr>
+                <th style="width:40%;">항목 설명</th>
+                <th style="width:15%;">수량</th>
+                <th style="width:20%;">단가</th>
+                <th style="width:20%;">금액</th>
+                <th style="width:5%;"></th>
+              </tr>
+            </thead>
+            <tbody id="itemsBody"></tbody>
+          </table>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-outline btn-sm" onclick="addItem()">+ 항목 추가</button>
+        </div>
+        
+        <div style="margin-top:24px;display:flex;justify-content:flex-end;">
+          <div style="width:300px;">
+            <div class="summary-row"><span>소계</span><span id="subtotalDisplay">0</span></div>
+            <div class="summary-row">
+              <span>세금 (<input type="number" id="taxRate" value="10" min="0" max="100" style="width:50px;padding:2px 6px;border:1px solid var(--border);border-radius:4px;text-align:center;" oninput="updateTotals()">%)</span>
+              <span id="taxDisplay">0</span>
+            </div>
+            <div class="summary-row">
+              <span>할인 (<input type="number" id="discountRate" value="0" min="0" max="100" style="width:50px;padding:2px 6px;border:1px solid var(--border);border-radius:4px;text-align:center;" oninput="updateTotals()">%)</span>
+              <span id="discountDisplay">0</span>
+            </div>
+            <div class="summary-row total"><span>합계</span><span id="totalDisplay">0</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="btn-group" style="justify-content:space-between;">
+        <button class="btn btn-outline" onclick="showSection('receiver')">← 이전</button>
+        <button class="btn btn-primary" onclick="showSection('settings')">다음: 설정 →</button>
+      </div>
+    </div>
+
+    <!-- Settings Section -->
+    <div id="settings-section" class="section">
+      <div class="card">
+        <h3>⚙️ 인보이스 설정</h3>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>인보이스 번호</label>
+            <input type="text" id="invoiceNumber" placeholder="INV-001">
+          </div>
+          <div class="form-group">
+            <label>발행일</label>
+            <input type="date" id="invoiceDate">
+          </div>
+          <div class="form-group">
+            <label>결제 기한</label>
+            <input type="date" id="dueDate">
+          </div>
+          <div class="form-group">
+            <label>결제 방법</label>
+            <select id="paymentMethod">
+              <option value="bank">은행 이체</option>
+              <option value="card">카드 결제</option>
+              <option value="paypal">PayPal</option>
+              <option value="crypto">암호화폐</option>
+              <option value="other">기타</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>💰 통화</h3>
+        <div class="currency-selector">
+          <button class="currency-btn selected" onclick="selectCurrency(this, 'KRW', '₩')">🇰🇷 KRW (₩)</button>
+          <button class="currency-btn" onclick="selectCurrency(this, 'USD', '$')">🇺🇸 USD ($)</button>
+          <button class="currency-btn" onclick="selectCurrency(this, 'EUR', '€')">🇪🇺 EUR (€)</button>
+          <button class="currency-btn" onclick="selectCurrency(this, 'JPY', '¥')">🇯🇵 JPY (¥)</button>
+          <button class="currency-btn" onclick="selectCurrency(this, 'GBP', '£')">🇬🇧 GBP (£)</button>
+          <button class="currency-btn" onclick="selectCurrency(this, 'CNY', '¥')">🇨🇳 CNY (¥)</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>🎨 템플릿</h3>
+        <div class="template-cards">
+          <div class="template-card selected" onclick="selectTemplate('modern')">
+            <div class="icon">✨</div>
+            <div class="name">모던</div>
+            <div class="desc">깔끔하고 세련된 디자인</div>
+          </div>
+          <div class="template-card" onclick="selectTemplate('classic')">
+            <div class="icon">📜</div>
+            <div class="name">클래식</div>
+            <div class="desc">전통적이고 격식 있는 디자인</div>
+          </div>
+          <div class="template-card" onclick="selectTemplate('minimal')">
+            <div class="icon">🪶</div>
+            <div class="name">미니멀</div>
+            <div class="desc">심플하고 여백이 넉넉한 디자인</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>📝 메모 / 비고</h3>
+        <textarea id="invoiceNotes" rows="3" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:0.9rem;font-family:inherit;resize:vertical;" placeholder="결제 안내, 감사 인사 등..."></textarea>
+      </div>
+
+      <div class="btn-group" style="justify-content:space-between;">
+        <button class="btn btn-outline" onclick="showSection('items')">← 이전</button>
+        <button class="btn btn-primary" onclick="generatePreview()">미리보기 생성 →</button>
+      </div>
+    </div>
+
+    <!-- Preview Section -->
+    <div id="preview-section" class="section">
+      <div class="btn-group" style="margin-bottom:16px;justify-content:space-between;">
+        <button class="btn btn-outline" onclick="showSection('settings')">← 수정하기</button>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-primary" onclick="downloadPDF()">📥 PDF 다운로드</button>
+          <button class="btn btn-success" onclick="window.print()">🖨️ 인쇄</button>
+        </div>
+      </div>
+      <div class="preview-container" id="invoicePreview"></div>
     </div>
   </div>
 
   <script>
-    const CURRENCIES = {
-      USD: { symbol: '$', format: (n) => '$' + n.toFixed(2) },
-      EUR: { symbol: '€', format: (n) => '€' + n.toFixed(2) },
-      KRW: { symbol: '₩', format: (n) => '₩' + n.toLocaleString('ko-KR') },
-      JPY: { symbol: '¥', format: (n) => '¥' + Math.round(n).toLocaleString('ja-JP') }
+    let state = {
+      currency: 'KRW',
+      symbol: '₩',
+      template: 'modern',
+      logo: null,
+      items: [{ desc: '', qty: 1, price: 0 }]
     };
 
+    // Init
     function init() {
-      loadTheme();
-      generateInvoiceNumber();
-      addItem();
-      addItem();
+      loadSender();
+      const today = new Date();
+      document.getElementById('invoiceDate').value = today.toISOString().split('T')[0];
+      const due = new Date(today);
+      due.setDate(due.getDate() + 30);
+      document.getElementById('dueDate').value = due.toISOString().split('T')[0];
+      document.getElementById('invoiceNumber').value = 'INV-' + String(Math.floor(Math.random() * 9000) + 1000);
+      renderItems();
     }
 
-    function loadTheme() {
-      const theme = localStorage.getItem('theme') || 'light';
-      document.documentElement.setAttribute('data-theme', theme);
-      updateThemeIcon();
+    function showSection(name) {
+      document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.getElementById(name + '-section').classList.add('active');
+      const tabs = ['sender','receiver','items','settings','preview'];
+      const idx = tabs.indexOf(name);
+      if (idx >= 0) document.querySelectorAll('.tab')[idx].classList.add('active');
+      if (name === 'preview') generatePreview();
     }
 
-    function toggleTheme() {
-      const current = document.documentElement.getAttribute('data-theme');
-      const next = current === 'light' ? 'dark' : 'light';
-      document.documentElement.setAttribute('data-theme', next);
-      localStorage.setItem('theme', next);
-      updateThemeIcon();
-    }
-
-    function updateThemeIcon() {
-      const theme = document.documentElement.getAttribute('data-theme');
-      document.querySelector('.theme-toggle').textContent = theme === 'light' ? '🌙' : '☀️';
-    }
-
-    function generateInvoiceNumber() {
-      const date = new Date();
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-      document.getElementById('invoiceNumber').value = `INV-${year}${month}-${random}`;
-    }
-
-    function addItem() {
-      const tbody = document.getElementById('itemsBody');
-      const row = tbody.insertRow();
-      row.innerHTML = `
-        <td><input type="text" placeholder="품명" oninput="updateTotals()"></td>
-        <td><input type="number" value="1" min="0" oninput="updateTotals()"></td>
-        <td><input type="number" value="0" min="0" step="0.01" oninput="updateTotals()"></td>
-        <td class="item-total">0</td>
-        <td><button class="delete-btn" onclick="deleteItem(this)">×</button></td>
-      `;
-      updateTotals();
-    }
-
-    function deleteItem(btn) {
-      btn.closest('tr').remove();
-      updateTotals();
-    }
-
-    function updateTotals() {
-      const rows = document.querySelectorAll('#itemsBody tr');
-      const currency = document.getElementById('currency').value;
-      const formatter = CURRENCIES[currency].format;
-      
-      let subtotal = 0;
-      
-      rows.forEach(row => {
-        const qty = parseFloat(row.cells[1].querySelector('input').value) || 0;
-        const price = parseFloat(row.cells[2].querySelector('input').value) || 0;
-        const total = qty * price;
-        row.cells[3].textContent = formatter(total);
-        subtotal += total;
-      });
-
-      const tax = subtotal * 0.1;
-      const total = subtotal + tax;
-
-      document.getElementById('subtotal').textContent = formatter(subtotal);
-      document.getElementById('tax').textContent = formatter(tax);
-      document.getElementById('total').textContent = formatter(total);
-    }
-
-    function saveInvoice() {
-      const invoice = {
-        number: document.getElementById('invoiceNumber').value,
-        currency: document.getElementById('currency').value,
-        from: {
-          name: document.getElementById('fromName').value,
-          address: document.getElementById('fromAddress').value
-        },
-        to: {
-          name: document.getElementById('toName').value,
-          address: document.getElementById('toAddress').value
-        },
-        items: [],
-        date: new Date().toISOString()
+    // Logo
+    function handleLogo(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        state.logo = ev.target.result;
+        document.getElementById('logoPreview').src = ev.target.result;
+        document.getElementById('logoPreview').style.display = 'block';
+        document.getElementById('logoPlaceholder').style.display = 'none';
       };
-
-      document.querySelectorAll('#itemsBody tr').forEach(row => {
-        invoice.items.push({
-          description: row.cells[0].querySelector('input').value,
-          quantity: row.cells[1].querySelector('input').value,
-          price: row.cells[2].querySelector('input').value
-        });
-      });
-
-      const invoices = JSON.parse(localStorage.getItem('invoices') || '[]');
-      invoices.unshift(invoice);
-      localStorage.setItem('invoices', JSON.stringify(invoices.slice(0, 50)));
-
-      alert('인보이스가 저장되었습니다!');
+      reader.readAsDataURL(file);
     }
 
-    function loadInvoices() {
-      const invoices = JSON.parse(localStorage.getItem('invoices') || '[]');
+    // Sender save/load
+    function saveSender() {
+      const data = {
+        name: document.getElementById('senderName').value,
+        address: document.getElementById('senderAddress').value,
+        email: document.getElementById('senderEmail').value,
+        phone: document.getElementById('senderPhone').value,
+        bizNum: document.getElementById('senderBizNum').value,
+        website: document.getElementById('senderWebsite').value,
+      };
+      localStorage.setItem('invoice_sender', JSON.stringify(data));
+    }
+    function loadSender() {
+      const data = JSON.parse(localStorage.getItem('invoice_sender') || 'null');
+      if (!data) return;
+      document.getElementById('senderName').value = data.name || '';
+      document.getElementById('senderAddress').value = data.address || '';
+      document.getElementById('senderEmail').value = data.email || '';
+      document.getElementById('senderPhone').value = data.phone || '';
+      document.getElementById('senderBizNum').value = data.bizNum || '';
+      document.getElementById('senderWebsite').value = data.website || '';
+    }
+
+    // Currency
+    function selectCurrency(btn, code, symbol) {
+      document.querySelectorAll('.currency-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      state.currency = code;
+      state.symbol = symbol;
+      updateTotals();
+    }
+
+    // Template
+    function selectTemplate(tpl) {
+      state.template = tpl;
+      document.querySelectorAll('.template-card').forEach(c => c.classList.remove('selected'));
+      event.currentTarget.classList.add('selected');
+    }
+
+    // Items
+    function addItem() {
+      state.items.push({ desc: '', qty: 1, price: 0 });
+      renderItems();
+    }
+    function removeItem(i) {
+      if (state.items.length <= 1) return;
+      state.items.splice(i, 1);
+      renderItems();
+    }
+    function renderItems() {
+      const body = document.getElementById('itemsBody');
+      body.innerHTML = state.items.map((item, i) => `
+        <tr>
+          <td><input type="text" value="${escHtml(item.desc)}" placeholder="서비스/제품명" oninput="state.items[${i}].desc=this.value"></td>
+          <td><input type="number" class="num-input" value="${item.qty}" min="1" oninput="state.items[${i}].qty=+this.value;updateTotals()"></td>
+          <td><input type="number" class="num-input" value="${item.price}" min="0" oninput="state.items[${i}].price=+this.value;updateTotals()"></td>
+          <td style="text-align:right;font-weight:600;">${formatMoney(item.qty * item.price)}</td>
+          <td><button class="btn btn-danger btn-sm" onclick="removeItem(${i})" style="padding:4px 8px;">&times;</button></td>
+        </tr>
+      `).join('');
+      updateTotals();
+    }
+    function updateTotals() {
+      const subtotal = state.items.reduce((s, it) => s + it.qty * it.price, 0);
+      const taxRate = +document.getElementById('taxRate').value || 0;
+      const discountRate = +document.getElementById('discountRate').value || 0;
+      const tax = subtotal * taxRate / 100;
+      const discount = subtotal * discountRate / 100;
+      const total = subtotal + tax - discount;
+      document.getElementById('subtotalDisplay').textContent = formatMoney(subtotal);
+      document.getElementById('taxDisplay').textContent = formatMoney(tax);
+      document.getElementById('discountDisplay').textContent = '-' + formatMoney(discount);
+      document.getElementById('totalDisplay').textContent = formatMoney(total);
+    }
+    function formatMoney(n) {
+      const opts = { minimumFractionDigits: state.currency === 'KRW' || state.currency === 'JPY' ? 0 : 2, maximumFractionDigits: state.currency === 'KRW' || state.currency === 'JPY' ? 0 : 2 };
+      return state.symbol + n.toLocaleString(undefined, opts);
+    }
+    function escHtml(s) { return (s||'').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
+
+    // Preview
+    function generatePreview() {
+      const d = getData();
+      const tpl = state.template;
+      const cls = `inv-${tpl}`;
+      let logoHtml = d.logo ? `<img class="inv-logo" src="${d.logo}" alt="Logo">` : '';
       
-      if (invoices.length === 0) {
-        alert('저장된 인보이스가 없습니다.');
-        return;
+      let html = `<div class="${cls}">`;
+      
+      if (tpl === 'modern') {
+        html += `
+          <div class="inv-header">
+            <div>${logoHtml}<div class="inv-party-name" style="font-size:1.2rem;margin-top:8px;">${esc(d.sender.name)}</div></div>
+            <div><div class="inv-title">INVOICE</div><div class="inv-number">#${esc(d.number)}</div></div>
+          </div>
+          <div class="inv-meta">
+            <div class="inv-meta-item"><div class="inv-meta-label">발행일</div><div class="inv-meta-value">${d.date}</div></div>
+            <div class="inv-meta-item"><div class="inv-meta-label">결제 기한</div><div class="inv-meta-value">${d.dueDate}</div></div>
+            <div class="inv-meta-item"><div class="inv-meta-label">결제 방법</div><div class="inv-meta-value">${d.paymentLabel}</div></div>
+          </div>`;
+      } else if (tpl === 'classic') {
+        html += `
+          <div class="inv-header">${logoHtml}<div class="inv-title">INVOICE</div><div style="color:#666;margin-top:4px;">#${esc(d.number)}</div></div>
+          <div class="inv-meta">
+            <div class="inv-meta-item"><span class="inv-meta-label">발행일:</span> <span class="inv-meta-value">${d.date}</span></div>
+            <div class="inv-meta-item"><span class="inv-meta-label">기한:</span> <span class="inv-meta-value">${d.dueDate}</span></div>
+            <div class="inv-meta-item"><span class="inv-meta-label">결제:</span> <span class="inv-meta-value">${d.paymentLabel}</span></div>
+          </div>`;
+      } else {
+        html += `
+          <div class="inv-header">${logoHtml}<div class="inv-title">INVOICE</div></div>
+          <div class="inv-meta">
+            <div><div class="inv-meta-label">번호</div><div class="inv-meta-value">${esc(d.number)}</div></div>
+            <div><div class="inv-meta-label">발행일</div><div class="inv-meta-value">${d.date}</div></div>
+            <div><div class="inv-meta-label">기한</div><div class="inv-meta-value">${d.dueDate}</div></div>
+          </div>`;
       }
 
-      const container = document.getElementById('savedInvoices');
-      const list = document.getElementById('savedInvoicesList');
-      
-      list.innerHTML = invoices.map((inv, idx) => `
-        <div class="saved-invoice-item">
-          <div class="saved-invoice-info">
-            <div class="saved-invoice-number">${inv.number}</div>
-            <div class="saved-invoice-date">${new Date(inv.date).toLocaleString('ko-KR')}</div>
-            <div class="saved-invoice-date">${inv.from.name} → ${inv.to.name}</div>
+      html += `
+        <div class="inv-parties">
+          <div>
+            <div class="inv-party-label">From</div>
+            <div class="inv-party-name">${esc(d.sender.name)}</div>
+            <div class="inv-party-detail">${esc(d.sender.address).replace(/\n/g,'<br>')}${d.sender.email ? '<br>'+esc(d.sender.email) : ''}${d.sender.phone ? '<br>'+esc(d.sender.phone) : ''}${d.sender.bizNum ? '<br>사업자번호: '+esc(d.sender.bizNum) : ''}</div>
           </div>
-          <div class="saved-invoice-actions">
-            <button onclick="loadInvoice(${idx})" class="secondary">불러오기</button>
-            <button onclick="deleteInvoice(${idx})" class="danger">삭제</button>
+          <div>
+            <div class="inv-party-label">Bill To</div>
+            <div class="inv-party-name">${esc(d.receiver.name)}</div>
+            <div class="inv-party-detail">${esc(d.receiver.address).replace(/\n/g,'<br>')}${d.receiver.email ? '<br>'+esc(d.receiver.email) : ''}${d.receiver.phone ? '<br>'+esc(d.receiver.phone) : ''}</div>
           </div>
         </div>
-      `).join('');
+        <table>
+          <thead><tr><th>항목</th><th>수량</th><th>단가</th><th style="text-align:right;">금액</th></tr></thead>
+          <tbody>
+            ${d.items.map(it => `<tr><td>${esc(it.desc) || '-'}</td><td>${it.qty}</td><td>${formatMoney(it.price)}</td><td class="text-right">${formatMoney(it.qty*it.price)}</td></tr>`).join('')}
+          </tbody>
+        </table>
+        <div class="inv-totals"><div class="inv-totals-box">
+          <div class="inv-total-row"><span>소계</span><span>${formatMoney(d.subtotal)}</span></div>
+          ${d.taxRate > 0 ? `<div class="inv-total-row"><span>세금 (${d.taxRate}%)</span><span>${formatMoney(d.tax)}</span></div>` : ''}
+          ${d.discountRate > 0 ? `<div class="inv-total-row"><span>할인 (${d.discountRate}%)</span><span>-${formatMoney(d.discount)}</span></div>` : ''}
+          <div class="inv-total-row grand"><span>합계</span><span>${formatMoney(d.total)}</span></div>
+        </div></div>
+        ${d.notes ? `<div class="inv-notes"><div class="inv-notes-title">비고</div><div class="inv-notes-text">${esc(d.notes).replace(/\n/g,'<br>')}</div></div>` : ''}
+      </div>`;
 
-      container.style.display = 'block';
+      document.getElementById('invoicePreview').innerHTML = html;
     }
 
-    function loadInvoice(idx) {
-      const invoices = JSON.parse(localStorage.getItem('invoices') || '[]');
-      const invoice = invoices[idx];
+    function getData() {
+      const subtotal = state.items.reduce((s, it) => s + it.qty * it.price, 0);
+      const taxRate = +document.getElementById('taxRate').value || 0;
+      const discountRate = +document.getElementById('discountRate').value || 0;
+      const payMethods = { bank: '은행 이체', card: '카드 결제', paypal: 'PayPal', crypto: '암호화폐', other: '기타' };
+      return {
+        sender: {
+          name: document.getElementById('senderName').value || 'Your Company',
+          address: document.getElementById('senderAddress').value,
+          email: document.getElementById('senderEmail').value,
+          phone: document.getElementById('senderPhone').value,
+          bizNum: document.getElementById('senderBizNum').value,
+        },
+        receiver: {
+          name: document.getElementById('receiverName').value || 'Client',
+          address: document.getElementById('receiverAddress').value,
+          email: document.getElementById('receiverEmail').value,
+          phone: document.getElementById('receiverPhone').value,
+        },
+        items: state.items,
+        number: document.getElementById('invoiceNumber').value,
+        date: document.getElementById('invoiceDate').value,
+        dueDate: document.getElementById('dueDate').value,
+        paymentLabel: payMethods[document.getElementById('paymentMethod').value],
+        notes: document.getElementById('invoiceNotes').value,
+        logo: state.logo,
+        subtotal, taxRate, discountRate,
+        tax: subtotal * taxRate / 100,
+        discount: subtotal * discountRate / 100,
+        total: subtotal + subtotal * taxRate / 100 - subtotal * discountRate / 100,
+      };
+    }
+    function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-      document.getElementById('invoiceNumber').value = invoice.number;
-      document.getElementById('currency').value = invoice.currency;
-      document.getElementById('fromName').value = invoice.from.name;
-      document.getElementById('fromAddress').value = invoice.from.address;
-      document.getElementById('toName').value = invoice.to.name;
-      document.getElementById('toAddress').value = invoice.to.address;
+    // PDF Generation
+    async function downloadPDF() {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF('p', 'mm', 'a4');
+      const d = getData();
+      const pw = 210, ph = 297, m = 20;
+      let y = m;
 
-      document.getElementById('itemsBody').innerHTML = '';
-      invoice.items.forEach(item => {
-        const tbody = document.getElementById('itemsBody');
-        const row = tbody.insertRow();
-        row.innerHTML = `
-          <td><input type="text" value="${item.description}" oninput="updateTotals()"></td>
-          <td><input type="number" value="${item.quantity}" min="0" oninput="updateTotals()"></td>
-          <td><input type="number" value="${item.price}" min="0" step="0.01" oninput="updateTotals()"></td>
-          <td class="item-total">0</td>
-          <td><button class="delete-btn" onclick="deleteItem(this)">×</button></td>
-        `;
+      // Colors based on template
+      const colors = {
+        modern: { primary: [99,102,241], accent: [139,92,246] },
+        classic: { primary: [51,51,51], accent: [51,51,51] },
+        minimal: { primary: [100,100,100], accent: [180,180,180] }
+      }[state.template];
+
+      // Logo
+      if (d.logo) {
+        try { doc.addImage(d.logo, 'PNG', m, y, 30, 30); } catch(e) {}
+      }
+
+      // Title
+      doc.setFontSize(24);
+      doc.setTextColor(...colors.primary);
+      doc.text('INVOICE', pw - m, y + 10, { align: 'right' });
+      doc.setFontSize(10);
+      doc.setTextColor(150,150,150);
+      doc.text('#' + d.number, pw - m, y + 18, { align: 'right' });
+      
+      y += 35;
+
+      // Sender name
+      doc.setFontSize(12);
+      doc.setTextColor(30,30,30);
+      doc.text(d.sender.name, m, y);
+      y += 10;
+
+      // Meta
+      doc.setFillColor(248,250,252);
+      doc.roundedRect(m, y, pw - 2*m, 12, 2, 2, 'F');
+      doc.setFontSize(8);
+      doc.setTextColor(100,116,139);
+      const metaY = y + 5;
+      doc.text('발행일: ' + d.date, m + 5, metaY);
+      doc.text('기한: ' + d.dueDate, m + 60, metaY);
+      doc.text('결제: ' + d.paymentLabel, m + 115, metaY);
+      y += 20;
+
+      // Parties
+      doc.setFontSize(7);
+      doc.setTextColor(...colors.primary);
+      doc.text('FROM', m, y);
+      doc.text('BILL TO', m + 90, y);
+      y += 5;
+      doc.setFontSize(11);
+      doc.setTextColor(30,30,30);
+      doc.text(d.sender.name, m, y);
+      doc.text(d.receiver.name, m + 90, y);
+      y += 5;
+      doc.setFontSize(8);
+      doc.setTextColor(100,116,139);
+      const sLines = [d.sender.address, d.sender.email, d.sender.phone, d.sender.bizNum ? '사업자번호: '+d.sender.bizNum : ''].filter(Boolean);
+      const rLines = [d.receiver.address, d.receiver.email, d.receiver.phone].filter(Boolean);
+      sLines.forEach((l,i) => doc.text(l, m, y + i*4.5));
+      rLines.forEach((l,i) => doc.text(l, m + 90, y + i*4.5));
+      y += Math.max(sLines.length, rLines.length) * 4.5 + 10;
+
+      // Table header
+      doc.setFillColor(...colors.primary);
+      doc.roundedRect(m, y, pw - 2*m, 8, 1, 1, 'F');
+      doc.setFontSize(7);
+      doc.setTextColor(255,255,255);
+      doc.text('항목', m + 3, y + 5.5);
+      doc.text('수량', m + 95, y + 5.5);
+      doc.text('단가', m + 120, y + 5.5);
+      doc.text('금액', pw - m - 3, y + 5.5, { align: 'right' });
+      y += 10;
+
+      // Table rows
+      doc.setTextColor(30,30,30);
+      doc.setFontSize(9);
+      d.items.forEach((it) => {
+        if (y > ph - 60) { doc.addPage(); y = m; }
+        doc.text(it.desc || '-', m + 3, y + 4);
+        doc.text(String(it.qty), m + 95, y + 4);
+        doc.text(formatMoney(it.price), m + 120, y + 4);
+        doc.text(formatMoney(it.qty * it.price), pw - m - 3, y + 4, { align: 'right' });
+        doc.setDrawColor(241,245,249);
+        doc.line(m, y + 7, pw - m, y + 7);
+        y += 9;
       });
 
-      updateTotals();
-      document.getElementById('savedInvoices').style.display = 'none';
-      window.scrollTo(0, 0);
-    }
+      y += 5;
 
-    function deleteInvoice(idx) {
-      if (!confirm('이 인보이스를 삭제하시겠습니까?')) return;
+      // Totals
+      const tx = pw - m - 60;
+      doc.setFontSize(9);
+      doc.setTextColor(100,116,139);
+      doc.text('소계', tx, y); doc.text(formatMoney(d.subtotal), pw - m, y, { align: 'right' }); y += 6;
+      if (d.taxRate > 0) { doc.text(`세금 (${d.taxRate}%)`, tx, y); doc.text(formatMoney(d.tax), pw - m, y, { align: 'right' }); y += 6; }
+      if (d.discountRate > 0) { doc.text(`할인 (${d.discountRate}%)`, tx, y); doc.text('-' + formatMoney(d.discount), pw - m, y, { align: 'right' }); y += 6; }
       
-      const invoices = JSON.parse(localStorage.getItem('invoices') || '[]');
-      invoices.splice(idx, 1);
-      localStorage.setItem('invoices', JSON.stringify(invoices));
-      loadInvoices();
-    }
+      doc.setDrawColor(...colors.primary);
+      doc.setLineWidth(0.5);
+      doc.line(tx, y, pw - m, y);
+      y += 6;
+      doc.setFontSize(13);
+      doc.setTextColor(...colors.primary);
+      doc.text('합계', tx, y);
+      doc.text(formatMoney(d.total), pw - m, y, { align: 'right' });
+      y += 12;
 
-    function resetInvoice() {
-      if (!confirm('새 인보이스를 만드시겠습니까? 현재 내용은 저장되지 않습니다.')) return;
-      
-      generateInvoiceNumber();
-      document.getElementById('currency').value = 'KRW';
-      document.getElementById('fromName').value = '';
-      document.getElementById('fromAddress').value = '';
-      document.getElementById('toName').value = '';
-      document.getElementById('toAddress').value = '';
-      document.getElementById('itemsBody').innerHTML = '';
-      addItem();
-      addItem();
-      document.getElementById('savedInvoices').style.display = 'none';
+      // Notes
+      if (d.notes) {
+        if (y > ph - 40) { doc.addPage(); y = m; }
+        doc.setFillColor(248,250,252);
+        const noteLines = doc.splitTextToSize(d.notes, pw - 2*m - 14);
+        const noteH = noteLines.length * 4.5 + 14;
+        doc.roundedRect(m, y, pw - 2*m, noteH, 2, 2, 'F');
+        doc.setDrawColor(...colors.primary);
+        doc.setLineWidth(1);
+        doc.line(m, y, m, y + noteH);
+        doc.setFontSize(7);
+        doc.setTextColor(100,116,139);
+        doc.text('비고', m + 6, y + 6);
+        doc.setFontSize(8);
+        doc.text(noteLines, m + 6, y + 12);
+      }
+
+      doc.save(`${d.number || 'invoice'}.pdf`);
     }
 
     init();

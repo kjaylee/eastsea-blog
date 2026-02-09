@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Audio Trimmer | 오디오 트리머</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f5f7fa;--surface:#fff;--text:#1a1a2e;--text2:#555;--accent:#f59e0b;--accent2:#ef4444;--wave:#6366f1;--wave-bg:#e2e8f0;--select:rgba(99,102,241,.2);--border:#e2e8f0;--shadow:0 4px 24px rgba(0,0,0,.08);--radius:12px;--playhead:#ef4444}
+@media(prefers-color-scheme:dark){:root{--bg:#0f0f1a;--surface:#1a1a2e;--text:#e2e8f0;--text2:#94a3b8;--accent:#fbbf24;--accent2:#f87171;--wave:#818cf8;--wave-bg:#2d2d44;--select:rgba(129,140,248,.2);--border:#2d2d44;--shadow:0 4px 24px rgba(0,0,0,.3);--playhead:#f87171}}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:20px;display:flex;flex-direction:column;align-items:center}
+h1{font-size:1.8rem;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:6px}
+.subtitle{color:var(--text2);margin-bottom:24px;font-size:.95rem}
+.container{width:100%;max-width:900px}
+.card{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px;margin-bottom:20px;border:1px solid var(--border)}
+.upload-zone{border:2px dashed var(--border);border-radius:var(--radius);padding:48px 20px;text-align:center;cursor:pointer;transition:all .3s}
+.upload-zone:hover,.upload-zone.dragover{border-color:var(--accent);background:rgba(245,158,11,.05)}
+.upload-zone .icon{font-size:3rem;margin-bottom:12px}
+.upload-zone p{color:var(--text2)}
+.upload-zone input{display:none}
+.btn{padding:10px 20px;border:none;border-radius:8px;font-size:.9rem;font-weight:600;cursor:pointer;transition:all .2s;display:inline-flex;align-items:center;gap:6px}
+.btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;box-shadow:0 2px 12px rgba(245,158,11,.3)}
+.btn-primary:hover{transform:translateY(-1px)}
+.btn-outline{background:transparent;border:2px solid var(--border);color:var(--text)}
+.btn-outline:hover{border-color:var(--accent);color:var(--accent)}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:16px}
+.waveform-container{position:relative;width:100%;height:160px;background:var(--wave-bg);border-radius:8px;overflow:hidden;cursor:pointer;touch-action:none;margin-bottom:12px}
+#waveCanvas{width:100%;height:100%}
+.time-display{display:flex;justify-content:space-between;font-size:.85rem;color:var(--text2);margin-bottom:8px}
+.time-input-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.time-input-row label{font-weight:600;font-size:.85rem}
+.time-input{padding:8px 12px;border:2px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:.9rem;width:110px;text-align:center;font-family:monospace}
+.time-input:focus{outline:none;border-color:var(--accent)}
+.file-info{display:flex;flex-wrap:wrap;gap:12px;font-size:.85rem;color:var(--text2);margin-bottom:16px}
+.file-info span{background:var(--bg);padding:4px 10px;border-radius:6px}
+.progress-bar{width:100%;height:4px;background:var(--wave-bg);border-radius:2px;margin-top:8px;overflow:hidden}
+.progress-bar .fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:2px;transition:width .1s}
+.hidden{display:none}
+@media(max-width:600px){h1{font-size:1.4rem}.card{padding:16px}.waveform-container{height:120px}.btn{padding:8px 14px;font-size:.8rem}}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🎵 Audio Trimmer</h1>
+  <p class="subtitle">오디오 파일을 업로드하고 원하는 구간만 잘라보세요</p>
+
+  <div class="card" id="uploadCard">
+    <div class="upload-zone" id="dropZone">
+      <div class="icon">🎧</div>
+      <p><strong>클릭하거나 오디오 파일을 드래그하세요</strong></p>
+      <p style="font-size:.85rem;margin-top:6px">MP3, WAV, OGG, M4A, FLAC 등 지원</p>
+      <input type="file" id="fileInput" accept="audio/*">
+    </div>
+  </div>
+
+  <div class="card hidden" id="editorCard">
+    <div class="file-info" id="fileInfo"></div>
+    <div class="waveform-container" id="waveContainer">
+      <canvas id="waveCanvas"></canvas>
+    </div>
+    <div class="time-display">
+      <span id="currentTime">0:00.0</span>
+      <span id="totalTime">0:00.0</span>
+    </div>
+    <div class="time-input-row">
+      <label>시작:</label>
+      <input type="text" class="time-input" id="startInput" value="0:00.000" placeholder="0:00.000">
+      <label>끝:</label>
+      <input type="text" class="time-input" id="endInput" value="0:00.000" placeholder="0:00.000">
+      <span id="durationLabel" style="font-size:.85rem;color:var(--text2)">선택: 0.0초</span>
+    </div>
+    <div class="controls">
+      <button class="btn btn-outline" id="playBtn">▶️ 재생</button>
+      <button class="btn btn-outline" id="previewBtn">🔊 선택 구간 미리듣기</button>
+      <button class="btn btn-outline" id="resetBtn">↺ 초기화</button>
+      <button class="btn btn-outline" id="newFileBtn">📂 새 파일</button>
+    </div>
+    <div class="controls">
+      <button class="btn btn-primary" id="trimBtn">✂️ 트리밍 & 다운로드</button>
+      <select id="formatSelect" style="padding:10px;border:2px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:.9rem">
+        <option value="wav">WAV</option>
+      </select>
+    </div>
+    <div class="progress-bar hidden" id="progressBar"><div class="fill" id="progressFill"></div></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const $ = s => document.querySelector(s);
+  const dropZone = $('#dropZone'), fileInput = $('#fileInput');
+  const waveCanvas = $('#waveCanvas'), waveContainer = $('#waveContainer');
+  const ctx = waveCanvas.getContext('2d');
+  const uploadCard = $('#uploadCard'), editorCard = $('#editorCard');
+
+  let audioCtx, audioBuffer, sourceNode;
+  let waveData = [], fileName = '';
+  let selStart = 0, selEnd = 0, duration = 0;
+  let isDragging = false, dragTarget = null;
+  let isPlaying = false, playStartTime = 0, playOffset = 0, animFrame;
+
+  // Upload
+  dropZone.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', e => { if(e.target.files[0]) loadAudio(e.target.files[0]); });
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+  dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('dragover'); if(e.dataTransfer.files[0]) loadAudio(e.dataTransfer.files[0]); });
+
+  async function loadAudio(file){
+    fileName = file.name.replace(/\.[^.]+$/, '');
+    if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    try {
+      const arrayBuf = await file.arrayBuffer();
+      audioBuffer = await audioCtx.decodeAudioData(arrayBuf);
+      duration = audioBuffer.duration;
+      selStart = 0;
+      selEnd = duration;
+      computeWaveform();
+      resizeCanvas();
+      drawWaveform();
+      updateUI();
+      uploadCard.classList.add('hidden');
+      editorCard.classList.remove('hidden');
+      // File info
+      const mins = Math.floor(duration / 60);
+      const secs = (duration % 60).toFixed(1);
+      const ch = audioBuffer.numberOfChannels;
+      const sr = audioBuffer.sampleRate;
+      const size = file.size > 1e6 ? (file.size/1e6).toFixed(1)+'MB' : (file.size/1e3).toFixed(0)+'KB';
+      $('#fileInfo').innerHTML = `
+        <span>📄 ${file.name}</span><span>⏱️ ${mins}:${secs.padStart(4,'0')}</span>
+        <span>🔊 ${ch}ch</span><span>📊 ${sr}Hz</span><span>💾 ${size}</span>
+      `;
+    } catch(err){
+      alert('오디오 파일을 읽을 수 없습니다: ' + err.message);
+    }
+  }
+
+  function computeWaveform(){
+    const raw = audioBuffer.getChannelData(0);
+    const buckets = 800;
+    const bSize = Math.floor(raw.length / buckets);
+    waveData = [];
+    for(let i = 0; i < buckets; i++){
+      let sum = 0;
+      const start = i * bSize;
+      for(let j = start; j < start + bSize && j < raw.length; j++){
+        sum += Math.abs(raw[j]);
+      }
+      waveData.push(sum / bSize);
+    }
+    // Normalize
+    const max = Math.max(...waveData, 0.01);
+    waveData = waveData.map(v => v / max);
+  }
+
+  function resizeCanvas(){
+    const rect = waveContainer.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    waveCanvas.width = rect.width * dpr;
+    waveCanvas.height = rect.height * dpr;
+    waveCanvas.style.width = rect.width + 'px';
+    waveCanvas.style.height = rect.height + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  window.addEventListener('resize', () => {
+    if(audioBuffer){ resizeCanvas(); drawWaveform(); }
+  });
+
+  function drawWaveform(playPos){
+    const w = waveCanvas.width / (window.devicePixelRatio || 1);
+    const h = waveCanvas.height / (window.devicePixelRatio || 1);
+    ctx.clearRect(0, 0, w, h);
+
+    // Selection highlight
+    const sx = (selStart / duration) * w;
+    const ex = (selEnd / duration) * w;
+    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--select').trim();
+    ctx.fillRect(sx, 0, ex - sx, h);
+
+    // Waveform bars
+    const barW = w / waveData.length;
+    const mid = h / 2;
+    const style = getComputedStyle(document.documentElement);
+    const waveColor = style.getPropertyValue('--wave').trim();
+    const waveBg = style.getPropertyValue('--wave-bg').trim();
+
+    waveData.forEach((v, i) => {
+      const x = i * barW;
+      const bh = v * (h * 0.8);
+      const t = i / waveData.length;
+      const inSelection = t >= selStart/duration && t <= selEnd/duration;
+      ctx.fillStyle = inSelection ? waveColor : waveBg;
+      ctx.fillRect(x, mid - bh/2, Math.max(1, barW - 1), bh);
+    });
+
+    // Selection edges
+    ctx.fillStyle = style.getPropertyValue('--accent').trim();
+    ctx.fillRect(sx - 2, 0, 4, h);
+    ctx.fillRect(ex - 2, 0, 4, h);
+
+    // Handle triangles
+    [sx, ex].forEach(px => {
+      ctx.beginPath();
+      ctx.moveTo(px - 8, 0); ctx.lineTo(px + 8, 0); ctx.lineTo(px, 14);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(px - 8, h); ctx.lineTo(px + 8, h); ctx.lineTo(px, h - 14);
+      ctx.fill();
+    });
+
+    // Playhead
+    if(playPos !== undefined){
+      const px = (playPos / duration) * w;
+      ctx.strokeStyle = style.getPropertyValue('--playhead').trim();
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, h); ctx.stroke();
+    }
+  }
+
+  function formatTime(t){
+    const m = Math.floor(t / 60);
+    const s = (t % 60).toFixed(3);
+    return `${m}:${s.padStart(6,'0')}`;
+  }
+
+  function formatTimeShort(t){
+    const m = Math.floor(t / 60);
+    const s = (t % 60).toFixed(1);
+    return `${m}:${s.padStart(4,'0')}`;
+  }
+
+  function parseTime(str){
+    const parts = str.split(':');
+    if(parts.length === 2){
+      return parseInt(parts[0]) * 60 + parseFloat(parts[1]);
+    }
+    return parseFloat(str) || 0;
+  }
+
+  function updateUI(){
+    $('#startInput').value = formatTime(selStart);
+    $('#endInput').value = formatTime(selEnd);
+    $('#durationLabel').textContent = `선택: ${(selEnd - selStart).toFixed(1)}초`;
+    $('#totalTime').textContent = formatTimeShort(duration);
+  }
+
+  // Input time editing
+  ['startInput','endInput'].forEach(id => {
+    $(`#${id}`).addEventListener('change', () => {
+      const v = parseTime($(`#${id}`).value);
+      if(id === 'startInput'){
+        selStart = Math.max(0, Math.min(v, selEnd - 0.01));
+      } else {
+        selEnd = Math.min(duration, Math.max(v, selStart + 0.01));
+      }
+      updateUI();
+      drawWaveform();
+    });
+  });
+
+  // Drag selection on waveform
+  function getTimeFromX(e){
+    const rect = waveContainer.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
+    return (x / rect.width) * duration;
+  }
+
+  function getHandleAtX(e){
+    const rect = waveContainer.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const x = clientX - rect.left;
+    const sx = (selStart / duration) * rect.width;
+    const ex = (selEnd / duration) * rect.width;
+    if(Math.abs(x - sx) < 15) return 'start';
+    if(Math.abs(x - ex) < 15) return 'end';
+    if(x > sx && x < ex) return 'move';
+    return 'new';
+  }
+
+  let dragStartSel;
+
+  function onPointerDown(e){
+    e.preventDefault();
+    isDragging = true;
+    dragTarget = getHandleAtX(e);
+    dragStartSel = {start: selStart, end: selEnd, t: getTimeFromX(e)};
+    if(dragTarget === 'new'){
+      const t = getTimeFromX(e);
+      selStart = t; selEnd = t;
+      dragTarget = 'end';
+    }
+  }
+
+  function onPointerMove(e){
+    if(!isDragging) return;
+    e.preventDefault();
+    const t = getTimeFromX(e);
+    if(dragTarget === 'start'){
+      selStart = Math.max(0, Math.min(t, selEnd - 0.01));
+    } else if(dragTarget === 'end'){
+      selEnd = Math.min(duration, Math.max(t, selStart + 0.01));
+    } else if(dragTarget === 'move'){
+      const dt = t - dragStartSel.t;
+      let ns = dragStartSel.start + dt;
+      let ne = dragStartSel.end + dt;
+      const len = ne - ns;
+      if(ns < 0){ ns = 0; ne = len; }
+      if(ne > duration){ ne = duration; ns = duration - len; }
+      selStart = ns; selEnd = ne;
+    }
+    // Ensure start < end
+    if(selStart > selEnd){
+      [selStart, selEnd] = [selEnd, selStart];
+      dragTarget = dragTarget === 'start' ? 'end' : 'start';
+    }
+    updateUI();
+    drawWaveform();
+  }
+
+  function onPointerUp(){ isDragging = false; }
+
+  waveContainer.addEventListener('mousedown', onPointerDown);
+  window.addEventListener('mousemove', onPointerMove);
+  window.addEventListener('mouseup', onPointerUp);
+  waveContainer.addEventListener('touchstart', onPointerDown, {passive:false});
+  window.addEventListener('touchmove', onPointerMove, {passive:false});
+  window.addEventListener('touchend', onPointerUp);
+
+  // Play controls
+  function stopPlayback(){
+    if(sourceNode){ try{sourceNode.stop();}catch(e){} sourceNode = null; }
+    isPlaying = false;
+    cancelAnimationFrame(animFrame);
+    $('#playBtn').textContent = '▶️ 재생';
+    drawWaveform();
+  }
+
+  function playRange(start, end){
+    stopPlayback();
+    if(audioCtx.state === 'suspended') audioCtx.resume();
+    sourceNode = audioCtx.createBufferSource();
+    sourceNode.buffer = audioBuffer;
+    sourceNode.connect(audioCtx.destination);
+    const dur = end - start;
+    sourceNode.start(0, start, dur);
+    isPlaying = true;
+    playStartTime = audioCtx.currentTime;
+    playOffset = start;
+    $('#playBtn').textContent = '⏸️ 정지';
+
+    function animate(){
+      if(!isPlaying) return;
+      const elapsed = audioCtx.currentTime - playStartTime;
+      const pos = playOffset + elapsed;
+      if(pos >= end){
+        stopPlayback();
+        return;
+      }
+      $('#currentTime').textContent = formatTimeShort(pos);
+      drawWaveform(pos);
+      animFrame = requestAnimationFrame(animate);
+    }
+    animate();
+    sourceNode.onended = () => { if(isPlaying) stopPlayback(); };
+  }
+
+  $('#playBtn').addEventListener('click', () => {
+    if(isPlaying) stopPlayback();
+    else playRange(0, duration);
+  });
+
+  $('#previewBtn').addEventListener('click', () => {
+    playRange(selStart, selEnd);
+  });
+
+  $('#resetBtn').addEventListener('click', () => {
+    stopPlayback();
+    selStart = 0; selEnd = duration;
+    updateUI(); drawWaveform();
+  });
+
+  $('#newFileBtn').addEventListener('click', () => {
+    stopPlayback();
+    audioBuffer = null; fileInput.value = '';
+    uploadCard.classList.remove('hidden');
+    editorCard.classList.add('hidden');
+  });
+
+  // Trim & Download
+  $('#trimBtn').addEventListener('click', async () => {
+    if(!audioBuffer) return;
+    const bar = $('#progressBar'), fill = $('#progressFill');
+    bar.classList.remove('hidden');
+    fill.style.width = '10%';
+
+    const sr = audioBuffer.sampleRate;
+    const ch = audioBuffer.numberOfChannels;
+    const startSample = Math.floor(selStart * sr);
+    const endSample = Math.floor(selEnd * sr);
+    const len = endSample - startSample;
+
+    if(len <= 0){ alert('유효한 구간을 선택해 주세요.'); bar.classList.add('hidden'); return; }
+
+    fill.style.width = '30%';
+
+    // Create offline context
+    const offline = new OfflineAudioContext(ch, len, sr);
+    const newBuffer = offline.createBuffer(ch, len, sr);
+    for(let c = 0; c < ch; c++){
+      const src = audioBuffer.getChannelData(c);
+      const dst = newBuffer.getChannelData(c);
+      for(let i = 0; i < len; i++){
+        dst[i] = src[startSample + i];
+      }
+    }
+
+    fill.style.width = '60%';
+
+    // Encode to WAV
+    const wav = encodeWAV(newBuffer);
+    fill.style.width = '90%';
+
+    const blob = new Blob([wav], {type: 'audio/wav'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${fileName}_trimmed.wav`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+
+    fill.style.width = '100%';
+    setTimeout(() => bar.classList.add('hidden'), 1000);
+  });
+
+  function encodeWAV(buffer){
+    const ch = buffer.numberOfChannels;
+    const sr = buffer.sampleRate;
+    const len = buffer.length;
+    const bitsPerSample = 16;
+    const bytesPerSample = bitsPerSample / 8;
+    const blockAlign = ch * bytesPerSample;
+    const dataSize = len * blockAlign;
+    const bufferSize = 44 + dataSize;
+    const ab = new ArrayBuffer(bufferSize);
+    const view = new DataView(ab);
+
+    function writeString(offset, str){
+      for(let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+    }
+
+    writeString(0, 'RIFF');
+    view.setUint32(4, bufferSize - 8, true);
+    writeString(8, 'WAVE');
+    writeString(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, ch, true);
+    view.setUint32(24, sr, true);
+    view.setUint32(28, sr * blockAlign, true);
+    view.setUint16(32, blockAlign, true);
+    view.setUint16(34, bitsPerSample, true);
+    writeString(36, 'data');
+    view.setUint32(40, dataSize, true);
+
+    const channels = [];
+    for(let c = 0; c < ch; c++) channels.push(buffer.getChannelData(c));
+
+    let offset = 44;
+    for(let i = 0; i < len; i++){
+      for(let c = 0; c < ch; c++){
+        const sample = Math.max(-1, Math.min(1, channels[c][i]));
+        view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+        offset += 2;
+      }
+    }
+
+    return ab;
+  }
+})();
+</script>
+</body>
+</html>

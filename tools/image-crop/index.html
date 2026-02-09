@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Image Crop Tool | 이미지 자르기</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f5f7fa;--surface:#fff;--text:#1a1a2e;--text2:#555;--accent:#6366f1;--accent2:#8b5cf6;--border:#e2e8f0;--shadow:0 4px 24px rgba(0,0,0,.08);--radius:12px}
+@media(prefers-color-scheme:dark){:root{--bg:#0f0f1a;--surface:#1a1a2e;--text:#e2e8f0;--text2:#94a3b8;--accent:#818cf8;--accent2:#a78bfa;--border:#2d2d44;--shadow:0 4px 24px rgba(0,0,0,.3)}}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:20px}
+h1{font-size:1.8rem;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:6px}
+.subtitle{color:var(--text2);margin-bottom:24px;font-size:.95rem}
+.container{width:100%;max-width:900px}
+.card{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px;margin-bottom:20px;border:1px solid var(--border)}
+.upload-zone{border:2px dashed var(--border);border-radius:var(--radius);padding:48px 20px;text-align:center;cursor:pointer;transition:all .3s}
+.upload-zone:hover,.upload-zone.dragover{border-color:var(--accent);background:rgba(99,102,241,.05)}
+.upload-zone .icon{font-size:3rem;margin-bottom:12px}
+.upload-zone p{color:var(--text2)}
+.upload-zone input{display:none}
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:16px}
+.btn{padding:10px 20px;border:none;border-radius:8px;font-size:.9rem;font-weight:600;cursor:pointer;transition:all .2s;display:inline-flex;align-items:center;gap:6px}
+.btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;box-shadow:0 2px 12px rgba(99,102,241,.3)}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(99,102,241,.4)}
+.btn-outline{background:transparent;border:2px solid var(--border);color:var(--text)}
+.btn-outline:hover,.btn-outline.active{border-color:var(--accent);color:var(--accent);background:rgba(99,102,241,.05)}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+select{padding:10px 14px;border:2px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:.9rem;cursor:pointer}
+select:focus{outline:none;border-color:var(--accent)}
+.canvas-wrap{position:relative;display:inline-block;max-width:100%;overflow:hidden;border-radius:8px;cursor:crosshair;touch-action:none}
+.canvas-wrap canvas{display:block;max-width:100%;height:auto}
+#overlay{position:absolute;top:0;left:0;pointer-events:none}
+.crop-info{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:.85rem;color:var(--text2)}
+.crop-info span{background:var(--bg);padding:4px 10px;border-radius:6px}
+.format-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.format-row label{font-weight:600;font-size:.9rem}
+.hidden{display:none}
+@media(max-width:600px){h1{font-size:1.4rem}.card{padding:16px}.controls{gap:6px}.btn{padding:8px 14px;font-size:.8rem}}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>✂️ Image Crop Tool</h1>
+  <p class="subtitle">이미지를 업로드하고 원하는 영역을 잘라보세요</p>
+
+  <div class="card" id="uploadCard">
+    <div class="upload-zone" id="dropZone">
+      <div class="icon">🖼️</div>
+      <p><strong>클릭하거나 이미지를 드래그하세요</strong></p>
+      <p style="font-size:.85rem;margin-top:6px">PNG, JPG, WebP, GIF 지원</p>
+      <input type="file" id="fileInput" accept="image/*">
+    </div>
+  </div>
+
+  <div class="card hidden" id="editorCard">
+    <div class="controls">
+      <label style="font-weight:600;font-size:.9rem">비율:</label>
+      <select id="ratioSelect">
+        <option value="free">자유</option>
+        <option value="1:1">1:1 (정사각형)</option>
+        <option value="16:9">16:9 (와이드)</option>
+        <option value="9:16">9:16 (세로)</option>
+        <option value="4:3">4:3</option>
+        <option value="3:2">3:2</option>
+      </select>
+      <button class="btn btn-outline" id="resetBtn">↺ 초기화</button>
+      <button class="btn btn-outline" id="newImgBtn">📂 새 이미지</button>
+    </div>
+    <div class="canvas-wrap" id="canvasWrap">
+      <canvas id="imgCanvas"></canvas>
+      <canvas id="overlay"></canvas>
+    </div>
+    <div class="crop-info" id="cropInfo"></div>
+  </div>
+
+  <div class="card hidden" id="downloadCard">
+    <div class="controls">
+      <div class="format-row">
+        <label>형식:</label>
+        <button class="btn btn-outline active" data-fmt="png">PNG</button>
+        <button class="btn btn-outline" data-fmt="jpeg">JPEG</button>
+      </div>
+      <div class="format-row hidden" id="qualityRow">
+        <label>품질:</label>
+        <input type="range" id="qualitySlider" min="10" max="100" value="92" style="width:120px">
+        <span id="qualityVal">92%</span>
+      </div>
+      <button class="btn btn-primary" id="downloadBtn" disabled>💾 다운로드</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const $ = s => document.querySelector(s);
+  const dropZone = $('#dropZone'), fileInput = $('#fileInput');
+  const imgCanvas = $('#imgCanvas'), overlay = $('#overlay');
+  const ctx = imgCanvas.getContext('2d'), octx = overlay.getContext('2d');
+  const uploadCard = $('#uploadCard'), editorCard = $('#editorCard'), downloadCard = $('#downloadCard');
+  const ratioSelect = $('#ratioSelect'), cropInfo = $('#cropInfo');
+  const qualityRow = $('#qualityRow'), qualitySlider = $('#qualitySlider'), qualityVal = $('#qualityVal');
+
+  let img = null, scale = 1;
+  let crop = {x:0,y:0,w:0,h:0}, dragging = false, dragType = null;
+  let startX, startY, startCrop;
+  let format = 'png';
+
+  // Upload
+  dropZone.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', e => { if(e.target.files[0]) loadImage(e.target.files[0]); });
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+  dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('dragover'); if(e.dataTransfer.files[0]) loadImage(e.dataTransfer.files[0]); });
+
+  function loadImage(file){
+    const reader = new FileReader();
+    reader.onload = e => {
+      img = new Image();
+      img.onload = () => { setupCanvas(); uploadCard.classList.add('hidden'); editorCard.classList.remove('hidden'); downloadCard.classList.remove('hidden'); };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function setupCanvas(){
+    const wrap = $('#canvasWrap');
+    const maxW = wrap.parentElement.clientWidth - 48;
+    scale = Math.min(1, maxW / img.width);
+    const dw = Math.round(img.width * scale), dh = Math.round(img.height * scale);
+    imgCanvas.width = overlay.width = dw;
+    imgCanvas.height = overlay.height = dh;
+    overlay.style.width = imgCanvas.style.width = dw + 'px';
+    overlay.style.height = imgCanvas.style.height = dh + 'px';
+    ctx.drawImage(img, 0, 0, dw, dh);
+    crop = {x:0, y:0, w:dw, h:dh};
+    applyRatio();
+    drawOverlay();
+    $('#downloadBtn').disabled = false;
+  }
+
+  function applyRatio(){
+    const v = ratioSelect.value;
+    if(v === 'free') return;
+    const [rw, rh] = v.split(':').map(Number);
+    const cw = imgCanvas.width, ch = imgCanvas.height;
+    let w = cw, h = Math.round(cw * rh / rw);
+    if(h > ch){ h = ch; w = Math.round(ch * rw / rh); }
+    crop = {x: Math.round((cw - w)/2), y: Math.round((ch - h)/2), w, h};
+    drawOverlay();
+  }
+
+  ratioSelect.addEventListener('change', () => { if(img) applyRatio(); });
+
+  function drawOverlay(){
+    octx.clearRect(0,0,overlay.width,overlay.height);
+    octx.fillStyle = 'rgba(0,0,0,0.5)';
+    octx.fillRect(0,0,overlay.width,overlay.height);
+    octx.clearRect(crop.x, crop.y, crop.w, crop.h);
+    // Border
+    octx.strokeStyle = '#fff';
+    octx.lineWidth = 2;
+    octx.strokeRect(crop.x, crop.y, crop.w, crop.h);
+    // Grid (rule of thirds)
+    octx.strokeStyle = 'rgba(255,255,255,0.3)';
+    octx.lineWidth = 1;
+    for(let i=1;i<3;i++){
+      const gx = crop.x + crop.w * i / 3;
+      const gy = crop.y + crop.h * i / 3;
+      octx.beginPath(); octx.moveTo(gx, crop.y); octx.lineTo(gx, crop.y+crop.h); octx.stroke();
+      octx.beginPath(); octx.moveTo(crop.x, gy); octx.lineTo(crop.x+crop.w, gy); octx.stroke();
+    }
+    // Handles
+    const hs = 8;
+    octx.fillStyle = '#fff';
+    const corners = [[crop.x,crop.y],[crop.x+crop.w,crop.y],[crop.x,crop.y+crop.h],[crop.x+crop.w,crop.y+crop.h]];
+    corners.forEach(([cx,cy]) => { octx.fillRect(cx-hs/2, cy-hs/2, hs, hs); });
+    // Info
+    const rw = Math.round(crop.w / scale), rh = Math.round(crop.h / scale);
+    cropInfo.innerHTML = `<span>📐 ${rw} × ${rh}px</span><span>📏 위치: (${Math.round(crop.x/scale)}, ${Math.round(crop.y/scale)})</span>`;
+  }
+
+  // Interaction
+  function getPos(e){
+    const r = overlay.getBoundingClientRect();
+    const t = e.touches ? e.touches[0] : e;
+    return { x: t.clientX - r.left, y: t.clientY - r.top };
+  }
+
+  function hitTest(x, y){
+    const hs = 12;
+    const corners = [
+      {type:'nw', cx:crop.x, cy:crop.y},
+      {type:'ne', cx:crop.x+crop.w, cy:crop.y},
+      {type:'sw', cx:crop.x, cy:crop.y+crop.h},
+      {type:'se', cx:crop.x+crop.w, cy:crop.y+crop.h}
+    ];
+    for(const c of corners){
+      if(Math.abs(x-c.cx)<hs && Math.abs(y-c.cy)<hs) return c.type;
+    }
+    if(x>crop.x+hs && x<crop.x+crop.w-hs && y>crop.y+hs && y<crop.y+crop.h-hs) return 'move';
+    // Edge resize
+    if(Math.abs(x-crop.x)<hs && y>crop.y && y<crop.y+crop.h) return 'w';
+    if(Math.abs(x-crop.x-crop.w)<hs && y>crop.y && y<crop.y+crop.h) return 'e';
+    if(Math.abs(y-crop.y)<hs && x>crop.x && x<crop.x+crop.w) return 'n';
+    if(Math.abs(y-crop.y-crop.h)<hs && x>crop.x && x<crop.x+crop.w) return 's';
+    return 'new';
+  }
+
+  function onStart(e){
+    e.preventDefault();
+    const p = getPos(e);
+    dragType = hitTest(p.x, p.y);
+    dragging = true;
+    startX = p.x; startY = p.y;
+    startCrop = {...crop};
+    if(dragType === 'new'){
+      crop = {x:p.x, y:p.y, w:0, h:0};
+    }
+  }
+
+  function constrain(c){
+    if(c.w < 0){ c.x += c.w; c.w = -c.w; }
+    if(c.h < 0){ c.y += c.h; c.h = -c.h; }
+    c.x = Math.max(0, Math.min(c.x, overlay.width - c.w));
+    c.y = Math.max(0, Math.min(c.y, overlay.height - c.h));
+    c.w = Math.min(c.w, overlay.width - c.x);
+    c.h = Math.min(c.h, overlay.height - c.y);
+    return c;
+  }
+
+  function enforceRatio(c, anchor){
+    const v = ratioSelect.value;
+    if(v === 'free') return c;
+    const [rw, rh] = v.split(':').map(Number);
+    const r = rw / rh;
+    const newH = Math.round(c.w / r);
+    if(newH <= overlay.height){
+      c.h = newH;
+    } else {
+      c.h = overlay.height;
+      c.w = Math.round(c.h * r);
+    }
+    return c;
+  }
+
+  function onMove(e){
+    if(!dragging) return;
+    e.preventDefault();
+    const p = getPos(e);
+    const dx = p.x - startX, dy = p.y - startY;
+    let c = {...startCrop};
+
+    if(dragType === 'move'){
+      c.x += dx; c.y += dy;
+    } else if(dragType === 'new' || dragType === 'se'){
+      c.w = p.x - c.x; c.h = p.y - c.y;
+      c = enforceRatio(c);
+    } else if(dragType === 'nw'){
+      c.x = startCrop.x + dx; c.y = startCrop.y + dy;
+      c.w = startCrop.w - dx; c.h = startCrop.h - dy;
+      c = enforceRatio(c);
+    } else if(dragType === 'ne'){
+      c.y = startCrop.y + dy;
+      c.w = startCrop.w + dx; c.h = startCrop.h - dy;
+      c = enforceRatio(c);
+    } else if(dragType === 'sw'){
+      c.x = startCrop.x + dx;
+      c.w = startCrop.w - dx; c.h = startCrop.h + dy;
+      c = enforceRatio(c);
+    } else if(dragType === 'e'){
+      c.w = startCrop.w + dx;
+      c = enforceRatio(c);
+    } else if(dragType === 'w'){
+      c.x = startCrop.x + dx; c.w = startCrop.w - dx;
+      c = enforceRatio(c);
+    } else if(dragType === 's'){
+      c.h = startCrop.h + dy;
+      c = enforceRatio(c);
+    } else if(dragType === 'n'){
+      c.y = startCrop.y + dy; c.h = startCrop.h - dy;
+      c = enforceRatio(c);
+    }
+
+    crop = constrain(c);
+    drawOverlay();
+  }
+
+  function onEnd(){ dragging = false; }
+
+  overlay.style.pointerEvents = 'auto';
+  overlay.addEventListener('mousedown', onStart);
+  overlay.addEventListener('mousemove', onMove);
+  overlay.addEventListener('mouseup', onEnd);
+  overlay.addEventListener('mouseleave', onEnd);
+  overlay.addEventListener('touchstart', onStart, {passive:false});
+  overlay.addEventListener('touchmove', onMove, {passive:false});
+  overlay.addEventListener('touchend', onEnd);
+
+  // Reset
+  $('#resetBtn').addEventListener('click', () => { if(img) setupCanvas(); });
+  $('#newImgBtn').addEventListener('click', () => {
+    img = null; fileInput.value = '';
+    uploadCard.classList.remove('hidden');
+    editorCard.classList.add('hidden');
+    downloadCard.classList.add('hidden');
+  });
+
+  // Format
+  document.querySelectorAll('[data-fmt]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('[data-fmt]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      format = btn.dataset.fmt;
+      qualityRow.classList.toggle('hidden', format !== 'jpeg');
+    });
+  });
+  qualitySlider.addEventListener('input', () => { qualityVal.textContent = qualitySlider.value + '%'; });
+
+  // Download
+  $('#downloadBtn').addEventListener('click', () => {
+    if(!img) return;
+    const sx = crop.x / scale, sy = crop.y / scale;
+    const sw = crop.w / scale, sh = crop.h / scale;
+    const out = document.createElement('canvas');
+    out.width = Math.round(sw); out.height = Math.round(sh);
+    const outCtx = out.getContext('2d');
+    outCtx.drawImage(img, sx, sy, sw, sh, 0, 0, out.width, out.height);
+    const mime = format === 'jpeg' ? 'image/jpeg' : 'image/png';
+    const q = format === 'jpeg' ? qualitySlider.value / 100 : undefined;
+    out.toBlob(blob => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `cropped_${out.width}x${out.height}.${format === 'jpeg' ? 'jpg' : 'png'}`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }, mime, q);
+  });
+})();
+</script>
+</body>
+</html>

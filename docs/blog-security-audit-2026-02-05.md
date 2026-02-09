@@ -21,7 +21,7 @@
 
 ### 1. 내부 경로 노출 (1건)
 - **파일:** `2026-01-31-9slice-auto-research.md`
-- **이슈:** `/Users/kjaylee/clawd/scripts/auto-9slice.py`
+- **이슈:** `~/workspace/scripts/auto-9slice.py`
 - **수정:** `~/workspace/scripts/auto-9slice.py`
 
 ### 2. IP 주소/포트 노출 (1건)
@@ -100,7 +100,7 @@ grep -rn "Master" _posts/ | grep -v "Coin Master" | grep -v "Screw Master" | gre
 
 ### ❌ 절대 노출 금지 항목
 1. ✅ API 토큰, 비밀번호, 키 → 제거 또는 마스킹
-2. ✅ 내부 경로 (`/Users/kjaylee/...`) → `~/workspace/...` 또는 제거
+2. ✅ 내부 경로 (`~/...`) → `~/workspace/...` 또는 제거
 3. ✅ IP 주소 (로컬호스트 포트 포함) → 제거 또는 `<서버>`, `<노드>` 마스킹
 4. ✅ 서버 정보 (호스트명, 포트) → 일반적 표현으로 변경
 5. ✅ 계정명, 이메일 주소 → 확인 결과 없음

@@ -12,7 +12,7 @@ GitHub Pages 환경에서 서버사이드 코드 없이 소설 에피소드를 �
 
 **실행**:
 ```bash
-cd /Users/kjaylee/.openclaw/workspace/eastsea-blog
+cd eastsea-blog
 ./scripts/build-novels-manifest.sh
 ```
 
@@ -77,7 +77,7 @@ cd /Users/kjaylee/.openclaw/workspace/eastsea-blog
    git push origin master
    ```
 
-**자동화**: `/Users/kjaylee/.openclaw/workspace/scripts/update-novels.sh` 실행
+**자동화**: `~/workspace/scripts/update-novels.sh` 실행
 
 ### 새 소설 추가
 1. `scripts/build-novels-manifest.sh`의 `get_novel_metadata()` 함수에 메타데이터 추가:

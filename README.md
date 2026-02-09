@@ -22,7 +22,7 @@ eastsea-blog/
 
 ```bash
 # 마크다운 파일을 _posts/에 복사 + posts.json 업데이트 + Git push
-/Users/kjaylee/.openclaw/workspace/scripts/publish-blog-post.sh /path/to/2026-02-05-my-post.md
+$WORKSPACE/scripts/publish-blog-post.sh /path/to/2026-02-05-my-post.md
 ```
 
 ### 방법 2: 수동
@@ -36,7 +36,7 @@ cp /path/to/2026-02-05-my-post.md _posts/
 
 # 또는 수동으로:
 # 2-1. posts.json 재생성
-cd /Users/kjaylee/.openclaw/workspace/eastsea-blog
+cd eastsea-blog
 ./update-posts.sh
 
 # 2-2. Git commit + push
@@ -65,7 +65,7 @@ YYYY-MM-DD-[category-]title.md
 ## 🔄 posts.json 자동 생성
 
 ```bash
-cd /Users/kjaylee/.openclaw/workspace/eastsea-blog
+cd eastsea-blog
 ./update-posts.sh
 ```
 

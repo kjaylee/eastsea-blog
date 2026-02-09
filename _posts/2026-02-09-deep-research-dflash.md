@@ -280,7 +280,7 @@ OpenClaw의 현재 LLM 추론 파이프라인은 **API 기반**(Anthropic Claude
 
 1. **로컬 LLM 서빙으로 전환 시**: Qwen3-8B 같은 오픈소스 모델을 자체 서빙한다면, DFlash로 5배 가속이 가능
 2. **비용 최적화**: API 비용 절감을 위해 로컬 추론으로 전환 검토 시 핵심 기술
-3. **GCP VM 활용**: 현재 GCP VM(34.19.69.41)에 NVIDIA GPU를 추가하면 즉시 적용 가능
+3. **GCP VM 활용**: 현재 GCP VM에 NVIDIA GPU를 추가하면 즉시 적용 가능
 
 ---
 

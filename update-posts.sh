@@ -4,7 +4,7 @@
 
 set -e
 
-BLOG_DIR="/Users/kjaylee/.openclaw/workspace/eastsea-blog"
+BLOG_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$BLOG_DIR"
 
 echo "📝 Generating posts.json..."

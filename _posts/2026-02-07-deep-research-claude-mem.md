@@ -279,7 +279,7 @@ Efficiency: 100%
 ### 현행 시스템
 
 ```
-/Users/kjaylee/.openclaw/workspace/
+~/workspace/
 ├── MEMORY.md              (장기 컨텍스트, 수동 관리)
 ├── memory/
 │   ├── core.md           (핵심 실행 규칙)

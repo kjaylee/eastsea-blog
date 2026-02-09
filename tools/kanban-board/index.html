@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>칸반 보드 - Kanban Board | EastSea Tools</title>
+<meta name="description" content="드래그 앤 드롭 칸반 보드로 태스크를 효율적으로 관리하세요. 모바일 터치 지원, 다크모드, localStorage 자동 저장.">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f0f2f5;--surface:#fff;--surface2:#f7f8fa;--text:#1a1a2e;--text2:#555;--text3:#888;
+  --primary:#6366f1;--primary-light:#818cf8;--primary-bg:rgba(99,102,241,.08);
+  --danger:#ef4444;--danger-bg:rgba(239,68,68,.08);
+  --success:#22c55e;--warning:#f59e0b;--info:#3b82f6;
+  --border:#e2e8f0;--shadow:0 1px 3px rgba(0,0,0,.08);--shadow-lg:0 8px 24px rgba(0,0,0,.12);
+  --radius:12px;--radius-sm:8px;
+  --col-min:300px;
+}
+[data-theme="dark"]{
+  --bg:#0f172a;--surface:#1e293b;--surface2:#334155;--text:#e2e8f0;--text2:#94a3b8;--text3:#64748b;
+  --border:#334155;--shadow:0 1px 3px rgba(0,0,0,.3);--shadow-lg:0 8px 24px rgba(0,0,0,.4);
+  --primary-bg:rgba(99,102,241,.15);--danger-bg:rgba(239,68,68,.15);
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;transition:background .3s,color .3s}
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;position:sticky;top:0;z-index:100;box-shadow:var(--shadow)}
+header h1{font-size:1.3rem;display:flex;align-items:center;gap:8px}
+header h1 span{font-size:1.5rem}
+.header-actions{display:flex;gap:8px;align-items:center}
+button{cursor:pointer;border:none;font:inherit;border-radius:var(--radius-sm);transition:all .2s}
+.btn{padding:8px 16px;font-size:.875rem;font-weight:600}
+.btn-primary{background:var(--primary);color:#fff}.btn-primary:hover{background:var(--primary-light)}
+.btn-ghost{background:transparent;color:var(--text2);padding:8px}.btn-ghost:hover{background:var(--primary-bg);color:var(--primary)}
+.btn-icon{width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-size:1.1rem;background:var(--surface2);border:1px solid var(--border)}
+.btn-icon:hover{background:var(--primary-bg);border-color:var(--primary)}
+.board{display:flex;gap:16px;padding:16px;overflow-x:auto;min-height:calc(100vh - 65px);align-items:flex-start}
+.column{background:var(--surface2);border-radius:var(--radius);min-width:var(--col-min);max-width:360px;flex:1;display:flex;flex-direction:column;border:1px solid var(--border);box-shadow:var(--shadow)}
+.column.drag-over{border-color:var(--primary);background:var(--primary-bg)}
+.col-header{padding:12px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)}
+.col-title{font-weight:700;font-size:.95rem;display:flex;align-items:center;gap:8px}
+.col-count{background:var(--primary-bg);color:var(--primary);font-size:.75rem;font-weight:700;padding:2px 8px;border-radius:12px}
+.col-actions{display:flex;gap:4px}
+.col-actions button{width:28px;height:28px;font-size:.8rem;display:flex;align-items:center;justify-content:center;background:transparent;color:var(--text3);border-radius:6px}
+.col-actions button:hover{background:var(--primary-bg);color:var(--primary)}
+.cards{padding:8px;flex:1;min-height:60px;display:flex;flex-direction:column;gap:8px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;cursor:grab;transition:all .2s;position:relative}
+.card:hover{box-shadow:var(--shadow-lg);transform:translateY(-1px)}
+.card.dragging{opacity:.5;transform:rotate(2deg)}
+.card-priority{width:100%;height:3px;border-radius:3px;margin-bottom:8px}
+.card-priority.high{background:var(--danger)}.card-priority.medium{background:var(--warning)}.card-priority.low{background:var(--success)}.card-priority.none{background:var(--border)}
+.card-title{font-weight:600;font-size:.9rem;margin-bottom:4px;word-break:break-word}
+.card-desc{font-size:.8rem;color:var(--text2);margin-bottom:8px;word-break:break-word;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.card-meta{display:flex;justify-content:space-between;align-items:center;font-size:.75rem;color:var(--text3)}
+.card-due{display:flex;align-items:center;gap:4px}
+.card-due.overdue{color:var(--danger);font-weight:600}
+.card-actions{display:flex;gap:2px;opacity:0;transition:opacity .2s}
+.card:hover .card-actions{opacity:1}
+.card-actions button{width:24px;height:24px;font-size:.7rem;display:flex;align-items:center;justify-content:center;background:transparent;color:var(--text3);border-radius:4px}
+.card-actions button:hover{background:var(--danger-bg);color:var(--danger)}
+.add-card-btn{padding:8px 12px;background:transparent;color:var(--text3);font-size:.85rem;width:100%;text-align:left;display:flex;align-items:center;gap:6px;border-radius:var(--radius-sm);margin:4px 8px 8px;width:calc(100% - 16px)}
+.add-card-btn:hover{background:var(--primary-bg);color:var(--primary)}
+.add-col-btn{min-width:var(--col-min);max-width:360px;background:var(--surface2);border:2px dashed var(--border);border-radius:var(--radius);padding:16px;display:flex;align-items:center;justify-content:center;gap:8px;color:var(--text3);font-weight:600;height:fit-content}
+.add-col-btn:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-bg)}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:flex;align-items:center;justify-content:center;padding:16px;opacity:0;visibility:hidden;transition:all .3s}
+.modal-overlay.active{opacity:1;visibility:visible}
+.modal{background:var(--surface);border-radius:var(--radius);padding:24px;width:100%;max-width:460px;box-shadow:var(--shadow-lg);transform:translateY(20px);transition:transform .3s}
+.modal-overlay.active .modal{transform:translateY(0)}
+.modal h2{font-size:1.1rem;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.form-group{margin-bottom:14px}
+.form-group label{display:block;font-size:.8rem;font-weight:600;color:var(--text2);margin-bottom:4px}
+.form-group input,.form-group textarea,.form-group select{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);color:var(--text);font:inherit;font-size:.9rem;transition:border-color .2s}
+.form-group input:focus,.form-group textarea:focus,.form-group select:focus{outline:none;border-color:var(--primary)}
+.form-group textarea{resize:vertical;min-height:80px}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+.modal-actions .btn-cancel{background:var(--surface2);color:var(--text2)}.modal-actions .btn-cancel:hover{background:var(--border)}
+.drop-indicator{height:3px;background:var(--primary);border-radius:3px;margin:2px 0;transition:all .2s}
+@media(max-width:640px){
+  header{padding:10px 14px}
+  header h1{font-size:1.1rem}
+  .board{padding:12px;gap:12px}
+  .column{min-width:280px}
+  .modal{padding:18px}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1><span>📋</span> Kanban Board</h1>
+  <div class="header-actions">
+    <button class="btn-icon" onclick="clearAll()" title="전체 초기화">🗑️</button>
+    <button class="btn-icon" id="themeToggle" onclick="toggleTheme()" title="테마 전환">🌙</button>
+  </div>
+</header>
+
+<div class="board" id="board"></div>
+
+<div class="modal-overlay" id="cardModal">
+  <div class="modal">
+    <h2 id="modalTitle">✏️ 카드 추가</h2>
+    <div class="form-group">
+      <label>제목 *</label>
+      <input type="text" id="cardTitleInput" placeholder="태스크 제목" maxlength="100">
+    </div>
+    <div class="form-group">
+      <label>설명</label>
+      <textarea id="cardDescInput" placeholder="태스크 상세 설명 (선택)" maxlength="500"></textarea>
+    </div>
+    <div class="form-group">
+      <label>우선순위</label>
+      <select id="cardPriorityInput">
+        <option value="none">없음</option>
+        <option value="low">🟢 낮음</option>
+        <option value="medium">🟡 보통</option>
+        <option value="high">🔴 높음</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>마감일</label>
+      <input type="date" id="cardDueInput">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-cancel" onclick="closeModal()">취소</button>
+      <button class="btn btn-primary" onclick="saveCard()">저장</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="colModal">
+  <div class="modal">
+    <h2>📁 컬럼 추가</h2>
+    <div class="form-group">
+      <label>컬럼 이름 *</label>
+      <input type="text" id="colNameInput" placeholder="새 컬럼 이름" maxlength="30">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-cancel" onclick="closeColModal()">취소</button>
+      <button class="btn btn-primary" onclick="saveColumn()">추가</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const LS_KEY='kanban-v2';
+const LS_THEME='kanban-theme';
+
+let data={columns:[
+  {id:genId(),name:'To Do',cards:[]},
+  {id:genId(),name:'In Progress',cards:[]},
+  {id:genId(),name:'Done',cards:[]}
+]};
+
+let editingCard=null;
+let editingColId=null;
+let dragCard=null;
+let dragColId=null;
+let touchDragEl=null;
+let touchStartY=0;
+
+function genId(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
+function save(){localStorage.setItem(LS_KEY,JSON.stringify(data))}
+function load(){const d=localStorage.getItem(LS_KEY);if(d)try{data=JSON.parse(d)}catch(e){}}
+
+function render(){
+  const board=document.getElementById('board');
+  board.innerHTML='';
+  data.columns.forEach(col=>{
+    const colEl=document.createElement('div');
+    colEl.className='column';
+    colEl.dataset.colId=col.id;
+    colEl.innerHTML=`
+      <div class="col-header">
+        <div class="col-title">${esc(col.name)} <span class="col-count">${col.cards.length}</span></div>
+        <div class="col-actions">
+          <button onclick="renameColumn('${col.id}')" title="이름 변경">✏️</button>
+          <button onclick="deleteColumn('${col.id}')" title="삭제">✕</button>
+        </div>
+      </div>
+      <div class="cards" data-col-id="${col.id}"></div>
+      <button class="add-card-btn" onclick="openAddCard('${col.id}')">＋ 카드 추가</button>
+    `;
+    const cardsEl=colEl.querySelector('.cards');
+    col.cards.forEach(card=>{
+      const cardEl=createCardEl(card,col.id);
+      cardsEl.appendChild(cardEl);
+    });
+    setupColumnDrop(cardsEl,col.id);
+    board.appendChild(colEl);
+  });
+  const addBtn=document.createElement('button');
+  addBtn.className='add-col-btn';
+  addBtn.innerHTML='＋ 컬럼 추가';
+  addBtn.onclick=()=>document.getElementById('colModal').classList.add('active');
+  board.appendChild(addBtn);
+}
+
+function createCardEl(card,colId){
+  const el=document.createElement('div');
+  el.className='card';
+  el.draggable=true;
+  el.dataset.cardId=card.id;
+  el.dataset.colId=colId;
+  const isOverdue=card.due&&new Date(card.due)<new Date(new Date().toDateString());
+  el.innerHTML=`
+    <div class="card-priority ${card.priority||'none'}"></div>
+    <div class="card-title">${esc(card.title)}</div>
+    ${card.desc?`<div class="card-desc">${esc(card.desc)}</div>`:''}
+    <div class="card-meta">
+      ${card.due?`<span class="card-due ${isOverdue?'overdue':''}">📅 ${card.due}</span>`:'<span></span>'}
+      <div class="card-actions">
+        <button onclick="editCard('${colId}','${card.id}')" title="편집">✏️</button>
+        <button onclick="deleteCard('${colId}','${card.id}')" title="삭제">✕</button>
+      </div>
+    </div>
+  `;
+  el.addEventListener('dragstart',e=>{
+    dragCard=card.id;dragColId=colId;
+    el.classList.add('dragging');
+    e.dataTransfer.effectAllowed='move';
+    e.dataTransfer.setData('text/plain',card.id);
+  });
+  el.addEventListener('dragend',()=>{el.classList.remove('dragging');dragCard=null;dragColId=null;removeIndicators()});
+  setupTouchDrag(el,card,colId);
+  return el;
+}
+
+function setupColumnDrop(container,colId){
+  container.addEventListener('dragover',e=>{
+    e.preventDefault();e.dataTransfer.dropEffect='move';
+    container.closest('.column').classList.add('drag-over');
+    const afterEl=getDragAfterElement(container,e.clientY);
+    removeIndicators();
+    const indicator=document.createElement('div');
+    indicator.className='drop-indicator';
+    if(afterEl)container.insertBefore(indicator,afterEl);
+    else container.appendChild(indicator);
+  });
+  container.addEventListener('dragleave',e=>{
+    if(!container.contains(e.relatedTarget))container.closest('.column').classList.remove('drag-over');
+  });
+  container.addEventListener('drop',e=>{
+    e.preventDefault();
+    container.closest('.column').classList.remove('drag-over');
+    removeIndicators();
+    if(!dragCard||!dragColId)return;
+    const srcCol=data.columns.find(c=>c.id===dragColId);
+    const destCol=data.columns.find(c=>c.id===colId);
+    if(!srcCol||!destCol)return;
+    const idx=srcCol.cards.findIndex(c=>c.id===dragCard);
+    if(idx===-1)return;
+    const [card]=srcCol.cards.splice(idx,1);
+    const afterEl=getDragAfterElement(container,e.clientY);
+    if(afterEl){
+      const afterId=afterEl.dataset.cardId;
+      const destIdx=destCol.cards.findIndex(c=>c.id===afterId);
+      destCol.cards.splice(destIdx,0,card);
+    }else{
+      destCol.cards.push(card);
+    }
+    save();render();
+  });
+}
+
+function getDragAfterElement(container,y){
+  const els=[...container.querySelectorAll('.card:not(.dragging)')];
+  return els.reduce((closest,child)=>{
+    const box=child.getBoundingClientRect();
+    const offset=y-box.top-box.height/2;
+    if(offset<0&&offset>closest.offset)return{offset,element:child};
+    return closest;
+  },{offset:Number.NEGATIVE_INFINITY}).element;
+}
+
+function removeIndicators(){document.querySelectorAll('.drop-indicator').forEach(el=>el.remove())}
+
+function setupTouchDrag(el,card,colId){
+  let clone=null,startX,startY,moved=false;
+  el.addEventListener('touchstart',e=>{
+    if(e.touches.length!==1)return;
+    const t=e.touches[0];startX=t.clientX;startY=t.clientY;moved=false;
+    dragCard=card.id;dragColId=colId;
+  },{passive:true});
+  el.addEventListener('touchmove',e=>{
+    if(!dragCard)return;
+    const t=e.touches[0];
+    if(!moved&&Math.abs(t.clientY-startY)<10)return;
+    moved=true;e.preventDefault();
+    if(!clone){
+      clone=el.cloneNode(true);
+      clone.style.cssText='position:fixed;z-index:999;pointer-events:none;opacity:.85;width:'+el.offsetWidth+'px;transform:rotate(3deg);';
+      document.body.appendChild(clone);
+      el.style.opacity='.3';
+    }
+    clone.style.left=(t.clientX-el.offsetWidth/2)+'px';
+    clone.style.top=(t.clientY-30)+'px';
+    const target=document.elementFromPoint(t.clientX,t.clientY);
+    document.querySelectorAll('.column').forEach(c=>c.classList.remove('drag-over'));
+    if(target){
+      const col=target.closest('.column');
+      if(col)col.classList.add('drag-over');
+    }
+  },{passive:false});
+  el.addEventListener('touchend',e=>{
+    if(!moved){dragCard=null;dragColId=null;return}
+    if(clone){clone.remove();clone=null}
+    el.style.opacity='';
+    document.querySelectorAll('.column').forEach(c=>c.classList.remove('drag-over'));
+    const t=e.changedTouches[0];
+    const target=document.elementFromPoint(t.clientX,t.clientY);
+    if(target){
+      const destColEl=target.closest('.column');
+      if(destColEl){
+        const destColId=destColEl.dataset.colId;
+        const srcCol=data.columns.find(c=>c.id===dragColId);
+        const destCol=data.columns.find(c=>c.id===destColId);
+        if(srcCol&&destCol){
+          const idx=srcCol.cards.findIndex(c=>c.id===dragCard);
+          if(idx!==-1){
+            const [card]=srcCol.cards.splice(idx,1);
+            const cardsContainer=destColEl.querySelector('.cards');
+            const afterEl=getDragAfterElement(cardsContainer,t.clientY);
+            if(afterEl){
+              const afterId=afterEl.dataset.cardId;
+              const dIdx=destCol.cards.findIndex(c=>c.id===afterId);
+              destCol.cards.splice(dIdx,0,card);
+            }else{
+              destCol.cards.push(card);
+            }
+            save();render();
+          }
+        }
+      }
+    }
+    dragCard=null;dragColId=null;
+  });
+}
+
+function openAddCard(colId){
+  editingCard=null;editingColId=colId;
+  document.getElementById('modalTitle').textContent='✏️ 카드 추가';
+  document.getElementById('cardTitleInput').value='';
+  document.getElementById('cardDescInput').value='';
+  document.getElementById('cardPriorityInput').value='none';
+  document.getElementById('cardDueInput').value='';
+  document.getElementById('cardModal').classList.add('active');
+  setTimeout(()=>document.getElementById('cardTitleInput').focus(),100);
+}
+
+function editCard(colId,cardId){
+  const col=data.columns.find(c=>c.id===colId);
+  const card=col?.cards.find(c=>c.id===cardId);
+  if(!card)return;
+  editingCard=cardId;editingColId=colId;
+  document.getElementById('modalTitle').textContent='✏️ 카드 편집';
+  document.getElementById('cardTitleInput').value=card.title;
+  document.getElementById('cardDescInput').value=card.desc||'';
+  document.getElementById('cardPriorityInput').value=card.priority||'none';
+  document.getElementById('cardDueInput').value=card.due||'';
+  document.getElementById('cardModal').classList.add('active');
+  setTimeout(()=>document.getElementById('cardTitleInput').focus(),100);
+}
+
+function saveCard(){
+  const title=document.getElementById('cardTitleInput').value.trim();
+  if(!title)return alert('제목을 입력하세요.');
+  const desc=document.getElementById('cardDescInput').value.trim();
+  const priority=document.getElementById('cardPriorityInput').value;
+  const due=document.getElementById('cardDueInput').value;
+  const col=data.columns.find(c=>c.id===editingColId);
+  if(!col)return;
+  if(editingCard){
+    const card=col.cards.find(c=>c.id===editingCard);
+    if(card){card.title=title;card.desc=desc;card.priority=priority;card.due=due}
+  }else{
+    col.cards.push({id:genId(),title,desc,priority,due});
+  }
+  save();render();closeModal();
+}
+
+function deleteCard(colId,cardId){
+  if(!confirm('이 카드를 삭제하시겠습니까?'))return;
+  const col=data.columns.find(c=>c.id===colId);
+  if(col)col.cards=col.cards.filter(c=>c.id!==cardId);
+  save();render();
+}
+
+function closeModal(){document.getElementById('cardModal').classList.remove('active')}
+
+function saveColumn(){
+  const name=document.getElementById('colNameInput').value.trim();
+  if(!name)return alert('컬럼 이름을 입력하세요.');
+  data.columns.push({id:genId(),name,cards:[]});
+  save();render();closeColModal();
+}
+
+function closeColModal(){document.getElementById('colModal').classList.remove('active');document.getElementById('colNameInput').value=''}
+
+function renameColumn(colId){
+  const col=data.columns.find(c=>c.id===colId);
+  if(!col)return;
+  const name=prompt('새 컬럼 이름:',col.name);
+  if(name&&name.trim()){col.name=name.trim();save();render()}
+}
+
+function deleteColumn(colId){
+  const col=data.columns.find(c=>c.id===colId);
+  if(!col)return;
+  if(col.cards.length>0&&!confirm(`"${col.name}" 컬럼과 ${col.cards.length}개의 카드를 삭제하시겠습니까?`))return;
+  if(col.cards.length===0&&!confirm(`"${col.name}" 컬럼을 삭제하시겠습니까?`))return;
+  data.columns=data.columns.filter(c=>c.id!==colId);
+  save();render();
+}
+
+function clearAll(){
+  if(!confirm('모든 데이터를 초기화하시겠습니까?'))return;
+  data={columns:[
+    {id:genId(),name:'To Do',cards:[]},
+    {id:genId(),name:'In Progress',cards:[]},
+    {id:genId(),name:'Done',cards:[]}
+  ]};
+  save();render();
+}
+
+function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
+
+function toggleTheme(){
+  const isDark=document.documentElement.getAttribute('data-theme')==='dark';
+  document.documentElement.setAttribute('data-theme',isDark?'light':'dark');
+  document.getElementById('themeToggle').textContent=isDark?'🌙':'☀️';
+  localStorage.setItem(LS_THEME,isDark?'light':'dark');
+}
+
+function initTheme(){
+  const t=localStorage.getItem(LS_THEME)||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
+  document.documentElement.setAttribute('data-theme',t);
+  document.getElementById('themeToggle').textContent=t==='dark'?'☀️':'🌙';
+}
+
+document.querySelectorAll('.modal-overlay').forEach(m=>{
+  m.addEventListener('click',e=>{if(e.target===m){closeModal();closeColModal()}});
+});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){closeModal();closeColModal()}
+  if(e.key==='Enter'&&document.getElementById('cardModal').classList.contains('active')&&e.target.tagName!=='TEXTAREA')saveCard();
+  if(e.key==='Enter'&&document.getElementById('colModal').classList.contains('active'))saveColumn();
+});
+
+initTheme();load();render();
+</script>
+</body>
+</html>

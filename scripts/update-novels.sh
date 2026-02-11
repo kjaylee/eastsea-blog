@@ -236,7 +236,12 @@ echo "$METADATA" | jq -c 'group_by(.series) | .[]' | while IFS= read -r group; d
     author=$(echo "$group" | jq -r '.[0].author')
     episodes=$(echo "$group" | jq -c '. | sort_by(.episode) | reverse | .[0:3]')
     episode_count=$(echo "$group" | jq 'length')
-    series_slug=$(echo "$series" | sed 's/ //g')
+    explicit_slug=$(echo "$group" | jq -r '.[0].slug // empty')
+    if [ -n "$explicit_slug" ]; then
+        series_slug="$explicit_slug"
+    else
+        series_slug=$(echo "$series" | sed 's/ //g')
+    fi
     
     cat >> "$NOVELS_DIR/index.html" <<CARD
             <!-- $series -->

@@ -193,8 +193,20 @@
         
         function loadEpisodes() {
             try {
-                const seriesInfo = seriesData[series];
-                if (!seriesInfo) throw new Error('시리즈를 찾을 수 없습니다.');
+                // Handle both encoded and decoded series params for compatibility
+                const decodedSeries = decodeURIComponent(series);
+                
+                // Try direct lookup, then decoded lookup
+                const seriesInfo = seriesData[series] || seriesData[decodedSeries];
+                
+                if (!seriesInfo) {
+                    // Fallback: try to find by title if slug doesn't match
+                    const foundKey = Object.keys(seriesData).find(key => seriesData[key].title === decodedSeries);
+                    if (foundKey) {
+                        return window.location.replace(`series.html?series=${encodeURIComponent(foundKey)}`);
+                    }
+                    throw new Error('시리즈를 찾을 수 없습니다.');
+                }
                 
                 document.getElementById('series-title').textContent = seriesInfo.title;
                 document.getElementById('series-author').textContent = '작가: ' + seriesInfo.author;
@@ -224,8 +236,10 @@
             const html = episodes.map(ep => {
                 const epNum = String(ep.episode).padStart(3, '0');
                 const title = ep.title.replace(/^\[웹소설\]\s*/, '').replace(/\s*-\s*\d+화$/, '');
+                
+                // Use goToView function for safe URL handling
                 return `
-                    <div class="episode-item" onclick="location.href='view.html?series=${ep.series}&episode=${epNum}'">
+                    <div class="episode-item" onclick="goToView('${ep.series}', '${epNum}')">
                         <span class="episode-title">제${ep.episode}화${title ? ': ' + title : ''}</span>
                         <span class="episode-date">${ep.date}</span>
                     </div>
@@ -236,7 +250,11 @@
         }
         
         // Load on page load
-        loadEpisodes();
+        if (series) {
+            loadEpisodes();
+        } else {
+            document.getElementById('episodes-list').innerHTML = '<div class="loading"><p>시리즈 정보가 없습니다.</p></div>';
+        }
     </script>
 </body>
 </html>

@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>구독 관리 대시보드 | Subscription Tracker</title>
+  <meta name="description" content="반복 결제를 한눈에 관리하세요. 월/연 환산 비용, 결제 예정일, 카테고리별 필터, JSON 백업/복원을 지원합니다." />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #f3f5f9;
+      --card: #ffffff;
+      --text: #111827;
+      --muted: #6b7280;
+      --primary: #2563eb;
+      --primary-soft: rgba(37, 99, 235, 0.12);
+      --danger: #dc2626;
+      --success: #059669;
+      --border: #dbe1ea;
+      --shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+      --input: #f8fafc;
+    }
+    [data-theme="dark"] {
+      --bg: #0f172a;
+      --card: #111827;
+      --text: #f3f4f6;
+      --muted: #9ca3af;
+      --primary: #60a5fa;
+      --primary-soft: rgba(96, 165, 250, 0.2);
+      --danger: #f87171;
+      --success: #34d399;
+      --border: #273245;
+      --shadow: 0 14px 34px rgba(2, 6, 23, 0.45);
+      --input: #0b1322;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR', sans-serif;
+      background: radial-gradient(circle at 10% 0%, rgba(37,99,235,0.12), transparent 35%), var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 20px;
+      line-height: 1.45;
+      transition: background .3s ease;
+    }
+    .wrap { max-width: 1100px; margin: 0 auto; }
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 14px;
+      text-decoration: none;
+      color: var(--muted);
+      font-size: .92rem;
+    }
+    .back-link:hover { color: var(--primary); }
+
+    .header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    h1 {
+      font-size: clamp(1.4rem, 2.8vw, 2rem);
+      margin-bottom: 6px;
+      letter-spacing: -0.02em;
+    }
+    .subtitle { color: var(--muted); font-size: .95rem; }
+
+    .header-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .btn {
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--text);
+      border-radius: 10px;
+      height: 40px;
+      padding: 0 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: .2s ease;
+      box-shadow: 0 2px 8px rgba(15, 23, 42, .04);
+    }
+    .btn:hover { transform: translateY(-1px); }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--primary), #7c3aed);
+      color: #fff;
+      border: none;
+    }
+    .btn-danger {
+      border-color: color-mix(in srgb, var(--danger) 55%, var(--border));
+      color: var(--danger);
+      background: color-mix(in srgb, var(--danger) 10%, var(--card));
+    }
+
+    .grid-stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .stat {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      box-shadow: var(--shadow);
+    }
+    .stat .label {
+      color: var(--muted);
+      font-size: .8rem;
+      margin-bottom: 6px;
+    }
+    .stat .value {
+      font-size: clamp(1rem, 2.5vw, 1.55rem);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+    .stat .desc { color: var(--muted); font-size: .75rem; margin-top: 4px; }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+      padding: 16px;
+      margin-bottom: 14px;
+    }
+
+    .card h2 { font-size: 1rem; margin-bottom: 10px; }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .field label { font-size: .8rem; color: var(--muted); }
+    input, select, textarea {
+      width: 100%;
+      border: 1px solid var(--border);
+      background: var(--input);
+      color: var(--text);
+      border-radius: 10px;
+      min-height: 40px;
+      padding: 8px 10px;
+      font-size: .93rem;
+      font-family: inherit;
+    }
+    textarea { min-height: 76px; resize: vertical; }
+    input:focus, select:focus, textarea:focus {
+      outline: 2px solid color-mix(in srgb, var(--primary) 36%, transparent);
+      border-color: var(--primary);
+    }
+
+    .form-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+    .hint { color: var(--muted); font-size: .8rem; }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: 1.7fr 1fr 1fr 1fr;
+      gap: 10px;
+    }
+
+    .list-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .list-head .meta { color: var(--muted); font-size: .82rem; }
+
+    .table-wrap { overflow: auto; border-radius: 12px; border: 1px solid var(--border); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 860px;
+      background: var(--card);
+    }
+    th, td {
+      padding: 10px;
+      border-bottom: 1px solid var(--border);
+      font-size: .9rem;
+      vertical-align: middle;
+      text-align: left;
+    }
+    th {
+      font-size: .78rem;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      color: var(--muted);
+      position: sticky;
+      top: 0;
+      background: color-mix(in srgb, var(--card) 93%, var(--primary-soft));
+    }
+    tr:hover td { background: color-mix(in srgb, var(--card) 88%, var(--primary-soft)); }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 4px 8px;
+      font-size: .74rem;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      background: color-mix(in srgb, var(--card) 88%, var(--primary-soft));
+    }
+
+    .next-date.soon { color: var(--danger); font-weight: 700; }
+
+    .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+    .actions button {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      min-height: 30px;
+      padding: 0 8px;
+      font-size: .78rem;
+      background: var(--card);
+      color: var(--text);
+      cursor: pointer;
+    }
+    .actions .pay { border-color: color-mix(in srgb, var(--success) 45%, var(--border)); color: var(--success); }
+    .actions .edit { border-color: color-mix(in srgb, var(--primary) 45%, var(--border)); color: var(--primary); }
+    .actions .delete { border-color: color-mix(in srgb, var(--danger) 55%, var(--border)); color: var(--danger); }
+
+    .empty {
+      text-align: center;
+      padding: 26px;
+      color: var(--muted);
+      border: 1px dashed var(--border);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--card) 94%, var(--primary-soft));
+    }
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%) translateY(20px);
+      background: #111827;
+      color: #fff;
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: .88rem;
+      opacity: 0;
+      pointer-events: none;
+      transition: .25s;
+      z-index: 30;
+    }
+    .toast.show { opacity: .95; transform: translateX(-50%) translateY(0); }
+
+    @media (max-width: 1024px) {
+      .grid-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 640px) {
+      body { padding: 14px; }
+      .header { flex-direction: column; }
+      .header-actions { width: 100%; justify-content: flex-start; }
+      .grid-stats, .form-grid, .toolbar { grid-template-columns: 1fr; }
+      .btn { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <a href="/tools/" class="back-link">← 도구 목록으로</a>
+
+    <section class="header">
+      <div>
+        <h1>💳 구독 관리 대시보드</h1>
+        <p class="subtitle">반복 결제를 추적하고 월/연 환산 비용을 한눈에 관리하세요.</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn" id="themeBtn" type="button">🌙 다크 모드</button>
+        <button class="btn" id="exportBtn" type="button">⬇️ JSON 내보내기</button>
+        <button class="btn" id="importBtn" type="button">⬆️ JSON 가져오기</button>
+        <button class="btn btn-danger" id="resetBtn" type="button">🗑️ 전체 초기화</button>
+      </div>
+    </section>
+
+    <section class="grid-stats" id="stats"></section>
+
+    <section class="card">
+      <h2 id="formTitle">➕ 구독 추가</h2>
+      <form id="subscriptionForm">
+        <input type="hidden" id="editId" />
+        <div class="form-grid">
+          <div class="field">
+            <label for="name">서비스명 *</label>
+            <input id="name" required placeholder="예: Netflix" />
+          </div>
+          <div class="field">
+            <label for="amount">금액 *</label>
+            <input id="amount" type="number" min="0" step="0.01" required placeholder="예: 17000" />
+          </div>
+          <div class="field">
+            <label for="currency">통화</label>
+            <select id="currency">
+              <option value="KRW">KRW (₩)</option>
+              <option value="USD">USD ($)</option>
+              <option value="EUR">EUR (€)</option>
+              <option value="JPY">JPY (¥)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="billingCycle">결제 주기 *</label>
+            <select id="billingCycle" required>
+              <option value="weekly">매주</option>
+              <option value="monthly" selected>매월</option>
+              <option value="quarterly">분기</option>
+              <option value="yearly">매년</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="nextDate">다음 결제일 *</label>
+            <input id="nextDate" type="date" required />
+          </div>
+          <div class="field">
+            <label for="category">카테고리</label>
+            <select id="category">
+              <option value="엔터테인먼트">엔터테인먼트</option>
+              <option value="생산성">생산성</option>
+              <option value="클라우드/인프라">클라우드/인프라</option>
+              <option value="교육">교육</option>
+              <option value="건강/피트니스">건강/피트니스</option>
+              <option value="기타" selected>기타</option>
+            </select>
+          </div>
+          <div class="field" style="grid-column: span 2;">
+            <label for="notes">메모</label>
+            <textarea id="notes" placeholder="예: 가족 요금제, 카드 변경 예정"></textarea>
+          </div>
+        </div>
+        <div class="form-footer">
+          <p class="hint">* 필수 항목. 저장 시 브라우저 localStorage에 자동 보관됩니다.</p>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="btn" id="cancelEditBtn" type="button" style="display:none;">편집 취소</button>
+            <button class="btn btn-primary" type="submit" id="submitBtn">저장</button>
+          </div>
+        </div>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>🔎 검색 / 필터 / 정렬</h2>
+      <div class="toolbar">
+        <div class="field">
+          <label for="search">검색</label>
+          <input id="search" placeholder="서비스명 또는 메모" />
+        </div>
+        <div class="field">
+          <label for="filterCategory">카테고리</label>
+          <select id="filterCategory"></select>
+        </div>
+        <div class="field">
+          <label for="sortBy">정렬 기준</label>
+          <select id="sortBy">
+            <option value="nextDate">다음 결제일 빠른순</option>
+            <option value="nextDateDesc">다음 결제일 늦은순</option>
+            <option value="monthlyDesc">월 환산 비용 높은순</option>
+            <option value="monthlyAsc">월 환산 비용 낮은순</option>
+            <option value="name">서비스명 가나다순</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>&nbsp;</label>
+          <button class="btn" type="button" id="clearFilterBtn">필터 초기화</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="list-head">
+        <h2>📋 구독 목록</h2>
+        <p class="meta" id="listMeta">0개 항목</p>
+      </div>
+      <div id="listArea"></div>
+    </section>
+  </div>
+
+  <input type="file" id="importFile" accept="application/json" hidden />
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const STORAGE_KEY = 'es_subscription_tracker_v1';
+    const THEME_KEY = 'es_subscription_tracker_theme';
+    const currencySymbols = { KRW: '₩', USD: '$', EUR: '€', JPY: '¥' };
+
+    const state = {
+      items: [],
+      filters: {
+        search: '',
+        category: 'all',
+        sortBy: 'nextDate'
+      }
+    };
+
+    const el = {
+      stats: document.getElementById('stats'),
+      form: document.getElementById('subscriptionForm'),
+      formTitle: document.getElementById('formTitle'),
+      editId: document.getElementById('editId'),
+      name: document.getElementById('name'),
+      amount: document.getElementById('amount'),
+      currency: document.getElementById('currency'),
+      billingCycle: document.getElementById('billingCycle'),
+      nextDate: document.getElementById('nextDate'),
+      category: document.getElementById('category'),
+      notes: document.getElementById('notes'),
+      submitBtn: document.getElementById('submitBtn'),
+      cancelEditBtn: document.getElementById('cancelEditBtn'),
+      search: document.getElementById('search'),
+      filterCategory: document.getElementById('filterCategory'),
+      sortBy: document.getElementById('sortBy'),
+      listArea: document.getElementById('listArea'),
+      listMeta: document.getElementById('listMeta'),
+      themeBtn: document.getElementById('themeBtn'),
+      exportBtn: document.getElementById('exportBtn'),
+      importBtn: document.getElementById('importBtn'),
+      importFile: document.getElementById('importFile'),
+      resetBtn: document.getElementById('resetBtn'),
+      clearFilterBtn: document.getElementById('clearFilterBtn'),
+      toast: document.getElementById('toast')
+    };
+
+    function todayISO() {
+      const d = new Date();
+      const tz = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+      return tz.toISOString().slice(0, 10);
+    }
+
+    function formatMoney(amount, currency) {
+      try {
+        return new Intl.NumberFormat(currency === 'KRW' ? 'ko-KR' : 'en-US', {
+          style: 'currency',
+          currency,
+          maximumFractionDigits: currency === 'KRW' || currency === 'JPY' ? 0 : 2
+        }).format(amount);
+      } catch {
+        return `${currencySymbols[currency] || ''}${amount.toFixed(2)}`;
+      }
+    }
+
+    function toKRW(amount, currency) {
+      const rates = { KRW: 1, USD: 1330, EUR: 1450, JPY: 9.1 };
+      return amount * (rates[currency] || 1);
+    }
+
+    function monthlyEquivalent(item) {
+      const amount = Number(item.amount) || 0;
+      switch (item.billingCycle) {
+        case 'weekly': return amount * (52 / 12);
+        case 'monthly': return amount;
+        case 'quarterly': return amount / 3;
+        case 'yearly': return amount / 12;
+        default: return amount;
+      }
+    }
+
+    function yearlyEquivalent(item) {
+      return monthlyEquivalent(item) * 12;
+    }
+
+    function cycleLabel(cycle) {
+      return {
+        weekly: '매주',
+        monthly: '매월',
+        quarterly: '분기',
+        yearly: '매년'
+      }[cycle] || cycle;
+    }
+
+    function addCycle(dateStr, cycle) {
+      const d = new Date(dateStr + 'T12:00:00');
+      if (Number.isNaN(d.getTime())) return dateStr;
+      if (cycle === 'weekly') d.setDate(d.getDate() + 7);
+      if (cycle === 'monthly') d.setMonth(d.getMonth() + 1);
+      if (cycle === 'quarterly') d.setMonth(d.getMonth() + 3);
+      if (cycle === 'yearly') d.setFullYear(d.getFullYear() + 1);
+      return d.toISOString().slice(0, 10);
+    }
+
+    function diffDays(dateStr) {
+      const now = new Date();
+      const base = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const target = new Date(dateStr + 'T00:00:00');
+      const delta = target.getTime() - base.getTime();
+      return Math.floor(delta / 86400000);
+    }
+
+    function saveState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state.items));
+    }
+
+    function loadState() {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            state.items = parsed.map(it => ({
+              id: String(it.id || crypto.randomUUID()),
+              name: String(it.name || ''),
+              amount: Number(it.amount || 0),
+              currency: it.currency || 'KRW',
+              billingCycle: it.billingCycle || 'monthly',
+              nextDate: it.nextDate || todayISO(),
+              category: it.category || '기타',
+              notes: it.notes || '',
+              createdAt: it.createdAt || new Date().toISOString()
+            }));
+          }
+        } catch (err) {
+          console.error(err);
+        }
+      }
+    }
+
+    function showToast(msg) {
+      el.toast.textContent = msg;
+      el.toast.classList.add('show');
+      clearTimeout(showToast._timer);
+      showToast._timer = setTimeout(() => el.toast.classList.remove('show'), 1700);
+    }
+
+    function resetForm() {
+      el.form.reset();
+      el.nextDate.value = todayISO();
+      el.currency.value = 'KRW';
+      el.billingCycle.value = 'monthly';
+      el.category.value = '기타';
+      el.editId.value = '';
+      el.formTitle.textContent = '➕ 구독 추가';
+      el.submitBtn.textContent = '저장';
+      el.cancelEditBtn.style.display = 'none';
+    }
+
+    function validateForm() {
+      const name = el.name.value.trim();
+      const amount = Number(el.amount.value);
+      if (!name) return '서비스명을 입력하세요.';
+      if (!(amount > 0)) return '금액은 0보다 커야 합니다.';
+      if (!el.nextDate.value) return '다음 결제일을 입력하세요.';
+      return '';
+    }
+
+    function collectFormData() {
+      return {
+        id: el.editId.value || crypto.randomUUID(),
+        name: el.name.value.trim(),
+        amount: Number(el.amount.value),
+        currency: el.currency.value,
+        billingCycle: el.billingCycle.value,
+        nextDate: el.nextDate.value,
+        category: el.category.value,
+        notes: el.notes.value.trim(),
+        createdAt: new Date().toISOString()
+      };
+    }
+
+    function upsertItem(item) {
+      const idx = state.items.findIndex(x => x.id === item.id);
+      if (idx >= 0) {
+        state.items[idx] = { ...state.items[idx], ...item };
+      } else {
+        state.items.push(item);
+      }
+      saveState();
+      render();
+    }
+
+    function setEditMode(id) {
+      const item = state.items.find(x => x.id === id);
+      if (!item) return;
+      el.editId.value = item.id;
+      el.name.value = item.name;
+      el.amount.value = item.amount;
+      el.currency.value = item.currency;
+      el.billingCycle.value = item.billingCycle;
+      el.nextDate.value = item.nextDate;
+      el.category.value = item.category;
+      el.notes.value = item.notes || '';
+      el.formTitle.textContent = '✏️ 구독 수정';
+      el.submitBtn.textContent = '수정 저장';
+      el.cancelEditBtn.style.display = 'inline-flex';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function deleteItem(id) {
+      if (!confirm('이 구독 항목을 삭제할까요?')) return;
+      state.items = state.items.filter(x => x.id !== id);
+      saveState();
+      render();
+      showToast('삭제 완료');
+    }
+
+    function markPaid(id) {
+      const item = state.items.find(x => x.id === id);
+      if (!item) return;
+      item.nextDate = addCycle(item.nextDate, item.billingCycle);
+      saveState();
+      render();
+      showToast('결제 처리 완료');
+    }
+
+    function statsSummary(items) {
+      const count = items.length;
+      const monthlyKRW = items.reduce((sum, it) => sum + toKRW(monthlyEquivalent(it), it.currency), 0);
+      const yearlyKRW = monthlyKRW * 12;
+      const upcoming7 = items
+        .filter(it => {
+          const d = diffDays(it.nextDate);
+          return d >= 0 && d <= 7;
+        })
+        .reduce((sum, it) => sum + toKRW(it.amount, it.currency), 0);
+
+      return {
+        count,
+        monthlyKRW,
+        yearlyKRW,
+        upcoming7
+      };
+    }
+
+    function renderStats(filteredItems = state.items) {
+      const s = statsSummary(filteredItems);
+      const cards = [
+        { label: '활성 구독', value: `${s.count}개`, desc: '현재 필터 기준' },
+        { label: '월 환산 총액', value: formatMoney(s.monthlyKRW, 'KRW'), desc: '환율 추정치 포함' },
+        { label: '연 환산 총액', value: formatMoney(s.yearlyKRW, 'KRW'), desc: '월 환산 × 12' },
+        { label: '7일 내 결제 예정', value: formatMoney(s.upcoming7, 'KRW'), desc: '다가오는 결제 리스크' }
+      ];
+
+      el.stats.innerHTML = cards.map(c => `
+        <article class="stat">
+          <p class="label">${c.label}</p>
+          <p class="value">${c.value}</p>
+          <p class="desc">${c.desc}</p>
+        </article>
+      `).join('');
+    }
+
+    function buildCategoryOptions() {
+      const categorySet = new Set(['all']);
+      state.items.forEach(it => categorySet.add(it.category || '기타'));
+      const list = [...categorySet];
+      const current = el.filterCategory.value || 'all';
+      el.filterCategory.innerHTML = list.map(cat =>
+        `<option value="${cat}">${cat === 'all' ? '전체 카테고리' : cat}</option>`
+      ).join('');
+      el.filterCategory.value = list.includes(current) ? current : 'all';
+    }
+
+    function getFilteredItems() {
+      let items = [...state.items];
+      const search = state.filters.search.trim().toLowerCase();
+      if (search) {
+        items = items.filter(it =>
+          it.name.toLowerCase().includes(search) ||
+          (it.notes || '').toLowerCase().includes(search)
+        );
+      }
+      if (state.filters.category !== 'all') {
+        items = items.filter(it => it.category === state.filters.category);
+      }
+
+      items.sort((a, b) => {
+        switch (state.filters.sortBy) {
+          case 'nextDate':
+            return a.nextDate.localeCompare(b.nextDate);
+          case 'nextDateDesc':
+            return b.nextDate.localeCompare(a.nextDate);
+          case 'monthlyDesc':
+            return toKRW(monthlyEquivalent(b), b.currency) - toKRW(monthlyEquivalent(a), a.currency);
+          case 'monthlyAsc':
+            return toKRW(monthlyEquivalent(a), a.currency) - toKRW(monthlyEquivalent(b), b.currency);
+          case 'name':
+            return a.name.localeCompare(b.name, 'ko');
+          default:
+            return 0;
+        }
+      });
+      return items;
+    }
+
+    function renderList(items) {
+      el.listMeta.textContent = `${items.length}개 항목`;
+      if (!items.length) {
+        el.listArea.innerHTML = `<div class="empty">표시할 구독이 없습니다. 필터를 조정하거나 새 항목을 추가하세요.</div>`;
+        return;
+      }
+
+      const rows = items.map(it => {
+        const days = diffDays(it.nextDate);
+        const dayText = days < 0 ? `${Math.abs(days)}일 지남` : `${days}일 후`;
+        const soonClass = days >= 0 && days <= 7 ? 'soon' : '';
+        return `
+          <tr>
+            <td>
+              <strong>${escapeHtml(it.name)}</strong><br>
+              <span class="badge">${escapeHtml(it.category || '기타')}</span>
+            </td>
+            <td>${formatMoney(it.amount, it.currency)}</td>
+            <td>${cycleLabel(it.billingCycle)}</td>
+            <td>${formatMoney(monthlyEquivalent(it), it.currency)}</td>
+            <td class="next-date ${soonClass}">${it.nextDate}<br><small>${dayText}</small></td>
+            <td style="max-width:220px; color: var(--muted);">${escapeHtml(it.notes || '-')}</td>
+            <td>
+              <div class="actions">
+                <button class="pay" data-action="pay" data-id="${it.id}">결제 처리</button>
+                <button class="edit" data-action="edit" data-id="${it.id}">수정</button>
+                <button class="delete" data-action="delete" data-id="${it.id}">삭제</button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      el.listArea.innerHTML = `
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>서비스</th>
+                <th>결제 금액</th>
+                <th>주기</th>
+                <th>월 환산</th>
+                <th>다음 결제일</th>
+                <th>메모</th>
+                <th>작업</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    function escapeHtml(v) {
+      return String(v)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+    }
+
+    function render() {
+      buildCategoryOptions();
+      const items = getFilteredItems();
+      renderStats(items);
+      renderList(items);
+    }
+
+    function toggleTheme() {
+      const current = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+      const next = current === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem(THEME_KEY, next);
+      el.themeBtn.textContent = next === 'dark' ? '☀️ 라이트 모드' : '🌙 다크 모드';
+    }
+
+    function applyTheme() {
+      const saved = localStorage.getItem(THEME_KEY) || 'light';
+      document.documentElement.setAttribute('data-theme', saved);
+      el.themeBtn.textContent = saved === 'dark' ? '☀️ 라이트 모드' : '🌙 다크 모드';
+    }
+
+    function exportJSON() {
+      const payload = {
+        exportedAt: new Date().toISOString(),
+        version: 1,
+        items: state.items
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `subscription-tracker-${new Date().toISOString().slice(0,10)}.json`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      showToast('JSON 내보내기 완료');
+    }
+
+    function importJSON(file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const data = JSON.parse(reader.result);
+          const list = Array.isArray(data) ? data : data.items;
+          if (!Array.isArray(list)) throw new Error('invalid');
+
+          const normalized = list.map(it => ({
+            id: String(it.id || crypto.randomUUID()),
+            name: String(it.name || '').trim(),
+            amount: Number(it.amount || 0),
+            currency: ['KRW','USD','EUR','JPY'].includes(it.currency) ? it.currency : 'KRW',
+            billingCycle: ['weekly','monthly','quarterly','yearly'].includes(it.billingCycle) ? it.billingCycle : 'monthly',
+            nextDate: typeof it.nextDate === 'string' && it.nextDate ? it.nextDate : todayISO(),
+            category: String(it.category || '기타'),
+            notes: String(it.notes || ''),
+            createdAt: it.createdAt || new Date().toISOString()
+          })).filter(it => it.name && it.amount > 0);
+
+          state.items = normalized;
+          saveState();
+          render();
+          showToast(`가져오기 완료 (${normalized.length}개)`);
+        } catch {
+          alert('JSON 형식을 확인해주세요.');
+        }
+      };
+      reader.readAsText(file, 'utf-8');
+    }
+
+    function clearAll() {
+      if (!confirm('정말 모든 구독 데이터를 삭제할까요?')) return;
+      state.items = [];
+      saveState();
+      resetForm();
+      render();
+      showToast('전체 데이터 삭제 완료');
+    }
+
+    function bindEvents() {
+      el.form.addEventListener('submit', e => {
+        e.preventDefault();
+        const err = validateForm();
+        if (err) return alert(err);
+
+        const item = collectFormData();
+        const editing = Boolean(el.editId.value);
+        upsertItem(item);
+        resetForm();
+        showToast(editing ? '수정 완료' : '추가 완료');
+      });
+
+      el.cancelEditBtn.addEventListener('click', resetForm);
+
+      el.search.addEventListener('input', () => {
+        state.filters.search = el.search.value;
+        render();
+      });
+      el.filterCategory.addEventListener('change', () => {
+        state.filters.category = el.filterCategory.value;
+        render();
+      });
+      el.sortBy.addEventListener('change', () => {
+        state.filters.sortBy = el.sortBy.value;
+        render();
+      });
+
+      el.clearFilterBtn.addEventListener('click', () => {
+        state.filters = { search: '', category: 'all', sortBy: 'nextDate' };
+        el.search.value = '';
+        el.sortBy.value = 'nextDate';
+        render();
+      });
+
+      el.listArea.addEventListener('click', e => {
+        const btn = e.target.closest('button[data-action]');
+        if (!btn) return;
+        const { action, id } = btn.dataset;
+        if (action === 'edit') setEditMode(id);
+        if (action === 'delete') deleteItem(id);
+        if (action === 'pay') markPaid(id);
+      });
+
+      el.themeBtn.addEventListener('click', toggleTheme);
+      el.exportBtn.addEventListener('click', exportJSON);
+      el.importBtn.addEventListener('click', () => el.importFile.click());
+      el.importFile.addEventListener('change', ev => {
+        const f = ev.target.files?.[0];
+        if (f) importJSON(f);
+        ev.target.value = '';
+      });
+      el.resetBtn.addEventListener('click', clearAll);
+    }
+
+    function seedIfEmpty() {
+      if (state.items.length) return;
+      state.items = [
+        {
+          id: crypto.randomUUID(),
+          name: 'Netflix',
+          amount: 17000,
+          currency: 'KRW',
+          billingCycle: 'monthly',
+          nextDate: todayISO(),
+          category: '엔터테인먼트',
+          notes: '4인 요금제',
+          createdAt: new Date().toISOString()
+        },
+        {
+          id: crypto.randomUUID(),
+          name: 'Notion Plus',
+          amount: 96,
+          currency: 'USD',
+          billingCycle: 'yearly',
+          nextDate: addCycle(todayISO(), 'yearly'),
+          category: '생산성',
+          notes: '연간 선결제',
+          createdAt: new Date().toISOString()
+        }
+      ];
+      saveState();
+    }
+
+    function init() {
+      applyTheme();
+      loadState();
+      seedIfEmpty();
+      el.nextDate.value = todayISO();
+      bindEvents();
+      render();
+    }
+
+    init();
+  </script>
+</body>
+</html>

@@ -525,12 +525,62 @@ SERIES_JS
 
 echo "✅ series.html generated"
 
+# Generate manifest.json (Unified with index/series generation)
+echo "📝 Generating manifest.json..."
+
+echo "$METADATA" | python3 -c "
+import sys, json
+
+data = json.load(sys.stdin)
+novels = {}
+
+# Group by series
+for ep in data:
+    series = ep['series']
+    slug = series.replace(' ', '')  # Consistent slug generation
+    
+    if slug not in novels:
+        novels[slug] = {
+            'slug': slug,
+            'title': series,
+            'author': ep.get('author', 'Unknown'),
+            'genre': ep.get('genre', []),
+            'episodes': [],
+            'totalEpisodes': 0,
+            'latestDate': ''
+        }
+    
+    # Add episode (format matches manifest expectations)
+    novels[slug]['episodes'].append({
+        'num': f\"{ep['episode']:03d}\",  # Pad with zeros for view.html compatibility
+        'title': ep.get('title', ''),
+        'date': ep.get('date', '')
+    })
+
+# Post-process novels
+output_list = []
+for slug, novel in novels.items():
+    # Sort episodes by number
+    novel['episodes'].sort(key=lambda x: x['num'])
+    
+    novel['totalEpisodes'] = len(novel['episodes'])
+    if novel['totalEpisodes'] > 0:
+        novel['latestDate'] = novel['episodes'][-1]['date']
+    
+    output_list.append(novel)
+
+manifest = {'novels': output_list}
+print(json.dumps(manifest, ensure_ascii=False, indent=2))
+" > "$NOVELS_DIR/manifest.json"
+
+echo "✅ manifest.json generated"
+
 # Git auto-commit (optional)
 if [ "${AUTO_COMMIT:-true}" = "true" ]; then
     echo "📤 Committing changes..."
     cd "$NOVELS_DIR/.."
-    git add novels/index.html novels/series.html
-    git commit -m "Auto-update: Novel index and series pages [$(date +%Y-%m-%d)]" || echo "✓ No changes to commit"
+    git add novels/index.html novels/series.html novels/manifest.json
+    git commit -m "Auto-update: Novel index, series, and manifest [$(date +%Y-%m-%d)]" || echo "✓ No changes to commit"
 fi
 
 echo "🎉 Novel publishing system updated successfully!"

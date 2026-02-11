@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>미팅 시간 겹침 찾기 | Meeting Time Overlap Finder</title>
+  <meta name="description" content="여러 타임존 참가자의 업무시간을 기준으로 가능한 미팅 슬롯을 자동으로 찾아주는 도구" />
+  <style>
+    :root{
+      --bg:#f3f6ff;--panel:#fff;--text:#18213b;--muted:#617094;--line:#dce4f5;
+      --primary:#2563eb;--primary-soft:#eaf1ff;--success:#059669;--warn:#d97706;
+      --radius:14px;--shadow:0 14px 34px rgba(15,23,42,.08);
+    }
+    [data-theme="dark"]{
+      --bg:#0d1427;--panel:#111b33;--text:#ebf2ff;--muted:#9badcf;--line:#2a3b5f;
+      --primary:#5f8dff;--primary-soft:#172744;--success:#10b981;--warn:#f59e0b;
+      --shadow:0 18px 40px rgba(2,8,20,.55);
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;background:var(--bg);color:var(--text);padding:18px;line-height:1.45}
+    .wrap{max-width:1100px;margin:0 auto}
+    .back{display:inline-flex;gap:8px;align-items:center;text-decoration:none;color:var(--muted);margin-bottom:10px}
+    .back:hover{color:var(--primary)}
+    .head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:14px}
+    h1{font-size:clamp(1.45rem,3vw,2rem);letter-spacing:-.02em}
+    .sub{color:var(--muted);margin-top:6px;font-size:.95rem}
+    .actions{display:flex;gap:8px;flex-wrap:wrap}
+    .btn{border:1px solid var(--line);background:var(--panel);color:var(--text);padding:9px 12px;border-radius:10px;font-weight:700;font-size:.88rem;cursor:pointer}
+    .btn.primary{background:linear-gradient(135deg,var(--primary),#4f7fff);color:#fff;border:none}
+    .layout{display:grid;grid-template-columns:1fr 1.1fr;gap:14px}
+    .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px}
+    .panel h2{font-size:1rem;margin-bottom:10px}
+    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    .field{display:flex;flex-direction:column;gap:6px}
+    .field.full{grid-column:1/-1}
+    label{font-size:.8rem;color:var(--muted);font-weight:700}
+    input,select{border:1px solid var(--line);background:transparent;color:var(--text);border-radius:10px;padding:10px 11px;font-size:.9rem;font-family:inherit}
+    input:focus,select:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,.14)}
+    .people{display:flex;flex-direction:column;gap:9px}
+    .person{border:1px solid var(--line);border-radius:12px;padding:10px;background:rgba(255,255,255,.45)}
+    [data-theme="dark"] .person{background:rgba(8,14,26,.35)}
+    .person-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+    .person-name{font-weight:800}
+    .tiny{font-size:.8rem;color:var(--muted)}
+    .remove{border:none;background:rgba(220,38,38,.1);color:#dc2626;padding:5px 8px;border-radius:8px;font-size:.75rem;cursor:pointer}
+    .badge{display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border-radius:999px;background:var(--primary-soft);color:var(--primary);font-size:.75rem;font-weight:700;margin-top:8px}
+    .results{display:flex;flex-direction:column;gap:10px;max-height:650px;overflow:auto;padding-right:2px}
+    .slot{border:1px solid var(--line);border-radius:12px;padding:11px}
+    .slot-time{font-weight:800;font-size:1rem}
+    .chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:8px}
+    .chip{border:1px solid var(--line);background:var(--primary-soft);color:var(--text);padding:5px 8px;border-radius:9px;font-size:.78rem}
+    .empty{padding:26px 14px;border:1px dashed var(--line);border-radius:12px;text-align:center;color:var(--muted)}
+    .ok{color:var(--success);font-weight:700}
+    .warn{color:var(--warn);font-weight:700}
+    @media (max-width:940px){.layout{grid-template-columns:1fr}}
+    @media (max-width:680px){body{padding:14px}.grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <a class="back" href="/tools/">← 도구 목록으로</a>
+    <div class="head">
+      <div>
+        <h1>🌍 미팅 시간 겹침 찾기</h1>
+        <p class="sub">타임존이 다른 팀원들의 업무시간을 기준으로, 가능한 미팅 시작 시간을 자동 추천합니다.</p>
+      </div>
+      <div class="actions">
+        <button class="btn" id="themeBtn">🌙 테마</button>
+        <button class="btn" id="sampleBtn">샘플 팀</button>
+        <button class="btn primary" id="findBtn">겹치는 시간 찾기</button>
+      </div>
+    </div>
+
+    <div class="layout">
+      <section class="panel">
+        <h2>⚙️ 미팅 조건</h2>
+        <div class="grid" style="margin-bottom:12px">
+          <div class="field">
+            <label for="targetDate">기준 날짜</label>
+            <input id="targetDate" type="date" />
+          </div>
+          <div class="field">
+            <label for="duration">미팅 길이</label>
+            <select id="duration">
+              <option value="30">30분</option>
+              <option value="45">45분</option>
+              <option value="60" selected>60분</option>
+              <option value="90">90분</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="scanDays">탐색 기간</label>
+            <select id="scanDays">
+              <option value="1">당일만</option>
+              <option value="3">3일</option>
+              <option value="5" selected>5일</option>
+              <option value="7">7일</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="step">검색 간격</label>
+            <select id="step">
+              <option value="15">15분</option>
+              <option value="30" selected>30분</option>
+            </select>
+          </div>
+          <div class="field full">
+            <label><input id="weekdaysOnly" type="checkbox" checked style="margin-right:6px;vertical-align:middle"/> 주중(월~금)만</label>
+          </div>
+        </div>
+
+        <h2 style="margin-top:4px">👥 참가자</h2>
+        <div class="people" id="peopleList"></div>
+        <button class="btn" id="addBtn" style="margin-top:9px">+ 참가자 추가</button>
+        <div class="badge">💡 팁: 각 참가자의 로컬 근무시간(예: 09:00~18:00)으로 입력하세요.</div>
+      </section>
+
+      <section class="panel">
+        <h2>✅ 추천 슬롯</h2>
+        <p class="tiny" style="margin-bottom:10px">결과는 UTC 기준으로 계산 후 각 참가자 현지시간으로 변환됩니다.</p>
+        <div id="summary" class="tiny" style="margin-bottom:10px"></div>
+        <div class="results" id="results"></div>
+      </section>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const KEY = 'es_meeting_overlap_v1';
+  const ZONES = [
+    'Asia/Seoul','Asia/Tokyo','Asia/Singapore','Asia/Bangkok','Asia/Dubai',
+    'Europe/London','Europe/Paris','Europe/Berlin',
+    'America/New_York','America/Chicago','America/Denver','America/Los_Angeles',
+    'America/Sao_Paulo','Australia/Sydney','Pacific/Auckland'
+  ];
+
+  const $ = (id) => document.getElementById(id);
+  const pad = (n) => String(n).padStart(2,'0');
+  const hmToMin = (hm) => { const [h,m] = String(hm||'00:00').split(':').map(Number); return (h*60)+(m||0); };
+
+  function defaultDate(){
+    const d = new Date();
+    const tz = d.getTimezoneOffset();
+    const local = new Date(d.getTime() - tz*60000);
+    return local.toISOString().slice(0,10);
+  }
+
+  function defaults(){
+    return {
+      targetDate: defaultDate(), duration:60, scanDays:5, step:30, weekdaysOnly:true,
+      people:[
+        {id:uid(),name:'Seoul PM',zone:'Asia/Seoul',start:'10:00',end:'18:00'},
+        {id:uid(),name:'London Dev',zone:'Europe/London',start:'09:00',end:'17:00'},
+        {id:uid(),name:'SF Design',zone:'America/Los_Angeles',start:'09:00',end:'16:00'}
+      ]
+    };
+  }
+
+  function uid(){ return Date.now() + Math.floor(Math.random()*99999); }
+
+  let state = load();
+
+  function load(){
+    try {
+      const saved = JSON.parse(localStorage.getItem(KEY) || 'null');
+      return saved ? {...defaults(), ...saved, people: saved.people?.length ? saved.people : defaults().people} : defaults();
+    } catch { return defaults(); }
+  }
+  function save(){ localStorage.setItem(KEY, JSON.stringify(state)); }
+
+  function initTheme(){ document.documentElement.setAttribute('data-theme', localStorage.getItem('es_tool_theme') || 'light'); }
+  function toggleTheme(){
+    const n = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', n);
+    localStorage.setItem('es_tool_theme', n);
+  }
+
+  function zoneOptions(selected){
+    return ZONES.map(z=>`<option value="${z}" ${z===selected?'selected':''}>${z.replace('_',' ')}</option>`).join('');
+  }
+
+  function renderPeople(){
+    $('peopleList').innerHTML = state.people.map(p => `
+      <article class="person" data-id="${p.id}">
+        <div class="person-top">
+          <strong class="person-name">${esc(p.name || '참가자')}</strong>
+          ${state.people.length>2?'<button class="remove" data-act="remove">삭제</button>':''}
+        </div>
+        <div class="grid">
+          <div class="field"><label>이름</label><input data-field="name" value="${esc(p.name)}" placeholder="예: Seoul PM"/></div>
+          <div class="field"><label>타임존</label><select data-field="zone">${zoneOptions(p.zone)}</select></div>
+          <div class="field"><label>근무 시작</label><input data-field="start" type="time" value="${p.start}"/></div>
+          <div class="field"><label>근무 종료</label><input data-field="end" type="time" value="${p.end}"/></div>
+        </div>
+      </article>
+    `).join('');
+  }
+
+  function esc(s){ return String(s||'').replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m])); }
+
+  function bindFields(){
+    $('targetDate').value = state.targetDate;
+    $('duration').value = String(state.duration);
+    $('scanDays').value = String(state.scanDays);
+    $('step').value = String(state.step);
+    $('weekdaysOnly').checked = !!state.weekdaysOnly;
+  }
+
+  function collectGlobal(){
+    state.targetDate = $('targetDate').value || defaultDate();
+    state.duration = Number($('duration').value || 60);
+    state.scanDays = Number($('scanDays').value || 5);
+    state.step = Number($('step').value || 30);
+    state.weekdaysOnly = $('weekdaysOnly').checked;
+  }
+
+  function localParts(date, zone){
+    const fmt = new Intl.DateTimeFormat('en-CA', {
+      timeZone: zone, hourCycle:'h23',
+      year:'numeric', month:'2-digit', day:'2-digit',
+      hour:'2-digit', minute:'2-digit', weekday:'short'
+    });
+    const parts = Object.fromEntries(fmt.formatToParts(date).filter(p=>p.type!=='literal').map(p=>[p.type,p.value]));
+    return {
+      y:Number(parts.year), m:Number(parts.month), d:Number(parts.day),
+      hour:Number(parts.hour), min:Number(parts.minute), w:parts.weekday
+    };
+  }
+
+  function isWeekday(w){ return ['Mon','Tue','Wed','Thu','Fri'].includes(w); }
+
+  function availableAt(date, person){
+    const lp = localParts(date, person.zone);
+    if(state.weekdaysOnly && !isWeekday(lp.w)) return false;
+    const nowMin = lp.hour*60 + lp.min;
+    const s = hmToMin(person.start);
+    const e = hmToMin(person.end);
+    return e > s ? (nowMin >= s && nowMin < e) : (nowMin >= s || nowMin < e);
+  }
+
+  function fmtInZone(date, zone){
+    return new Intl.DateTimeFormat('ko-KR', {
+      timeZone: zone, month:'short', day:'numeric', weekday:'short',
+      hour:'2-digit', minute:'2-digit', hourCycle:'h23'
+    }).format(date);
+  }
+
+  function scanSlots(){
+    collectGlobal();
+    save();
+
+    const base = new Date(state.targetDate + 'T00:00:00Z');
+    const stepMs = state.step * 60000;
+    const durMs = state.duration * 60000;
+    const slots = [];
+
+    for(let day=0; day<state.scanDays; day++){
+      const dayStart = new Date(base.getTime() + day*86400000);
+      for(let min=0; min<1440; min += state.step){
+        const start = new Date(dayStart.getTime() + min*60000);
+        const end = new Date(start.getTime() + durMs);
+
+        const ok = state.people.every(p => {
+          for(let t=start.getTime(); t<end.getTime(); t += stepMs){
+            if(!availableAt(new Date(t), p)) return false;
+          }
+          return true;
+        });
+        if(ok) slots.push({start,end});
+      }
+    }
+
+    renderResults(slots);
+  }
+
+  function renderResults(slots){
+    $('summary').innerHTML = slots.length
+      ? `<span class="ok">${slots.length}개</span> 슬롯을 찾았습니다. (미팅 ${state.duration}분)`
+      : `<span class="warn">겹치는 슬롯 없음</span> — 근무시간/기간을 넓혀 보세요.`;
+
+    if(!slots.length){
+      $('results').innerHTML = `<div class="empty">결과가 없습니다.<br/>예: 탐색 기간 7일, 30분 미팅으로 변경해 보세요.</div>`;
+      return;
+    }
+
+    $('results').innerHTML = slots.slice(0,40).map((s,idx)=>{
+      const chips = state.people.map(p=>`<span class="chip">${esc(p.name)} · ${fmtInZone(s.start,p.zone)} → ${fmtInZone(s.end,p.zone)}</span>`).join('');
+      return `
+        <article class="slot">
+          <div class="slot-time">#${idx+1} · UTC ${s.start.toISOString().slice(0,16).replace('T',' ')} ~ ${s.end.toISOString().slice(11,16)}</div>
+          <div class="chips">${chips}</div>
+        </article>
+      `;
+    }).join('');
+  }
+
+  function addPerson(){
+    state.people.push({id:uid(),name:'New Member',zone:'Asia/Seoul',start:'09:00',end:'18:00'});
+    save(); renderPeople();
+  }
+
+  function handlePeople(e){
+    const card = e.target.closest('[data-id]');
+    if(!card) return;
+    const id = Number(card.dataset.id);
+    const p = state.people.find(x=>Number(x.id)===id);
+    if(!p) return;
+
+    const f = e.target.dataset.field;
+    if(f){
+      p[f] = e.target.value;
+      save();
+      const n = card.querySelector('.person-name');
+      if(n) n.textContent = p.name || '참가자';
+    }
+    if(e.target.dataset.act === 'remove'){
+      state.people = state.people.filter(x=>Number(x.id)!==id);
+      save(); renderPeople();
+    }
+  }
+
+  function sample(){
+    state = defaults();
+    state.targetDate = defaultDate();
+    bindFields(); renderPeople(); save();
+    scanSlots();
+  }
+
+  function wire(){
+    $('themeBtn').addEventListener('click', toggleTheme);
+    $('addBtn').addEventListener('click', addPerson);
+    $('sampleBtn').addEventListener('click', sample);
+    $('findBtn').addEventListener('click', scanSlots);
+    $('peopleList').addEventListener('input', handlePeople);
+    $('peopleList').addEventListener('change', handlePeople);
+    $('peopleList').addEventListener('click', handlePeople);
+    ['targetDate','duration','scanDays','step','weekdaysOnly'].forEach(id=>$(id).addEventListener('change',()=>{collectGlobal();save();}));
+  }
+
+  initTheme();
+  bindFields();
+  renderPeople();
+  wire();
+  scanSlots();
+})();
+</script>
+</body>
+</html>

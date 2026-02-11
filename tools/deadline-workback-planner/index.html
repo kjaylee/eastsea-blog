@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>마감 역산 플래너 | Deadline Workback Planner</title>
+  <meta name="description" content="마감일에서 역산해 단계별 시작일/종료일을 자동 계산하는 일정 계획 도구" />
+  <style>
+    :root{
+      --bg:#f3f7ff;--panel:#fff;--text:#16233c;--muted:#627296;--line:#dce4f4;
+      --primary:#2563eb;--soft:#ecf2ff;--success:#059669;--danger:#dc2626;--warn:#d97706;
+      --radius:14px;--shadow:0 14px 34px rgba(15,23,42,.08);
+    }
+    [data-theme="dark"]{
+      --bg:#0d1428;--panel:#111b33;--text:#ebf2ff;--muted:#9caed1;--line:#2a3d63;
+      --primary:#5f8dff;--soft:#182845;--success:#10b981;--danger:#ff7a7a;--warn:#f59e0b;
+      --shadow:0 18px 44px rgba(2,8,20,.5);
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;background:var(--bg);color:var(--text);padding:18px;line-height:1.45}
+    .wrap{max-width:1120px;margin:0 auto}
+    .back{display:inline-flex;gap:8px;color:var(--muted);text-decoration:none;margin-bottom:10px}
+    .head{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:flex-start;margin-bottom:14px}
+    h1{font-size:clamp(1.45rem,2.9vw,2rem);letter-spacing:-.02em}
+    .sub{margin-top:6px;color:var(--muted);font-size:.95rem}
+    .btn{border:1px solid var(--line);background:var(--panel);color:var(--text);padding:9px 12px;border-radius:10px;font-size:.88rem;font-weight:700;cursor:pointer}
+    .btn.primary{background:linear-gradient(135deg,var(--primary),#4f7fff);color:#fff;border:none}
+    .btn.danger{background:rgba(220,38,38,.1);color:var(--danger)}
+    .layout{display:grid;grid-template-columns:1fr 1.1fr;gap:14px}
+    .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px;box-shadow:var(--shadow)}
+    .panel h2{font-size:1rem;margin-bottom:10px}
+    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    .field{display:flex;flex-direction:column;gap:6px}
+    .field.full{grid-column:1/-1}
+    label{font-size:.8rem;color:var(--muted);font-weight:700}
+    input,select{border:1px solid var(--line);border-radius:10px;background:transparent;color:var(--text);padding:10px 11px;font-size:.9rem;font-family:inherit}
+    input:focus,select:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,.14)}
+    .steps{display:flex;flex-direction:column;gap:9px}
+    .step{border:1px solid var(--line);border-radius:12px;padding:10px;background:rgba(255,255,255,.45)}
+    [data-theme="dark"] .step{background:rgba(8,14,26,.35)}
+    .step-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+    .small{font-size:.79rem;color:var(--muted)}
+    .timeline{display:flex;flex-direction:column;gap:10px;max-height:640px;overflow:auto;padding-right:2px}
+    .slot{border:1px solid var(--line);border-radius:12px;padding:11px}
+    .slot h3{font-size:.95rem}
+    .slot p{margin-top:4px;font-size:.83rem;color:var(--muted)}
+    .status{display:inline-flex;margin-top:7px;padding:4px 8px;border-radius:999px;font-size:.74rem;font-weight:800}
+    .ok{background:rgba(5,150,105,.15);color:var(--success)}
+    .risk{background:rgba(220,38,38,.15);color:var(--danger)}
+    .warn{background:rgba(217,119,6,.16);color:var(--warn)}
+    .cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-top:10px}
+    .card{border:1px solid var(--line);border-radius:11px;padding:10px;background:var(--soft)}
+    .k{font-size:.74rem;color:var(--muted);font-weight:800}
+    .v{margin-top:4px;font-size:1.04rem;font-weight:800}
+    @media (max-width:960px){.layout{grid-template-columns:1fr}}
+    @media (max-width:700px){body{padding:14px}.grid,.cards{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <a class="back" href="/tools/">← 도구 목록으로</a>
+    <div class="head">
+      <div>
+        <h1>🗓️ 마감 역산 플래너</h1>
+        <p class="sub">최종 마감일에서 역으로 계산해 각 단계의 시작/종료 날짜를 자동으로 만들어 줍니다.</p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" id="themeBtn">🌙 테마</button>
+        <button class="btn" id="sampleBtn">샘플 단계</button>
+        <button class="btn primary" id="calcBtn">역산하기</button>
+      </div>
+    </div>
+
+    <div class="layout">
+      <section class="panel">
+        <h2>⚙️ 프로젝트 설정</h2>
+        <div class="grid" style="margin-bottom:12px">
+          <div class="field full">
+            <label for="project">프로젝트명</label>
+            <input id="project" placeholder="예: 랜딩페이지 리뉴얼" />
+          </div>
+          <div class="field">
+            <label for="deadlineDate">마감일</label>
+            <input id="deadlineDate" type="date" />
+          </div>
+          <div class="field">
+            <label for="deadlineTime">마감 시각</label>
+            <input id="deadlineTime" type="time" value="18:00" />
+          </div>
+          <div class="field">
+            <label for="buffer">버퍼 일수</label>
+            <input id="buffer" type="number" min="0" step="1" value="1" />
+          </div>
+          <div class="field">
+            <label for="minStart">최소 시작일(선택)</label>
+            <input id="minStart" type="date" />
+          </div>
+          <div class="field full">
+            <label><input type="checkbox" id="skipWeekend" checked style="margin-right:6px;vertical-align:middle"/> 주말 제외(업무일만 계산)</label>
+          </div>
+        </div>
+
+        <h2>📌 단계</h2>
+        <div class="steps" id="steps"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+          <button class="btn" id="addStepBtn">+ 단계 추가</button>
+          <button class="btn danger" id="clearBtn">단계 비우기</button>
+          <button class="btn" id="copyBtn">체크리스트 복사</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>📈 역산 결과</h2>
+        <p id="headline" class="small" style="margin-bottom:10px"></p>
+        <div class="timeline" id="timeline"></div>
+        <div class="cards" id="cards"></div>
+      </section>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const KEY='es_workback_planner_v1';
+  const $ = (id) => document.getElementById(id);
+  const num = (v) => Number(v||0);
+  const fmt = (d) => new Intl.DateTimeFormat('ko-KR',{year:'numeric',month:'2-digit',day:'2-digit'}).format(d);
+
+  function uid(){ return Date.now()+Math.floor(Math.random()*99999); }
+  function dateOnly(d){ const x = new Date(d); x.setHours(0,0,0,0); return x; }
+
+  function defaultDate(offset=0){
+    const d = new Date();
+    d.setDate(d.getDate()+offset);
+    const tz = d.getTimezoneOffset();
+    const local = new Date(d.getTime()-tz*60000);
+    return local.toISOString().slice(0,10);
+  }
+
+  function defaults(){
+    return {
+      project:'런칭 준비',
+      deadlineDate:defaultDate(12),
+      deadlineTime:'18:00',
+      buffer:1,
+      minStart:'',
+      skipWeekend:true,
+      steps:[
+        {id:uid(),name:'QA/최종 점검',days:2,owner:'PM'},
+        {id:uid(),name:'개발/수정 반영',days:4,owner:'Dev'},
+        {id:uid(),name:'디자인 확정',days:3,owner:'Design'},
+        {id:uid(),name:'요구사항 정리',days:2,owner:'PO'}
+      ]
+    };
+  }
+
+  let state = load();
+
+  function load(){
+    try{
+      const v = JSON.parse(localStorage.getItem(KEY)||'null');
+      return v ? {...defaults(),...v,steps:v.steps?.length?v.steps:defaults().steps} : defaults();
+    }catch{return defaults();}
+  }
+  function save(){ localStorage.setItem(KEY,JSON.stringify(state)); }
+
+  function initTheme(){ document.documentElement.setAttribute('data-theme', localStorage.getItem('es_tool_theme') || 'light'); }
+  function toggleTheme(){
+    const next = document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';
+    document.documentElement.setAttribute('data-theme',next); localStorage.setItem('es_tool_theme',next);
+  }
+
+  function syncInputs(){
+    $('project').value = state.project;
+    $('deadlineDate').value = state.deadlineDate;
+    $('deadlineTime').value = state.deadlineTime;
+    $('buffer').value = state.buffer;
+    $('minStart').value = state.minStart;
+    $('skipWeekend').checked = !!state.skipWeekend;
+  }
+
+  function collectInputs(){
+    state.project = $('project').value.trim();
+    state.deadlineDate = $('deadlineDate').value || defaultDate(7);
+    state.deadlineTime = $('deadlineTime').value || '18:00';
+    state.buffer = num($('buffer').value);
+    state.minStart = $('minStart').value;
+    state.skipWeekend = $('skipWeekend').checked;
+  }
+
+  function renderSteps(){
+    $('steps').innerHTML = state.steps.map((s,idx)=>`
+      <article class="step" data-id="${s.id}">
+        <div class="step-top">
+          <strong>${idx+1}. ${esc(s.name || '단계')}</strong>
+          ${state.steps.length>1?'<button class="btn danger" style="padding:5px 8px;font-size:.75rem" data-act="del">삭제</button>':''}
+        </div>
+        <div class="grid">
+          <div class="field"><label>단계명</label><input data-field="name" value="${esc(s.name)}"/></div>
+          <div class="field"><label>담당</label><input data-field="owner" value="${esc(s.owner || '')}" placeholder="선택"/></div>
+          <div class="field"><label>소요일(업무일 기준)</label><input data-field="days" type="number" min="0" step="1" value="${s.days}"/></div>
+          <div class="field"><label>메모</label><input disabled value="마감 기준 역산" style="opacity:.75"/></div>
+        </div>
+      </article>
+    `).join('');
+  }
+
+  function esc(s){ return String(s||'').replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m])); }
+
+  function isWeekend(d){ const w = d.getDay(); return w===0 || w===6; }
+
+  function subtractBusinessDays(date, days){
+    let d = new Date(date);
+    let remain = Math.max(0,Math.floor(days));
+    while(remain>0){
+      d.setDate(d.getDate()-1);
+      if(!state.skipWeekend || !isWeekend(d)) remain--;
+    }
+    return d;
+  }
+
+  function workback(){
+    collectInputs();
+    save();
+
+    const [hh,mm] = state.deadlineTime.split(':').map(Number);
+    let cursor = new Date(state.deadlineDate + 'T00:00:00');
+    cursor.setHours(hh||18, mm||0, 0, 0);
+
+    const timeline = [];
+
+    // 버퍼는 최종 마감 직전에 확보
+    const bufferedEnd = subtractBusinessDays(cursor, state.buffer);
+    let currentEnd = bufferedEnd;
+
+    for(let i=0;i<state.steps.length;i++){
+      const step = state.steps[i];
+      const end = new Date(currentEnd);
+      const start = subtractBusinessDays(end, num(step.days));
+      timeline.push({...step,start,end});
+      currentEnd = new Date(start);
+    }
+
+    // 입력 순서 유지(위가 먼저 해야 할 일)
+    timeline.reverse();
+    renderTimeline(timeline, cursor, bufferedEnd);
+  }
+
+  function renderTimeline(timeline, deadline, bufferedEnd){
+    const today = dateOnly(new Date());
+    const first = timeline.length ? dateOnly(timeline[0].start) : dateOnly(deadline);
+    const totalDays = timeline.reduce((a,b)=>a+num(b.days),0);
+    const late = first < today;
+
+    $('headline').textContent = state.project
+      ? `프로젝트: ${state.project} · 최종 마감 ${fmt(deadline)} ${state.deadlineTime}`
+      : `최종 마감 ${fmt(deadline)} ${state.deadlineTime}`;
+
+    $('timeline').innerHTML = timeline.map((t,idx)=>{
+      const risk = dateOnly(t.start) < today;
+      return `<article class="slot">
+        <h3>${idx+1}. ${esc(t.name)} ${t.owner?`· ${esc(t.owner)}`:''}</h3>
+        <p>${fmt(t.start)} 시작 → ${fmt(t.end)} 종료 (${t.days}일)</p>
+        <span class="status ${risk?'risk':'ok'}">${risk?'시작일 지남(리스크)':'진행 가능'}</span>
+      </article>`;
+    }).join('') || '<p class="small">단계를 추가한 뒤 역산하세요.</p>';
+
+    const leadDays = Math.round((dateOnly(deadline)-first)/86400000);
+    $('cards').innerHTML = [
+      ['총 단계 수', timeline.length + '개'],
+      ['순수 작업일', totalDays + '일'],
+      ['버퍼', state.buffer + '일'],
+      ['필요 리드타임', Math.max(0,leadDays) + '일'],
+      ['실제 시작일', fmt(first)],
+      ['상태', late ? '<span style="color:var(--danger)">지연 위험</span>' : '<span style="color:var(--success)">정상</span>']
+    ].map(([k,v])=>`<article class="card"><div class="k">${k}</div><div class="v">${v}</div></article>`).join('');
+
+    // copy checklist용 캐시
+    window.__workbackText = buildChecklist(timeline, deadline, bufferedEnd, late);
+  }
+
+  function buildChecklist(timeline, deadline, bufferedEnd, late){
+    let t = `✅ 마감 역산 체크리스트 (${state.project || '프로젝트'})\n`;
+    t += `- 최종 마감: ${fmt(deadline)} ${state.deadlineTime}\n`;
+    t += `- 버퍼 종료: ${fmt(bufferedEnd)}\n`;
+    t += `- 상태: ${late?'지연 위험':'정상'}\n\n`;
+    timeline.forEach((s,idx)=>{
+      t += `${idx+1}. [ ] ${s.name}${s.owner?` (${s.owner})`:''} — ${fmt(s.start)} ~ ${fmt(s.end)} (${s.days}일)\n`;
+    });
+    return t;
+  }
+
+  function copyChecklist(){
+    const text = window.__workbackText || '먼저 역산하기를 실행하세요.';
+    navigator.clipboard.writeText(text).then(()=>alert('체크리스트를 복사했습니다.')).catch(()=>{
+      const ta=document.createElement('textarea'); ta.value=text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+      alert('체크리스트를 복사했습니다.');
+    });
+  }
+
+  function addStep(){ state.steps.push({id:uid(),name:'새 단계',days:1,owner:''}); save(); renderSteps(); }
+  function clearSteps(){ if(confirm('모든 단계를 지울까요?')){ state.steps=[]; save(); renderSteps(); workback(); } }
+  function sample(){ state = defaults(); save(); syncInputs(); renderSteps(); workback(); }
+
+  function onSteps(e){
+    const card = e.target.closest('[data-id]'); if(!card) return;
+    const id = Number(card.dataset.id);
+    const step = state.steps.find(x=>Number(x.id)===id); if(!step) return;
+
+    if(e.target.dataset.act==='del'){
+      state.steps = state.steps.filter(x=>Number(x.id)!==id);
+      save(); renderSteps(); workback(); return;
+    }
+    const f = e.target.dataset.field; if(!f) return;
+    if(f==='days') step.days = num(e.target.value); else step[f] = e.target.value;
+    save(); workback();
+  }
+
+  ['project','deadlineDate','deadlineTime','buffer','minStart','skipWeekend'].forEach(id=>$(id).addEventListener('change',workback));
+  $('themeBtn').addEventListener('click',toggleTheme);
+  $('sampleBtn').addEventListener('click',sample);
+  $('calcBtn').addEventListener('click',workback);
+  $('addStepBtn').addEventListener('click',addStep);
+  $('clearBtn').addEventListener('click',clearSteps);
+  $('copyBtn').addEventListener('click',copyChecklist);
+  $('steps').addEventListener('input',onSteps);
+  $('steps').addEventListener('change',onSteps);
+  $('steps').addEventListener('click',onSteps);
+
+  initTheme();
+  syncInputs();
+  renderSteps();
+  workback();
+})();
+</script>
+</body>
+</html>

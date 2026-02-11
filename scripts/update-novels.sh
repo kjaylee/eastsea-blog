@@ -41,8 +41,17 @@ for file in glob.glob("$DATA_DIR/*.md"):
                 
                 metadata[key] = value
         
+        # Determine slug
+        slug = metadata.get('slug', '')
+        if not slug:
+            filename = Path(file).name
+            slug_match = re.match(r'^(.*)-\d+\.md$', filename)
+            if slug_match:
+                slug = slug_match.group(1)
+
         novels.append({
             'series': metadata.get('series', ''),
+            'slug': slug,
             'episode': int(metadata.get('episode', 0)),
             'title': metadata.get('title', ''),
             'date': str(metadata.get('date', '')).split(' ')[0],
@@ -450,8 +459,14 @@ first=true
 echo "$METADATA" | jq -c 'group_by(.series) | .[]' | while IFS= read -r group; do
     series=$(echo "$group" | jq -r '.[0].series')
     author=$(echo "$group" | jq -r '.[0].author')
-    series_slug=$(echo "$series" | sed 's/ //g')
-    episodes=$(echo "$group" | jq -c '. | sort_by(.episode)')
+    explicit_slug=$(echo "$group" | jq -r '.[0].slug // empty')
+    
+    if [ -n "$explicit_slug" ]; then
+        series_slug="$explicit_slug"
+    else
+        series_slug=$(echo "$series" | sed 's/ //g')
+    fi
+    episodes=$(echo "$group" | jq -c '. | sort_by(.episode) | reverse')
     
     [ "$first" = true ] || echo "," >> "$NOVELS_DIR/series.html"
     first=false
@@ -537,7 +552,12 @@ novels = {}
 # Group by series
 for ep in data:
     series = ep['series']
-    slug = series.replace(' ', '')  # Consistent slug generation
+    explicit_slug = ep.get('slug')
+    
+    if explicit_slug:
+        slug = explicit_slug
+    else:
+        slug = series.replace(' ', '')  # Consistent slug generation
     
     if slug not in novels:
         novels[slug] = {

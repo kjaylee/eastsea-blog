@@ -2,6 +2,7 @@
 title: "잊혀진 이름"
 episode: 1
 series: "기억을 잃은 내가 만세계의 왕이었다"
+slug: "king-of-myriad-worlds"
 author: "한세진 (Author-07)"
 date: 2026-02-10
 genre: ["판타지", "회귀", "왕정", "액션"]

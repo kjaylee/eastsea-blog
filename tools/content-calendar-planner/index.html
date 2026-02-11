@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>콘텐츠 캘린더 플래너 | Content Calendar Planner</title>
+<meta name="description" content="콘텐츠 아이템 관리, 자동 스케줄링, 월간 캘린더, CSV/Markdown 내보내기를 지원하는 실전용 콘텐츠 플래너">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#f3f5fb;
+    --panel:#ffffff;
+    --text:#162033;
+    --muted:#5f6a80;
+    --line:#dde3f0;
+    --primary:#4f46e5;
+    --primary-soft:#eef0ff;
+    --success:#119669;
+    --warn:#d97706;
+    --danger:#dc2626;
+    --scheduled:#0ea5e9;
+    --radius:14px;
+    --shadow:0 14px 34px rgba(15,23,42,.08);
+  }
+  [data-theme="dark"]{
+    --bg:#0f172a;
+    --panel:#111f39;
+    --text:#ebf1ff;
+    --muted:#9dafd3;
+    --line:#294066;
+    --primary:#7c8bff;
+    --primary-soft:#1f2a4c;
+    --success:#22c08b;
+    --warn:#f3a33e;
+    --danger:#ff6d6d;
+    --scheduled:#3bb9f7;
+    --shadow:0 18px 40px rgba(1,6,16,.45);
+  }
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;
+    line-height:1.4;
+    min-height:100vh;
+    padding:18px;
+  }
+  .container{max-width:1180px;margin:0 auto}
+  .back-link{display:inline-flex;align-items:center;gap:8px;text-decoration:none;color:var(--muted);margin-bottom:10px;font-size:.92rem}
+  .back-link:hover{color:var(--primary)}
+  .header{
+    display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;
+    margin-bottom:18px;
+  }
+  .title{font-size:clamp(1.45rem,2.7vw,2rem);font-weight:800;letter-spacing:-.02em}
+  .subtitle{color:var(--muted);margin-top:6px;font-size:.95rem}
+  .header-actions{display:flex;flex-wrap:wrap;gap:8px}
+  .btn{
+    border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:10px;padding:9px 12px;
+    font-size:.9rem;font-weight:700;cursor:pointer;transition:.2s;
+  }
+  .btn:hover{transform:translateY(-1px)}
+  .btn.primary{background:linear-gradient(135deg,var(--primary),#7168ff);border-color:transparent;color:#fff}
+  .btn.soft{background:var(--primary-soft);border-color:transparent;color:var(--primary)}
+  .btn.warn{background:rgba(217,119,6,.1);border-color:rgba(217,119,6,.2);color:var(--warn)}
+  .btn.danger{background:rgba(220,38,38,.1);border-color:rgba(220,38,38,.25);color:var(--danger)}
+
+  .grid{display:grid;grid-template-columns:1.1fr .9fr;gap:14px}
+  .panel{
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+    padding:15px;
+  }
+  .panel + .panel{margin-top:14px}
+  .panel h2{font-size:1.02rem;margin-bottom:12px}
+  .muted{color:var(--muted)}
+
+  .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .field{display:flex;flex-direction:column;gap:6px}
+  .field.full{grid-column:1/-1}
+  label{font-size:.82rem;color:var(--muted);font-weight:700}
+  input,select,textarea{
+    width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:transparent;color:var(--text);
+    font-size:.92rem;font-family:inherit;
+  }
+  textarea{min-height:90px;resize:vertical}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(79,70,229,.16)}
+
+  .weekday-wrap{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{
+    border:1px solid var(--line);background:transparent;border-radius:999px;padding:7px 10px;
+    font-size:.83rem;font-weight:700;cursor:pointer;color:var(--text)
+  }
+  .chip.active{background:var(--primary-soft);border-color:var(--primary);color:var(--primary)}
+
+  .stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+  .stat{padding:12px;border-radius:10px;background:var(--primary-soft);border:1px solid var(--line)}
+  .stat .k{font-size:.72rem;color:var(--muted);font-weight:700}
+  .stat .v{font-size:1.2rem;font-weight:800;margin-top:3px}
+
+  .toolbar{display:grid;grid-template-columns:1fr 170px 170px;gap:9px;margin-bottom:10px}
+  .table-wrap{overflow:auto;border:1px solid var(--line);border-radius:10px}
+  table{width:100%;border-collapse:collapse;min-width:860px}
+  th,td{padding:9px 10px;border-bottom:1px solid var(--line);font-size:.87rem;text-align:left;vertical-align:top}
+  th{font-size:.79rem;color:var(--muted);font-weight:800;background:var(--primary-soft);position:sticky;top:0}
+  .badge{display:inline-flex;padding:3px 8px;border-radius:999px;font-size:.72rem;font-weight:800;line-height:1}
+  .b-draft{background:rgba(99,102,241,.14);color:#6366f1}
+  .b-review{background:rgba(234,88,12,.14);color:#ea580c}
+  .b-scheduled{background:rgba(14,165,233,.14);color:var(--scheduled)}
+  .b-published{background:rgba(16,185,129,.14);color:var(--success)}
+  .actions{display:flex;gap:6px;flex-wrap:wrap}
+  .a-btn{border:1px solid var(--line);background:transparent;color:var(--text);padding:5px 7px;border-radius:8px;font-size:.75rem;font-weight:700;cursor:pointer}
+
+  .calendar-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:9px;gap:6px;flex-wrap:wrap}
+  .month-label{font-size:1.02rem;font-weight:800}
+  .calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}
+  .dow{font-size:.76rem;color:var(--muted);font-weight:800;text-align:center;padding:4px 0}
+  .day{
+    min-height:122px;border:1px solid var(--line);border-radius:10px;padding:7px;background:rgba(255,255,255,.35);
+    display:flex;flex-direction:column;gap:5px;
+  }
+  [data-theme="dark"] .day{background:rgba(15,23,42,.25)}
+  .day.other{opacity:.48}
+  .date-top{display:flex;justify-content:space-between;align-items:center}
+  .date-num{font-size:.8rem;font-weight:800}
+  .event{padding:4px 6px;border-radius:7px;font-size:.71rem;line-height:1.2;font-weight:700;word-break:break-word}
+  .event.draft{background:rgba(99,102,241,.15);color:#6366f1}
+  .event.review{background:rgba(234,88,12,.16);color:#ea580c}
+  .event.scheduled{background:rgba(14,165,233,.16);color:var(--scheduled)}
+  .event.published{background:rgba(16,185,129,.18);color:var(--success)}
+
+  .hint{font-size:.79rem;color:var(--muted)}
+
+  @media (max-width:1050px){
+    .grid{grid-template-columns:1fr}
+  }
+  @media (max-width:760px){
+    body{padding:14px}
+    .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .toolbar{grid-template-columns:1fr}
+    .form-grid{grid-template-columns:1fr}
+    .day{min-height:102px}
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <a class="back-link" href="/tools/">← 도구 목록으로</a>
+
+  <div class="header">
+    <div>
+      <div class="title">🗓️ 콘텐츠 캘린더 플래너</div>
+      <div class="subtitle">아이템 관리 + 자동 스케줄 + 월간 캘린더 + CSV/Markdown 내보내기</div>
+    </div>
+    <div class="header-actions">
+      <button class="btn" id="themeBtn">🌙 테마</button>
+      <button class="btn soft" id="sampleBtn">샘플 데이터</button>
+      <button class="btn warn" id="clearScheduleBtn">스케줄 초기화</button>
+      <button class="btn danger" id="clearAllBtn">전체 삭제</button>
+    </div>
+  </div>
+
+  <div class="grid">
+    <section>
+      <div class="panel">
+        <h2>⚙️ 스케줄 설정</h2>
+        <div class="form-grid">
+          <div class="field">
+            <label for="postsPerWeek">주당 게시 수</label>
+            <input type="number" id="postsPerWeek" min="1" max="14">
+          </div>
+          <div class="field">
+            <label for="startDate">자동 배치 시작일</label>
+            <input type="date" id="startDate">
+          </div>
+          <div class="field full">
+            <label>선호 업로드 요일</label>
+            <div class="weekday-wrap" id="weekdayWrap"></div>
+          </div>
+          <div class="field full">
+            <button class="btn primary" id="autoScheduleBtn">📌 자동 스케줄 생성</button>
+          </div>
+        </div>
+        <p class="hint" style="margin-top:8px">자동 배치는 일정이 없는 초안/검토 항목을 마감일 우선순위로 배치합니다.</p>
+      </div>
+
+      <div class="panel">
+        <h2 id="formTitle">➕ 콘텐츠 아이템 추가</h2>
+        <div class="form-grid">
+          <div class="field full">
+            <label for="titleInput">제목</label>
+            <input id="titleInput" placeholder="예: 2026 마케팅 자동화 툴 비교">
+          </div>
+          <div class="field">
+            <label for="channelInput">채널</label>
+            <select id="channelInput"></select>
+          </div>
+          <div class="field">
+            <label for="pillarInput">콘텐츠 필러</label>
+            <select id="pillarInput"></select>
+          </div>
+          <div class="field">
+            <label for="effortInput">작업량</label>
+            <select id="effortInput">
+              <option value="S">S (1~2h)</option>
+              <option value="M">M (3~5h)</option>
+              <option value="L">L (6h+)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="deadlineInput">마감일</label>
+            <input type="date" id="deadlineInput">
+          </div>
+          <div class="field">
+            <label for="statusInput">상태</label>
+            <select id="statusInput">
+              <option value="draft">초안</option>
+              <option value="review">검토</option>
+              <option value="scheduled">예약</option>
+              <option value="published">완료</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="scheduleInput">게시 예정일 (선택)</label>
+            <input type="date" id="scheduleInput">
+          </div>
+          <div class="field full">
+            <label for="notesInput">메모</label>
+            <textarea id="notesInput" placeholder="핵심 메시지, 참고 링크, 제작 체크리스트 등"></textarea>
+          </div>
+          <div class="field full" style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn primary" id="saveItemBtn">저장</button>
+            <button class="btn" id="cancelEditBtn" style="display:none">수정 취소</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>📈 진행 현황</h2>
+        <div class="stats" id="stats"></div>
+      </div>
+
+      <div class="panel">
+        <h2>📋 콘텐츠 목록</h2>
+        <div class="toolbar">
+          <input id="searchInput" placeholder="제목/메모 검색">
+          <select id="statusFilter">
+            <option value="all">상태 전체</option>
+            <option value="draft">초안</option>
+            <option value="review">검토</option>
+            <option value="scheduled">예약</option>
+            <option value="published">완료</option>
+          </select>
+          <select id="channelFilter">
+            <option value="all">채널 전체</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+          <button class="btn" id="exportCsvBtn">CSV 내보내기</button>
+          <button class="btn" id="exportMdBtn">Markdown 내보내기</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>제목</th>
+                <th>채널</th>
+                <th>필러</th>
+                <th>작업량</th>
+                <th>마감일</th>
+                <th>예정일</th>
+                <th>상태</th>
+                <th>작업</th>
+              </tr>
+            </thead>
+            <tbody id="itemTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="panel">
+        <div class="calendar-head">
+          <h2 style="margin:0">🗓️ 월간 캘린더</h2>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <button class="btn" id="prevMonthBtn">◀</button>
+            <div class="month-label" id="monthLabel"></div>
+            <button class="btn" id="nextMonthBtn">▶</button>
+          </div>
+        </div>
+        <div class="calendar-grid" id="calendarGrid"></div>
+      </div>
+      <div class="panel">
+        <h2>ℹ️ 사용 팁</h2>
+        <ul style="display:grid;gap:7px;padding-left:18px;color:var(--muted);font-size:.87rem">
+          <li>마감일이 빠른 항목부터 자동 배치되어 누락을 줄입니다.</li>
+          <li>예약/완료 상태는 통계와 캘린더에서 색상으로 구분됩니다.</li>
+          <li>CSV는 팀 공유, Markdown은 주간 회의 아젠다용으로 활용하세요.</li>
+          <li>모든 데이터는 이 브라우저의 localStorage에 자동 저장됩니다.</li>
+        </ul>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+(() => {
+  const KEY = 'es_content_calendar_planner_v1';
+  const CHANNELS = ['Blog','Newsletter','YouTube','Instagram','LinkedIn','X','Podcast','ETC'];
+  const PILLARS = ['교육','리뷰','브랜드','세일즈','커뮤니티','케이스스터디'];
+  const WEEKDAYS = ['일','월','화','수','목','금','토'];
+  const STATUS_LABEL = {draft:'초안',review:'검토',scheduled:'예약',published:'완료'};
+
+  const defaultState = () => ({
+    settings:{
+      postsPerWeek:3,
+      startDate:todayStr(),
+      preferredDays:[1,3,5]
+    },
+    monthCursor:monthStart(todayStr()),
+    editId:null,
+    items:[]
+  });
+
+  let state = load();
+
+  const $ = (id) => document.getElementById(id);
+
+  function todayStr(){ return new Date().toISOString().slice(0,10); }
+  function monthStart(dateStr){ return dateStr.slice(0,7)+'-01'; }
+  function esc(s){ return (s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+  function save(){
+    localStorage.setItem(KEY, JSON.stringify(state));
+  }
+
+  function load(){
+    try {
+      const parsed = JSON.parse(localStorage.getItem(KEY) || 'null');
+      if(!parsed) return defaultState();
+      return {
+        ...defaultState(),
+        ...parsed,
+        settings:{...defaultState().settings,...(parsed.settings||{})},
+        items:Array.isArray(parsed.items)?parsed.items:[]
+      };
+    } catch {
+      return defaultState();
+    }
+  }
+
+  function toggleTheme(){
+    const cur = document.documentElement.getAttribute('data-theme');
+    const next = cur === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('es_content_calendar_theme', next);
+  }
+
+  function initTheme(){
+    const t = localStorage.getItem('es_content_calendar_theme') || 'light';
+    document.documentElement.setAttribute('data-theme', t);
+  }
+
+  function seedSelects(){
+    $('channelInput').innerHTML = CHANNELS.map(c=>`<option value="${c}">${c}</option>`).join('');
+    $('pillarInput').innerHTML = PILLARS.map(p=>`<option value="${p}">${p}</option>`).join('');
+    $('channelFilter').innerHTML = '<option value="all">채널 전체</option>' + CHANNELS.map(c=>`<option value="${c}">${c}</option>`).join('');
+  }
+
+  function renderWeekdays(){
+    $('weekdayWrap').innerHTML = WEEKDAYS.map((d,idx)=>`<button type="button" class="chip ${state.settings.preferredDays.includes(idx)?'active':''}" data-day="${idx}">${d}</button>`).join('');
+  }
+
+  function statusClass(status){
+    return status==='draft'?'b-draft':status==='review'?'b-review':status==='scheduled'?'b-scheduled':'b-published';
+  }
+
+  function normalizeItem(raw){
+    return {
+      id: raw.id || Date.now()+Math.random(),
+      title: (raw.title||'').trim(),
+      channel: raw.channel || CHANNELS[0],
+      pillar: raw.pillar || PILLARS[0],
+      effort: raw.effort || 'M',
+      deadline: raw.deadline || '',
+      status: raw.status || 'draft',
+      scheduledDate: raw.scheduledDate || '',
+      notes: (raw.notes||'').trim(),
+      createdAt: raw.createdAt || new Date().toISOString()
+    };
+  }
+
+  function resetForm(){
+    $('titleInput').value='';
+    $('channelInput').value=CHANNELS[0];
+    $('pillarInput').value=PILLARS[0];
+    $('effortInput').value='M';
+    $('deadlineInput').value='';
+    $('statusInput').value='draft';
+    $('scheduleInput').value='';
+    $('notesInput').value='';
+    state.editId=null;
+    $('formTitle').textContent='➕ 콘텐츠 아이템 추가';
+    $('cancelEditBtn').style.display='none';
+  }
+
+  function fillForm(item){
+    $('titleInput').value=item.title;
+    $('channelInput').value=item.channel;
+    $('pillarInput').value=item.pillar;
+    $('effortInput').value=item.effort;
+    $('deadlineInput').value=item.deadline;
+    $('statusInput').value=item.status;
+    $('scheduleInput').value=item.scheduledDate;
+    $('notesInput').value=item.notes;
+    state.editId=item.id;
+    $('formTitle').textContent='✏️ 콘텐츠 아이템 수정';
+    $('cancelEditBtn').style.display='inline-flex';
+  }
+
+  function getFormItem(){
+    return normalizeItem({
+      id: state.editId,
+      title: $('titleInput').value,
+      channel: $('channelInput').value,
+      pillar: $('pillarInput').value,
+      effort: $('effortInput').value,
+      deadline: $('deadlineInput').value,
+      status: $('statusInput').value,
+      scheduledDate: $('scheduleInput').value,
+      notes: $('notesInput').value
+    });
+  }
+
+  function saveItem(){
+    const item = getFormItem();
+    if(!item.title){ alert('제목을 입력해 주세요.'); return; }
+    if(state.editId){
+      const idx = state.items.findIndex(i=>i.id===state.editId);
+      if(idx>-1) state.items[idx] = {...state.items[idx],...item};
+    } else {
+      state.items.unshift(item);
+    }
+    save();
+    resetForm();
+    render();
+  }
+
+  function deleteItem(id){
+    if(!confirm('이 항목을 삭제할까요?')) return;
+    state.items = state.items.filter(i=>i.id!==id);
+    save();
+    render();
+  }
+
+  function cycleStatus(id){
+    const order=['draft','review','scheduled','published'];
+    state.items = state.items.map(i=>{
+      if(i.id!==id) return i;
+      const idx = order.indexOf(i.status);
+      const next = order[(idx+1)%order.length];
+      return {...i,status:next};
+    });
+    save();render();
+  }
+
+  function parseDate(d){ return d ? new Date(d+'T00:00:00') : null; }
+
+  function weekKey(date){
+    const temp = new Date(date);
+    const day = (temp.getDay()+6)%7;
+    temp.setDate(temp.getDate()-day);
+    return temp.toISOString().slice(0,10);
+  }
+
+  function autoSchedule(){
+    const preferred = [...state.settings.preferredDays].sort((a,b)=>a-b);
+    if(!preferred.length){ alert('선호 요일을 최소 1개 선택해 주세요.'); return; }
+
+    const target = state.items
+      .filter(i=>!i.scheduledDate && (i.status==='draft' || i.status==='review'))
+      .sort((a,b)=>{
+        const ad = a.deadline || '9999-12-31';
+        const bd = b.deadline || '9999-12-31';
+        if(ad!==bd) return ad<bd?-1:1;
+        return a.createdAt < b.createdAt ? -1 : 1;
+      });
+
+    if(!target.length){ alert('자동 배치할 항목이 없습니다.'); return; }
+
+    const start = parseDate(state.settings.startDate) || new Date();
+    const counts = {};
+    let ptr = 0;
+    let date = new Date(start);
+    let guard = 0;
+
+    while(ptr < target.length && guard < 3800){
+      guard++;
+      const dow = date.getDay();
+      const wk = weekKey(date);
+      counts[wk] = counts[wk] || 0;
+
+      if(preferred.includes(dow) && counts[wk] < Number(state.settings.postsPerWeek || 3)){
+        target[ptr].scheduledDate = date.toISOString().slice(0,10);
+        target[ptr].status = target[ptr].status === 'published' ? 'published' : 'scheduled';
+        counts[wk] += 1;
+        ptr += 1;
+      }
+
+      date.setDate(date.getDate()+1);
+    }
+
+    save();
+    render();
+    alert(`${ptr}개 항목을 자동 배치했습니다.`);
+  }
+
+  function clearSchedule(){
+    if(!confirm('모든 예약일(scheduledDate)을 지우고 상태를 초안/검토로 되돌릴까요?')) return;
+    state.items = state.items.map(i=>({
+      ...i,
+      scheduledDate:'',
+      status: i.status === 'scheduled' ? 'draft' : i.status
+    }));
+    save(); render();
+  }
+
+  function clearAll(){
+    if(!confirm('전체 데이터를 삭제합니다. 계속할까요?')) return;
+    state = defaultState();
+    save();
+    bindSettingsToInputs();
+    resetForm();
+    render();
+  }
+
+  function buildStats(){
+    const stats = {
+      total: state.items.length,
+      draft: state.items.filter(i=>i.status==='draft').length,
+      review: state.items.filter(i=>i.status==='review').length,
+      scheduled: state.items.filter(i=>i.status==='scheduled').length,
+      published: state.items.filter(i=>i.status==='published').length,
+    };
+    const completion = stats.total ? Math.round((stats.published/stats.total)*100) : 0;
+
+    $('stats').innerHTML = [
+      ['총 아이템', stats.total],
+      ['예약/완료', stats.scheduled+stats.published],
+      ['검토 필요', stats.review],
+      ['완료율', completion+'%']
+    ].map(([k,v])=>`<div class="stat"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
+  }
+
+  function filteredItems(){
+    const q = $('searchInput').value.trim().toLowerCase();
+    const sf = $('statusFilter').value;
+    const cf = $('channelFilter').value;
+
+    return [...state.items].filter(i=>{
+      const matchQ = !q || `${i.title} ${i.notes}`.toLowerCase().includes(q);
+      const matchS = sf==='all' || i.status===sf;
+      const matchC = cf==='all' || i.channel===cf;
+      return matchQ && matchS && matchC;
+    }).sort((a,b)=>{
+      const da = a.scheduledDate || a.deadline || '9999-12-31';
+      const db = b.scheduledDate || b.deadline || '9999-12-31';
+      if(da!==db) return da<db?-1:1;
+      return a.title.localeCompare(b.title,'ko');
+    });
+  }
+
+  function renderTable(){
+    const rows = filteredItems().map(i=>`
+      <tr>
+        <td><strong>${esc(i.title)}</strong><div class="muted" style="margin-top:4px;font-size:.75rem">${esc(i.notes||'')}</div></td>
+        <td>${esc(i.channel)}</td>
+        <td>${esc(i.pillar)}</td>
+        <td>${i.effort}</td>
+        <td>${i.deadline || '-'}</td>
+        <td>${i.scheduledDate || '-'}</td>
+        <td><span class="badge ${statusClass(i.status)}">${STATUS_LABEL[i.status]}</span></td>
+        <td>
+          <div class="actions">
+            <button class="a-btn" data-act="edit" data-id="${i.id}">수정</button>
+            <button class="a-btn" data-act="status" data-id="${i.id}">상태↻</button>
+            <button class="a-btn" data-act="del" data-id="${i.id}">삭제</button>
+          </div>
+        </td>
+      </tr>`).join('');
+
+    $('itemTbody').innerHTML = rows || `<tr><td colspan="8" class="muted" style="text-align:center;padding:18px">조건에 맞는 데이터가 없습니다.</td></tr>`;
+  }
+
+  function monthMeta(dateStr){
+    const d = parseDate(monthStart(dateStr));
+    const y = d.getFullYear();
+    const m = d.getMonth();
+    const firstDow = new Date(y,m,1).getDay();
+    const lastDate = new Date(y,m+1,0).getDate();
+    return {y,m,firstDow,lastDate};
+  }
+
+  function renderCalendar(){
+    const {y,m,firstDow,lastDate} = monthMeta(state.monthCursor);
+    $('monthLabel').textContent = `${y}년 ${m+1}월`;
+
+    const map = {};
+    state.items.forEach(item=>{
+      const key = item.scheduledDate || item.deadline;
+      if(!key) return;
+      map[key] = map[key] || [];
+      map[key].push(item);
+    });
+
+    const cells = [];
+    WEEKDAYS.forEach(d=>cells.push(`<div class="dow">${d}</div>`));
+
+    const firstDate = new Date(y,m,1-firstDow);
+    for(let i=0;i<42;i++){
+      const cellDate = new Date(firstDate);
+      cellDate.setDate(firstDate.getDate()+i);
+      const key = cellDate.toISOString().slice(0,10);
+      const isOther = cellDate.getMonth()!==m;
+      const items = (map[key]||[]).slice(0,3);
+      const extra = (map[key]||[]).length - items.length;
+
+      cells.push(`
+        <div class="day ${isOther?'other':''}">
+          <div class="date-top">
+            <div class="date-num">${cellDate.getDate()}</div>
+          </div>
+          ${items.map(it=>`<div class="event ${it.status}">${esc(it.title)}</div>`).join('')}
+          ${extra>0?`<div class="hint">+${extra}개 더</div>`:''}
+        </div>
+      `);
+    }
+
+    $('calendarGrid').innerHTML = cells.join('');
+  }
+
+  function exportCsv(){
+    const header = ['title','channel','pillar','effort','deadline','scheduledDate','status','notes'];
+    const body = state.items.map(i=>[
+      i.title,i.channel,i.pillar,i.effort,i.deadline,i.scheduledDate,i.status,(i.notes||'').replace(/\n/g,' ')
+    ]);
+    const csv = [header,...body].map(row=>row.map(cell=>`"${String(cell||'').replace(/"/g,'""')}"`).join(',')).join('\n');
+    downloadFile(csv, `content-calendar-${todayStr()}.csv`, 'text/csv;charset=utf-8;');
+  }
+
+  function exportMarkdown(){
+    const groups = {};
+    state.items.forEach(i=>{
+      const key = i.scheduledDate || i.deadline || '날짜 미정';
+      groups[key] = groups[key] || [];
+      groups[key].push(i);
+    });
+    const dates = Object.keys(groups).sort();
+    let md = `# 콘텐츠 캘린더\n\n생성일: ${new Date().toLocaleString('ko-KR')}\n\n`;
+    dates.forEach(d=>{
+      md += `## ${d}\n`;
+      groups[d].sort((a,b)=>a.channel.localeCompare(b.channel,'ko')).forEach(i=>{
+        md += `- [${STATUS_LABEL[i.status]}] **${i.title}** (${i.channel}/${i.pillar}/${i.effort})`;
+        if(i.notes) md += `\n  - 메모: ${i.notes.replace(/\n/g,' ')}`;
+        md += '\n';
+      });
+      md += '\n';
+    });
+    downloadFile(md, `content-calendar-${todayStr()}.md`, 'text/markdown;charset=utf-8;');
+  }
+
+  function downloadFile(content, filename, type){
+    const blob = new Blob([content], {type});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+  }
+
+  function bindSettingsToInputs(){
+    $('postsPerWeek').value = state.settings.postsPerWeek;
+    $('startDate').value = state.settings.startDate;
+    renderWeekdays();
+  }
+
+  function sampleData(){
+    if(state.items.length && !confirm('기존 데이터가 있습니다. 샘플 데이터를 추가할까요?')) return;
+    const today = new Date();
+    const addDays = (n)=>{const d = new Date(today); d.setDate(today.getDate()+n); return d.toISOString().slice(0,10);};
+    const seed = [
+      ['2026 상반기 SEO 체크리스트','Blog','교육','M','draft',addDays(3),'검색 의도 기반 소제목 구조화'],
+      ['고객 후기 리포맷 숏츠','YouTube','케이스스터디','S','review',addDays(5),'30초 3개 버전'],
+      ['제품 릴리즈 노트 템플릿 배포','Newsletter','브랜드','M','draft',addDays(7),'CTA 2종 A/B'],
+      ['브랜드 톤앤매너 카드뉴스','Instagram','브랜드','L','scheduled',addDays(9),'슬라이드 8장 구성'],
+      ['주간 성과 리캡 스레드','X','커뮤니티','S','published',addDays(1),'숫자 + 인사이트 요약']
+    ];
+    const items = seed.map((s,idx)=>normalizeItem({
+      title:s[0],channel:s[1],pillar:s[2],effort:s[3],status:s[4],deadline:s[5],scheduledDate:s[4]==='scheduled'||s[4]==='published'?s[5]:'',notes:s[6],createdAt:new Date(Date.now()-idx*86400000).toISOString()
+    }));
+    state.items = [...items, ...state.items];
+    save();render();
+  }
+
+  function wireEvents(){
+    $('themeBtn').addEventListener('click',toggleTheme);
+    $('sampleBtn').addEventListener('click',sampleData);
+    $('clearScheduleBtn').addEventListener('click',clearSchedule);
+    $('clearAllBtn').addEventListener('click',clearAll);
+    $('autoScheduleBtn').addEventListener('click',autoSchedule);
+    $('saveItemBtn').addEventListener('click',saveItem);
+    $('cancelEditBtn').addEventListener('click',resetForm);
+
+    $('postsPerWeek').addEventListener('input', e=>{ state.settings.postsPerWeek = Math.max(1,Math.min(14,Number(e.target.value||1))); save(); });
+    $('startDate').addEventListener('change', e=>{ state.settings.startDate = e.target.value || todayStr(); save(); });
+
+    $('weekdayWrap').addEventListener('click', e=>{
+      const btn = e.target.closest('[data-day]');
+      if(!btn) return;
+      const d = Number(btn.dataset.day);
+      if(state.settings.preferredDays.includes(d)){
+        state.settings.preferredDays = state.settings.preferredDays.filter(v=>v!==d);
+      } else {
+        state.settings.preferredDays = [...state.settings.preferredDays,d].sort((a,b)=>a-b);
+      }
+      if(!state.settings.preferredDays.length) state.settings.preferredDays=[1];
+      save();renderWeekdays();
+    });
+
+    ['searchInput','statusFilter','channelFilter'].forEach(id=>$(id).addEventListener('input',renderTable));
+    ['statusFilter','channelFilter'].forEach(id=>$(id).addEventListener('change',renderTable));
+
+    $('itemTbody').addEventListener('click',e=>{
+      const btn = e.target.closest('[data-act]');
+      if(!btn) return;
+      const id = Number(btn.dataset.id);
+      const item = state.items.find(i=>Number(i.id)===id);
+      if(!item) return;
+      const act = btn.dataset.act;
+      if(act==='edit') fillForm(item);
+      if(act==='status') cycleStatus(item.id);
+      if(act==='del') deleteItem(item.id);
+    });
+
+    $('prevMonthBtn').addEventListener('click',()=>{
+      const d = parseDate(state.monthCursor); d.setMonth(d.getMonth()-1); state.monthCursor = monthStart(d.toISOString().slice(0,10)); renderCalendar(); save();
+    });
+    $('nextMonthBtn').addEventListener('click',()=>{
+      const d = parseDate(state.monthCursor); d.setMonth(d.getMonth()+1); state.monthCursor = monthStart(d.toISOString().slice(0,10)); renderCalendar(); save();
+    });
+
+    $('exportCsvBtn').addEventListener('click',exportCsv);
+    $('exportMdBtn').addEventListener('click',exportMarkdown);
+  }
+
+  function render(){
+    buildStats();
+    renderTable();
+    renderCalendar();
+  }
+
+  function boot(){
+    initTheme();
+    seedSelects();
+    bindSettingsToInputs();
+    resetForm();
+    wireEvents();
+    render();
+  }
+
+  boot();
+})();
+</script>
+</body>
+</html>

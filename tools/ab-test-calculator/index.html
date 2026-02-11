@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>A/B Test Calculator | AB 테스트 계산기</title>
+  <meta name="description" content="A/B 테스트 전환율, uplift, z-score, p-value를 계산하는 통계 계산기" />
+  <style>
+    :root {
+      --bg: #0d111a;
+      --panel: #171d2d;
+      --panel-2: #11172a;
+      --line: #2a3554;
+      --text: #e8efff;
+      --muted: #aab5d8;
+      --a: #7c95ff;
+      --b: #36d8b1;
+      --warn: #ffbc5f;
+      --danger: #ff6e72;
+      --shadow: 0 16px 34px rgba(0,0,0,.35);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--text);
+      background: radial-gradient(circle at 12% -10%, #212d56 0%, #0d111a 45%);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+      min-height: 100vh;
+    }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 20px 14px 64px; }
+    .head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 14px; }
+    h1 { margin: 0; font-size: clamp(1.15rem, 2.8vw, 1.7rem); }
+    .sub { margin-top: 5px; color: var(--muted); font-size: .9rem; }
+    .home {
+      text-decoration: none;
+      color: #d9e4ff;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #121a31;
+      padding: 8px 12px;
+      font-size: .88rem;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .card {
+      background: linear-gradient(165deg, var(--panel) 0%, var(--panel-2) 100%);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+      padding: 14px;
+    }
+    .card h2 { margin: 0 0 10px; font-size: 1rem; }
+    label { display: block; margin: 0 0 6px; color: var(--muted); font-size: .8rem; }
+    input, select, button {
+      width: 100%;
+      border: 1px solid var(--line);
+      background: #0d1325;
+      color: var(--text);
+      border-radius: 10px;
+      padding: 10px 11px;
+      font-size: .92rem;
+    }
+    input:focus, select:focus { outline: 2px solid rgba(124,149,255,.35); border-color: #5d7cf9; }
+    .two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .set { margin-bottom: 10px; }
+    .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+    button { border: none; cursor: pointer; font-weight: 700; background: linear-gradient(135deg, #607dff, #4e68ef); }
+    .soft { background: #1a2545; border: 1px solid var(--line); font-weight: 600; }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px;
+      background: #0f1630;
+      min-height: 76px;
+    }
+    .k { color: var(--muted); font-size: .76rem; margin-bottom: 5px; }
+    .v { font-size: 1.03rem; font-weight: 800; }
+    .va { color: var(--a); }
+    .vb { color: var(--b); }
+    .warn { color: var(--warn); }
+    .danger { color: var(--danger); }
+
+    .result {
+      margin-top: 10px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      background: #0f1732;
+      font-size: .9rem;
+      line-height: 1.5;
+    }
+    .bar-wrap { margin-top: 12px; }
+    .bar {
+      width: 100%;
+      height: 14px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: #182447;
+      border: 1px solid #314676;
+    }
+    .fill {
+      height: 100%;
+      width: 50%;
+      background: linear-gradient(90deg, var(--a), var(--b));
+      transition: width .3s ease;
+    }
+    .mini { color: var(--muted); font-size: .78rem; margin-top: 6px; }
+
+    .table-wrap {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      overflow: auto;
+      margin-top: 10px;
+      background: #0e1631;
+    }
+    table { width: 100%; border-collapse: collapse; min-width: 620px; }
+    th, td {
+      border-bottom: 1px solid #23345f;
+      padding: 8px;
+      font-size: .82rem;
+      text-align: right;
+      white-space: nowrap;
+    }
+    th:first-child, td:first-child { text-align: left; }
+    th { color: #b7c4e8; background: #121f40; }
+
+    @media (max-width: 860px) {
+      .grid { grid-template-columns: 1fr; }
+      .metrics { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <div class="head">
+      <div>
+        <h1>🧪 AB 테스트 계산기</h1>
+        <div class="sub">전환율 차이가 우연인지, 실제 개선인지 빠르게 검증합니다.</div>
+      </div>
+      <a class="home" href="/tools/">전체 도구</a>
+    </div>
+
+    <section class="grid">
+      <article class="card">
+        <h2>실험 데이터 입력</h2>
+
+        <div class="set">
+          <label>그룹 A (기준안)</label>
+          <div class="two">
+            <input id="visA" type="number" min="1" value="12000" placeholder="방문자 수" />
+            <input id="convA" type="number" min="0" value="936" placeholder="전환 수" />
+          </div>
+        </div>
+
+        <div class="set">
+          <label>그룹 B (변경안)</label>
+          <div class="two">
+            <input id="visB" type="number" min="1" value="11840" placeholder="방문자 수" />
+            <input id="convB" type="number" min="0" value="1042" placeholder="전환 수" />
+          </div>
+        </div>
+
+        <div class="two">
+          <div>
+            <label for="alpha">유의수준 (α)</label>
+            <select id="alpha">
+              <option value="0.10">90% 신뢰 (α=0.10)</option>
+              <option value="0.05" selected>95% 신뢰 (α=0.05)</option>
+              <option value="0.01">99% 신뢰 (α=0.01)</option>
+            </select>
+          </div>
+          <div>
+            <label for="tail">검정 유형</label>
+            <select id="tail">
+              <option value="two" selected>양측검정 (차이 존재)</option>
+              <option value="one">단측검정 (B가 더 큼)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="btns">
+          <button id="calcBtn" type="button">계산</button>
+          <button id="sampleBtn" type="button" class="soft">샘플 데이터</button>
+          <button id="saveBtn" type="button" class="soft">저장</button>
+          <button id="loadBtn" type="button" class="soft">불러오기</button>
+        </div>
+
+        <div class="mini">2-proportion z-test 기준. 작은 표본에서는 베이지안/피셔 검정을 병행하세요.</div>
+      </article>
+
+      <article class="card">
+        <h2>핵심 결과</h2>
+
+        <div class="metrics">
+          <div class="pill"><div class="k">A 전환율</div><div class="v va" id="rateA">-</div></div>
+          <div class="pill"><div class="k">B 전환율</div><div class="v vb" id="rateB">-</div></div>
+          <div class="pill"><div class="k">Uplift (B vs A)</div><div class="v" id="uplift">-</div></div>
+          <div class="pill"><div class="k">z-score</div><div class="v" id="zScore">-</div></div>
+          <div class="pill"><div class="k">p-value</div><div class="v" id="pValue">-</div></div>
+          <div class="pill"><div class="k">판정</div><div class="v warn" id="decision">-</div></div>
+        </div>
+
+        <div class="bar-wrap">
+          <div class="bar"><div id="fill" class="fill"></div></div>
+          <div class="mini" id="fillText">전환율 차이 시각화</div>
+        </div>
+
+        <div class="result" id="explain">값을 입력하고 계산 버튼을 눌러주세요.</div>
+      </article>
+    </section>
+
+    <section class="card">
+      <h2>신뢰구간 & 참고 지표</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>지표</th>
+              <th>값</th>
+              <th>해석</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const KEY = 'ab-test-calculator:v1';
+    const $ = (id) => document.getElementById(id);
+    const refs = {
+      visA: $('visA'), convA: $('convA'), visB: $('visB'), convB: $('convB'), alpha: $('alpha'), tail: $('tail'),
+      calcBtn: $('calcBtn'), sampleBtn: $('sampleBtn'), saveBtn: $('saveBtn'), loadBtn: $('loadBtn'),
+      rateA: $('rateA'), rateB: $('rateB'), uplift: $('uplift'), zScore: $('zScore'), pValue: $('pValue'), decision: $('decision'),
+      fill: $('fill'), fillText: $('fillText'), explain: $('explain'), rows: $('rows')
+    };
+
+    function save() {
+      const payload = {
+        visA: refs.visA.value, convA: refs.convA.value, visB: refs.visB.value, convB: refs.convB.value, alpha: refs.alpha.value, tail: refs.tail.value
+      };
+      localStorage.setItem(KEY, JSON.stringify(payload));
+    }
+
+    function load() {
+      try {
+        const d = JSON.parse(localStorage.getItem(KEY));
+        if (!d) return false;
+        Object.keys(d).forEach(k => refs[k] && (refs[k].value = d[k]));
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
+    function normalCdf(x) {
+      return 0.5 * (1 + erf(x / Math.SQRT2));
+    }
+
+    // Numerical approximation of erf (Abramowitz & Stegun 7.1.26)
+    function erf(x) {
+      const sign = x < 0 ? -1 : 1;
+      x = Math.abs(x);
+      const a1 = 0.254829592;
+      const a2 = -0.284496736;
+      const a3 = 1.421413741;
+      const a4 = -1.453152027;
+      const a5 = 1.061405429;
+      const p = 0.3275911;
+      const t = 1 / (1 + p * x);
+      const y = 1 - (((((a5 * t + a4) * t + a3) * t + a2) * t + a1) * t * Math.exp(-x * x));
+      return sign * y;
+    }
+
+    function zCritical(alpha, tail) {
+      const target = tail === 'two' ? 1 - alpha / 2 : 1 - alpha;
+      let lo = -8, hi = 8;
+      for (let i = 0; i < 80; i++) {
+        const mid = (lo + hi) / 2;
+        if (normalCdf(mid) < target) lo = mid; else hi = mid;
+      }
+      return (lo + hi) / 2;
+    }
+
+    function pct(v) { return `${(v * 100).toFixed(2)}%`; }
+
+    function run() {
+      const nA = Math.max(1, Number(refs.visA.value) || 0);
+      const xA = Math.max(0, Number(refs.convA.value) || 0);
+      const nB = Math.max(1, Number(refs.visB.value) || 0);
+      const xB = Math.max(0, Number(refs.convB.value) || 0);
+
+      if (xA > nA || xB > nB) {
+        refs.explain.textContent = '전환 수는 방문자 수를 초과할 수 없습니다.';
+        refs.explain.style.borderColor = '#8b2e3d';
+        refs.explain.style.color = '#ffd9df';
+        return;
+      }
+
+      const alpha = Number(refs.alpha.value);
+      const tail = refs.tail.value;
+      const pA = xA / nA;
+      const pB = xB / nB;
+      const uplift = pA === 0 ? 0 : (pB - pA) / pA;
+
+      const pooled = (xA + xB) / (nA + nB);
+      const se = Math.sqrt(Math.max(1e-15, pooled * (1 - pooled) * (1 / nA + 1 / nB)));
+      const z = (pB - pA) / se;
+
+      let p;
+      if (tail === 'two') {
+        p = 2 * (1 - normalCdf(Math.abs(z)));
+      } else {
+        p = 1 - normalCdf(z);
+      }
+
+      const zCrit = zCritical(alpha, tail);
+      const seDiff = Math.sqrt(Math.max(1e-15, pA * (1 - pA) / nA + pB * (1 - pB) / nB));
+      const diff = pB - pA;
+      const ciLow = diff - zCrit * seDiff;
+      const ciHigh = diff + zCrit * seDiff;
+
+      const significant = p < alpha;
+      const winner = pB > pA ? 'B' : (pB < pA ? 'A' : '동률');
+
+      refs.rateA.textContent = pct(pA);
+      refs.rateB.textContent = pct(pB);
+      refs.uplift.textContent = `${uplift >= 0 ? '+' : ''}${(uplift * 100).toFixed(2)}%`;
+      refs.zScore.textContent = z.toFixed(3);
+      refs.pValue.textContent = p.toFixed(6);
+      refs.decision.textContent = significant ? `유의함 (${winner} 우세)` : '유의하지 않음';
+      refs.decision.className = `v ${significant ? '' : 'warn'} ${significant && winner==='A' ? 'danger' : ''}`;
+
+      const maxRate = Math.max(pA, pB, 0.0001);
+      const width = Math.max(8, Math.min(100, (pB / maxRate) * 100));
+      refs.fill.style.width = `${width}%`;
+      refs.fillText.textContent = `A ${pct(pA)} vs B ${pct(pB)} (상대비 ${(Math.abs((pB-pA)*100)).toFixed(2)}%p)`;
+
+      const confidence = Math.round((1 - alpha) * 100);
+      let summary;
+      if (significant) {
+        if (winner === 'B') {
+          summary = `✅ B안이 A안보다 통계적으로 유의하게 높습니다 (p=${p.toFixed(5)} < α=${alpha}). ${confidence}% 신뢰수준에서 롤아웃 후보입니다.`;
+        } else if (winner === 'A') {
+          summary = `⚠️ B안이 오히려 낮습니다. A안 유지 권장 (p=${p.toFixed(5)} < α=${alpha}).`;
+        } else {
+          summary = `통계적으로 유의한 차이가 관측되었으나 실제 차이는 매우 작습니다.`;
+        }
+      } else {
+        summary = `보류 권장: 현재 표본에서 유의한 차이를 확인하지 못했습니다 (p=${p.toFixed(5)}). 표본 확대 또는 더 큰 변화 필요.`;
+      }
+      refs.explain.textContent = summary;
+      refs.explain.style.borderColor = significant ? '#2f4d79' : '#5b4a2c';
+      refs.explain.style.color = '#e8efff';
+
+      const rows = [
+        ['전환율 차이 (B-A)', `${(diff*100).toFixed(3)}%p`, '절대 전환율 차이'],
+        [`${confidence}% 신뢰구간`, `${(ciLow*100).toFixed(3)}%p ~ ${(ciHigh*100).toFixed(3)}%p`, '0을 포함하면 유의하지 않을 가능성 큼'],
+        ['표준오차(SE, pooled)', se.toFixed(6), '작을수록 차이 검출에 유리'],
+        ['검정 유형', tail === 'two' ? '양측검정' : '단측검정(B>A)', '사전 가설과 일치시켜 사용'],
+        ['권장 해석', significant ? `${winner} 우세 시나리오` : '추가 데이터 필요', significant ? '출시 전 품질/세그먼트 재검증' : '실험 연장 또는 아이디어 재설계']
+      ];
+
+      refs.rows.innerHTML = rows.map(r => `
+        <tr>
+          <td>${r[0]}</td>
+          <td>${r[1]}</td>
+          <td style="text-align:left; color:#b9c6ea;">${r[2]}</td>
+        </tr>
+      `).join('');
+
+      save();
+    }
+
+    function bind() {
+      refs.calcBtn.addEventListener('click', run);
+      refs.sampleBtn.addEventListener('click', () => {
+        refs.visA.value = 13200; refs.convA.value = 845;
+        refs.visB.value = 13140; refs.convB.value = 962;
+        refs.alpha.value = '0.05'; refs.tail.value = 'two';
+        run();
+      });
+      refs.saveBtn.addEventListener('click', () => { save(); alert('입력값 저장 완료'); });
+      refs.loadBtn.addEventListener('click', () => {
+        if (!load()) return alert('저장된 값이 없습니다.');
+        run();
+      });
+
+      [refs.visA, refs.convA, refs.visB, refs.convB, refs.alpha, refs.tail].forEach(node => node.addEventListener('change', run));
+    }
+
+    function init() {
+      load();
+      bind();
+      run();
+    }
+
+    init();
+  </script>
+</body>
+</html>

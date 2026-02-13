@@ -8,7 +8,7 @@
 ### Tasks
 1. [x] 장애 재현 및 원인 확정
 2. [x] `.nojekyll` 기반 핫픽스 구현
-3. [ ] eastsea-blog에서만 커밋/푸시
+3. [x] eastsea-blog에서만 커밋/푸시
 4. [ ] 실서버 재검증(curl + browser)
 5. [ ] 증거 포함 완료 보고
 

@@ -41,12 +41,12 @@
 - 품질 리뷰: `novels/view.html`의 기존 `_data/...` fetch 경로를 그대로 유지하므로 호환성 영향 없음
 
 ### Task 3. Git 커밋/푸시 (eastsea-blog only)
-- [ ] 관련 파일만 커밋
-- [ ] origin/master push
+- [x] 관련 파일만 커밋
+- [x] origin/master push
 
 #### 2-Stage Review
-- Spec 준수: 서브모듈 내부 Git 작업만 수행
-- 품질 리뷰: 불필요 파일 포함 여부 점검
+- Spec 준수: `/Users/kjaylee/.openclaw/workspace/eastsea-blog` 내부에서만 Git 수행
+- 품질 리뷰: 커밋 포함 파일 `.nojekyll`, `IMPLEMENTATION_PLAN.md`, `specs/novels-hotfix-2026-02-11.md` 3개로 제한
 
 ### Task 4. 실서버 검증 (증거 필수)
 - [ ] `novels/_data/*.md` HTTP 200 확인

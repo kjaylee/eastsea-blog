@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>수면 사이클 계산기 | East Sea Tools</title>
+<meta name="description" content="수면 사이클에 맞춰 최적의 기상/취침 시간을 계산합니다. 90분 사이클 기반으로 개운한 아침을 만들어보세요.">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--primary:#4F46E5;--primary-light:#6366F1;--bg:#f8fafc;--surface:#fff;--text:#1e293b;--text-secondary:#64748b;--border:#e2e8f0;--shadow:0 1px 3px rgba(0,0,0,.1);--radius:12px;--sleep:#7c3aed}
+@media(prefers-color-scheme:dark){:root{--bg:#0f172a;--surface:#1e293b;--text:#f1f5f9;--text-secondary:#94a3b8;--border:#334155;--shadow:0 1px 3px rgba(0,0,0,.3)}}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:20px}
+.container{max-width:560px;width:100%}
+h1{font-size:1.8rem;text-align:center;margin:20px 0 8px;color:var(--sleep)}
+.desc{text-align:center;color:var(--text-secondary);margin-bottom:24px;font-size:.95rem}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;margin-bottom:16px;box-shadow:var(--shadow)}
+.tabs{display:flex;gap:4px;margin-bottom:20px;background:var(--bg);border-radius:8px;padding:4px}
+.tab{flex:1;padding:10px;text-align:center;border:none;background:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:.9rem;color:var(--text-secondary);transition:all .2s}
+.tab.active{background:var(--sleep);color:#fff}
+label{display:block;font-weight:600;margin-bottom:6px;font-size:.9rem}
+input[type="time"]{width:100%;padding:14px;border:1px solid var(--border);border-radius:8px;font-size:1.2rem;background:var(--bg);color:var(--text);margin-bottom:16px;text-align:center}
+input:focus{outline:none;border-color:var(--sleep);box-shadow:0 0 0 3px rgba(124,58,237,.15)}
+.btn{width:100%;padding:14px;background:var(--sleep);color:#fff;border:none;border-radius:8px;font-size:1.05rem;font-weight:600;cursor:pointer;transition:background .2s}
+.btn:hover{opacity:.9}
+.results{display:none}
+.time-cards{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}
+@media(max-width:400px){.time-cards{grid-template-columns:1fr}}
+.time-card{background:var(--bg);border:2px solid var(--border);border-radius:var(--radius);padding:16px;text-align:center;transition:all .2s}
+.time-card.recommended{border-color:var(--sleep);background:rgba(124,58,237,.05)}
+.time-card .cycles{font-size:.75rem;color:var(--text-secondary);margin-bottom:4px}
+.time-card .time{font-size:1.6rem;font-weight:700;color:var(--text)}
+.time-card.recommended .time{color:var(--sleep)}
+.time-card .duration{font-size:.8rem;color:var(--text-secondary);margin-top:4px}
+.time-card .quality{display:inline-block;margin-top:6px;padding:2px 8px;border-radius:10px;font-size:.7rem;font-weight:600}
+.quality-best{background:rgba(16,185,129,.15);color:#059669}
+.quality-good{background:rgba(59,130,246,.15);color:#2563eb}
+.quality-ok{background:rgba(245,158,11,.15);color:#d97706}
+.quality-short{background:rgba(239,68,68,.15);color:#dc2626}
+.info{background:var(--bg);border-radius:8px;padding:16px;margin-top:16px;font-size:.85rem;color:var(--text-secondary);line-height:1.7}
+.now-btn{background:none;border:1px solid var(--border);border-radius:6px;padding:6px 12px;cursor:pointer;font-size:.8rem;color:var(--text-secondary);margin-bottom:8px}
+.now-btn:hover{border-color:var(--sleep);color:var(--sleep)}
+footer{text-align:center;padding:32px 0 16px;color:var(--text-secondary);font-size:.8rem}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>😴 수면 사이클 계산기</h1>
+<p class="desc">90분 수면 사이클에 맞춰 최적의 기상/취침 시간을 찾아보세요.</p>
+
+<div class="card">
+<div class="tabs">
+<button class="tab active" onclick="setMode('sleep')">😴 지금 자려면</button>
+<button class="tab" onclick="setMode('wake')">⏰ 이때 일어나려면</button>
+</div>
+
+<div id="sleepMode">
+<label>지금 잠들 시간</label>
+<button class="now-btn" onclick="setNow('sleepTime')">⏱️ 현재 시간</button>
+<input type="time" id="sleepTime">
+<button class="btn" onclick="calcWakeUp()">⏰ 기상 시간 계산</button>
+</div>
+
+<div id="wakeMode" style="display:none">
+<label>일어나야 할 시간</label>
+<input type="time" id="wakeTime" value="07:00">
+<button class="btn" onclick="calcBedTime()">😴 취침 시간 계산</button>
+</div>
+</div>
+
+<div class="card results" id="results">
+<h3 id="resultTitle" style="margin-bottom:4px"></h3>
+<p style="font-size:.85rem;color:var(--text-secondary);margin-bottom:8px" id="resultDesc"></p>
+<div class="time-cards" id="timeCards"></div>
+</div>
+
+<div class="card">
+<div class="info">
+<strong>💤 수면 사이클이란?</strong><br><br>
+하나의 수면 사이클은 약 <strong>90분</strong>입니다.<br>
+• 입면 시간: 약 <strong>15분</strong> 소요<br>
+• 4~5 사이클 (6~7.5시간) = 적정 수면<br>
+• 6 사이클 (9시간) = 충분한 수면<br><br>
+사이클 도중에 깨면 피곤하고, 사이클이 끝날 때 깨면 개운합니다.<br>
+이 계산기는 <strong>사이클 종료 시점</strong>에 맞춰 기상 시간을 추천합니다.
+</div>
+</div>
+</div>
+<footer>© 2026 East Sea</footer>
+
+<script>
+const CYCLE=90; // minutes
+const FALL_ASLEEP=15; // minutes
+
+let mode='sleep';
+
+function setMode(m){
+mode=m;
+document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+event.target.classList.add('active');
+document.getElementById('sleepMode').style.display=m==='sleep'?'block':'none';
+document.getElementById('wakeMode').style.display=m==='wake'?'block':'none';
+document.getElementById('results').style.display='none';
+}
+
+function setNow(id){
+const now=new Date();
+const h=String(now.getHours()).padStart(2,'0');
+const m=String(now.getMinutes()).padStart(2,'0');
+document.getElementById(id).value=h+':'+m;
+}
+
+function parseTime(val){
+const[h,m]=val.split(':').map(Number);
+return h*60+m;
+}
+
+function formatTime(totalMin){
+totalMin=((totalMin%1440)+1440)%1440;
+const h=Math.floor(totalMin/60);
+const m=totalMin%60;
+const period=h<12?'오전':'오후';
+const h12=h===0?12:h>12?h-12:h;
+return period+' '+h12+':'+String(m).padStart(2,'0');
+}
+
+function getQuality(cycles){
+if(cycles>=5&&cycles<=6)return{label:'최적',cls:'quality-best'};
+if(cycles===4)return{label:'좋음',cls:'quality-good'};
+if(cycles===3)return{label:'보통',cls:'quality-ok'};
+return{label:'부족',cls:'quality-short'};
+}
+
+function calcWakeUp(){
+const val=document.getElementById('sleepTime').value;
+if(!val){alert('잠들 시간을 입력하세요.');return;}
+const sleepMin=parseTime(val)+FALL_ASLEEP;
+
+const cards=[];
+for(let c=6;c>=3;c--){
+const wakeMin=sleepMin+c*CYCLE;
+const dur=c*CYCLE;
+const q=getQuality(c);
+cards.push({time:formatTime(wakeMin),cycles:c,duration:`${Math.floor(dur/60)}시간 ${dur%60}분`,quality:q,recommended:c===5||c===6});
+}
+
+renderResults('⏰ 추천 기상 시간','사이클 완료 시점에 맞춘 기상 시간입니다.',cards);
+}
+
+function calcBedTime(){
+const val=document.getElementById('wakeTime').value;
+if(!val){alert('기상 시간을 입력하세요.');return;}
+const wakeMin=parseTime(val);
+
+const cards=[];
+for(let c=6;c>=3;c--){
+const bedMin=wakeMin-c*CYCLE-FALL_ASLEEP;
+const dur=c*CYCLE;
+const q=getQuality(c);
+cards.push({time:formatTime(bedMin),cycles:c,duration:`${Math.floor(dur/60)}시간 ${dur%60}분`,quality:q,recommended:c===5||c===6});
+}
+
+renderResults('😴 추천 취침 시간','이 시간에 잠들면 사이클에 맞춰 깰 수 있습니다.',cards);
+}
+
+function renderResults(title,desc,cards){
+document.getElementById('resultTitle').textContent=title;
+document.getElementById('resultDesc').textContent=desc;
+const el=document.getElementById('timeCards');
+el.innerHTML=cards.map(c=>`
+<div class="time-card${c.recommended?' recommended':''}">
+<div class="cycles">${c.cycles} 사이클</div>
+<div class="time">${c.time}</div>
+<div class="duration">${c.duration} 수면</div>
+<span class="quality ${c.quality.cls}">${c.quality.label}</span>
+</div>
+`).join('');
+document.getElementById('results').style.display='block';
+}
+
+// Auto-set current time
+setNow('sleepTime');
+</script>
+</body>
+</html>

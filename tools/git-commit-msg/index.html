@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Git 커밋 메시지 생성기 | 웹 도구 모음</title>
+    <style>
+        :root {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8f9fa;
+            --text-primary: #212529;
+            --text-secondary: #6c757d;
+            --accent: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --border: #dee2e6;
+            --shadow: rgba(0, 0, 0, 0.1);
+            --card-bg: #ffffff;
+        }
+        [data-theme="dark"] {
+            --bg-primary: #1a1a1a;
+            --bg-secondary: #121212;
+            --text-primary: #f8f9fa;
+            --text-secondary: #adb5bd;
+            --border: #444;
+            --shadow: rgba(0, 0, 0, 0.3);
+            --card-bg: #2d2d2d;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR', sans-serif;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .container { max-width: 800px; margin: 0 auto; }
+        header {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 30px;
+        }
+        .back-btn {
+            text-decoration: none; color: var(--text-secondary);
+            display: flex; align-items: center; gap: 5px; font-weight: 500;
+        }
+        .back-btn:hover { color: var(--text-primary); }
+        .theme-toggle { background: none; border: none; cursor: pointer; font-size: 1.5rem; }
+        .card {
+            background: var(--card-bg); border-radius: 20px; padding: 30px;
+            box-shadow: 0 10px 30px var(--shadow); border: 1px solid var(--border);
+            margin-bottom: 20px;
+        }
+        h1 {
+            font-size: 1.8rem; margin-bottom: 10px;
+            background: var(--accent); -webkit-background-clip: text;
+            background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .desc { color: var(--text-secondary); margin-bottom: 20px; }
+        label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 0.9rem; }
+        select, input, textarea {
+            width: 100%; padding: 12px; border: 2px solid var(--border);
+            border-radius: 12px; background: var(--bg-primary);
+            color: var(--text-primary); font-size: 1rem; outline: none;
+            font-family: inherit; margin-bottom: 16px;
+        }
+        select:focus, input:focus, textarea:focus { border-color: #667eea; }
+        textarea { resize: vertical; height: 80px; }
+        .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .output-box {
+            background: var(--bg-secondary); border: 1px solid var(--border);
+            border-radius: 12px; padding: 16px; font-family: 'Courier New', monospace;
+            font-size: 0.95rem; white-space: pre-wrap; word-break: break-all;
+            min-height: 60px; position: relative;
+        }
+        .copy-btn {
+            position: absolute; top: 10px; right: 10px;
+            padding: 6px 12px; background: var(--card-bg); border: 1px solid var(--border);
+            border-radius: 8px; cursor: pointer; font-size: 0.8rem; color: var(--text-primary);
+        }
+        .copy-btn:hover { background: var(--bg-primary); }
+        .type-grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+            gap: 8px; margin-bottom: 16px;
+        }
+        .type-btn {
+            padding: 10px 8px; border: 2px solid var(--border); border-radius: 10px;
+            background: var(--bg-primary); cursor: pointer; text-align: center;
+            font-size: 0.85rem; color: var(--text-primary); transition: all 0.2s;
+        }
+        .type-btn:hover { border-color: #667eea; }
+        .type-btn.active { border-color: #667eea; background: rgba(102,126,234,0.1); }
+        .type-emoji { font-size: 1.2rem; display: block; margin-bottom: 2px; }
+        .breaking-toggle {
+            display: flex; align-items: center; gap: 10px; margin-bottom: 16px;
+        }
+        .breaking-toggle input[type="checkbox"] { width: auto; margin: 0; }
+        .preview-label { font-weight: 700; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 8px; }
+        @media (max-width: 600px) {
+            .row { grid-template-columns: 1fr; }
+            .type-grid { grid-template-columns: repeat(3, 1fr); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <a href="../" class="back-btn">← 목록으로</a>
+            <button class="theme-toggle" onclick="toggleTheme()">🌓</button>
+        </header>
+
+        <div class="card">
+            <h1>📝 Git 커밋 메시지 생성기</h1>
+            <p class="desc">Conventional Commits 컨벤션에 맞는 커밋 메시지를 쉽게 생성합니다.</p>
+
+            <label>Type (커밋 유형)</label>
+            <div class="type-grid" id="typeGrid"></div>
+
+            <div class="row">
+                <div>
+                    <label for="scope">Scope (범위, 선택)</label>
+                    <input type="text" id="scope" placeholder="예: auth, api, ui" oninput="generate()">
+                </div>
+                <div>
+                    <label for="ticket">Ticket (이슈 번호, 선택)</label>
+                    <input type="text" id="ticket" placeholder="예: JIRA-123, #42" oninput="generate()">
+                </div>
+            </div>
+
+            <label for="subject">Subject (제목, 필수)</label>
+            <input type="text" id="subject" placeholder="변경 사항을 간결하게 요약 (50자 이내 권장)" maxlength="72" oninput="generate()">
+            <div style="text-align:right;font-size:0.8rem;color:var(--text-secondary);margin-top:-12px;margin-bottom:12px;">
+                <span id="charCount">0</span>/72
+            </div>
+
+            <label for="body">Body (본문, 선택)</label>
+            <textarea id="body" placeholder="변경 이유, 상세 설명 등" oninput="generate()"></textarea>
+
+            <div class="breaking-toggle">
+                <input type="checkbox" id="breaking" onchange="generate()">
+                <label for="breaking" style="margin:0;font-weight:400;">⚠️ Breaking Change</label>
+            </div>
+
+            <label for="breakingDesc">Breaking Change 설명 (선택)</label>
+            <input type="text" id="breakingDesc" placeholder="이전 버전과 호환되지 않는 변경 사항" oninput="generate()">
+        </div>
+
+        <div class="card">
+            <div class="preview-label">📋 생성된 커밋 메시지</div>
+            <div class="output-box" id="output">
+                타입을 선택하고 제목을 입력하세요...
+                <button class="copy-btn" onclick="copyOutput()">복사</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const TYPES = [
+            { key: 'feat', emoji: '✨', label: 'feat', desc: '새 기능' },
+            { key: 'fix', emoji: '🐛', label: 'fix', desc: '버그 수정' },
+            { key: 'docs', emoji: '📚', label: 'docs', desc: '문서 변경' },
+            { key: 'style', emoji: '💎', label: 'style', desc: '포맷팅' },
+            { key: 'refactor', emoji: '♻️', label: 'refactor', desc: '리팩토링' },
+            { key: 'perf', emoji: '⚡', label: 'perf', desc: '성능 개선' },
+            { key: 'test', emoji: '🧪', label: 'test', desc: '테스트' },
+            { key: 'build', emoji: '🔧', label: 'build', desc: '빌드' },
+            { key: 'ci', emoji: '👷', label: 'ci', desc: 'CI 설정' },
+            { key: 'chore', emoji: '🔨', label: 'chore', desc: '기타 작업' },
+            { key: 'revert', emoji: '⏪', label: 'revert', desc: '되돌리기' },
+        ];
+
+        let selectedType = '';
+
+        function initTypeGrid() {
+            const grid = document.getElementById('typeGrid');
+            TYPES.forEach(t => {
+                const btn = document.createElement('button');
+                btn.className = 'type-btn';
+                btn.dataset.type = t.key;
+                btn.innerHTML = `<span class="type-emoji">${t.emoji}</span>${t.label}<br><small style="color:var(--text-secondary)">${t.desc}</small>`;
+                btn.onclick = () => selectType(t.key);
+                grid.appendChild(btn);
+            });
+        }
+
+        function selectType(type) {
+            selectedType = type;
+            document.querySelectorAll('.type-btn').forEach(b => {
+                b.classList.toggle('active', b.dataset.type === type);
+            });
+            generate();
+        }
+
+        function generate() {
+            const scope = document.getElementById('scope').value.trim();
+            const subject = document.getElementById('subject').value.trim();
+            const body = document.getElementById('body').value.trim();
+            const breaking = document.getElementById('breaking').checked;
+            const breakingDesc = document.getElementById('breakingDesc').value.trim();
+            const ticket = document.getElementById('ticket').value.trim();
+
+            document.getElementById('charCount').textContent = subject.length;
+
+            if (!selectedType || !subject) {
+                document.getElementById('output').innerHTML = '타입을 선택하고 제목을 입력하세요...<button class="copy-btn" onclick="copyOutput()">복사</button>';
+                return;
+            }
+
+            let header = selectedType;
+            if (scope) header += `(${scope})`;
+            if (breaking) header += '!';
+            header += `: ${subject}`;
+
+            let msg = header;
+            if (body) msg += `\n\n${body}`;
+            if (breaking && breakingDesc) msg += `\n\nBREAKING CHANGE: ${breakingDesc}`;
+            if (ticket) msg += `\n\nRefs: ${ticket}`;
+
+            document.getElementById('output').innerHTML = escapeHtml(msg) + '<button class="copy-btn" onclick="copyOutput()">복사</button>';
+        }
+
+        function escapeHtml(text) {
+            return text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        }
+
+        function copyOutput() {
+            const el = document.getElementById('output');
+            const text = el.textContent.replace('복사', '').replace('복사됨!', '').trim();
+            navigator.clipboard.writeText(text).then(() => {
+                const btn = el.querySelector('.copy-btn');
+                btn.textContent = '복사됨!';
+                setTimeout(() => btn.textContent = '복사', 1500);
+            });
+        }
+
+        function toggleTheme() {
+            const html = document.documentElement;
+            const t = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+            html.setAttribute('data-theme', t);
+            localStorage.setItem('theme', t);
+        }
+        document.documentElement.setAttribute('data-theme', localStorage.getItem('theme') || 'light');
+
+        initTypeGrid();
+    </script>
+</body>
+</html>

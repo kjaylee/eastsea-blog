@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTML to JSX Converter</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg-primary: #ffffff; --bg-secondary: #f8f9fa; --bg-tertiary: #e9ecef;
+            --text-primary: #212529; --text-secondary: #6c757d;
+            --accent: #f59e0b; --border: #dee2e6; --shadow: rgba(0,0,0,0.1);
+        }
+        [data-theme="dark"] {
+            --bg-primary: #0f0f23; --bg-secondary: #1a1a2e; --bg-tertiary: #16213e;
+            --text-primary: #e4e4e7; --text-secondary: #a1a1aa;
+            --border: #27272a; --shadow: rgba(0,0,0,0.5);
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR', sans-serif;
+            background: var(--bg-primary); color: var(--text-primary);
+            padding: 20px; min-height: 100vh; transition: background 0.3s, color 0.3s;
+        }
+        .container { max-width: 900px; margin: 0 auto; }
+        header { text-align: center; margin-bottom: 24px; }
+        h1 { font-size: 1.8rem; color: var(--accent); margin-bottom: 6px; }
+        .subtitle { color: var(--text-secondary); font-size: 0.9rem; }
+        .theme-toggle {
+            position: fixed; top: 20px; right: 20px; width: 44px; height: 44px;
+            border-radius: 50%; background: var(--bg-secondary); border: 2px solid var(--border);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.3rem; cursor: pointer; z-index: 1000;
+        }
+        .editors { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+        .editor-box {
+            background: var(--bg-secondary); border-radius: 12px; padding: 16px;
+            border: 1px solid var(--border);
+        }
+        .editor-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .editor-title { font-weight: 700; font-size: 0.95rem; color: var(--accent); }
+        textarea {
+            width: 100%; height: 350px; padding: 12px; border: 1px solid var(--border);
+            border-radius: 10px; background: var(--bg-primary); color: var(--text-primary);
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace; font-size: 0.85rem;
+            resize: vertical; line-height: 1.5; tab-size: 2;
+        }
+        .btn-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+        .btn {
+            padding: 10px 20px; border: none; border-radius: 10px;
+            font-weight: 700; cursor: pointer; font-size: 0.9rem; transition: opacity 0.2s;
+        }
+        .btn-primary { background: var(--accent); color: white; }
+        .btn-secondary { background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border); }
+        .btn:hover { opacity: 0.85; }
+        .options {
+            background: var(--bg-secondary); border-radius: 12px; padding: 16px;
+            border: 1px solid var(--border); margin-bottom: 16px;
+            display: flex; gap: 20px; flex-wrap: wrap; align-items: center;
+        }
+        .options label { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; cursor: pointer; }
+        .stats {
+            text-align: center; color: var(--text-secondary); font-size: 0.8rem; margin-top: 12px;
+        }
+        @media (max-width: 700px) {
+            .editors { grid-template-columns: 1fr; }
+            textarea { height: 250px; }
+        }
+    </style>
+</head>
+<body>
+    <button class="theme-toggle" onclick="toggleTheme()" id="theme-btn">🌙</button>
+    <div class="container">
+        <header>
+            <h1>⚛️ HTML to JSX Converter</h1>
+            <p class="subtitle">HTML을 React JSX로 변환</p>
+        </header>
+
+        <div class="options">
+            <label><input type="checkbox" id="opt-fragment" checked> Fragment로 감싸기</label>
+            <label><input type="checkbox" id="opt-self-close" checked> 빈 태그 자동 닫기</label>
+            <label><input type="checkbox" id="opt-remove-comments"> 주석 제거</label>
+        </div>
+
+        <div class="editors">
+            <div class="editor-box">
+                <div class="editor-header">
+                    <span class="editor-title">HTML 입력</span>
+                    <button class="btn btn-secondary" onclick="document.getElementById('html-input').value='';convert()" style="padding:4px 10px;font-size:0.8rem">지우기</button>
+                </div>
+                <textarea id="html-input" placeholder='<div class="container">
+  <label for="name">Name</label>
+  <input type="text" tabindex="1">
+  <img src="photo.jpg">
+  <br>
+  <!-- comment -->
+  <p style="color: red; font-size: 14px;">Hello</p>
+</div>' oninput="convert()"></textarea>
+            </div>
+            <div class="editor-box">
+                <div class="editor-header">
+                    <span class="editor-title">JSX 출력</span>
+                    <button class="btn btn-secondary" onclick="copyOutput()" style="padding:4px 10px;font-size:0.8rem" id="copy-btn">복사</button>
+                </div>
+                <textarea id="jsx-output" readonly></textarea>
+            </div>
+        </div>
+
+        <div class="btn-row">
+            <button class="btn btn-primary" onclick="convert()">변환 →</button>
+            <button class="btn btn-secondary" onclick="loadExample()">예제 로드</button>
+        </div>
+        <div class="stats" id="stats"></div>
+    </div>
+    <script>
+        function initTheme() {
+            const s = localStorage.getItem('html2jsx-theme') || 'light';
+            document.documentElement.setAttribute('data-theme', s);
+            document.getElementById('theme-btn').textContent = s === 'light' ? '🌙' : '☀️';
+        }
+        function toggleTheme() {
+            const c = document.documentElement.getAttribute('data-theme') || 'light';
+            const n = c === 'light' ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-theme', n);
+            localStorage.setItem('html2jsx-theme', n);
+            document.getElementById('theme-btn').textContent = n === 'light' ? '🌙' : '☀️';
+        }
+
+        const attrMap = {
+            'class': 'className', 'for': 'htmlFor', 'tabindex': 'tabIndex',
+            'readonly': 'readOnly', 'maxlength': 'maxLength', 'cellpadding': 'cellPadding',
+            'cellspacing': 'cellSpacing', 'rowspan': 'rowSpan', 'colspan': 'colSpan',
+            'enctype': 'encType', 'contenteditable': 'contentEditable', 'crossorigin': 'crossOrigin',
+            'accesskey': 'accessKey', 'autocomplete': 'autoComplete', 'autofocus': 'autoFocus',
+            'autoplay': 'autoPlay', 'formaction': 'formAction', 'novalidate': 'noValidate',
+            'spellcheck': 'spellCheck', 'srcdoc': 'srcDoc', 'srcset': 'srcSet',
+            'charset': 'charSet', 'datetime': 'dateTime', 'hreflang': 'hrefLang',
+            'http-equiv': 'httpEquiv', 'inputmode': 'inputMode',
+        };
+        const selfClosing = new Set(['area','base','br','col','embed','hr','img','input','link','meta','param','source','track','wbr']);
+
+        function styleToObj(str) {
+            const parts = str.split(';').filter(s => s.trim());
+            const result = parts.map(part => {
+                const [key, ...vals] = part.split(':');
+                if (!key || !vals.length) return '';
+                const prop = key.trim().replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+                let val = vals.join(':').trim();
+                // Numbers without unit
+                if (/^\d+$/.test(val) && !['opacity','zIndex','flex','order','flexGrow','flexShrink','fontWeight','lineHeight','zoom'].some(p => prop.toLowerCase().includes(p.toLowerCase()))) {
+                    // Keep as string for most props
+                }
+                return `${prop}: '${val}'`;
+            }).filter(Boolean);
+            return `{{ ${result.join(', ')} }}`;
+        }
+
+        function convertAttr(name, value) {
+            // Event handlers
+            if (name.startsWith('on')) {
+                const evtName = 'on' + name.slice(2, 3).toUpperCase() + name.slice(3);
+                return `${evtName}={${value || 'undefined'}}`;
+            }
+            if (name === 'style') return `style=${styleToObj(value)}`;
+            const jsxName = attrMap[name] || name;
+            if (value === '' || value === name) return jsxName;
+            return `${jsxName}="${value}"`;
+        }
+
+        function convert() {
+            const html = document.getElementById('html-input').value;
+            if (!html.trim()) { document.getElementById('jsx-output').value = ''; document.getElementById('stats').textContent = ''; return; }
+
+            let jsx = html;
+            const removeComments = document.getElementById('opt-remove-comments').checked;
+            const doSelfClose = document.getElementById('opt-self-close').checked;
+            const doFragment = document.getElementById('opt-fragment').checked;
+
+            // Remove comments
+            if (removeComments) jsx = jsx.replace(/<!--[\s\S]*?-->/g, '');
+            else jsx = jsx.replace(/<!--([\s\S]*?)-->/g, '{/*$1*/}');
+
+            // Convert attributes
+            jsx = jsx.replace(/<([a-zA-Z][a-zA-Z0-9]*)((?:\s+[^>]*?)?)(\s*\/?\s*)>/g, (match, tag, attrs, close) => {
+                if (!attrs.trim()) {
+                    if (doSelfClose && selfClosing.has(tag.toLowerCase()) && !close.includes('/')) {
+                        return `<${tag} />`;
+                    }
+                    return match;
+                }
+                let newAttrs = attrs;
+                // style attribute
+                newAttrs = newAttrs.replace(/\sstyle="([^"]*)"/g, (_, val) => ` style=${styleToObj(val)}`);
+                newAttrs = newAttrs.replace(/\sstyle='([^']*)'/g, (_, val) => ` style=${styleToObj(val)}`);
+                // class → className
+                newAttrs = newAttrs.replace(/\bclass=/g, 'className=');
+                // for → htmlFor
+                newAttrs = newAttrs.replace(/\bfor="/g, 'htmlFor="');
+                newAttrs = newAttrs.replace(/\bfor='/g, "htmlFor='");
+                // tabindex → tabIndex
+                newAttrs = newAttrs.replace(/\btabindex=/g, 'tabIndex=');
+                newAttrs = newAttrs.replace(/\breadonly\b/g, 'readOnly');
+                newAttrs = newAttrs.replace(/\bmaxlength=/g, 'maxLength=');
+                newAttrs = newAttrs.replace(/\bcellpadding=/g, 'cellPadding=');
+                newAttrs = newAttrs.replace(/\bcellspacing=/g, 'cellSpacing=');
+                newAttrs = newAttrs.replace(/\browspan=/g, 'rowSpan=');
+                newAttrs = newAttrs.replace(/\bcolspan=/g, 'colSpan=');
+                newAttrs = newAttrs.replace(/\bautocomplete=/g, 'autoComplete=');
+                newAttrs = newAttrs.replace(/\bautofocus\b/g, 'autoFocus');
+                newAttrs = newAttrs.replace(/\bautoplay\b/g, 'autoPlay');
+                newAttrs = newAttrs.replace(/\bcontenteditable=/g, 'contentEditable=');
+                newAttrs = newAttrs.replace(/\bcrossorigin=/g, 'crossOrigin=');
+                newAttrs = newAttrs.replace(/\bhttp-equiv=/g, 'httpEquiv=');
+
+                // Self-close void elements
+                if (doSelfClose && selfClosing.has(tag.toLowerCase()) && !close.includes('/')) {
+                    return `<${tag}${newAttrs} />`;
+                }
+                return `<${tag}${newAttrs}${close}>`;
+            });
+
+            // Self-close void elements without attributes
+            if (doSelfClose) {
+                selfClosing.forEach(tag => {
+                    const re = new RegExp(`<(${tag})(\\s[^>]*)?>(?!\\s*/)`, 'gi');
+                    jsx = jsx.replace(re, (m) => {
+                        if (m.endsWith('/>')) return m;
+                        if (m.endsWith('>')) return m.slice(0, -1) + ' />';
+                        return m;
+                    });
+                });
+            }
+
+            // Wrap in fragment if needed
+            if (doFragment) {
+                const trimmed = jsx.trim();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                const children = [...doc.body.childNodes].filter(n => n.nodeType === 1 || (n.nodeType === 3 && n.textContent.trim()));
+                if (children.length > 1) {
+                    jsx = `<>\n${jsx}\n</>`;
+                }
+            }
+
+            document.getElementById('jsx-output').value = jsx;
+            const changes = [];
+            if (html.includes('class=')) changes.push('class→className');
+            if (html.includes(' for=')) changes.push('for→htmlFor');
+            if (html.includes('style=')) changes.push('style→object');
+            if (/<!--/.test(html)) changes.push(removeComments ? '주석 제거' : '주석→JSX');
+            document.getElementById('stats').textContent = changes.length ? '변환: ' + changes.join(', ') : '변환 완료';
+        }
+
+        function copyOutput() {
+            const out = document.getElementById('jsx-output');
+            navigator.clipboard.writeText(out.value);
+            const btn = document.getElementById('copy-btn');
+            btn.textContent = '✓ 복사됨';
+            setTimeout(() => btn.textContent = '복사', 1500);
+        }
+
+        function loadExample() {
+            document.getElementById('html-input').value = `<div class="container">
+  <label for="username">사용자명</label>
+  <input type="text" tabindex="1" readonly>
+  <img src="avatar.png" alt="프로필">
+  <br>
+  <!-- 아래는 스타일 예제 -->
+  <p style="color: red; font-size: 14px; margin-top: 10px;">
+    Hello World
+  </p>
+  <button onclick="handleClick()" class="btn primary">
+    클릭
+  </button>
+</div>`;
+            convert();
+        }
+
+        initTheme();
+    </script>
+</body>
+</html>

@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Regex Replace</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg-primary: #ffffff; --bg-secondary: #f8f9fa; --bg-tertiary: #e9ecef;
+            --text-primary: #212529; --text-secondary: #6c757d;
+            --accent: #7c3aed; --accent-light: rgba(124,58,237,0.15);
+            --border: #dee2e6; --shadow: rgba(0,0,0,0.1);
+            --match-bg: #fef3c7; --match-border: #f59e0b;
+        }
+        [data-theme="dark"] {
+            --bg-primary: #0f0f23; --bg-secondary: #1a1a2e; --bg-tertiary: #16213e;
+            --text-primary: #e4e4e7; --text-secondary: #a1a1aa;
+            --border: #27272a; --shadow: rgba(0,0,0,0.5);
+            --match-bg: rgba(245,158,11,0.2); --match-border: #f59e0b;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR', sans-serif;
+            background: var(--bg-primary); color: var(--text-primary);
+            padding: 20px; min-height: 100vh; transition: background 0.3s, color 0.3s;
+        }
+        .container { max-width: 800px; margin: 0 auto; }
+        header { text-align: center; margin-bottom: 24px; }
+        h1 { font-size: 1.8rem; color: var(--accent); margin-bottom: 6px; }
+        .subtitle { color: var(--text-secondary); font-size: 0.9rem; }
+        .theme-toggle {
+            position: fixed; top: 20px; right: 20px; width: 44px; height: 44px;
+            border-radius: 50%; background: var(--bg-secondary); border: 2px solid var(--border);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.3rem; cursor: pointer; z-index: 1000;
+        }
+        .card {
+            background: var(--bg-secondary); border-radius: 16px; padding: 20px;
+            border: 1px solid var(--border); margin-bottom: 16px;
+        }
+        .card h2 { font-size: 1rem; margin-bottom: 12px; color: var(--accent); }
+        .regex-row { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; }
+        .regex-row label { font-size: 0.85rem; font-weight: 600; min-width: 50px; }
+        input[type="text"] {
+            flex: 1; padding: 10px 14px; border: 1px solid var(--border); border-radius: 10px;
+            background: var(--bg-primary); color: var(--text-primary);
+            font-family: 'SF Mono', Monaco, monospace; font-size: 0.9rem;
+        }
+        textarea {
+            width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 10px;
+            background: var(--bg-primary); color: var(--text-primary);
+            font-family: 'SF Mono', Monaco, monospace; font-size: 0.85rem;
+            resize: vertical; line-height: 1.6; min-height: 150px;
+        }
+        .flags { display: flex; gap: 12px; flex-wrap: wrap; }
+        .flags label { display: flex; align-items: center; gap: 4px; font-size: 0.85rem; cursor: pointer; }
+        .btn-row { display: flex; gap: 8px; margin-top: 12px; }
+        .btn {
+            padding: 8px 16px; border: none; border-radius: 8px;
+            font-weight: 700; cursor: pointer; font-size: 0.85rem; transition: opacity 0.2s;
+        }
+        .btn-primary { background: var(--accent); color: white; }
+        .btn-secondary { background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border); }
+        .btn:hover { opacity: 0.85; }
+        .error { color: #ef4444; font-size: 0.85rem; margin-top: 8px; }
+        .match-info { font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 8px; }
+        .highlighted {
+            font-family: 'SF Mono', Monaco, monospace; font-size: 0.85rem;
+            line-height: 1.6; white-space: pre-wrap; word-break: break-all;
+            background: var(--bg-primary); padding: 12px; border-radius: 10px;
+            border: 1px solid var(--border); min-height: 80px;
+        }
+        .match-highlight {
+            background: var(--match-bg); border: 1px solid var(--match-border);
+            border-radius: 3px; padding: 0 2px;
+        }
+        .match-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-top: 12px; }
+        .match-table th { text-align: left; padding: 8px; background: var(--bg-tertiary); border: 1px solid var(--border); }
+        .match-table td { padding: 8px; border: 1px solid var(--border); font-family: monospace; word-break: break-all; }
+        .presets { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+        .preset {
+            padding: 4px 10px; border-radius: 6px; font-size: 0.75rem;
+            background: var(--bg-tertiary); border: 1px solid var(--border);
+            cursor: pointer; color: var(--text-secondary);
+        }
+        .preset:hover { border-color: var(--accent); color: var(--accent); }
+        @media (max-width: 600px) {
+            .regex-row { flex-direction: column; }
+            .regex-row label { min-width: auto; }
+        }
+    </style>
+</head>
+<body>
+    <button class="theme-toggle" onclick="toggleTheme()" id="theme-btn">🌙</button>
+    <div class="container">
+        <header>
+            <h1>🔍 Regex Replace</h1>
+            <p class="subtitle">정규식 찾기 & 바꾸기</p>
+        </header>
+
+        <div class="card">
+            <h2>정규식 패턴</h2>
+            <div class="presets">
+                <span class="preset" onclick="setPreset('\\b\\w+@\\w+\\.\\w+\\b','[EMAIL]')">이메일</span>
+                <span class="preset" onclick="setPreset('https?://[^\\s]+','[URL]')">URL</span>
+                <span class="preset" onclick="setPreset('\\b\\d{2,3}-\\d{3,4}-\\d{4}\\b','[PHONE]')">전화번호</span>
+                <span class="preset" onclick="setPreset('\\d{4}-\\d{2}-\\d{2}','[DATE]')">날짜</span>
+                <span class="preset" onclick="setPreset('<[^>]+>','')">HTML 태그</span>
+                <span class="preset" onclick="setPreset('\\s+',' ')">공백 정리</span>
+                <span class="preset" onclick="setPreset('^\\s+|\\s+$','')">Trim</span>
+            </div>
+            <div class="regex-row">
+                <label>찾기</label>
+                <input type="text" id="pattern" placeholder="정규식 패턴" oninput="run()">
+            </div>
+            <div class="regex-row">
+                <label>바꾸기</label>
+                <input type="text" id="replacement" placeholder="대체 문자열 ($1, $2...)" oninput="run()">
+            </div>
+            <div class="flags">
+                <label><input type="checkbox" id="flag-g" checked onchange="run()"> g (전체)</label>
+                <label><input type="checkbox" id="flag-i" onchange="run()"> i (대소문자 무시)</label>
+                <label><input type="checkbox" id="flag-m" onchange="run()"> m (멀티라인)</label>
+                <label><input type="checkbox" id="flag-s" onchange="run()"> s (dotAll)</label>
+            </div>
+            <div class="error" id="error"></div>
+        </div>
+
+        <div class="card">
+            <h2>입력 텍스트</h2>
+            <textarea id="input" oninput="run()" placeholder="여기에 텍스트를 입력하세요...">안녕하세요, 제 이메일은 test@example.com 입니다.
+연락처: 010-1234-5678
+웹사이트: https://example.com
+날짜: 2024-01-15</textarea>
+        </div>
+
+        <div class="card">
+            <h2>매칭 결과</h2>
+            <div class="match-info" id="match-info">0개 매칭</div>
+            <div class="highlighted" id="highlighted"></div>
+            <table class="match-table" id="match-table" style="display:none">
+                <thead><tr><th>#</th><th>매칭</th><th>위치</th><th>그룹</th></tr></thead>
+                <tbody id="match-tbody"></tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h2>치환 결과</h2>
+            <textarea id="output" readonly style="min-height:100px"></textarea>
+            <div class="btn-row">
+                <button class="btn btn-primary" onclick="copyResult()">결과 복사</button>
+                <button class="btn btn-secondary" onclick="applyResult()">입력에 적용 ↑</button>
+            </div>
+        </div>
+    </div>
+    <script>
+        function initTheme() {
+            const s = localStorage.getItem('regexr-theme') || 'light';
+            document.documentElement.setAttribute('data-theme', s);
+            document.getElementById('theme-btn').textContent = s === 'light' ? '🌙' : '☀️';
+        }
+        function toggleTheme() {
+            const c = document.documentElement.getAttribute('data-theme') || 'light';
+            const n = c === 'light' ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-theme', n);
+            localStorage.setItem('regexr-theme', n);
+            document.getElementById('theme-btn').textContent = n === 'light' ? '🌙' : '☀️';
+        }
+
+        function setPreset(pattern, repl) {
+            document.getElementById('pattern').value = pattern;
+            document.getElementById('replacement').value = repl;
+            run();
+        }
+
+        function getFlags() {
+            let f = '';
+            if (document.getElementById('flag-g').checked) f += 'g';
+            if (document.getElementById('flag-i').checked) f += 'i';
+            if (document.getElementById('flag-m').checked) f += 'm';
+            if (document.getElementById('flag-s').checked) f += 's';
+            return f;
+        }
+
+        function escapeHtml(s) {
+            return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        }
+
+        function run() {
+            const pattern = document.getElementById('pattern').value;
+            const replacement = document.getElementById('replacement').value;
+            const input = document.getElementById('input').value;
+            const errEl = document.getElementById('error');
+            errEl.textContent = '';
+
+            if (!pattern) {
+                document.getElementById('highlighted').textContent = input;
+                document.getElementById('output').value = input;
+                document.getElementById('match-info').textContent = '패턴을 입력하세요';
+                document.getElementById('match-table').style.display = 'none';
+                return;
+            }
+
+            let regex;
+            try {
+                regex = new RegExp(pattern, getFlags());
+            } catch (e) {
+                errEl.textContent = '정규식 오류: ' + e.message;
+                return;
+            }
+
+            // Find matches
+            const matches = [];
+            let m;
+            const searchRegex = new RegExp(pattern, getFlags().includes('g') ? getFlags() : getFlags() + 'g');
+            while ((m = searchRegex.exec(input)) !== null) {
+                matches.push({ match: m[0], index: m.index, groups: m.slice(1) });
+                if (!searchRegex.global) break;
+                if (m[0].length === 0) searchRegex.lastIndex++;
+            }
+
+            // Highlight
+            let highlighted = '';
+            let lastIdx = 0;
+            for (const mt of matches) {
+                highlighted += escapeHtml(input.slice(lastIdx, mt.index));
+                highlighted += `<span class="match-highlight">${escapeHtml(mt.match)}</span>`;
+                lastIdx = mt.index + mt.match.length;
+            }
+            highlighted += escapeHtml(input.slice(lastIdx));
+            document.getElementById('highlighted').innerHTML = highlighted;
+
+            document.getElementById('match-info').textContent = `${matches.length}개 매칭`;
+
+            // Match table
+            if (matches.length > 0 && matches.length <= 50) {
+                let tbody = '';
+                matches.forEach((mt, i) => {
+                    const groups = mt.groups.length ? mt.groups.map((g,j) => `$${j+1}: ${g||''}`).join(', ') : '-';
+                    tbody += `<tr><td>${i+1}</td><td>${escapeHtml(mt.match)}</td><td>${mt.index}</td><td>${escapeHtml(groups)}</td></tr>`;
+                });
+                document.getElementById('match-tbody').innerHTML = tbody;
+                document.getElementById('match-table').style.display = '';
+            } else {
+                document.getElementById('match-table').style.display = 'none';
+            }
+
+            // Replace
+            try {
+                document.getElementById('output').value = input.replace(regex, replacement);
+            } catch (e) {
+                errEl.textContent = '치환 오류: ' + e.message;
+            }
+        }
+
+        function copyResult() {
+            navigator.clipboard.writeText(document.getElementById('output').value);
+        }
+        function applyResult() {
+            document.getElementById('input').value = document.getElementById('output').value;
+            run();
+        }
+
+        initTheme();
+        run();
+    </script>
+</body>
+</html>

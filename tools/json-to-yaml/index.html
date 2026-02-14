@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JSON ↔ YAML Converter</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg-primary: #ffffff; --bg-secondary: #f8f9fa; --bg-tertiary: #e9ecef;
+            --text-primary: #212529; --text-secondary: #6c757d;
+            --accent: #ec4899; --border: #dee2e6; --shadow: rgba(0,0,0,0.1);
+        }
+        [data-theme="dark"] {
+            --bg-primary: #0f0f23; --bg-secondary: #1a1a2e; --bg-tertiary: #16213e;
+            --text-primary: #e4e4e7; --text-secondary: #a1a1aa;
+            --border: #27272a; --shadow: rgba(0,0,0,0.5);
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR', sans-serif;
+            background: var(--bg-primary); color: var(--text-primary);
+            padding: 20px; min-height: 100vh; transition: background 0.3s, color 0.3s;
+        }
+        .container { max-width: 950px; margin: 0 auto; }
+        header { text-align: center; margin-bottom: 24px; }
+        h1 { font-size: 1.8rem; color: var(--accent); margin-bottom: 6px; }
+        .subtitle { color: var(--text-secondary); font-size: 0.9rem; }
+        .theme-toggle {
+            position: fixed; top: 20px; right: 20px; width: 44px; height: 44px;
+            border-radius: 50%; background: var(--bg-secondary); border: 2px solid var(--border);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.3rem; cursor: pointer; z-index: 1000;
+        }
+        .editors { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+        .editor-box {
+            background: var(--bg-secondary); border-radius: 12px; padding: 16px;
+            border: 1px solid var(--border);
+        }
+        .editor-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .editor-title { font-weight: 700; font-size: 0.95rem; color: var(--accent); }
+        textarea {
+            width: 100%; height: 400px; padding: 12px; border: 1px solid var(--border);
+            border-radius: 10px; background: var(--bg-primary); color: var(--text-primary);
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace; font-size: 0.85rem;
+            resize: vertical; line-height: 1.5; tab-size: 2;
+        }
+        .btn-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+        .btn {
+            padding: 10px 24px; border: none; border-radius: 10px;
+            font-weight: 700; cursor: pointer; font-size: 0.95rem; transition: opacity 0.2s;
+        }
+        .btn-primary { background: var(--accent); color: white; }
+        .btn-secondary { background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border); }
+        .btn:hover { opacity: 0.85; }
+        .error { color: #ef4444; font-size: 0.85rem; margin-top: 8px; text-align: center; }
+        .small-btn {
+            padding: 4px 10px; font-size: 0.8rem; border: 1px solid var(--border);
+            border-radius: 6px; background: var(--bg-tertiary); color: var(--text-primary); cursor: pointer;
+        }
+        .small-btn:hover { opacity: 0.8; }
+        @media (max-width: 700px) {
+            .editors { grid-template-columns: 1fr; }
+            textarea { height: 250px; }
+        }
+    </style>
+</head>
+<body>
+    <button class="theme-toggle" onclick="toggleTheme()" id="theme-btn">🌙</button>
+    <div class="container">
+        <header>
+            <h1>🔄 JSON ↔ YAML Converter</h1>
+            <p class="subtitle">JSON과 YAML 사이 양방향 변환</p>
+        </header>
+
+        <div class="editors">
+            <div class="editor-box">
+                <div class="editor-header">
+                    <span class="editor-title">JSON</span>
+                    <button class="small-btn" onclick="copyText('json-input')">복사</button>
+                </div>
+                <textarea id="json-input" placeholder='{
+  "name": "my-project",
+  "version": "1.0.0",
+  "dependencies": {
+    "react": "^18.0.0"
+  }
+}'></textarea>
+            </div>
+            <div class="editor-box">
+                <div class="editor-header">
+                    <span class="editor-title">YAML</span>
+                    <button class="small-btn" onclick="copyText('yaml-input')">복사</button>
+                </div>
+                <textarea id="yaml-input" placeholder="name: my-project
+version: '1.0.0'
+dependencies:
+  react: ^18.0.0"></textarea>
+            </div>
+        </div>
+
+        <div class="btn-row">
+            <button class="btn btn-primary" onclick="jsonToYaml()">JSON → YAML</button>
+            <button class="btn btn-primary" onclick="yamlToJson()">YAML → JSON</button>
+            <button class="btn btn-secondary" onclick="loadExample()">예제</button>
+        </div>
+        <div class="error" id="error"></div>
+    </div>
+    <script>
+        function initTheme() {
+            const s = localStorage.getItem('j2y-theme') || 'light';
+            document.documentElement.setAttribute('data-theme', s);
+            document.getElementById('theme-btn').textContent = s === 'light' ? '🌙' : '☀️';
+        }
+        function toggleTheme() {
+            const c = document.documentElement.getAttribute('data-theme') || 'light';
+            const n = c === 'light' ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-theme', n);
+            localStorage.setItem('j2y-theme', n);
+            document.getElementById('theme-btn').textContent = n === 'light' ? '🌙' : '☀️';
+        }
+
+        // Simple YAML serializer
+        function toYaml(obj, indent = 0) {
+            const pad = '  '.repeat(indent);
+            if (obj === null) return 'null';
+            if (obj === undefined) return '';
+            if (typeof obj === 'boolean') return obj.toString();
+            if (typeof obj === 'number') return obj.toString();
+            if (typeof obj === 'string') {
+                if (obj === '' || obj === 'true' || obj === 'false' || obj === 'null' || obj === 'yes' || obj === 'no'
+                    || /^\d/.test(obj) || /[:#{}[\],&*?|>!%@`]/.test(obj) || obj.includes('\n')) {
+                    return "'" + obj.replace(/'/g, "''") + "'";
+                }
+                return obj;
+            }
+            if (Array.isArray(obj)) {
+                if (obj.length === 0) return '[]';
+                return obj.map(item => {
+                    const val = toYaml(item, indent + 1);
+                    if (typeof item === 'object' && item !== null && !Array.isArray(item)) {
+                        const lines = val.split('\n');
+                        return pad + '- ' + lines[0] + (lines.length > 1 ? '\n' + lines.slice(1).map(l => pad + '  ' + l).join('\n') : '');
+                    }
+                    return pad + '- ' + val;
+                }).join('\n');
+            }
+            if (typeof obj === 'object') {
+                const keys = Object.keys(obj);
+                if (keys.length === 0) return '{}';
+                return keys.map(key => {
+                    const val = obj[key];
+                    const yamlKey = /[:#{}[\],&*?|>!%@`\s]/.test(key) ? "'" + key + "'" : key;
+                    if (typeof val === 'object' && val !== null) {
+                        return pad + yamlKey + ':\n' + toYaml(val, indent + 1);
+                    }
+                    return pad + yamlKey + ': ' + toYaml(val, indent + 1);
+                }).join('\n');
+            }
+            return String(obj);
+        }
+
+        // Simple YAML parser (handles common cases)
+        function parseYaml(str) {
+            const lines = str.split('\n');
+            return parseYamlLines(lines, 0).value;
+        }
+
+        function parseYamlLines(lines, startIndent) {
+            let result = null;
+            let isArray = false;
+            let i = 0;
+
+            while (i < lines.length) {
+                const line = lines[i];
+                const trimmed = line.replace(/\s+$/, '');
+                if (trimmed === '' || trimmed.startsWith('#')) { i++; continue; }
+
+                const indent = line.search(/\S/);
+                if (indent < startIndent) break;
+
+                if (trimmed.startsWith('- ') || trimmed === '-') {
+                    if (!result) { result = []; isArray = true; }
+                    const content = trimmed.slice(2).trim();
+                    if (content === '' || content.includes(':')) {
+                        if (content && content.includes(':')) {
+                            // Inline mapping in array
+                            const subLines = [content, ...lines.slice(i + 1)];
+                            const sub = parseYamlLines(subLines, 0);
+                            result.push(sub.value);
+                            i += 1;
+                        } else {
+                            const subLines = lines.slice(i + 1);
+                            const sub = parseYamlLines(subLines, indent + 2);
+                            result.push(sub.value);
+                            i += 1 + sub.consumed;
+                        }
+                    } else {
+                        result.push(parseScalar(content));
+                        i++;
+                    }
+                    continue;
+                }
+
+                const match = trimmed.match(/^([^:]+?):\s*(.*)/);
+                if (match) {
+                    if (!result) result = {};
+                    const key = parseScalar(match[1].trim());
+                    const val = match[2].trim();
+                    if (val === '' || val === '|' || val === '>') {
+                        const subLines = lines.slice(i + 1);
+                        const sub = parseYamlLines(subLines, indent + 2);
+                        result[key] = sub.value;
+                        i += 1 + sub.consumed;
+                    } else {
+                        result[key] = parseScalar(val);
+                        i++;
+                    }
+                    continue;
+                }
+                i++;
+            }
+            return { value: result, consumed: i };
+        }
+
+        function parseScalar(s) {
+            if (s === 'null' || s === '~') return null;
+            if (s === 'true' || s === 'yes') return true;
+            if (s === 'false' || s === 'no') return false;
+            if (/^-?\d+$/.test(s)) return parseInt(s);
+            if (/^-?\d+\.\d+$/.test(s)) return parseFloat(s);
+            if ((s.startsWith("'") && s.endsWith("'")) || (s.startsWith('"') && s.endsWith('"')))
+                return s.slice(1, -1);
+            if (s.startsWith('[') || s.startsWith('{')) try { return JSON.parse(s); } catch(e) {}
+            return s;
+        }
+
+        function jsonToYaml() {
+            const err = document.getElementById('error');
+            err.textContent = '';
+            try {
+                const json = JSON.parse(document.getElementById('json-input').value);
+                document.getElementById('yaml-input').value = toYaml(json);
+            } catch (e) {
+                err.textContent = 'JSON 파싱 오류: ' + e.message;
+            }
+        }
+
+        function yamlToJson() {
+            const err = document.getElementById('error');
+            err.textContent = '';
+            try {
+                const yaml = document.getElementById('yaml-input').value;
+                const obj = parseYaml(yaml);
+                document.getElementById('json-input').value = JSON.stringify(obj, null, 2);
+            } catch (e) {
+                err.textContent = 'YAML 파싱 오류: ' + e.message;
+            }
+        }
+
+        function copyText(id) {
+            navigator.clipboard.writeText(document.getElementById(id).value);
+        }
+
+        function loadExample() {
+            document.getElementById('json-input').value = JSON.stringify({
+                apiVersion: "apps/v1",
+                kind: "Deployment",
+                metadata: { name: "my-app", labels: { app: "my-app", version: "1.0.0" } },
+                spec: {
+                    replicas: 3,
+                    selector: { matchLabels: { app: "my-app" } },
+                    template: {
+                        metadata: { labels: { app: "my-app" } },
+                        spec: {
+                            containers: [
+                                { name: "app", image: "my-app:1.0.0", ports: [{ containerPort: 8080 }],
+                                  env: [{ name: "NODE_ENV", value: "production" }] }
+                            ]
+                        }
+                    }
+                }
+            }, null, 2);
+            jsonToYaml();
+        }
+
+        initTheme();
+    </script>
+</body>
+</html>

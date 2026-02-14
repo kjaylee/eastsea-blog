@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Size Converter</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg-primary: #ffffff; --bg-secondary: #f8f9fa; --bg-tertiary: #e9ecef;
+            --text-primary: #212529; --text-secondary: #6c757d;
+            --accent: #f97316; --border: #dee2e6; --shadow: rgba(0,0,0,0.1);
+        }
+        [data-theme="dark"] {
+            --bg-primary: #0f0f23; --bg-secondary: #1a1a2e; --bg-tertiary: #16213e;
+            --text-primary: #e4e4e7; --text-secondary: #a1a1aa;
+            --border: #27272a; --shadow: rgba(0,0,0,0.5);
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR', sans-serif;
+            background: var(--bg-primary); color: var(--text-primary);
+            padding: 20px; min-height: 100vh; transition: background 0.3s, color 0.3s;
+        }
+        .container { max-width: 600px; margin: 0 auto; }
+        header { text-align: center; margin-bottom: 24px; }
+        h1 { font-size: 1.8rem; color: var(--accent); margin-bottom: 6px; }
+        .subtitle { color: var(--text-secondary); font-size: 0.9rem; }
+        .theme-toggle {
+            position: fixed; top: 20px; right: 20px; width: 44px; height: 44px;
+            border-radius: 50%; background: var(--bg-secondary); border: 2px solid var(--border);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.3rem; cursor: pointer; z-index: 1000;
+        }
+        .card {
+            background: var(--bg-secondary); border-radius: 16px; padding: 24px;
+            border: 1px solid var(--border); margin-bottom: 20px;
+        }
+        .input-row { display: flex; gap: 12px; margin-bottom: 20px; }
+        input[type="number"] {
+            flex: 1; padding: 12px 16px; border: 1px solid var(--border); border-radius: 10px;
+            background: var(--bg-primary); color: var(--text-primary); font-size: 1.2rem; font-weight: 700;
+        }
+        select {
+            padding: 12px 16px; border: 1px solid var(--border); border-radius: 10px;
+            background: var(--bg-primary); color: var(--text-primary); font-size: 1rem;
+            cursor: pointer; min-width: 100px;
+        }
+        .result-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px 16px; border-radius: 10px; margin-bottom: 6px;
+            background: var(--bg-tertiary); border: 1px solid var(--border); cursor: pointer;
+        }
+        .result-item:hover { border-color: var(--accent); }
+        .result-unit { font-weight: 600; font-size: 0.9rem; min-width: 120px; }
+        .result-value {
+            font-family: 'SF Mono', Monaco, monospace; font-size: 0.95rem;
+            font-weight: 700; color: var(--accent); text-align: right;
+        }
+        .section-title {
+            font-size: 0.85rem; font-weight: 700; color: var(--text-secondary);
+            margin: 16px 0 8px; padding-bottom: 4px; border-bottom: 1px solid var(--border);
+        }
+        .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+        .tab {
+            padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; font-weight: 600;
+            border: 1px solid var(--border); background: var(--bg-tertiary);
+        }
+        .tab.active { background: var(--accent); color: white; border-color: var(--accent); }
+        .info { font-size: 0.8rem; color: var(--text-secondary); text-align: center; margin-top: 12px; }
+        @media (max-width: 500px) { .input-row { flex-direction: column; } }
+    </style>
+</head>
+<body>
+    <button class="theme-toggle" onclick="toggleTheme()" id="theme-btn">🌙</button>
+    <div class="container">
+        <header>
+            <h1>💾 Data Size Converter</h1>
+            <p class="subtitle">데이터 크기 단위 변환기</p>
+        </header>
+
+        <div class="card">
+            <div class="tabs">
+                <div class="tab active" onclick="setBase(1000)" id="tab-si">SI (1000)</div>
+                <div class="tab" onclick="setBase(1024)" id="tab-bin">Binary (1024)</div>
+            </div>
+
+            <div class="input-row">
+                <input type="number" id="value" value="1" min="0" step="any" oninput="convert()">
+                <select id="unit" onchange="convert()">
+                    <option value="0">Bytes (B)</option>
+                    <option value="1" selected>KB</option>
+                    <option value="2">MB</option>
+                    <option value="3" >GB</option>
+                    <option value="4">TB</option>
+                    <option value="5">PB</option>
+                    <option value="6">EB</option>
+                </select>
+            </div>
+
+            <div id="results"></div>
+            <div class="info" id="info"></div>
+        </div>
+
+        <div class="card">
+            <div class="section-title">📊 비트 단위</div>
+            <div id="bit-results"></div>
+        </div>
+
+        <div class="card">
+            <div class="section-title">⚡ 전송 시간 추정</div>
+            <div id="speed-results"></div>
+        </div>
+    </div>
+    <script>
+        let base = 1000;
+        const siNames = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB'];
+        const binNames = ['Bytes', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB'];
+
+        function initTheme() {
+            const s = localStorage.getItem('datasize-theme') || 'light';
+            document.documentElement.setAttribute('data-theme', s);
+            document.getElementById('theme-btn').textContent = s === 'light' ? '🌙' : '☀️';
+        }
+        function toggleTheme() {
+            const c = document.documentElement.getAttribute('data-theme') || 'light';
+            const n = c === 'light' ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-theme', n);
+            localStorage.setItem('datasize-theme', n);
+            document.getElementById('theme-btn').textContent = n === 'light' ? '🌙' : '☀️';
+        }
+
+        function setBase(b) {
+            base = b;
+            document.getElementById('tab-si').classList.toggle('active', b === 1000);
+            document.getElementById('tab-bin').classList.toggle('active', b === 1024);
+            convert();
+        }
+
+        function formatNum(n) {
+            if (n === 0) return '0';
+            if (n >= 1e15 || (n > 0 && n < 0.001)) return n.toExponential(4);
+            if (Number.isInteger(n) && n < 1e12) return n.toLocaleString();
+            return parseFloat(n.toPrecision(8)).toLocaleString(undefined, { maximumFractionDigits: 6 });
+        }
+
+        function formatTime(seconds) {
+            if (seconds < 0.001) return '< 1ms';
+            if (seconds < 1) return (seconds * 1000).toFixed(1) + 'ms';
+            if (seconds < 60) return seconds.toFixed(1) + '초';
+            if (seconds < 3600) return (seconds / 60).toFixed(1) + '분';
+            if (seconds < 86400) return (seconds / 3600).toFixed(1) + '시간';
+            return (seconds / 86400).toFixed(1) + '일';
+        }
+
+        function convert() {
+            const val = parseFloat(document.getElementById('value').value) || 0;
+            const unitPow = parseInt(document.getElementById('unit').value);
+            const bytes = val * Math.pow(base, unitPow);
+            const names = base === 1000 ? siNames : binNames;
+
+            // Byte conversions
+            let html = '';
+            for (let i = 0; i < names.length; i++) {
+                const converted = bytes / Math.pow(base, i);
+                const active = i === unitPow ? ' style="border-color:var(--accent)"' : '';
+                html += `<div class="result-item"${active} onclick="navigator.clipboard.writeText('${formatNum(converted)}')">
+                    <span class="result-unit">${names[i]}</span>
+                    <span class="result-value">${formatNum(converted)}</span>
+                </div>`;
+            }
+            document.getElementById('results').innerHTML = html;
+
+            // Bit conversions
+            const bits = bytes * 8;
+            const bitNames = ['Bits', base === 1000 ? 'Kbit' : 'Kibit', base === 1000 ? 'Mbit' : 'Mibit', base === 1000 ? 'Gbit' : 'Gibit'];
+            let bitHtml = '';
+            for (let i = 0; i < bitNames.length; i++) {
+                const converted = bits / Math.pow(base, i);
+                bitHtml += `<div class="result-item" onclick="navigator.clipboard.writeText('${formatNum(converted)}')">
+                    <span class="result-unit">${bitNames[i]}</span>
+                    <span class="result-value">${formatNum(converted)}</span>
+                </div>`;
+            }
+            document.getElementById('bit-results').innerHTML = bitHtml;
+
+            // Transfer speeds
+            const speeds = [
+                { name: '🐌 3G (1 Mbps)', bps: 1e6/8 },
+                { name: '📶 4G (20 Mbps)', bps: 20e6/8 },
+                { name: '⚡ 5G (100 Mbps)', bps: 100e6/8 },
+                { name: '🏠 WiFi (100 Mbps)', bps: 100e6/8 },
+                { name: '🔌 기가비트 (1 Gbps)', bps: 1e9/8 },
+                { name: '💿 USB 3.0 (5 Gbps)', bps: 5e9/8 },
+            ];
+            let speedHtml = '';
+            for (const s of speeds) {
+                speedHtml += `<div class="result-item">
+                    <span class="result-unit">${s.name}</span>
+                    <span class="result-value">${formatTime(bytes / s.bps)}</span>
+                </div>`;
+            }
+            document.getElementById('speed-results').innerHTML = speedHtml;
+
+            document.getElementById('info').textContent = base === 1000
+                ? 'SI 표준: 1 KB = 1,000 Bytes (저장장치 제조사 기준)'
+                : 'Binary: 1 KiB = 1,024 Bytes (OS/메모리 기준)';
+        }
+
+        initTheme();
+        convert();
+    </script>
+</body>
+</html>

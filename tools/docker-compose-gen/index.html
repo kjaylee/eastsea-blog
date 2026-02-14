@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Docker Compose 생성기 | 웹 도구 모음</title>
+    <style>
+        :root{--bg-primary:#fff;--bg-secondary:#f8f9fa;--text-primary:#212529;--text-secondary:#6c757d;--accent:linear-gradient(135deg,#667eea 0%,#764ba2 100%);--border:#dee2e6;--shadow:rgba(0,0,0,.1);--card-bg:#fff}
+        [data-theme="dark"]{--bg-primary:#1a1a1a;--bg-secondary:#121212;--text-primary:#f8f9fa;--text-secondary:#adb5bd;--border:#444;--shadow:rgba(0,0,0,.3);--card-bg:#2d2d2d}
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Noto Sans KR',sans-serif;background:var(--bg-secondary);color:var(--text-primary);line-height:1.6;padding:20px;min-height:100vh}
+        .container{max-width:900px;margin:0 auto}
+        header{display:flex;align-items:center;justify-content:space-between;margin-bottom:30px}
+        .back-btn{text-decoration:none;color:var(--text-secondary);display:flex;align-items:center;gap:5px;font-weight:500}
+        .back-btn:hover{color:var(--text-primary)}
+        .theme-toggle{background:none;border:none;cursor:pointer;font-size:1.5rem}
+        .card{background:var(--card-bg);border-radius:20px;padding:30px;box-shadow:0 10px 30px var(--shadow);border:1px solid var(--border);margin-bottom:20px}
+        h1{font-size:1.8rem;margin-bottom:10px;background:var(--accent);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+        .desc{color:var(--text-secondary);margin-bottom:20px}
+        label{display:block;font-weight:600;margin-bottom:6px;font-size:.9rem}
+        select,input,textarea{width:100%;padding:12px;border:2px solid var(--border);border-radius:12px;background:var(--bg-primary);color:var(--text-primary);font-size:1rem;outline:none;font-family:inherit;margin-bottom:16px}
+        select:focus,input:focus,textarea:focus{border-color:#667eea}
+        .svc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:20px}
+        .svc-btn{padding:14px 10px;border:2px solid var(--border);border-radius:12px;background:var(--bg-primary);cursor:pointer;text-align:center;font-size:.85rem;color:var(--text-primary);transition:all .2s}
+        .svc-btn:hover{border-color:#667eea}
+        .svc-btn.active{border-color:#667eea;background:rgba(102,126,234,.1)}
+        .svc-emoji{font-size:1.4rem;display:block;margin-bottom:4px}
+        .output-box{background:var(--bg-secondary);border:1px solid var(--border);border-radius:12px;padding:16px;font-family:'Courier New',monospace;font-size:.85rem;white-space:pre;word-break:break-all;overflow-x:auto;min-height:200px;position:relative;tab-size:2}
+        .copy-btn{position:absolute;top:10px;right:10px;padding:6px 12px;background:var(--card-bg);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:.8rem;color:var(--text-primary)}
+        .copy-btn:hover{background:var(--bg-primary)}
+        .options-row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+        .check-row{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+        .check-row input[type="checkbox"]{width:auto;margin:0}
+        @media(max-width:600px){.svc-grid{grid-template-columns:repeat(3,1fr)}.options-row{grid-template-columns:1fr}}
+    </style>
+</head>
+<body>
+<div class="container">
+    <header>
+        <a href="../" class="back-btn">← 목록으로</a>
+        <button class="theme-toggle" onclick="toggleTheme()">🌓</button>
+    </header>
+    <div class="card">
+        <h1>🐳 Docker Compose 생성기</h1>
+        <p class="desc">서비스를 선택하면 즉시 docker-compose.yml을 생성합니다.</p>
+        <label>서비스 선택 (클릭)</label>
+        <div class="svc-grid" id="svcGrid"></div>
+        <div class="options-row">
+            <div>
+                <label for="composeVer">Compose 버전</label>
+                <select id="composeVer" onchange="generate()">
+                    <option value="3.9">3.9</option>
+                    <option value="3.8">3.8</option>
+                    <option value="2.4">2.4</option>
+                    <option value="">없음 (최신 Docker)</option>
+                </select>
+            </div>
+            <div>
+                <label for="networkName">네트워크 이름</label>
+                <input type="text" id="networkName" placeholder="app-network" oninput="generate()">
+            </div>
+        </div>
+        <div class="check-row">
+            <input type="checkbox" id="addVolumes" checked onchange="generate()">
+            <label for="addVolumes" style="margin:0;font-weight:400">Named volumes 사용</label>
+        </div>
+        <div class="check-row">
+            <input type="checkbox" id="addRestart" checked onchange="generate()">
+            <label for="addRestart" style="margin:0;font-weight:400">restart: unless-stopped</label>
+        </div>
+    </div>
+    <div class="card">
+        <div style="font-weight:700;font-size:.85rem;color:var(--text-secondary);margin-bottom:8px">📄 docker-compose.yml</div>
+        <div class="output-box" id="output">서비스를 하나 이상 선택하세요...<button class="copy-btn" onclick="copyOutput()">복사</button></div>
+    </div>
+</div>
+<script>
+const SERVICES = [
+    {key:'nginx',emoji:'🌐',label:'Nginx',image:'nginx:alpine',ports:['80:80'],volumes:['/etc/nginx/conf.d']},
+    {key:'postgres',emoji:'🐘',label:'PostgreSQL',image:'postgres:16-alpine',ports:['5432:5432'],env:{POSTGRES_DB:'app',POSTGRES_USER:'user',POSTGRES_PASSWORD:'password'},volumes:['pgdata:/var/lib/postgresql/data']},
+    {key:'mysql',emoji:'🐬',label:'MySQL',image:'mysql:8',ports:['3306:3306'],env:{MYSQL_ROOT_PASSWORD:'rootpass',MYSQL_DATABASE:'app',MYSQL_USER:'user',MYSQL_PASSWORD:'password'},volumes:['mysqldata:/var/lib/mysql']},
+    {key:'redis',emoji:'🔴',label:'Redis',image:'redis:7-alpine',ports:['6379:6379'],volumes:['redisdata:/data']},
+    {key:'mongodb',emoji:'🍃',label:'MongoDB',image:'mongo:7',ports:['27017:27017'],env:{MONGO_INITDB_ROOT_USERNAME:'root',MONGO_INITDB_ROOT_PASSWORD:'password'},volumes:['mongodata:/data/db']},
+    {key:'rabbitmq',emoji:'🐰',label:'RabbitMQ',image:'rabbitmq:3-management-alpine',ports:['5672:5672','15672:15672'],volumes:['rabbitmqdata:/var/lib/rabbitmq']},
+    {key:'elasticsearch',emoji:'🔍',label:'Elasticsearch',image:'elasticsearch:8.12.0',ports:['9200:9200'],env:{discovery_type:'single-node','ES_JAVA_OPTS':'-Xms512m -Xmx512m',xpack_security_enabled:'false'},volumes:['esdata:/usr/share/elasticsearch/data']},
+    {key:'minio',emoji:'📦',label:'MinIO',image:'minio/minio',ports:['9000:9000','9001:9001'],env:{MINIO_ROOT_USER:'minioadmin',MINIO_ROOT_PASSWORD:'minioadmin'},command:'server /data --console-address ":9001"',volumes:['miniodata:/data']},
+    {key:'traefik',emoji:'🚦',label:'Traefik',image:'traefik:v3.0',ports:['80:80','8080:8080'],command:'--api.insecure=true --providers.docker',volumes:['/var/run/docker.sock:/var/run/docker.sock:ro']},
+    {key:'mailhog',emoji:'📧',label:'MailHog',image:'mailhog/mailhog',ports:['1025:1025','8025:8025']},
+    {key:'adminer',emoji:'🗄️',label:'Adminer',image:'adminer',ports:['8080:8080']},
+    {key:'prometheus',emoji:'📊',label:'Prometheus',image:'prom/prometheus',ports:['9090:9090'],volumes:['promdata:/prometheus']},
+    {key:'grafana',emoji:'📈',label:'Grafana',image:'grafana/grafana',ports:['3000:3000'],env:{GF_SECURITY_ADMIN_PASSWORD:'admin'},volumes:['grafanadata:/var/lib/grafana']},
+    {key:'node',emoji:'💚',label:'Node.js App',image:'node:20-alpine',ports:['3000:3000'],command:'npm start',volumes:['.:/app'],workdir:'/app'},
+    {key:'python',emoji:'🐍',label:'Python App',image:'python:3.12-slim',ports:['8000:8000'],command:'python manage.py runserver 0.0.0.0:8000',volumes:['.:/app'],workdir:'/app'},
+];
+
+let selected = new Set();
+
+function initGrid(){
+    const g=document.getElementById('svcGrid');
+    SERVICES.forEach(s=>{
+        const b=document.createElement('button');
+        b.className='svc-btn';b.dataset.key=s.key;
+        b.innerHTML=`<span class="svc-emoji">${s.emoji}</span>${s.label}`;
+        b.onclick=()=>{selected.has(s.key)?selected.delete(s.key):selected.add(s.key);b.classList.toggle('active');generate()};
+        g.appendChild(b);
+    });
+}
+
+function generate(){
+    if(!selected.size){document.getElementById('output').innerHTML='서비스를 하나 이상 선택하세요...<button class="copy-btn" onclick="copyOutput()">복사</button>';return}
+    const ver=document.getElementById('composeVer').value;
+    const net=document.getElementById('networkName').value.trim()||'';
+    const useVol=document.getElementById('addVolumes').checked;
+    const useRestart=document.getElementById('addRestart').checked;
+    let y='';
+    if(ver)y+=`version: '${ver}'\n\n`;
+    y+='services:\n';
+    const namedVols=new Set();
+    const usedPorts=new Set();
+    SERVICES.filter(s=>selected.has(s.key)).forEach(s=>{
+        y+=`  ${s.key}:\n    image: ${s.image}\n`;
+        if(s.command)y+=`    command: ${s.command}\n`;
+        if(s.workdir)y+=`    working_dir: ${s.workdir}\n`;
+        if(useRestart)y+=`    restart: unless-stopped\n`;
+        if(s.ports&&s.ports.length){
+            // resolve port conflicts
+            const mappedPorts=s.ports.map(p=>{
+                let [h,c]=p.split(':');
+                while(usedPorts.has(h)){h=String(Number(h)+1)}
+                usedPorts.add(h);
+                return `${h}:${c}`;
+            });
+            y+=`    ports:\n`;mappedPorts.forEach(p=>y+=`      - "${p}"\n`);
+        }
+        if(s.env){y+=`    environment:\n`;Object.entries(s.env).forEach(([k,v])=>y+=`      ${k}: "${v}"\n`)}
+        if(useVol&&s.volumes&&s.volumes.length){
+            y+=`    volumes:\n`;s.volumes.forEach(v=>{y+=`      - ${v}\n`;const m=v.match(/^([a-z]\w*):/i);if(m)namedVols.add(m[1])});
+        }
+        if(net)y+=`    networks:\n      - ${net}\n`;
+        y+='\n';
+    });
+    if(useVol&&namedVols.size){y+='volumes:\n';namedVols.forEach(v=>y+=`  ${v}:\n`);y+='\n'}
+    if(net){y+=`networks:\n  ${net}:\n    driver: bridge\n`}
+    document.getElementById('output').innerHTML=escapeHtml(y)+'<button class="copy-btn" onclick="copyOutput()">복사</button>';
+}
+
+function escapeHtml(t){return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function copyOutput(){const el=document.getElementById('output');const t=el.textContent.replace('복사','').replace('복사됨!','').trim();navigator.clipboard.writeText(t).then(()=>{const b=el.querySelector('.copy-btn');b.textContent='복사됨!';setTimeout(()=>b.textContent='복사',1500)})}
+function toggleTheme(){const h=document.documentElement;const t=h.getAttribute('data-theme')==='dark'?'light':'dark';h.setAttribute('data-theme',t);localStorage.setItem('theme',t)}
+document.documentElement.setAttribute('data-theme',localStorage.getItem('theme')||'light');
+initGrid();
+</script>
+</body>
+</html>

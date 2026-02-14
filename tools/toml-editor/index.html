@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TOML 편집기 | 웹 도구 모음</title>
+    <style>
+        :root{--bg-primary:#fff;--bg-secondary:#f8f9fa;--text-primary:#212529;--text-secondary:#6c757d;--accent:linear-gradient(135deg,#667eea 0%,#764ba2 100%);--border:#dee2e6;--shadow:rgba(0,0,0,.1);--card-bg:#fff}
+        [data-theme="dark"]{--bg-primary:#1a1a1a;--bg-secondary:#121212;--text-primary:#f8f9fa;--text-secondary:#adb5bd;--border:#444;--shadow:rgba(0,0,0,.3);--card-bg:#2d2d2d}
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Noto Sans KR',sans-serif;background:var(--bg-secondary);color:var(--text-primary);line-height:1.6;padding:20px;min-height:100vh}
+        .container{max-width:1000px;margin:0 auto}
+        header{display:flex;align-items:center;justify-content:space-between;margin-bottom:30px}
+        .back-btn{text-decoration:none;color:var(--text-secondary);display:flex;align-items:center;gap:5px;font-weight:500}.back-btn:hover{color:var(--text-primary)}
+        .theme-toggle{background:none;border:none;cursor:pointer;font-size:1.5rem}
+        .card{background:var(--card-bg);border-radius:20px;padding:30px;box-shadow:0 10px 30px var(--shadow);border:1px solid var(--border);margin-bottom:20px}
+        h1{font-size:1.8rem;margin-bottom:10px;background:var(--accent);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+        .desc{color:var(--text-secondary);margin-bottom:20px}
+        label{display:block;font-weight:600;margin-bottom:6px;font-size:.9rem}
+        textarea{width:100%;padding:12px;border:2px solid var(--border);border-radius:12px;background:var(--bg-primary);color:var(--text-primary);font-size:.85rem;outline:none;font-family:'Courier New',monospace;resize:vertical;height:300px;tab-size:2}
+        textarea:focus{border-color:#667eea}
+        .btn-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+        .btn{padding:10px 20px;border:none;border-radius:12px;cursor:pointer;font-size:.9rem;font-weight:600;transition:all .2s}
+        .btn-primary{background:var(--accent);color:#fff}
+        .btn-secondary{background:var(--bg-secondary);color:var(--text-primary);border:1px solid var(--border)}
+        .btn:hover{opacity:.85;transform:translateY(-1px)}
+        .split{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+        .status{padding:10px 16px;border-radius:10px;font-size:.85rem;margin-bottom:16px}
+        .status-ok{background:#d1fae5;color:#059669}
+        .status-err{background:#fee2e2;color:#dc2626}
+        .output-box{background:var(--bg-secondary);border:1px solid var(--border);border-radius:12px;padding:16px;font-family:'Courier New',monospace;font-size:.85rem;white-space:pre-wrap;word-break:break-all;min-height:200px;position:relative;overflow:auto;max-height:500px}
+        .copy-btn{position:absolute;top:10px;right:10px;padding:6px 12px;background:var(--card-bg);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:.8rem;color:var(--text-primary)}
+        .tree-key{color:#667eea;font-weight:600}
+        .tree-str{color:#059669}
+        .tree-num{color:#d97706}
+        .tree-bool{color:#dc2626}
+        @media(max-width:700px){.split{grid-template-columns:1fr}}
+    </style>
+</head>
+<body>
+<div class="container">
+    <header>
+        <a href="../" class="back-btn">← 목록으로</a>
+        <button class="theme-toggle" onclick="toggleTheme()">🌓</button>
+    </header>
+    <div class="card">
+        <h1>📄 TOML 편집기</h1>
+        <p class="desc">TOML을 편집·검증하고, JSON과 상호변환합니다.</p>
+        <div class="btn-row">
+            <button class="btn btn-primary" onclick="validateToml()">검증</button>
+            <button class="btn btn-secondary" onclick="toJson()">→ JSON 변환</button>
+            <button class="btn btn-secondary" onclick="fromJson()">JSON → TOML</button>
+            <button class="btn btn-secondary" onclick="formatToml()">정렬/포맷</button>
+            <button class="btn btn-secondary" onclick="loadSample()">샘플</button>
+        </div>
+        <div id="status"></div>
+        <div class="split">
+            <div>
+                <label for="tomlInput">TOML</label>
+                <textarea id="tomlInput" placeholder='[package]
+name = "my-app"
+version = "1.0.0"
+
+[dependencies]
+serde = "1.0"'></textarea>
+            </div>
+            <div>
+                <label>결과</label>
+                <div class="output-box" id="output">검증 또는 변환 버튼을 클릭하세요...<button class="copy-btn" onclick="copyOut()">복사</button></div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+// Minimal TOML parser (supports basic tables, key-value, strings, numbers, bools, arrays)
+function parseTOML(src) {
+    const result = {}; let current = result; let path = [];
+    const lines = src.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+        let line = lines[i].trim();
+        // Remove comments
+        const commentIdx = findComment(line);
+        if (commentIdx >= 0) line = line.substring(0, commentIdx).trim();
+        if (!line) continue;
+        // Table header
+        const tableMatch = line.match(/^\[([^\[\]]+)\]$/);
+        if (tableMatch) {
+            const keys = tableMatch[1].split('.').map(k => k.trim().replace(/^["']|["']$/g, ''));
+            current = result; path = keys;
+            keys.forEach(k => { if (!current[k]) current[k] = {}; current = current[k]; });
+            continue;
+        }
+        // Array of tables
+        const arrTableMatch = line.match(/^\[\[([^\[\]]+)\]\]$/);
+        if (arrTableMatch) {
+            const keys = arrTableMatch[1].split('.').map(k => k.trim().replace(/^["']|["']$/g, ''));
+            let target = result;
+            for (let j = 0; j < keys.length - 1; j++) {
+                if (!target[keys[j]]) target[keys[j]] = {};
+                target = target[keys[j]];
+            }
+            const last = keys[keys.length - 1];
+            if (!Array.isArray(target[last])) target[last] = [];
+            const obj = {};
+            target[last].push(obj);
+            current = obj;
+            continue;
+        }
+        // Key = Value
+        const eqIdx = line.indexOf('=');
+        if (eqIdx === -1) throw new Error(`Line ${i+1}: 잘못된 구문 — "${line}"`);
+        const key = line.substring(0, eqIdx).trim().replace(/^["']|["']$/g, '');
+        const rawVal = line.substring(eqIdx + 1).trim();
+        current[key] = parseValue(rawVal, i + 1);
+    }
+    return result;
+}
+
+function findComment(line) {
+    let inStr = false; let q = '';
+    for (let i = 0; i < line.length; i++) {
+        const c = line[i];
+        if (inStr) { if (c === q && line[i-1] !== '\\') inStr = false; }
+        else { if (c === '"' || c === "'") { inStr = true; q = c; } else if (c === '#') return i; }
+    }
+    return -1;
+}
+
+function parseValue(raw, lineNum) {
+    if (raw.startsWith('"') || raw.startsWith("'")) {
+        const q = raw[0]; const end = raw.lastIndexOf(q);
+        if (end <= 0) throw new Error(`Line ${lineNum}: 문자열 닫기 누락`);
+        return raw.substring(1, end).replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"');
+    }
+    if (raw === 'true') return true;
+    if (raw === 'false') return false;
+    if (raw.startsWith('[')) {
+        try {
+            return JSON.parse(raw.replace(/'/g, '"'));
+        } catch {
+            // Simple parse
+            const items = raw.slice(1, -1).split(',').map(s => parseValue(s.trim(), lineNum));
+            return items;
+        }
+    }
+    if (raw.match(/^\d{4}-\d{2}-\d{2}/)) return raw; // datetime as string
+    const num = Number(raw);
+    if (!isNaN(num) && raw !== '') return num;
+    return raw;
+}
+
+function tomlStringify(obj, prefix = '') {
+    let out = ''; let tables = '';
+    for (const [key, val] of Object.entries(obj)) {
+        if (val && typeof val === 'object' && !Array.isArray(val)) {
+            const fullKey = prefix ? `${prefix}.${key}` : key;
+            tables += `\n[${fullKey}]\n` + tomlStringify(val, fullKey).replace(/\n\[/g, '\n[');
+        } else if (Array.isArray(val) && val.length > 0 && typeof val[0] === 'object') {
+            const fullKey = prefix ? `${prefix}.${key}` : key;
+            val.forEach(item => {
+                tables += `\n[[${fullKey}]]\n` + tomlStringify(item, fullKey).replace(/\n\[/g, '\n[');
+            });
+        } else {
+            out += `${key} = ${formatTOMLValue(val)}\n`;
+        }
+    }
+    return out + tables;
+}
+
+function formatTOMLValue(val) {
+    if (typeof val === 'string') return `"${val.replace(/\\/g,'\\\\').replace(/"/g,'\\"')}"`;
+    if (typeof val === 'boolean') return val ? 'true' : 'false';
+    if (typeof val === 'number') return String(val);
+    if (Array.isArray(val)) return '[' + val.map(formatTOMLValue).join(', ') + ']';
+    return String(val);
+}
+
+function validateToml() {
+    try {
+        const obj = parseTOML(document.getElementById('tomlInput').value);
+        const keys = countKeys(obj);
+        setStatus('ok', `✅ 유효한 TOML — ${keys}개 키 발견`);
+        showOutput(syntaxHighlight(JSON.stringify(obj, null, 2)));
+    } catch (e) {
+        setStatus('err', `❌ ${e.message}`);
+        showOutput(esc(e.message));
+    }
+}
+
+function toJson() {
+    try {
+        const obj = parseTOML(document.getElementById('tomlInput').value);
+        const json = JSON.stringify(obj, null, 2);
+        setStatus('ok', '✅ JSON으로 변환 완료');
+        showOutput(syntaxHighlight(json));
+    } catch (e) {
+        setStatus('err', `❌ ${e.message}`);
+    }
+}
+
+function fromJson() {
+    try {
+        const obj = JSON.parse(document.getElementById('tomlInput').value);
+        const toml = tomlStringify(obj).trim();
+        document.getElementById('tomlInput').value = toml;
+        setStatus('ok', '✅ JSON → TOML 변환 완료');
+        showOutput(esc(toml));
+    } catch (e) {
+        setStatus('err', `❌ JSON 파싱 에러: ${e.message}`);
+    }
+}
+
+function formatToml() {
+    try {
+        const obj = parseTOML(document.getElementById('tomlInput').value);
+        const sorted = sortObj(obj);
+        const toml = tomlStringify(sorted).trim();
+        document.getElementById('tomlInput').value = toml;
+        setStatus('ok', '✅ 정렬 및 포맷 완료');
+        showOutput(esc(toml));
+    } catch (e) {
+        setStatus('err', `❌ ${e.message}`);
+    }
+}
+
+function sortObj(obj) {
+    const sorted = {};
+    Object.keys(obj).sort().forEach(k => {
+        sorted[k] = (obj[k] && typeof obj[k] === 'object' && !Array.isArray(obj[k])) ? sortObj(obj[k]) : obj[k];
+    });
+    return sorted;
+}
+
+function countKeys(obj) {
+    let c = 0;
+    for (const v of Object.values(obj)) {
+        c++;
+        if (v && typeof v === 'object' && !Array.isArray(v)) c += countKeys(v);
+    }
+    return c;
+}
+
+function syntaxHighlight(json) {
+    return esc(json).replace(/"([^"]+)"(?=\s*:)/g, '<span class="tree-key">"$1"</span>')
+        .replace(/"([^"]+)"(?!\s*:)/g, '<span class="tree-str">"$1"</span>')
+        .replace(/\b(\d+\.?\d*)\b/g, '<span class="tree-num">$1</span>')
+        .replace(/\b(true|false)\b/g, '<span class="tree-bool">$1</span>');
+}
+
+function setStatus(type, msg) {
+    document.getElementById('status').innerHTML = `<div class="status status-${type}">${msg}</div>`;
+}
+
+function showOutput(html) {
+    document.getElementById('output').innerHTML = html + '<button class="copy-btn" onclick="copyOut()">복사</button>';
+}
+
+function copyOut() {
+    const el = document.getElementById('output');
+    const t = el.textContent.replace('복사','').replace('복사됨!','').trim();
+    navigator.clipboard.writeText(t).then(() => {
+        const b = el.querySelector('.copy-btn'); b.textContent='복사됨!'; setTimeout(()=>b.textContent='복사',1500);
+    });
+}
+
+function loadSample() {
+    document.getElementById('tomlInput').value = `# Cargo.toml 예제
+[package]
+name = "my-rust-app"
+version = "0.1.0"
+edition = "2021"
+authors = ["developer <dev@example.com>"]
+description = "A sample Rust application"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+tokio = { version = "1", features = ["full"] }
+axum = "0.7"
+sqlx = { version = "0.7", features = ["postgres", "runtime-tokio"] }
+tracing = "0.1"
+
+[dev-dependencies]
+criterion = "0.5"
+mockall = "0.12"
+
+[profile.release]
+opt-level = 3
+lto = true
+strip = true
+
+[[bin]]
+name = "server"
+path = "src/main.rs"
+
+[[bin]]
+name = "cli"
+path = "src/cli.rs"`;
+    validateToml();
+}
+
+function esc(t){return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function toggleTheme(){const h=document.documentElement;const t=h.getAttribute('data-theme')==='dark'?'light':'dark';h.setAttribute('data-theme',t);localStorage.setItem('theme',t)}
+document.documentElement.setAttribute('data-theme',localStorage.getItem('theme')||'light');
+</script>
+</body>
+</html>

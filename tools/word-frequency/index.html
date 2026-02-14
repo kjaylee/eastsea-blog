@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Word Frequency Analyzer</title>
+<style>
+:root{--bg:#f5f5f5;--card:#fff;--text:#333;--border:#ddd;--accent:#f59e0b;--accent2:#fbbf24;--muted:#888;--success:#22c55e;--bar:#f59e0b}
+@media(prefers-color-scheme:dark){:root{--bg:#1a1a2e;--card:#16213e;--text:#e0e0e0;--border:#2a2a4a;--accent:#fbbf24;--accent2:#fcd34d;--muted:#999;--success:#4ade80;--bar:#fbbf24}}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:20px}
+.container{max-width:900px;margin:0 auto}
+h1{text-align:center;margin-bottom:8px;font-size:1.8rem}
+.subtitle{text-align:center;color:var(--muted);margin-bottom:24px;font-size:.95rem}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px;margin-bottom:16px}
+label{display:block;font-weight:600;margin-bottom:8px;font-size:.9rem}
+textarea{width:100%;padding:12px;border:1px solid var(--border);border-radius:8px;font-size:1rem;background:var(--bg);color:var(--text);font-family:inherit;min-height:150px;resize:vertical}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin:16px 0}
+.stat{text-align:center;padding:12px;background:var(--bg);border-radius:8px;border:1px solid var(--border)}
+.stat-val{font-size:1.6rem;font-weight:700;color:var(--accent)}
+.stat-label{font-size:.75rem;color:var(--muted);margin-top:4px}
+.options{display:flex;gap:16px;flex-wrap:wrap;margin:12px 0;align-items:center}
+.options label{display:flex;align-items:center;gap:6px;font-weight:400;cursor:pointer;font-size:.85rem;margin-bottom:0}
+select{padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:.85rem}
+.bar-chart{margin-top:12px}
+.bar-row{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.bar-word{width:120px;text-align:right;font-size:.85rem;font-family:'Courier New',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0}
+.bar{height:24px;border-radius:4px;background:var(--bar);transition:width .3s;min-width:2px;position:relative}
+.bar-count{font-size:.75rem;color:var(--muted);margin-left:4px;white-space:nowrap}
+.table-view{width:100%;border-collapse:collapse;margin-top:12px;font-size:.85rem}
+.table-view th,.table-view td{padding:8px 12px;text-align:left;border-bottom:1px solid var(--border)}
+.table-view th{font-weight:600;background:var(--bg)}
+.btn{padding:10px 20px;border:none;border-radius:8px;cursor:pointer;font-size:.9rem;font-weight:600;transition:all .2s}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--accent2)}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.tabs{display:flex;gap:4px;margin-bottom:12px}
+.tab{padding:8px 16px;border:1px solid var(--border);border-radius:8px 8px 0 0;cursor:pointer;font-size:.85rem;background:var(--bg);color:var(--muted)}
+.tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.toast{position:fixed;bottom:20px;right:20px;background:var(--success);color:#fff;padding:12px 20px;border-radius:8px;font-weight:600;opacity:0;transition:opacity .3s;pointer-events:none}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>📊 Word Frequency Analyzer</h1>
+<p class="subtitle">Analyze word frequency, n-grams, and text statistics</p>
+
+<div class="card">
+<label for="input">Paste your text</label>
+<textarea id="input" placeholder="Paste any text here to analyze word frequencies..."></textarea>
+<div class="stats" id="stats">
+<div class="stat"><div class="stat-val" id="sWords">0</div><div class="stat-label">Words</div></div>
+<div class="stat"><div class="stat-val" id="sUnique">0</div><div class="stat-label">Unique</div></div>
+<div class="stat"><div class="stat-val" id="sChars">0</div><div class="stat-label">Characters</div></div>
+<div class="stat"><div class="stat-val" id="sSentences">0</div><div class="stat-label">Sentences</div></div>
+<div class="stat"><div class="stat-val" id="sAvg">0</div><div class="stat-label">Avg Word Len</div></div>
+<div class="stat"><div class="stat-val" id="sLex">0</div><div class="stat-label">Lexical Diversity</div></div>
+</div>
+</div>
+
+<div class="card">
+<div class="options">
+<label>N-gram: <select id="ngram"><option value="1">Single words</option><option value="2">Bigrams (2)</option><option value="3">Trigrams (3)</option></select></label>
+<label><input type="checkbox" id="ignoreStop"> Ignore stop words</label>
+<label><input type="checkbox" id="caseSensitive"> Case sensitive</label>
+<label>Top: <select id="topN"><option value="20">20</option><option value="30">30</option><option value="50">50</option><option value="100">100</option></select></label>
+</div>
+<div class="tabs">
+<div class="tab active" data-view="chart" onclick="switchView(this)">📊 Chart</div>
+<div class="tab" data-view="table" onclick="switchView(this)">📋 Table</div>
+</div>
+<div id="resultArea"></div>
+<div class="btn-row">
+<button class="btn btn-primary" onclick="exportCSV()">📥 Export CSV</button>
+<button class="btn btn-primary" onclick="copyResults()">📋 Copy</button>
+</div>
+</div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+const stopWords=new Set(['the','be','to','of','and','a','in','that','have','i','it','for','not','on','with','he','as','you','do','at','this','but','his','by','from','they','we','her','she','or','an','will','my','one','all','would','there','their','what','so','up','out','if','about','who','get','which','go','me','when','make','can','like','time','no','just','him','know','take','people','into','year','your','good','some','could','them','see','other','than','then','now','look','only','come','its','over','think','also','back','after','use','two','how','our','work','first','well','way','even','new','want','because','any','these','give','day','most','us']);
+let currentView='chart',lastData=[];
+
+function analyze(){
+  const raw=document.getElementById('input').value;
+  if(!raw.trim()){
+    document.getElementById('resultArea').innerHTML='<p style="color:var(--muted);text-align:center;padding:40px">Enter text above to analyze</p>';
+    ['sWords','sUnique','sChars','sSentences','sAvg','sLex'].forEach(id=>document.getElementById(id).textContent='0');
+    return;
+  }
+  
+  const caseSens=document.getElementById('caseSensitive').checked;
+  const ignoreStop=document.getElementById('ignoreStop').checked;
+  const n=parseInt(document.getElementById('ngram').value);
+  const topN=parseInt(document.getElementById('topN').value);
+  
+  const text=caseSens?raw:raw.toLowerCase();
+  let words=text.match(/[\p{L}\p{N}]+(?:['-][\p{L}\p{N}]+)*/gu)||[];
+  
+  // Stats
+  const totalWords=words.length;
+  const chars=raw.length;
+  const sentences=(raw.match(/[.!?]+/g)||[]).length||1;
+  const avgLen=totalWords?Math.round(words.reduce((s,w)=>s+w.length,0)/totalWords*10)/10:0;
+  
+  if(ignoreStop)words=words.filter(w=>!stopWords.has(w.toLowerCase()));
+  const uniqueAll=new Set(words).size;
+  const lexDiv=totalWords?Math.round(uniqueAll/totalWords*100):0;
+  
+  document.getElementById('sWords').textContent=totalWords;
+  document.getElementById('sUnique').textContent=uniqueAll;
+  document.getElementById('sChars').textContent=chars.toLocaleString();
+  document.getElementById('sSentences').textContent=sentences;
+  document.getElementById('sAvg').textContent=avgLen;
+  document.getElementById('sLex').textContent=lexDiv+'%';
+  
+  // N-grams
+  const freq=new Map();
+  for(let i=0;i<=words.length-n;i++){
+    const gram=words.slice(i,i+n).join(' ');
+    freq.set(gram,(freq.get(gram)||0)+1);
+  }
+  
+  lastData=[...freq.entries()].sort((a,b)=>b[1]-a[1]).slice(0,topN);
+  renderView();
+}
+
+function renderView(){
+  const area=document.getElementById('resultArea');
+  if(!lastData.length){area.innerHTML='';return}
+  const max=lastData[0][1];
+  
+  if(currentView==='chart'){
+    area.innerHTML='<div class="bar-chart">'+lastData.map(([w,c])=>{
+      const pct=Math.round(c/max*100);
+      return `<div class="bar-row"><div class="bar-word" title="${w}">${w}</div><div class="bar" style="width:${pct}%"></div><span class="bar-count">${c}</span></div>`;
+    }).join('')+'</div>';
+  }else{
+    const total=lastData.reduce((s,d)=>s+d[1],0);
+    area.innerHTML=`<table class="table-view"><thead><tr><th>#</th><th>Word</th><th>Count</th><th>%</th></tr></thead><tbody>${lastData.map(([w,c],i)=>`<tr><td>${i+1}</td><td>${w}</td><td>${c}</td><td>${(c/total*100).toFixed(1)}%</td></tr>`).join('')}</tbody></table>`;
+  }
+}
+
+function switchView(el){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  currentView=el.dataset.view;
+  renderView();
+}
+
+function exportCSV(){
+  if(!lastData.length)return;
+  const csv='Word,Count\n'+lastData.map(([w,c])=>`"${w}",${c}`).join('\n');
+  const blob=new Blob([csv],{type:'text/csv'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='word-frequency.csv';a.click();
+}
+
+function copyResults(){
+  if(!lastData.length)return;
+  const text=lastData.map(([w,c])=>`${w}: ${c}`).join('\n');
+  navigator.clipboard.writeText(text);
+  const t=document.getElementById('toast');t.textContent='Copied!';t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1500);
+}
+
+document.getElementById('input').addEventListener('input',analyze);
+['ngram','ignoreStop','caseSensitive','topN'].forEach(id=>document.getElementById(id).addEventListener('change',analyze));
+</script>
+</body>
+</html>

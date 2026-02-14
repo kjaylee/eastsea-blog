@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CSP Builder</title>
+<style>
+:root{--bg:#f5f5f5;--card:#fff;--text:#333;--border:#ddd;--accent:#dc2626;--accent2:#ef4444;--muted:#888;--success:#22c55e;--code-bg:#f0f0f0;--warn:#f59e0b}
+@media(prefers-color-scheme:dark){:root{--bg:#1a1a2e;--card:#16213e;--text:#e0e0e0;--border:#2a2a4a;--accent:#ef4444;--accent2:#f87171;--muted:#999;--success:#4ade80;--code-bg:#0f0f23;--warn:#fbbf24}}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:20px}
+.container{max-width:900px;margin:0 auto}
+h1{text-align:center;margin-bottom:8px;font-size:1.8rem}
+.subtitle{text-align:center;color:var(--muted);margin-bottom:24px;font-size:.95rem}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px;margin-bottom:16px}
+label{display:block;font-weight:600;margin-bottom:6px;font-size:.85rem}
+input[type=text],select{width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:.9rem;background:var(--bg);color:var(--text)}
+.directive{margin-bottom:16px;border:1px solid var(--border);border-radius:8px;padding:16px;background:var(--bg)}
+.directive-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.directive-name{font-weight:700;font-size:.9rem}
+.directive-desc{font-size:.8rem;color:var(--muted);margin-bottom:8px}
+.chip-row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.chip{padding:4px 10px;border:1px solid var(--border);border-radius:16px;font-size:.8rem;cursor:pointer;transition:all .15s;user-select:none}
+.chip:hover{border-color:var(--accent)}
+.chip.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.chip.warn{border-color:var(--warn);color:var(--warn)}
+.chip.warn.active{background:var(--warn);color:#000}
+.custom-input{display:flex;gap:6px;margin-top:6px}
+.custom-input input{flex:1;padding:6px 10px;font-size:.8rem}
+.custom-input button{padding:6px 12px;border:none;border-radius:6px;background:var(--accent);color:#fff;cursor:pointer;font-size:.8rem}
+.code-box{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:16px;font-family:'Courier New',monospace;font-size:.8rem;white-space:pre-wrap;word-break:break-all;max-height:300px;overflow-y:auto;line-height:1.6}
+.tabs{display:flex;gap:4px;margin-bottom:12px}
+.tab{padding:8px 16px;border:1px solid var(--border);border-radius:8px 8px 0 0;cursor:pointer;font-size:.85rem;background:var(--bg);color:var(--muted)}
+.tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn{padding:10px 20px;border:none;border-radius:8px;cursor:pointer;font-size:.9rem;font-weight:600;transition:all .2s}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--accent2)}
+.btn-row{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
+.presets{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.preset{padding:8px 16px;border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:.85rem;transition:all .2s}
+.preset:hover{border-color:var(--accent)}
+.score{display:flex;align-items:center;gap:12px;margin-bottom:16px;padding:12px;background:var(--bg);border-radius:8px;border:1px solid var(--border)}
+.score-bar{flex:1;height:8px;background:var(--border);border-radius:4px;overflow:hidden}
+.score-fill{height:100%;border-radius:4px;transition:width .3s}
+.score-label{font-weight:700;min-width:40px;text-align:center}
+.toast{position:fixed;bottom:20px;right:20px;background:var(--success);color:#fff;padding:12px 20px;border-radius:8px;font-weight:600;opacity:0;transition:opacity .3s;pointer-events:none}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>🛡️ CSP Builder</h1>
+<p class="subtitle">Build Content Security Policy headers with an interactive UI</p>
+
+<div class="card">
+<label>Presets</label>
+<div class="presets">
+<button class="preset" onclick="loadPreset('strict')">🔒 Strict</button>
+<button class="preset" onclick="loadPreset('moderate')">⚡ Moderate</button>
+<button class="preset" onclick="loadPreset('relaxed')">🌐 Relaxed</button>
+<button class="preset" onclick="loadPreset('api')">🔌 API Only</button>
+<button class="preset" onclick="loadPreset('clear')">🗑 Clear All</button>
+</div>
+<label>Security Score</label>
+<div class="score">
+<div class="score-bar"><div class="score-fill" id="scoreFill" style="width:0%;background:#ef4444"></div></div>
+<div class="score-label" id="scoreLabel">0</div>
+</div>
+</div>
+
+<div class="card" id="directivesCard"></div>
+
+<div class="card">
+<div class="tabs">
+<div class="tab active" data-fmt="header" onclick="switchFmt(this)">HTTP Header</div>
+<div class="tab" data-fmt="meta" onclick="switchFmt(this)">Meta Tag</div>
+<div class="tab" data-fmt="nginx" onclick="switchFmt(this)">Nginx</div>
+<div class="tab" data-fmt="apache" onclick="switchFmt(this)">Apache</div>
+</div>
+<div class="code-box" id="output"></div>
+<div class="btn-row">
+<button class="btn btn-primary" onclick="copyOutput()">📋 Copy</button>
+<button class="btn" style="border:1px solid var(--border)" onclick="importCSP()">📥 Import CSP</button>
+</div>
+</div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+const directives=[
+  {name:'default-src',desc:'Fallback for all resource types',keywords:["'none'","'self'"],common:['https:','data:','blob:']},
+  {name:'script-src',desc:'JavaScript sources',keywords:["'none'","'self'","'unsafe-inline'","'unsafe-eval'","'strict-dynamic'","'wasm-unsafe-eval'"],common:['https:','https://cdn.jsdelivr.net','https://cdnjs.cloudflare.com','https://www.googletagmanager.com','https://www.google-analytics.com'],warn:["'unsafe-inline'","'unsafe-eval'"]},
+  {name:'style-src',desc:'CSS sources',keywords:["'none'","'self'","'unsafe-inline'"],common:['https:','https://fonts.googleapis.com','https://cdn.jsdelivr.net'],warn:["'unsafe-inline'"]},
+  {name:'img-src',desc:'Image sources',keywords:["'none'","'self'"],common:['https:','data:','blob:','https://*.googleapis.com']},
+  {name:'font-src',desc:'Font sources',keywords:["'none'","'self'"],common:['https:','data:','https://fonts.gstatic.com']},
+  {name:'connect-src',desc:'Fetch, XHR, WebSocket sources',keywords:["'none'","'self'"],common:['https:','wss:','https://*.google-analytics.com']},
+  {name:'media-src',desc:'Audio/Video sources',keywords:["'none'","'self'"],common:['https:','blob:','data:']},
+  {name:'object-src',desc:'Plugins (Flash, Java) — recommend none',keywords:["'none'","'self'"],common:[]},
+  {name:'frame-src',desc:'iframe sources',keywords:["'none'","'self'"],common:['https:','https://www.youtube.com','https://player.vimeo.com']},
+  {name:'frame-ancestors',desc:'Who can embed this page in iframe',keywords:["'none'","'self'"],common:['https:']},
+  {name:'base-uri',desc:'Restricts <base> element URLs',keywords:["'none'","'self'"],common:[]},
+  {name:'form-action',desc:'Where forms can submit',keywords:["'none'","'self'"],common:['https:']},
+  {name:'worker-src',desc:'Web Worker sources',keywords:["'none'","'self'"],common:['blob:']},
+  {name:'manifest-src',desc:'Web App Manifest',keywords:["'none'","'self'"],common:[]},
+  {name:'upgrade-insecure-requests',desc:'Auto-upgrade HTTP to HTTPS',keywords:[],common:[],isBoolean:true}
+];
+
+let state={};
+let currentFmt='header';
+
+function init(){
+  const card=document.getElementById('directivesCard');
+  card.innerHTML=directives.map((d,i)=>{
+    if(d.isBoolean){
+      return `<div class="directive"><div class="directive-header"><span class="directive-name">${d.name}</span><label style="display:flex;align-items:center;gap:6px;margin:0"><input type="checkbox" id="bool_${i}" onchange="generate()"> Enable</label></div><div class="directive-desc">${d.desc}</div></div>`;
+    }
+    const allChips=[...d.keywords,...d.common];
+    return `<div class="directive"><div class="directive-header"><span class="directive-name">${d.name}</span></div><div class="directive-desc">${d.desc}</div><div class="chip-row" id="chips_${i}">${allChips.map(v=>`<span class="chip${d.warn&&d.warn.includes(v)?' warn':''}" data-dir="${i}" data-val="${v}" onclick="toggleChip(this)">${v}</span>`).join('')}</div><div class="custom-input"><input type="text" id="custom_${i}" placeholder="Add custom source..." onkeydown="if(event.key==='Enter')addCustom(${i})"><button onclick="addCustom(${i})">+</button></div></div>`;
+  }).join('');
+  generate();
+}
+
+function toggleChip(el){
+  el.classList.toggle('active');
+  generate();
+}
+
+function addCustom(idx){
+  const inp=document.getElementById(`custom_${idx}`);
+  const val=inp.value.trim();
+  if(!val)return;
+  const row=document.getElementById(`chips_${idx}`);
+  const chip=document.createElement('span');
+  chip.className='chip active';
+  chip.dataset.dir=idx;
+  chip.dataset.val=val;
+  chip.onclick=function(){this.classList.toggle('active');generate()};
+  chip.textContent=val;
+  row.appendChild(chip);
+  inp.value='';
+  generate();
+}
+
+function generate(){
+  const parts=[];
+  directives.forEach((d,i)=>{
+    if(d.isBoolean){
+      if(document.getElementById(`bool_${i}`)?.checked)parts.push(d.name);
+      return;
+    }
+    const vals=[];
+    document.querySelectorAll(`#chips_${i} .chip.active`).forEach(c=>vals.push(c.dataset.val));
+    if(vals.length)parts.push(`${d.name} ${vals.join(' ')}`);
+  });
+  
+  const policy=parts.join('; ');
+  
+  let output;
+  switch(currentFmt){
+    case'header':output=`Content-Security-Policy: ${policy}`;break;
+    case'meta':output=`<meta http-equiv="Content-Security-Policy" content="${policy}">`;break;
+    case'nginx':output=`add_header Content-Security-Policy "${policy}" always;`;break;
+    case'apache':output=`Header set Content-Security-Policy "${policy}"`;break;
+  }
+  document.getElementById('output').textContent=output||'# No directives selected';
+  updateScore();
+}
+
+function updateScore(){
+  let score=0,max=100;
+  // Check if default-src is set
+  if(document.querySelectorAll('#chips_0 .chip.active').length)score+=10;
+  // Check if script-src avoids unsafe
+  const scriptChips=[...document.querySelectorAll('#chips_1 .chip.active')].map(c=>c.dataset.val);
+  if(scriptChips.length){score+=15;if(!scriptChips.includes("'unsafe-inline'"))score+=10;if(!scriptChips.includes("'unsafe-eval'"))score+=10}
+  // Check object-src none
+  const objChips=[...document.querySelectorAll('#chips_7 .chip.active')].map(c=>c.dataset.val);
+  if(objChips.includes("'none'"))score+=15;
+  // Check frame-ancestors
+  if(document.querySelectorAll('#chips_9 .chip.active').length)score+=10;
+  // Check base-uri
+  if(document.querySelectorAll('#chips_10 .chip.active').length)score+=10;
+  // Check form-action
+  if(document.querySelectorAll('#chips_11 .chip.active').length)score+=10;
+  // upgrade-insecure
+  if(document.getElementById('bool_14')?.checked)score+=10;
+  
+  score=Math.min(score,max);
+  const fill=document.getElementById('scoreFill');
+  const label=document.getElementById('scoreLabel');
+  fill.style.width=score+'%';
+  fill.style.background=score>=80?'#22c55e':score>=50?'#f59e0b':'#ef4444';
+  label.textContent=score;
+  label.style.color=score>=80?'#22c55e':score>=50?'#f59e0b':'#ef4444';
+}
+
+function switchFmt(el){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  currentFmt=el.dataset.fmt;
+  generate();
+}
+
+const presets={
+  strict:{'0':["'none'"],'1':["'self'"],'2':["'self'"],'3':["'self'"],'4':["'self'"],'5':["'self'"],'6':["'none'"],'7':["'none'"],'8':["'none'"],'9':["'self'"],'10':["'self'"],'11':["'self'"],bools:[14]},
+  moderate:{'0':["'self'"],'1':["'self'","https://cdn.jsdelivr.net"],'2':["'self'","'unsafe-inline'","https://fonts.googleapis.com"],'3':["'self'","https:","data:"],'4':["'self'","https://fonts.gstatic.com"],'5':["'self'","https:"],'7':["'none'"],'9':["'self'"],'10':["'self'"],'11':["'self'"],bools:[14]},
+  relaxed:{'0':["'self'","https:","data:"],'1':["'self'","'unsafe-inline'","'unsafe-eval'","https:"],'2':["'self'","'unsafe-inline'","https:"],'3':["'self'","https:","data:","blob:"],'4':["'self'","https:","data:"],'5':["'self'","https:","wss:"],bools:[14]},
+  api:{'0':["'none'"],'1':["'none'"],'2':["'none'"],'3':["'none'"],'4':["'none'"],'5':["'self'"],'6':["'none'"],'7':["'none'"],'8':["'none'"],'11':["'none'"],bools:[]},
+  clear:{bools:[]}
+};
+
+function loadPreset(name){
+  // Clear all
+  document.querySelectorAll('.chip.active').forEach(c=>c.classList.remove('active'));
+  directives.forEach((d,i)=>{if(d.isBoolean){const el=document.getElementById(`bool_${i}`);if(el)el.checked=false}});
+  
+  const p=presets[name];
+  if(!p){generate();return}
+  
+  Object.entries(p).forEach(([key,vals])=>{
+    if(key==='bools'){vals.forEach(i=>{const el=document.getElementById(`bool_${i}`);if(el)el.checked=true});return}
+    vals.forEach(v=>{
+      const chip=document.querySelector(`#chips_${key} .chip[data-val="${v}"]`);
+      if(chip)chip.classList.add('active');
+    });
+  });
+  generate();
+}
+
+function copyOutput(){
+  navigator.clipboard.writeText(document.getElementById('output').textContent);
+  showToast('Copied!');
+}
+
+function importCSP(){
+  const raw=prompt('Paste your existing CSP:');
+  if(!raw)return;
+  // Clear
+  document.querySelectorAll('.chip.active').forEach(c=>c.classList.remove('active'));
+  
+  let policy=raw.replace(/^Content-Security-Policy:\s*/i,'').replace(/;?\s*$/,'');
+  policy.split(';').forEach(part=>{
+    const tokens=part.trim().split(/\s+/);
+    const dir=tokens[0];
+    const vals=tokens.slice(1);
+    const idx=directives.findIndex(d=>d.name===dir);
+    if(idx===-1)return;
+    if(directives[idx].isBoolean){const el=document.getElementById(`bool_${idx}`);if(el)el.checked=true;return}
+    vals.forEach(v=>{
+      let chip=document.querySelector(`#chips_${idx} .chip[data-val="${v}"]`);
+      if(chip){chip.classList.add('active')}
+      else{
+        const row=document.getElementById(`chips_${idx}`);
+        const c=document.createElement('span');
+        c.className='chip active';c.dataset.dir=idx;c.dataset.val=v;
+        c.onclick=function(){this.classList.toggle('active');generate()};
+        c.textContent=v;row.appendChild(c);
+      }
+    });
+  });
+  generate();
+  showToast('CSP imported!');
+}
+
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1500)}
+
+init();
+</script>
+</body>
+</html>

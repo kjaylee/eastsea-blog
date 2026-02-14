@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Font Pair Suggest</title>
+<style>
+:root{--bg:#f5f5f5;--card:#fff;--text:#333;--border:#ddd;--accent:#0ea5e9;--accent2:#38bdf8;--muted:#888;--success:#22c55e}
+@media(prefers-color-scheme:dark){:root{--bg:#1a1a2e;--card:#16213e;--text:#e0e0e0;--border:#2a2a4a;--accent:#38bdf8;--accent2:#7dd3fc;--muted:#999;--success:#4ade80}}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:20px}
+.container{max-width:900px;margin:0 auto}
+h1{text-align:center;margin-bottom:8px;font-size:1.8rem}
+.subtitle{text-align:center;color:var(--muted);margin-bottom:24px;font-size:.95rem}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px;margin-bottom:16px}
+.controls{display:flex;gap:12px;flex-wrap:wrap;align-items:end;margin-bottom:20px}
+.controls>div{flex:1;min-width:200px}
+label{display:block;font-weight:600;margin-bottom:6px;font-size:.85rem}
+select,input{width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:.95rem;background:var(--bg);color:var(--text)}
+.btn{padding:10px 20px;border:none;border-radius:8px;cursor:pointer;font-size:.9rem;font-weight:600;transition:all .2s}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--accent2)}
+.pair-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:768px){.pair-grid{grid-template-columns:1fr}}
+.pair-card{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:20px;cursor:pointer;transition:all .2s;position:relative}
+.pair-card:hover{border-color:var(--accent);transform:translateY(-2px)}
+.pair-card.selected{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
+.pair-heading{font-size:1.6rem;margin-bottom:8px;line-height:1.3}
+.pair-body{font-size:1rem;line-height:1.6;color:var(--muted)}
+.pair-meta{display:flex;justify-content:space-between;margin-top:12px;font-size:.75rem;color:var(--muted)}
+.tag{display:inline-block;background:var(--accent);color:#fff;padding:1px 8px;border-radius:10px;font-size:.7rem;margin-right:4px}
+.preview-section{margin-top:20px}
+.preview-box{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:32px;margin-top:12px}
+.preview-box h2{margin-bottom:16px;line-height:1.3}
+.preview-box p{line-height:1.7;color:var(--muted);margin-bottom:12px}
+.code-box{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px;font-family:'Courier New',monospace;font-size:.8rem;white-space:pre-wrap;margin-top:12px;position:relative}
+.copy-btn{position:absolute;top:8px;right:8px;background:var(--accent);color:#fff;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:.75rem}
+.toast{position:fixed;bottom:20px;right:20px;background:var(--success);color:#fff;padding:12px 20px;border-radius:8px;font-weight:600;opacity:0;transition:opacity .3s;pointer-events:none}
+.toast.show{opacity:1}
+.shuffle-btn{background:none;border:2px solid var(--accent);color:var(--accent);padding:10px 20px;border-radius:8px;cursor:pointer;font-size:.9rem;font-weight:600}
+.shuffle-btn:hover{background:var(--accent);color:#fff}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>🔤 Font Pair Suggest</h1>
+<p class="subtitle">Find beautiful font pairings for your next project</p>
+
+<div class="card">
+<div class="controls">
+<div>
+<label>Category</label>
+<select id="category">
+<option value="all">All Styles</option>
+<option value="modern">Modern & Clean</option>
+<option value="classic">Classic & Elegant</option>
+<option value="bold">Bold & Impact</option>
+<option value="friendly">Friendly & Warm</option>
+<option value="tech">Tech & Code</option>
+</select>
+</div>
+<div>
+<label>Preview Text</label>
+<input type="text" id="customText" placeholder="Your headline here..." value="">
+</div>
+<div style="flex:0">
+<label>&nbsp;</label>
+<button class="shuffle-btn" onclick="shuffle()">🔀 Shuffle</button>
+</div>
+</div>
+
+<div class="pair-grid" id="pairGrid"></div>
+</div>
+
+<div class="card preview-section" id="previewSection" style="display:none">
+<label>Full Preview</label>
+<div class="preview-box" id="previewBox">
+<h2 id="prevH"></h2>
+<p id="prevP1"></p>
+<p id="prevP2"></p>
+</div>
+<div class="code-box" id="codeBox"><button class="copy-btn" onclick="copyCode()">Copy</button></div>
+</div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+const pairs=[
+{heading:'Inter',body:'Merriweather',cat:'modern',tags:['clean','readable'],w:'400;700'},
+{heading:'Playfair Display',body:'Source Sans 3',cat:'classic',tags:['elegant','serif'],w:'400;700'},
+{heading:'Montserrat',body:'Open Sans',cat:'modern',tags:['geometric','versatile'],w:'400;700'},
+{heading:'Poppins',body:'Lora',cat:'friendly',tags:['rounded','warm'],w:'400;600'},
+{heading:'Raleway',body:'Roboto',cat:'modern',tags:['thin','clean'],w:'400;700'},
+{heading:'Oswald',body:'Quattrocento',cat:'bold',tags:['condensed','editorial'],w:'400;700'},
+{heading:'Space Grotesk',body:'IBM Plex Sans',cat:'tech',tags:['mono-adjacent','sharp'],w:'400;700'},
+{heading:'DM Serif Display',body:'DM Sans',cat:'classic',tags:['transitional','modern-serif'],w:'400;700'},
+{heading:'Bebas Neue',body:'Roboto Condensed',cat:'bold',tags:['impact','poster'],w:'400;700'},
+{heading:'Archivo',body:'Literata',cat:'modern',tags:['grotesk','bookish'],w:'400;700'},
+{heading:'Sora',body:'Noto Sans',cat:'tech',tags:['variable','global'],w:'400;700'},
+{heading:'Fraunces',body:'Commissioner',cat:'classic',tags:['soft-serif','expressive'],w:'400;700'},
+{heading:'Rubik',body:'Karla',cat:'friendly',tags:['rounded','geometric'],w:'400;700'},
+{heading:'Bitter',body:'Source Sans 3',cat:'classic',tags:['slab-serif','readable'],w:'400;700'},
+{heading:'Space Mono',body:'Work Sans',cat:'tech',tags:['monospace','minimal'],w:'400;700'},
+{heading:'Outfit',body:'Newsreader',cat:'modern',tags:['geometric','editorial'],w:'400;700'},
+{heading:'Lexend',body:'Inter',cat:'friendly',tags:['readability','accessible'],w:'400;700'},
+{heading:'Unbounded',body:'Nunito',cat:'bold',tags:['display','fun'],w:'400;700'},
+{heading:'Bricolage Grotesque',body:'Lato',cat:'modern',tags:['quirky','grotesk'],w:'400;700'},
+{heading:'Cormorant Garamond',body:'Fira Sans',cat:'classic',tags:['french','elegant'],w:'400;700'},
+];
+
+let current=null;
+const loaded=new Set();
+
+function loadFont(name,weights){
+  if(loaded.has(name))return;
+  loaded.add(name);
+  const link=document.createElement('link');
+  link.rel='stylesheet';
+  link.href=`https://fonts.googleapis.com/css2?family=${name.replace(/ /g,'+')}:wght@${weights||'400;700'}&display=swap`;
+  document.head.appendChild(link);
+}
+
+function render(filter){
+  const grid=document.getElementById('pairGrid');
+  let list=filter==='all'?[...pairs]:pairs.filter(p=>p.cat===filter);
+  list=list.sort(()=>Math.random()-0.5).slice(0,6);
+  const customText=document.getElementById('customText').value;
+  const headline=customText||'The Quick Brown Fox Jumps Over the Lazy Dog';
+  const bodyText='Good typography is invisible. Great typography enhances the reading experience and guides the eye naturally through content.';
+  
+  grid.innerHTML=list.map((p,i)=>{
+    loadFont(p.heading,p.w);loadFont(p.body,p.w);
+    return `<div class="pair-card" onclick="selectPair(${pairs.indexOf(p)})">
+      <div class="pair-heading" style="font-family:'${p.heading}',sans-serif;font-weight:700">${headline.substring(0,40)}</div>
+      <div class="pair-body" style="font-family:'${p.body}',sans-serif">${bodyText.substring(0,100)}...</div>
+      <div class="pair-meta">
+        <div>${p.tags.map(t=>`<span class="tag">${t}</span>`).join('')}</div>
+        <div>${p.heading} + ${p.body}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function selectPair(idx){
+  const p=pairs[idx];current=p;
+  loadFont(p.heading,p.w);loadFont(p.body,p.w);
+  const customText=document.getElementById('customText').value;
+  const headline=customText||'The Quick Brown Fox Jumps Over the Lazy Dog';
+  
+  document.getElementById('previewSection').style.display='block';
+  const h=document.getElementById('prevH');
+  h.style.fontFamily=`'${p.heading}',sans-serif`;h.style.fontWeight='700';h.style.fontSize='2rem';
+  h.textContent=headline;
+  
+  const p1=document.getElementById('prevP1');
+  p1.style.fontFamily=`'${p.body}',sans-serif`;
+  p1.textContent='Typography is the art and technique of arranging type to make written language legible, readable, and appealing when displayed. The arrangement of type involves selecting typefaces, point sizes, line lengths, line-spacing, and letter-spacing.';
+  
+  const p2=document.getElementById('prevP2');
+  p2.style.fontFamily=`'${p.body}',sans-serif`;
+  p2.textContent='With the development of digital fonts, typographers have access to thousands of typefaces. The challenge is finding combinations that create visual harmony and serve the content effectively.';
+  
+  const hFont=p.heading.replace(/ /g,'+');
+  const bFont=p.body.replace(/ /g,'+');
+  document.getElementById('codeBox').innerHTML=`<button class="copy-btn" onclick="copyCode()">Copy</button>/* Google Fonts Import */
+@import url('https://fonts.googleapis.com/css2?family=${hFont}:wght@700&family=${bFont}:wght@400;700&display=swap');
+
+/* Heading */
+h1, h2, h3 {
+  font-family: '${p.heading}', sans-serif;
+  font-weight: 700;
+}
+
+/* Body */
+body, p {
+  font-family: '${p.body}', sans-serif;
+  font-weight: 400;
+  line-height: 1.6;
+}`;
+  
+  document.querySelectorAll('.pair-card').forEach(c=>c.classList.remove('selected'));
+  event.currentTarget?.classList.add('selected');
+  document.getElementById('previewSection').scrollIntoView({behavior:'smooth'});
+}
+
+function copyCode(){
+  const code=document.getElementById('codeBox').textContent.replace('Copy','').trim();
+  navigator.clipboard.writeText(code);
+  const t=document.getElementById('toast');t.textContent='CSS copied!';t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1500);
+}
+
+function shuffle(){render(document.getElementById('category').value)}
+
+document.getElementById('category').addEventListener('change',e=>render(e.target.value));
+document.getElementById('customText').addEventListener('input',()=>render(document.getElementById('category').value));
+
+render('all');
+</script>
+</body>
+</html>

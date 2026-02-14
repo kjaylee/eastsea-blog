@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>URL Slug Generator</title>
+<style>
+:root{--bg:#f5f5f5;--card:#fff;--text:#333;--border:#ddd;--accent:#4f46e5;--accent2:#6366f1;--muted:#888;--success:#22c55e}
+@media(prefers-color-scheme:dark){:root{--bg:#1a1a2e;--card:#16213e;--text:#e0e0e0;--border:#2a2a4a;--accent:#818cf8;--accent2:#a5b4fc;--muted:#999;--success:#4ade80}}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:20px}
+.container{max-width:700px;margin:0 auto}
+h1{text-align:center;margin-bottom:8px;font-size:1.8rem}
+.subtitle{text-align:center;color:var(--muted);margin-bottom:24px;font-size:.95rem}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px;margin-bottom:16px}
+label{display:block;font-weight:600;margin-bottom:8px;font-size:.9rem}
+textarea,input[type=text],select{width:100%;padding:12px;border:1px solid var(--border);border-radius:8px;font-size:1rem;background:var(--bg);color:var(--text);font-family:inherit}
+textarea{min-height:100px;resize:vertical}
+.options{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0}
+.options label{display:flex;align-items:center;gap:8px;font-weight:400;cursor:pointer}
+.output-box{background:var(--bg);border:2px dashed var(--border);border-radius:8px;padding:16px;font-family:'Courier New',monospace;font-size:1rem;word-break:break-all;min-height:48px;position:relative}
+.btn{padding:10px 20px;border:none;border-radius:8px;cursor:pointer;font-size:.9rem;font-weight:600;transition:all .2s}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--accent2)}
+.btn-sm{padding:6px 14px;font-size:.8rem}
+.btn-row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.badge{display:inline-block;background:var(--accent);color:#fff;padding:2px 8px;border-radius:12px;font-size:.75rem;margin-left:8px}
+.toast{position:fixed;bottom:20px;right:20px;background:var(--success);color:#fff;padding:12px 20px;border-radius:8px;font-weight:600;opacity:0;transition:opacity .3s;pointer-events:none}
+.toast.show{opacity:1}
+.history{margin-top:12px;font-size:.85rem;color:var(--muted)}
+.history span{display:inline-block;background:var(--bg);border:1px solid var(--border);padding:2px 8px;border-radius:4px;margin:2px 4px;cursor:pointer}
+.history span:hover{border-color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>🔗 URL Slug Generator</h1>
+<p class="subtitle">Convert any text into a clean, SEO-friendly URL slug</p>
+
+<div class="card">
+<label for="input">Enter text to slugify</label>
+<textarea id="input" placeholder="e.g. Hello World! This is My Blog Post #1 — 안녕하세요"></textarea>
+
+<div class="options">
+<label><input type="radio" name="sep" value="-" checked> Hyphen separator (-)</label>
+<label><input type="radio" name="sep" value="_"> Underscore separator (_)</label>
+<label><input type="checkbox" id="lowercase" checked> Lowercase</label>
+<label><input type="checkbox" id="transliterate" checked> Transliterate accents</label>
+<label><input type="number" id="maxLen" value="80" min="10" max="300" style="width:70px;padding:4px 8px"> Max length</label>
+<label><input type="checkbox" id="trimStops"> Remove stop words</label>
+</div>
+</div>
+
+<div class="card">
+<label>Generated Slug <span id="charCount" class="badge">0 chars</span></label>
+<div class="output-box" id="output">—</div>
+<div class="btn-row">
+<button class="btn btn-primary" onclick="copySlug()">📋 Copy</button>
+<button class="btn btn-primary" onclick="copyFull()">🔗 Copy as URL</button>
+<button class="btn btn-sm" onclick="clearAll()">Clear</button>
+</div>
+<div class="history" id="history"></div>
+</div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+const accents={À:'A',Á:'A',Â:'A',Ã:'A',Ä:'A',Å:'A',Æ:'AE',Ç:'C',È:'E',É:'E',Ê:'E',Ë:'E',Ì:'I',Í:'I',Î:'I',Ï:'I',Ð:'D',Ñ:'N',Ò:'O',Ó:'O',Ô:'O',Õ:'O',Ö:'O',Ø:'O',Ù:'U',Ú:'U',Û:'U',Ü:'U',Ý:'Y',Þ:'Th',ß:'ss',à:'a',á:'a',â:'a',ã:'a',ä:'a',å:'a',æ:'ae',ç:'c',è:'e',é:'e',ê:'e',ë:'e',ì:'i',í:'i',î:'i',ï:'i',ð:'d',ñ:'n',ò:'o',ó:'o',ô:'o',õ:'o',ö:'o',ø:'o',ù:'u',ú:'u',û:'u',ü:'u',ý:'y',þ:'th',ÿ:'y',ą:'a',ć:'c',ę:'e',ł:'l',ń:'n',ś:'s',ź:'z',ż:'z',ă:'a',ș:'s',ț:'t'};
+const stopWords=new Set(['a','an','the','and','or','but','in','on','at','to','for','of','with','by','from','is','it','its','this','that','are','was','were','be','been','being','have','has','had','do','does','did','will','would','could','should','may','might','shall','can','not','no','nor','so','if','then','than','too','very','just','about','above','after','before','between','into','through','during','out','off','over','under','again','further','once']);
+
+const history=JSON.parse(localStorage.getItem('slug-history')||'[]');
+
+function transliterate(s){return s.replace(/[^\u0000-\u007E]/g,c=>accents[c]||'')}
+
+function slugify(text){
+  const sep=document.querySelector('input[name=sep]:checked').value;
+  const lower=document.getElementById('lowercase').checked;
+  const trans=document.getElementById('transliterate').checked;
+  const maxLen=parseInt(document.getElementById('maxLen').value)||80;
+  const trimStop=document.getElementById('trimStops').checked;
+  
+  let s=text.trim();
+  if(!s)return '';
+  if(trans)s=transliterate(s);
+  if(lower)s=s.toLowerCase();
+  s=s.replace(/[^\w\s-]/g,'').replace(/[\s_-]+/g,' ').trim();
+  if(trimStop){s=s.split(' ').filter(w=>!stopWords.has(w.toLowerCase())).join(' ')}
+  s=s.replace(/\s+/g,sep);
+  if(s.length>maxLen){s=s.substring(0,maxLen);const li=s.lastIndexOf(sep);if(li>maxLen*0.5)s=s.substring(0,li)}
+  return s;
+}
+
+function update(){
+  const text=document.getElementById('input').value;
+  const slug=slugify(text);
+  document.getElementById('output').textContent=slug||'—';
+  document.getElementById('charCount').textContent=slug.length+' chars';
+}
+
+document.getElementById('input').addEventListener('input',update);
+document.querySelectorAll('input[name=sep],#lowercase,#transliterate,#maxLen,#trimStops').forEach(el=>el.addEventListener('change',update));
+document.getElementById('maxLen').addEventListener('input',update);
+
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1500)}
+
+function copySlug(){const s=document.getElementById('output').textContent;if(s==='—')return;navigator.clipboard.writeText(s);addHistory(s);showToast('Copied!')}
+function copyFull(){const s=document.getElementById('output').textContent;if(s==='—')return;navigator.clipboard.writeText('https://example.com/'+s);showToast('Full URL copied!')}
+function clearAll(){document.getElementById('input').value='';update()}
+
+function addHistory(slug){if(!history.includes(slug)){history.unshift(slug);if(history.length>10)history.pop();localStorage.setItem('slug-history',JSON.stringify(history));renderHistory()}}
+function renderHistory(){const h=document.getElementById('history');if(!history.length){h.innerHTML='';return}h.innerHTML='<strong>Recent:</strong> '+history.map(s=>`<span onclick="navigator.clipboard.writeText('${s}');showToast('Copied!')">${s}</span>`).join('')}
+renderHistory();
+</script>
+</body>
+</html>

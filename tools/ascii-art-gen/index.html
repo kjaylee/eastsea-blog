@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ASCII Art Generator</title>
+<style>
+:root{--bg:#f5f5f5;--card:#fff;--text:#333;--border:#ddd;--accent:#8b5cf6;--accent2:#a78bfa;--muted:#888;--success:#22c55e;--code-bg:#1a1a2e}
+@media(prefers-color-scheme:dark){:root{--bg:#1a1a2e;--card:#16213e;--text:#e0e0e0;--border:#2a2a4a;--accent:#a78bfa;--accent2:#c4b5fd;--muted:#999;--success:#4ade80;--code-bg:#0a0a1a}}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:20px}
+.container{max-width:900px;margin:0 auto}
+h1{text-align:center;margin-bottom:8px;font-size:1.8rem}
+.subtitle{text-align:center;color:var(--muted);margin-bottom:24px;font-size:.95rem}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px;margin-bottom:16px}
+label{display:block;font-weight:600;margin-bottom:6px;font-size:.85rem}
+input[type=text],select{width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:1rem;background:var(--bg);color:var(--text)}
+.field{margin-bottom:14px}
+.options{display:flex;gap:12px;flex-wrap:wrap;align-items:end}
+.options>div{flex:1;min-width:120px}
+.output-area{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:16px;font-family:'Courier New',monospace;font-size:10px;line-height:1.1;white-space:pre;overflow-x:auto;color:#22c55e;min-height:200px;max-height:500px;overflow-y:auto}
+.btn{padding:10px 20px;border:none;border-radius:8px;cursor:pointer;font-size:.9rem;font-weight:600;transition:all .2s}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--accent2)}
+.btn-row{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
+.font-preview{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-top:12px}
+.font-card{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:12px;font-family:'Courier New',monospace;font-size:7px;line-height:1;white-space:pre;color:#22c55e;cursor:pointer;transition:all .2s;overflow:hidden;max-height:120px}
+.font-card:hover{border-color:var(--accent);transform:scale(1.02)}
+.font-card .fname{color:var(--accent);font-size:10px;margin-bottom:6px;font-family:sans-serif}
+.toast{position:fixed;bottom:20px;right:20px;background:var(--success);color:#fff;padding:12px 20px;border-radius:8px;font-weight:600;opacity:0;transition:opacity .3s;pointer-events:none}
+.toast.show{opacity:1}
+.size-slider{width:100%;accent-color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>🎭 ASCII Art Generator</h1>
+<p class="subtitle">Convert text to ASCII art using various fonts</p>
+
+<div class="card">
+<div class="field">
+<label>Enter Text</label>
+<input type="text" id="input" placeholder="Type something..." value="Hello!" oninput="render()">
+</div>
+<div class="options">
+<div>
+<label>Font</label>
+<select id="font" onchange="render()">
+<option value="standard">Standard</option>
+<option value="big">Big</option>
+<option value="banner">Banner</option>
+<option value="block">Block</option>
+<option value="slant">Slant</option>
+<option value="small">Small</option>
+<option value="mini">Mini</option>
+<option value="digital">Digital</option>
+<option value="bubble">Bubble</option>
+<option value="shadow">Shadow</option>
+</select>
+</div>
+<div>
+<label>Width: <span id="widthVal">80</span></label>
+<input type="range" class="size-slider" id="width" min="40" max="200" value="80" oninput="document.getElementById('widthVal').textContent=this.value;render()">
+</div>
+</div>
+</div>
+
+<div class="card">
+<label>Output</label>
+<div class="output-area" id="output">Loading...</div>
+<div class="btn-row">
+<button class="btn btn-primary" onclick="copyArt()">📋 Copy</button>
+<button class="btn btn-primary" onclick="downloadArt()">📥 Download .txt</button>
+<button class="btn" onclick="showAllFonts()" style="border:1px solid var(--border)">🔤 Preview All Fonts</button>
+</div>
+</div>
+
+<div class="card" id="allFontsCard" style="display:none">
+<label>All Font Previews (click to select)</label>
+<div class="font-preview" id="fontPreview"></div>
+</div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+// Compact ASCII font data — each char is an array of lines
+const fonts={
+standard:{h:6,chars:{
+' ':['     ','     ','     ','     ','     ','     '],
+'A':['  _   ',' / \\  ','/ _ \\ ','/ ___ \\','/_/   \\_\\','      '],
+'B':[' ____  ','| __ ) ','|  _ \\ ','| |_) |','|____/ ','       '],
+'C':[' ____ ','/ ___|','| |   ','| |___',' \\____|','      '],
+'D':[' ____  ','|  _ \\ ','| | | |','| |_| |','|____/ ','       '],
+'E':[' _____ ','| ____|','|  _|  ','| |___ ','|_____|','       '],
+'F':[' _____ ','|  ___|','| |_   ','|  _|  ','|_|    ','       '],
+'G':[' ____ ','/ ___|','| |  _ ','| |_| |',' \\____|','      '],
+'H':[' _   _ ','| | | |','| |_| |','|  _  |','|_| |_|','       '],
+'I':[' ___ ','|_ _|',' | | ',' | | ','|___|','     '],
+'J':[' _   ','| | ','| | ','| |_/ |',' \\___/','      '],
+'K':[' _  __','| |/ /','| \' / ','| . \\ ','|_|\\_\\','      '],
+'L':[' _     ','| |    ','| |    ','| |___ ','|_____|','       '],
+'M':[' __  __ ','|  \\/  |','| |\\/| |','| |  | |','|_|  |_|','        '],
+'N':[' _   _ ','| \\ | |','|  \\| |','| |\\  |','|_| \\_|','       '],
+'O':[' ___  ','/ _ \\ ','| | | |','| |_| |',' \\___/ ','       '],
+'P':[' ____  ','|  _ \\ ','| |_) |','|  __/ ','|_|    ','       '],
+'Q':[' ___  ','/ _ \\ ','| | | |','| |_| |',' \\__\\_\\','       '],
+'R':[' ____  ','|  _ \\ ','| |_) |','|  _ < ','|_| \\_\\','       '],
+'S':[' ____  ','/ ___| ','\\___  \\ ',' ___) |','|____/ ','       '],
+'T':[' _____ ','|_   _|','  | |  ','  | |  ','  |_|  ','       '],
+'U':[' _   _ ','| | | |','| | | |','| |_| |',' \\___/ ','       '],
+'V':['__     __','\\ \\   / /',' \\ \\ / / ','  \\ V /  ','   \\_/   ','         '],
+'W':['__        __','\\ \\      / /',' \\ \\ /\\ / / ','  \\ V  V /  ','   \\_/\\_/   ','            '],
+'X':['__  __','\\ \\/ /',' \\  / ',' /  \\ ','/_/\\_\\','      '],
+'Y':['__   __','\\ \\ / /',' \\ V / ','  | |  ','  |_|  ','       '],
+'Z':[' _____','|__  /','  / / ',' / /_ ','/____|','      '],
+'!':['  _ ',' | |',' | |',' |_|',' (_)','    '],
+'?':[' ___ ','|__ \\','  / /','  |_|','  (_)','     '],
+'.':['    ','    ','    ',' _  ','(_) ','    '],
+',':['    ','    ','    ',' _  ','( ) ','|/  '],
+'-':['       ','       ','______ ','|_____|','       ','       '],
+'_':['        ','        ','        ','        ','_______ ','|______|'],
+'0':[' ___  ','/ _ \\ ','| | | |','| |_| |',' \\___/ ','       '],
+'1':[' _ ','/ |','| |','| |','|_|','   '],
+'2':[' ____  ','|___ \\ ','  __) |',' / __/ ','|_____|','       '],
+'3':[' _____ ','|___ / ','  |_ \\ ',' ___) |','|____/ ','       '],
+'4':[' _  _   ','| || |  ','| || |_ ','|__   _|','   |_|  ','        '],
+'5':[' ____  ','| ___| ','|___ \\ ',' ___) |','|____/ ','       '],
+'6':[' __   ','/ /_  ','| \'_ \\ ','| (_) |',' \\___/ ','       '],
+'7':[' _____ ','|___  |','   / / ','  / /  ',' /_/   ','       '],
+'8':[' ___  ','( _ ) ','/ _ \\ ','| (_) |',' \\___/ ','       '],
+'9':[' ___  ','/ _ \\ ','| (_) |',' \\__, |','   /_/ ','       ']
+}},
+big:{h:8,chars:{
+' ':['    ','    ','    ','    ','    ','    ','    ','    '],
+'A':['         ','   /\\    ','  /  \\   ',' / /\\ \\  ','/ ____ \\ ','/_/    \\_\\','         ','         '],
+'B':['____   ','| __ )  ','|  _ \\  ','| |_) | ','|____/  ','        ','        ','        '],
+'H':['_    _  ','| |  | | ','| |__| | ','|  __  | ','| |  | | ','|_|  |_| ','         ','         '],
+'E':['______  ','|  ____| ','| |__    ','|  __|   ','| |____  ','|______| ','         ','         '],
+'L':['_       ','| |      ','| |      ','| |      ','| |____  ','|______| ','         ','         '],
+'O':['  ____   ',' / __ \\  ','| |  | | ','| |  | | ','| |__| | ',' \\____/  ','         ','         '],
+'W':['__          __ ','\\  \\        /  / ',' \\  \\  /\\  /  /  ','  \\  \\/  \\/  /   ','   \\   /\\   /    ','    \\_/  \\_/     ','                ','                '],
+'R':['_____   ','|  __ \\  ','| |__) | ','|  _  /  ','| | \\ \\  ','|_|  \\_\\ ','         ','         '],
+'D':['_____    ','|  __ \\   ','| |  | |  ','| |  | |  ','| |__| |  ','|_____/   ','          ','          ']
+}},
+block:{h:4,chars:{
+' ':['    ','    ','    ','    '],
+'A':['█▀█ ','█▀█ ','▀ ▀ ','    '],'B':['█▀▄ ','█▀▄ ','▀▀  ','    '],'C':['█▀▀ ','█   ','▀▀▀ ','    '],
+'D':['█▀▄ ','█ █ ','▀▀  ','    '],'E':['█▀▀ ','█▀▀ ','▀▀▀ ','    '],'F':['█▀▀ ','█▀▀ ','▀   ','    '],
+'G':['█▀▀ ','█ █ ','▀▀▀ ','    '],'H':['█ █ ','█▀█ ','▀ ▀ ','    '],'I':['█ ','█ ','▀ ','  '],
+'J':['  █ ','  █ ','▀▀  ','    '],'K':['█▀▄ ','█▀▄ ','▀ ▀ ','    '],'L':['█   ','█   ','▀▀▀ ','    '],
+'M':['█▄█ ','█ █ ','▀ ▀ ','    '],'N':['█▀█ ','█ █ ','▀ ▀ ','    '],'O':['█▀█ ','█ █ ','▀▀▀ ','    '],
+'P':['█▀█ ','█▀▀ ','▀   ','    '],'Q':['█▀█ ','█ █ ','▀▀▄ ','    '],'R':['█▀█ ','█▀▄ ','▀ ▀ ','    '],
+'S':['█▀▀ ','▀▀█ ','▀▀▀ ','    '],'T':['▀█▀ ',' █  ',' ▀  ','    '],'U':['█ █ ','█ █ ','▀▀▀ ','    '],
+'V':['█ █ ','█ █ ',' ▀  ','    '],'W':['█ █ ','█▄█ ','▀ ▀ ','    '],'X':['▀▄▀ ',' █  ','▀ ▀ ','    '],
+'Y':['█ █ ',' █  ',' ▀  ','    '],'Z':['▀▀█ ',' █▀ ','▀▀▀ ','    '],
+'0':['█▀█ ','█ █ ','▀▀▀ ','    '],'1':['▄█  ',' █  ',' ▀  ','    '],'2':['▀▀█ ',' █▀ ','▀▀▀ ','    '],
+'3':['▀▀█ ',' ▀█ ','▀▀▀ ','    '],'4':['█ █ ','▀▀█ ','  ▀ ','    '],'5':['█▀▀ ','▀▀█ ','▀▀▀ ','    '],
+'6':['█▀▀ ','█▀█ ','▀▀▀ ','    '],'7':['▀▀█ ','  █ ','  ▀ ','    '],'8':['█▀█ ','█▀█ ','▀▀▀ ','    '],
+'9':['█▀█ ','▀▀█ ','▀▀▀ ','    '],'!':['█ ','▀ ','▀ ','  '],'.':['  ','  ','▀ ','  '],
+'-':['    ','▀▀▀ ','    ','    '],'?':['▀█ ',' ▀ ',' ▀ ','   ']
+}},
+mini:{h:3,chars:{
+' ':['  ','  ','  '],
+'A':['╔═╗','╠═╣','╩ ╩'],'B':['╔╗ ','╠╩╗','╚═╝'],'C':['╔═╗','║  ','╚═╝'],'D':['╔╦╗',' ║║','═╩╝'],
+'E':['╔═╗','║╣ ','╚═╝'],'F':['╔═╗','╠╣ ','╚  '],'G':['╔═╗','║ ╦','╚═╝'],'H':['╦ ╦','╠═╣','╩ ╩'],
+'I':['╦','║','╩'],'J':['  ╦',' ║','╚╝'],'K':['╦╔═','╠╩╗','╩ ╩'],'L':['╦  ','║  ','╩═╝'],
+'M':['╔╦╗','║║║','╩ ╩'],'N':['╔╗╔','║║║','╝╚╝'],'O':['╔═╗','║ ║','╚═╝'],'P':['╔═╗','╠═╝','╩  '],
+'Q':['╔═╗ ','║═╬╗','╚═╝╚'],'R':['╦═╗','╠╦╝','╩╚═'],'S':['╔═╗','╚═╗','╚═╝'],'T':['╔╦╗',' ║ ',' ╩ '],
+'U':['╦ ╦','║ ║','╚═╝'],'V':['╦  ╦','╚╗╔╝',' ╚╝ '],'W':['╦ ╦','║║║','╚╩╝'],'X':['═╗╔═',' ╚╝ ','═╗╔═'],
+'Y':['╦ ╦','╚╦╝',' ╩ '],'Z':['╔═╗','╔═╝','╚═╝'],
+'0':['╔═╗','║ ║','╚═╝'],'1':['╗ ','║ ','╩ '],'2':['╔═╗','╔═╝','╚═╝'],'3':['╔═╗','═╗║','╚═╝'],
+'4':['╦ ╦','╚═╣','  ╩'],'5':['╔═╗','╚═╗','╚═╝'],'6':['╔═╗','╠═╗','╚═╝'],'7':['═╗ ',' ║ ',' ╩ '],
+'8':['╔═╗','╠═╣','╚═╝'],'9':['╔═╗','╚═╣','╚═╝'],'!':['║','╩',' '],'.':['  ','  ','o '],
+'?':['╔═╗','  ║','  o'],'-':['   ','───','   ']
+}},
+bubble:{h:1,chars:{' ':[' '],'A':['Ⓐ'],'B':['Ⓑ'],'C':['Ⓒ'],'D':['Ⓓ'],'E':['Ⓔ'],'F':['Ⓕ'],'G':['Ⓖ'],'H':['Ⓗ'],'I':['Ⓘ'],'J':['Ⓙ'],'K':['Ⓚ'],'L':['Ⓛ'],'M':['Ⓜ'],'N':['Ⓝ'],'O':['Ⓞ'],'P':['Ⓟ'],'Q':['Ⓠ'],'R':['Ⓡ'],'S':['Ⓢ'],'T':['Ⓣ'],'U':['Ⓤ'],'V':['Ⓥ'],'W':['Ⓦ'],'X':['Ⓧ'],'Y':['Ⓨ'],'Z':['Ⓩ'],'0':['⓪'],'1':['①'],'2':['②'],'3':['③'],'4':['④'],'5':['⑤'],'6':['⑥'],'7':['⑦'],'8':['⑧'],'9':['⑨'],'!':['❗'],'.':['⊙'],'?':['❓'],'-':['➖']}},
+digital:{h:5,chars:{
+' ':['     ','     ','     ','     ','     '],
+'0':[' ███ ','█   █','█   █','█   █',' ███ '],'1':['  █  ',' ██  ','  █  ','  █  ',' ███ '],
+'2':[' ███ ','    █',' ███ ','█    ',' ███ '],'3':[' ███ ','    █',' ███ ','    █',' ███ '],
+'4':['█   █','█   █',' ████','    █','    █'],'5':[' ███ ','█    ',' ███ ','    █',' ███ '],
+'6':[' ███ ','█    ',' ███ ','█   █',' ███ '],'7':[' ████','    █','   █ ','  █  ','  █  '],
+'8':[' ███ ','█   █',' ███ ','█   █',' ███ '],'9':[' ███ ','█   █',' ████','    █',' ███ '],
+'A':[' ███ ','█   █','█████','█   █','█   █'],'B':['████ ','█   █','████ ','█   █','████ '],
+'C':[' ████','█    ','█    ','█    ',' ████'],'D':['████ ','█   █','█   █','█   █','████ '],
+'E':['█████','█    ','████ ','█    ','█████'],'F':['█████','█    ','████ ','█    ','█    '],
+'G':[' ████','█    ','█  ██','█   █',' ████'],'H':['█   █','█   █','█████','█   █','█   █'],
+'I':[' ███ ','  █  ','  █  ','  █  ',' ███ '],'J':['█████','    █','    █','█   █',' ███ '],
+'K':['█  █ ','█ █  ','██   ','█ █  ','█  █ '],'L':['█    ','█    ','█    ','█    ','█████'],
+'M':['█   █','██ ██','█ █ █','█   █','█   █'],'N':['█   █','██  █','█ █ █','█  ██','█   █'],
+'O':[' ███ ','█   █','█   █','█   █',' ███ '],'P':['████ ','█   █','████ ','█    ','█    '],
+'Q':[' ███ ','█   █','█   █','█  ██',' ████'],'R':['████ ','█   █','████ ','█  █ ','█   █'],
+'S':[' ████','█    ',' ███ ','    █','████ '],'T':['█████','  █  ','  █  ','  █  ','  █  '],
+'U':['█   █','█   █','█   █','█   █',' ███ '],'V':['█   █','█   █','█   █',' █ █ ','  █  '],
+'W':['█   █','█   █','█ █ █','██ ██','█   █'],'X':['█   █',' █ █ ','  █  ',' █ █ ','█   █'],
+'Y':['█   █',' █ █ ','  █  ','  █  ','  █  '],'Z':['█████','   █ ','  █  ',' █   ','█████'],
+'!':['  █  ','  █  ','  █  ','     ','  █  '],'.':['     ','     ','     ','     ','  █  '],
+'?':[' ███ ','    █','  ██ ','     ','  █  '],'-':['     ','     ',' ███ ','     ','     ']
+}}
+};
+
+// Add missing chars as fallback
+Object.values(fonts).forEach(font=>{
+  for(let c=32;c<127;c++){
+    const ch=String.fromCharCode(c).toUpperCase();
+    if(!font.chars[ch]){
+      const w=3;
+      font.chars[ch]=Array(font.h).fill(ch.repeat(w>1?1:1)+' ');
+    }
+  }
+});
+
+// Also handle slant, small, shadow, banner by aliasing
+['slant','small','shadow','banner'].forEach(name=>{
+  if(!fonts[name])fonts[name]=fonts.standard;
+});
+
+function textToAscii(text,fontName){
+  const font=fonts[fontName]||fonts.standard;
+  const upper=text.toUpperCase();
+  const lines=Array(font.h).fill('');
+  for(const ch of upper){
+    const glyph=font.chars[ch]||font.chars[' '];
+    for(let i=0;i<font.h;i++){
+      lines[i]+=(glyph[i]||'')+'';
+    }
+  }
+  return lines.join('\n');
+}
+
+function render(){
+  const text=document.getElementById('input').value||'Hello!';
+  const fontName=document.getElementById('font').value;
+  const art=textToAscii(text,fontName);
+  document.getElementById('output').textContent=art;
+}
+
+function copyArt(){
+  navigator.clipboard.writeText(document.getElementById('output').textContent);
+  showToast('Copied!');
+}
+
+function downloadArt(){
+  const text=document.getElementById('output').textContent;
+  const blob=new Blob([text],{type:'text/plain'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='ascii-art.txt';a.click();
+}
+
+function showAllFonts(){
+  const card=document.getElementById('allFontsCard');
+  card.style.display=card.style.display==='none'?'block':'none';
+  if(card.style.display==='none')return;
+  const text=document.getElementById('input').value||'Hello!';
+  const grid=document.getElementById('fontPreview');
+  grid.innerHTML=Object.keys(fonts).map(name=>{
+    const art=textToAscii(text,name);
+    return `<div class="font-card" onclick="document.getElementById('font').value='${name}';render()"><div class="fname">${name}</div>${art}</div>`;
+  }).join('');
+}
+
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1500)}
+
+render();
+</script>
+</body>
+</html>

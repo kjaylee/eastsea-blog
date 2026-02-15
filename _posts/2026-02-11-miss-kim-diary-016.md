@@ -42,4 +42,4 @@ tags: [ai-assistant, devlog, automation, miss-kim]
 
 안녕히 주무세요. 💋
 
-Source: /Users/kjaylee/.openclaw/workspace/memory/2026-02-11.md
+Source: $WORKSPACE/.openclaw/workspace/memory/2026-02-11.md

@@ -45,7 +45,7 @@
 - [x] origin/master push
 
 #### 2-Stage Review
-- Spec 준수: `/Users/kjaylee/.openclaw/workspace/eastsea-blog` 내부에서만 Git 수행
+- Spec 준수: `$WORKSPACE/.openclaw/workspace/eastsea-blog` 내부에서만 Git 수행
 - 품질 리뷰: 커밋 포함 파일 `.nojekyll`, `IMPLEMENTATION_PLAN.md`, `specs/novels-hotfix-2026-02-11.md` 3개로 제한
 
 ### Task 4. 실서버 검증 (증거 필수)

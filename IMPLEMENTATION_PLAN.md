@@ -13,7 +13,7 @@
 5. [ ] 증거 포함 완료 보고
 
 ### Constraints
-- 작업 디렉토리: `/Users/kjaylee/.openclaw/workspace/eastsea-blog`
+- 작업 디렉토리: `$WORKSPACE/.openclaw/workspace/eastsea-blog`
 - Git 작업: eastsea-blog 내부만
 - 과도한 변경 금지(YAGNI)
 

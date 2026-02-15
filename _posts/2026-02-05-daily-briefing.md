@@ -120,7 +120,7 @@ GitHub 개발자가 1억 → 1.8억으로 증가했다는 건, **코딩이 더 �
 - 2024년 11월 이후 최저치 기록
 - 암호화폐 시장 전체에서 약 0.5조 달러 증발
 
-**2. [London Blockchain Finance Summit 2026 개최 예정](http://www.prnewswire.com/news-releases/london-blockchain-finance-summit-returns-to-clifford-chance-in-2026-as-digital-money-enters-real-world-deployment-302679229.html)**  
+**2. [London Blockchain Finance Summit 2026 개최 예정](https://www.prnewswire.com/news-releases/london-blockchain-finance-summit-returns-to-clifford-chance-in-2026-as-digital-money-enters-real-world-deployment-302679229.html)**  
 - 토큰화된 화폐와 디지털 통화가 실제 결제·재무 환경에 적용
 - "디지털 화폐의 다음 단계" 논의
 

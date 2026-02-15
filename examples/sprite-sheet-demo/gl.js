@@ -126,7 +126,7 @@ function UTF8ToString(ptr, maxBytesToRead) {
     var str = '';
     while (!(idx >= endIdx)) {
         // For UTF8 byte structure, see:
-        // http://en.wikipedia.org/wiki/UTF-8#Description
+        // https://en.wikipedia.org/wiki/UTF-8#Description
         // https://www.ietf.org/rfc/rfc2279.txt
         // https://tools.ietf.org/html/rfc3629
         var u0 = u8Array[idx++];
@@ -164,8 +164,8 @@ function stringToUTF8(str, heap, outIdx, maxBytesToWrite) {
     var endIdx = outIdx + maxBytesToWrite;
     for (var i = 0; i < str.length; ++i) {
         // Gotcha: charCodeAt returns a 16-bit word that is a UTF-16 encoded code unit, not a Unicode code point of the character! So decode UTF16->UTF32->UTF8.
-        // See http://unicode.org/faq/utf_bom.html#utf16-3
-        // For UTF8 byte structure, see http://en.wikipedia.org/wiki/UTF-8#Description and https://www.ietf.org/rfc/rfc2279.txt and https://tools.ietf.org/html/rfc3629
+        // See https://unicode.org/faq/utf_bom.html#utf16-3
+        // For UTF8 byte structure, see https://en.wikipedia.org/wiki/UTF-8#Description and https://www.ietf.org/rfc/rfc2279.txt and https://tools.ietf.org/html/rfc3629
         var u = str.charCodeAt(i); // possibly a lead surrogate
         if (u >= 0xD800 && u <= 0xDFFF) {
             var u1 = str.charCodeAt(++i);

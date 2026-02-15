@@ -121,14 +121,18 @@
 
     const isFree = price.current === 0;
     const isLowest = history.is_lowest === true;
+    const isStoreLow = history.is_store_low === true;
     const isUpcoming = deal.is_upcoming === true;
     const isHot = (deal.popularity_score || 0) >= 0.5;
+    const isHistoryFlag = deal.flag === 'H';
+    const currency = price.currency || 'USD';
 
     // Badges
     let badgesHTML = '';
     if (isFree) badgesHTML += '<span class="badge badge-free">FREE</span>';
     if (isUpcoming) badgesHTML += '<span class="badge badge-upcoming">UPCOMING</span>';
-    if (isLowest && !isFree) badgesHTML += '<span class="badge badge-lowest">📉 LOWEST</span>';
+    if (isHistoryFlag && !isFree) badgesHTML += '<span class="badge badge-history-low">🏆 역대 최저가!</span>';
+    else if (isLowest && !isFree) badgesHTML += '<span class="badge badge-lowest">📉 LOWEST</span>';
     if (isHot && !isFree) badgesHTML += '<span class="badge badge-hot">🔥 HOT</span>';
 
     // Thumbnail
@@ -150,13 +154,13 @@
     if (isFree) {
       priceHTML = `<span class="price-current free">FREE</span>`;
       if (price.regular > 0) {
-        priceHTML += `<span class="price-original">$${price.regular.toFixed(2)}</span>`;
+        priceHTML += `<span class="price-original">${formatPrice(price.regular, currency)}</span>`;
         priceHTML += `<span class="price-cut">-100%</span>`;
       }
     } else {
-      priceHTML = `<span class="price-current">$${price.current.toFixed(2)}</span>`;
+      priceHTML = `<span class="price-current">${formatPrice(price.current, currency)}</span>`;
       if (price.regular > price.current) {
-        priceHTML += `<span class="price-original">$${price.regular.toFixed(2)}</span>`;
+        priceHTML += `<span class="price-original">${formatPrice(price.regular, currency)}</span>`;
       }
       if (price.cut > 0) {
         priceHTML += `<span class="price-cut">-${price.cut}%</span>`;
@@ -235,6 +239,16 @@
         // Ignore
       }
     }
+  }
+
+  // --- Price formatting ---
+  function formatPrice(amount, currency) {
+    if (currency === 'KRW') {
+      // Korean Won: no decimals, comma-separated, ₩ prefix
+      return '₩' + Math.round(amount).toLocaleString('ko-KR');
+    }
+    // Default: USD
+    return '$' + amount.toFixed(2);
   }
 
   // --- Helpers ---

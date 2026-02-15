@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Building Persistent Memory for AI Agents — How We Solved Context Loss</title>
+  <link rel="canonical" href="https://eastsea.monster/view.html?post=2026-02-15-openclaw-mem-persistent-memory">
+  <meta name="robots" content="index,follow">
+</head>
+<body>
+<article>
+<h1>Building Persistent Memory for AI Agents — How We Solved Context Loss</h1>
+<p><em>Subtitle: A practical guide to making AI agents remember across sessions, tasks, and reboots</em></p>
+<p>If you’ve worked with AI agents for more than a week, you know this pain.</p>
+<p>They can reason brilliantly for 30 minutes, then act like they woke up from a nap with no idea who they are, what they were doing, or why they made yesterday’s decisions.</p>
+<p>That was exactly our situation.</p>
+<p>Our stack (led by indie developer Jay Lee) runs one main orchestrator agent, dozens of sub-agents, and 28 cron jobs coordinating production workflows across 101 live game projects and tools. It sounds powerful — and it is — but only if continuity exists.</p>
+<p>Without continuity, every session starts with the same awkward questions:</p>
+<ul>
+<li>“What were we working on?”</li>
+<li>“Why did we choose this approach?”</li>
+<li>“Did we already decide this?”</li>
+</ul>
+<p>At scale, memory bugs become product bugs.</p>
+<p>This post explains how we fixed that with a local-first memory system called <strong>openclaw-mem</strong>, and why a simple file-first architecture beat “fancy” alternatives.</p>
+<hr>
+<h2>The Problem Nobody Talks About</h2>
+<p>Most discussions about AI agents focus on reasoning quality, tool use, or model size. Very few teams talk about memory continuity.</p>
+<p>But in practice, continuity is where many agent systems fail.</p>
+<h3>Symptom 1: repeated questions and rework</h3>
+<p>Our AI orchestrator could produce high-quality plans in-session, but after restart or context compaction, it would ask for the same policy decisions again. Humans had already answered, but the memory path was weak.</p>
+<h3>Symptom 2: lost decisions</h3>
+<p>A decision made on Monday could disappear by Wednesday. Not because it was never written — because it was buried in long transcripts or mixed with low-priority notes.</p>
+<h3>Symptom 3: conflicting actions</h3>
+<p>One sub-agent might follow an old assumption while another follows a newer direction. Without a canonical decision log, “parallel execution” becomes “parallel confusion.”</p>
+<h3>Symptom 4: slow warm-up at session start</h3>
+<p>Even with RAG available, startup was not instant. The agent had to search, infer relevance, and reconstruct intent from scattered sources. That costs time and tokens.</p>
+<p>In short: our agents had goldfish memory in a system that required long-term operational memory.</p>
+<hr>
+<h2>What We Tried First (and Why It Failed)</h2>
+<p>Before landing on the current architecture, we tested three common approaches.</p>
+<h3>1) A giant MEMORY.md file (monolith)</h3>
+<p>We kept everything in one “hot cache” file. At first, this felt efficient. Then it grew.</p>
+<p>When one file becomes a dump of priorities, logs, decisions, and temporary notes, curation collapses. Important facts lose visibility. Old entries stay forever. New sessions load too much, but understand too little.</p>
+<h3>2) RAG-only memory</h3>
+<p>RAG is excellent for retrieval, but it is not always ideal for “wake-up context.”</p>
+<p>RAG answers: “Find relevant historical text.”
+Warm startup asks: “What matters right now?”</p>
+<p>Those are related but not identical.</p>
+<p>With RAG-only startup, the first few interactions still felt cold. It worked technically, but the orchestrator’s initial context was not warm enough for immediate execution.</p>
+<h3>3) Raw session transcripts</h3>
+<p>Transcripts are complete, but completeness is not usability.</p>
+<p>When you need one critical decision from 30,000 lines of mixed conversation and tool traces, transcripts become a needle-in-haystack problem.</p>
+<p>We needed structured memory, not just stored text.</p>
+<hr>
+<h2>The Architecture That Worked</h2>
+<p>The breakthrough came from a layered approach:</p>
+<ol>
+<li><strong>Hot Cache</strong> (<code>MEMORY.md</code>) → tiny, curated, always-loaded</li>
+<li><strong>Warm Layer</strong> (Brain files under <code>memory/</code>) → structured operational memory</li>
+<li><strong>Cold Layer</strong> (RAG index + archive) → searchable historical depth</li>
+</ol>
+<p>Think of it like computer storage hierarchy:</p>
+<ul>
+<li>CPU cache = hot context</li>
+<li>RAM = active structured memory</li>
+<li>disk index/archive = long-term retrieval</li>
+</ul>
+<h3>Layer 1: Hot Cache</h3>
+<p>A short file with only high-value context:</p>
+<ul>
+<li>current continuity snapshot</li>
+<li>recent decisions</li>
+<li>active priorities</li>
+<li>hard constraints</li>
+<li>latest developer preferences</li>
+</ul>
+<p>This is designed for immediate startup recall.</p>
+<h3>Layer 2: Warm Memory files</h3>
+<p>Dedicated files answer specific questions:</p>
+<ul>
+<li><code>handoff.md</code>: What happened last session? What comes next?</li>
+<li><code>working-memory.md</code>: What is in focus now?</li>
+<li><code>decisions.md</code>: What has already been decided?</li>
+<li>project brain files: domain-specific persistent context</li>
+</ul>
+<p>This separation prevents one-file sprawl.</p>
+<h3>Layer 3: Cold archive + semantic search</h3>
+<p>Older files move to archive but remain searchable through LanceDB-based semantic retrieval. That keeps hot/warm lean while preserving long-tail recall.</p>
+<h3>The three CLI workflows that changed behavior</h3>
+<p>openclaw-mem v0.2.0 added continuity primitives that made daily operations stable:</p>
+<ul>
+<li><code>handoff read/write</code> for session-to-session continuity</li>
+<li><code>working-memory show/set/update/clear</code> for focus tracking</li>
+<li><code>decision list/log</code> as an append-only governance trail (log = add)</li>
+</ul>
+<p>Instead of asking humans repeatedly, the agent checks the decision log first.</p>
+<h3>Session Observer + Memory Reflector</h3>
+<p>Beyond manual updates, we also automated memory capture:</p>
+<ul>
+<li><strong>Session Observer</strong> parses <code>.jsonl</code> transcripts into structured observation files under <code>memory/observations/</code></li>
+<li><strong>Memory Reflector</strong> runs weekly (heartbeat rule), detects patterns, and extracts high-signal learnings into hot memory</li>
+</ul>
+<p>This gives us a feedback loop:</p>
+<p><strong>session data → structured observations → periodic reflection → hot cache updates</strong></p>
+<hr>
+<h2>Implementation Details</h2>
+<p>The implementation is intentionally boring — and that’s why it works.</p>
+<h3>Stack choices</h3>
+<ul>
+<li><strong>Language</strong>: Python</li>
+<li><strong>Storage model</strong>: file-based memory + local LanceDB vectors</li>
+<li><strong>Embeddings</strong>: pluggable backend (<code>local</code> default, <code>openai</code>, <code>ollama</code>)</li>
+<li><strong>Default model</strong>: <code>intfloat/multilingual-e5-small</code> (Korean + English)</li>
+<li><strong>External DB requirement</strong>: none</li>
+<li><strong>Cloud dependency</strong>: optional, not required</li>
+</ul>
+<h3>Code size reality</h3>
+<p>The full package is larger than a tiny script (roughly ~2k lines in the core package), but the continuity-focused additions in v0.2.0 (handoff, working memory, decision log + CLI wiring) are in the “few hundred lines” range and deliberately straightforward.</p>
+<p>That simplicity matters for maintenance and trust.</p>
+<h3>Example: actual CLI usage (sanitized)</h3>
+<pre><code class="language-bash">$ openclaw-mem version
+openclaw-mem 0.2.0
+</code></pre>
+<pre><code class="language-bash">$ openclaw-mem handoff write &quot;Release checklist done. Next: run regression on payment flow.&quot;
+Handoff written (61 chars)
+
+$ openclaw-mem handoff read
+# Session Handoff
+Updated: 2026-02-15 22:20
+
+Release checklist done. Next: run regression on payment flow.
+</code></pre>
+<pre><code class="language-bash">$ openclaw-mem working-memory set &quot;Current focus: stabilize deployment pipeline.&quot;
+Working memory set (45 chars)
+
+$ openclaw-mem working-memory update &quot;Regression tests passed for 3 critical paths.&quot;
+Working memory updated (45 chars)
+
+$ openclaw-mem working-memory show
+# Working Memory
+Updated: 2026-02-15 22:20
+
+Current focus: stabilize deployment pipeline.
+
+## [2026-02-15 22:20]
+Regression tests passed for 3 critical paths.
+</code></pre>
+<pre><code class="language-bash">$ openclaw-mem decision log &quot;Use append-only decision log for governance.&quot; --tag architecture
+Logged: - [2026-02-15 22:20] [architecture] Use append-only decision log for governance.
+
+$ openclaw-mem decision list --last 5
+- [2026-02-15 22:20] [architecture] Use append-only decision log for governance.
+</code></pre>
+<h3>Progressive disclosure in search</h3>
+<p>We use a two-step retrieval flow to save tokens:</p>
+<ol>
+<li><code>search --index</code> to see short candidates</li>
+<li><code>search --detail &lt;id&gt;</code> only for selected chunks</li>
+</ol>
+<pre><code class="language-bash">$ openclaw-mem search &quot;rollback path&quot; --index --raw
+1. [0.8884] memory/2026-02-15.md
+   id: 2026-02-15.md:1:dbe3defb
+   ## Learning
+</code></pre>
+<pre><code class="language-bash">$ openclaw-mem search --detail &quot;2026-02-15.md:1:dbe3defb&quot; --raw
+Source: memory/2026-02-15.md
+ID: 2026-02-15.md:1:dbe3defb
+
+## Learning
+The fastest rollback path is feature flags plus append-only audit logs.
+</code></pre>
+<h3>Auto-capture from transcripts</h3>
+<pre><code class="language-bash">$ openclaw-mem auto-capture --since 24h --dry-run
+Scanning 1 session file(s) (last 24h)...
+Found 3 total, 3 new
+(dry run) Would record:
+  [decision] Use append-only logs for compliance.
+  [error] deployment failed due to timeout in payment API
+  [insight] add retry with exponential backoff
+</code></pre>
+<h3>Archive keeps memory lean</h3>
+<pre><code class="language-bash">$ openclaw-mem archive
+Found 1 files older than 30 days:
+  2025-12-01.md
+
+Dry run. Use --execute to actually move files.
+</code></pre>
+<h3>Cron integration</h3>
+<p>The memory pipeline fits operational automation:</p>
+<ul>
+<li>auto-capture can run periodically over recent sessions</li>
+<li>observer/reflection can run in heartbeat cycles</li>
+<li>archive can run scheduled maintenance windows</li>
+</ul>
+<p>No external service orchestration required.</p>
+<h3>Security: memory injection defense</h3>
+<p>Persistent memory introduces a non-obvious risk: if malicious text enters memory, it can poison future sessions.</p>
+<p>openclaw-mem addresses this with a built-in sanitizer layer:</p>
+<ul>
+<li>observation text is checked before storage</li>
+<li>suspicious patterns are replaced with <code>[FILTERED]</code></li>
+<li>indexing scans chunk content and emits warnings for risky patterns</li>
+</ul>
+<p>Pattern coverage includes instruction override phrases (e.g., “ignore previous instructions”), credential exfiltration prompts, script-like execution strings (<code>eval(</code> / <code>exec(</code>), and role-manipulation jailbreak language.</p>
+<p>This matters because long-term memory is part of the attack surface in tool-using agents.</p>
+<h3>Data model details that made retrieval practical</h3>
+<p>Under the hood, retrieval quality came from a few simple choices:</p>
+<ul>
+<li>Markdown is chunked by <code>##</code> / <code>###</code> sections first</li>
+<li>Oversized sections are split by paragraph</li>
+<li>Long paragraphs are force-split with overlap for context continuity</li>
+<li>Chunk IDs include filename, index, and content hash (<code>filename:index:hash</code>)</li>
+<li>Incremental indexing uses file mtime + stored index state</li>
+</ul>
+<p>That combination gives reliable chunk identity, fast reindexing, and stable “detail fetch” behavior.</p>
+<h3>Why this design handles Korean + English operations</h3>
+<p>Our environment is bilingual. If embeddings only perform in English, operational memory breaks.</p>
+<p>Using multilingual local embeddings (<code>intfloat/multilingual-e5-small</code>), the project benchmark reports:</p>
+<ul>
+<li>10/10 retrieval accuracy on mixed Korean/English test queries</li>
+<li>~0.38s average response in benchmark runs</li>
+</ul>
+<p>Those numbers won’t be identical in every environment, but they confirmed the approach was production-viable for our workload.</p>
+<hr>
+<h2>The Session Start Protocol</h2>
+<p>This was a major unlock.</p>
+<p>Instead of asking the agent to “figure out context somehow,” we defined a deterministic startup recall chain in BOOTSTRAP:</p>
+<ol>
+<li><code>memory/handoff.md</code> — last session transfer</li>
+<li><code>memory/working-memory.md</code> — current focus and verification state</li>
+<li><code>memory/decisions.md</code> — append-only decision history</li>
+<li><code>memory/developer-preferences.md</code> — human preference layer</li>
+</ol>
+<p>CLI equivalent:</p>
+<pre><code class="language-bash">openclaw-mem handoff read
+openclaw-mem working-memory show
+openclaw-mem decision list --last 10
+</code></pre>
+<p>This means each new session starts like a well-rested engineer reading yesterday’s handoff, not like someone waking up with total amnesia.</p>
+<p>In practice, this gives near-instant context hydration because:</p>
+<ul>
+<li>files are small</li>
+<li>order is fixed</li>
+<li>no network call is required for core recall</li>
+<li>RAG is used when needed, not for everything</li>
+</ul>
+<p>That “under two seconds to wake up” feeling came from architecture, not model magic.</p>
+<hr>
+<h2>Results</h2>
+<p>We are currently validating v0.2.0 in a two-week trial window, but early operational results are already clear.</p>
+<h3>1) Repeated high-level questions dropped sharply</h3>
+<p>The agent now checks handoff/working-memory/decisions before asking humans. This removes the most frustrating category of repeated prompts.</p>
+<h3>2) Sub-agent handoff quality improved</h3>
+<p>When a sub-agent finishes, continuity notes can be routed into handoff + decisions + observations instead of disappearing into transcript noise.</p>
+<h3>3) Decision conflicts became traceable</h3>
+<p>Append-only logs make timeline reconstruction trivial:</p>
+<ul>
+<li>what was decided</li>
+<li>when</li>
+<li>by whom (via tags)</li>
+</ul>
+<p>Even when strategies change, we preserve why the previous choice existed.</p>
+<h3>4) Memory operations became auditable</h3>
+<p>Because memory is file-based and human-readable, debugging memory behavior is easier than debugging hidden prompt-state in opaque systems.</p>
+<hr>
+<h2>Lessons Learned</h2>
+<h3>1) File-based memory beats “smart” database-first designs (for many teams)</h3>
+<p>For agent continuity, simplicity often wins. Files are inspectable, diffable, scriptable, and easy to recover.</p>
+<h3>2) Hot cache must stay curated</h3>
+<p>Hot memory is not a dump. It’s a priority filter.</p>
+<p>If everything is hot, nothing is hot.</p>
+<h3>3) RAG is necessary, but not sufficient</h3>
+<p>RAG is great for retrieval depth. It does not replace explicit operational state like handoff, current focus, and decisions.</p>
+<h3>4) Humans forget what they told the AI</h3>
+<p>Ironically, people forget instructions too. A good memory system protects both sides: the human from repetition fatigue and the agent from context drift.</p>
+<h3>5) Memory is prioritization, not just storage</h3>
+<p>The key design question is not “Can we store this?”
+It’s “Will the right fact be available at the right moment?”</p>
+<hr>
+<h2>Try It Yourself</h2>
+<p>If you’re building any agent framework — autonomous dev agents, support agents, research assistants, internal copilots — these principles transfer directly.</p>
+<h3>Project</h3>
+<ul>
+<li>GitHub: <strong><a href="https://github.com/kjaylee/openclaw-mem">https://github.com/kjaylee/openclaw-mem</a></strong></li>
+</ul>
+<h3>Architecture principles you can reuse anywhere</h3>
+<ol>
+<li>Keep a <strong>tiny always-loaded hot cache</strong></li>
+<li>Split warm memory by function (handoff, decisions, active focus)</li>
+<li>Keep cold history searchable, but off the hot path</li>
+<li>Automate extraction (observer) and consolidation (reflector)</li>
+<li>Prefer transparent storage that humans can audit</li>
+</ol>
+<h3>The 3 questions every agent memory system must answer</h3>
+<ol>
+<li><strong>What was I doing?</strong></li>
+<li><strong>What did we decide?</strong></li>
+<li><strong>What should I focus on now?</strong></li>
+</ol>
+<p>If your system can answer those reliably, your agent stops acting like a goldfish and starts acting like a teammate.</p>
+<p>And that is when AI agents become truly operational.</p>
+
+</article>
+</body>
+</html>

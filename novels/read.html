@@ -5,155 +5,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>리더 - novels.eastsea.xyz</title>
   <meta name="description" content="eastsea 웹소설 마크다운 리더" />
-  <link rel="stylesheet" href="app.css" />
+  <script>
+    (function() {
+      var params = new URLSearchParams(location.search);
+      var slug = params.get('novel') || params.get('series');
+      var ep = params.get('ep') || params.get('episode') || '001';
+      if (slug) {
+        var pad = String(ep).replace(/^0+/, '') || '1';
+        pad = pad.padStart(3, '0');
+        location.replace('https://novels.eastsea.xyz/novel/' + encodeURIComponent(slug) + '/episode/' + pad);
+      } else {
+        location.replace('https://novels.eastsea.xyz/');
+      }
+    })();
+  </script>
 </head>
 <body>
-  <div class="reader-shell">
-    <div class="reader-controls">
-      <a class="btn" href="index.html">← 소설 목록</a>
-      <a id="toNovel" class="btn" href="#">작품 상세</a>
-
-      <select id="episodeSelect" class="select reader-select" aria-label="에피소드 목록"></select>
-
-      <div class="spacer"></div>
-      <button id="themeBtn" class="btn" type="button">🌙 다크</button>
-      <button class="btn" type="button" data-size="small">A-</button>
-      <button class="btn" type="button" data-size="medium">A</button>
-      <button class="btn" type="button" data-size="large">A+</button>
-    </div>
-
-    <article id="reader" class="reader-article">
-      <div class="loading">본문을 불러오는 중…</div>
-    </article>
-
-    <p class="footer-note">화면 폭에 따라 자동으로 가독성 레이아웃이 조정됩니다.</p>
-  </div>
-
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <script src="app.js"></script>
-  <script>
-    const FONT_KEY = 'novels-reader-font-size';
-    const FONT_MAP = { small: 17, medium: 19, large: 21 };
-
-    const {
-      loadManifest,
-      getEpisodePath,
-      splitFrontMatter,
-      extractMeta,
-      cleanEpisodeTitle,
-      formatDate,
-      normEp
-    } = window.NovelsApp;
-
-    const params = new URLSearchParams(location.search);
-    const novelSlug = params.get('novel');
-    const epQuery = normEp(params.get('ep') || '001');
-
-    const reader = document.getElementById('reader');
-    const episodeSelect = document.getElementById('episodeSelect');
-    const toNovel = document.getElementById('toNovel');
-
-    function setFontSize(sizeKey) {
-      const px = FONT_MAP[sizeKey] || FONT_MAP.medium;
-      document.documentElement.style.setProperty('--reader-font-size', `${px}px`);
-      try { localStorage.setItem(FONT_KEY, sizeKey); } catch (_) {}
-    }
-
-    function applySavedFontSize() {
-      let key = 'medium';
-      try { key = localStorage.getItem(FONT_KEY) || 'medium'; } catch (_) {}
-      setFontSize(key);
-    }
-
-    function renderError(msg) {
-      reader.innerHTML = `<div class='error'>${msg}</div>`;
-    }
-
-    function renderNav(novel, episodes, idx) {
-      const prev = idx > 0 ? episodes[idx - 1] : null;
-      const next = idx >= 0 && idx < episodes.length - 1 ? episodes[idx + 1] : null;
-
-      return `
-        <div class="reader-nav">
-          <a class="btn" href="novel.html?slug=${encodeURIComponent(novel.slug)}">작품 상세</a>
-          ${prev ? `<a class='btn' href='read.html?novel=${encodeURIComponent(novel.slug)}&ep=${normEp(prev.num)}'>← 이전화</a>` : `<span class='btn' style='opacity:.4;pointer-events:none;'>← 이전화</span>`}
-          ${next ? `<a class='btn primary' href='read.html?novel=${encodeURIComponent(novel.slug)}&ep=${normEp(next.num)}'>다음화 →</a>` : `<span class='btn' style='opacity:.4;pointer-events:none;'>다음화 →</span>`}
-        </div>
-      `;
-    }
-
-    async function init() {
-      try {
-        if (!novelSlug) throw new Error('novel 쿼리가 필요합니다. 예) read.html?novel=king-of-myriad-worlds&ep=001');
-
-        applySavedFontSize();
-
-        const { novels } = await loadManifest();
-        const novel = novels.find((n) => n.slug === novelSlug);
-        if (!novel) throw new Error('해당 소설을 찾을 수 없습니다.');
-
-        const episodes = (novel.episodes || []).slice().sort((a, b) => String(a.num).localeCompare(String(b.num)));
-        const idx = episodes.findIndex((e) => normEp(e.num) === epQuery);
-        if (idx < 0) throw new Error('해당 회차를 찾을 수 없습니다.');
-
-        const current = episodes[idx];
-        const mdPath = getEpisodePath(novel.slug, current.num);
-
-        toNovel.href = `novel.html?slug=${encodeURIComponent(novel.slug)}`;
-
-        episodeSelect.innerHTML = episodes.map((e) => {
-          const n = normEp(e.num);
-          const label = cleanEpisodeTitle(e.title, n);
-          return `<option value='${n}' ${n === epQuery ? 'selected' : ''}>${n}화 · ${label}</option>`;
-        }).join('');
-
-        episodeSelect.addEventListener('change', (ev) => {
-          const nextEp = ev.target.value;
-          location.href = `read.html?novel=${encodeURIComponent(novel.slug)}&ep=${nextEp}`;
-        });
-
-        const res = await fetch(mdPath, { cache: 'no-store' });
-        if (!res.ok) throw new Error(`마크다운 로드 실패: ${mdPath}`);
-
-        const raw = await res.text();
-        const { metaText, body } = splitFrontMatter(raw);
-        const meta = extractMeta(metaText);
-
-        const title = cleanEpisodeTitle(meta.title || current.title, current.num);
-        const epNo = parseInt(meta.episode || current.num, 10);
-
-        document.title = `${novel.title} ${epNo}화 - novels.eastsea.xyz`;
-
-        marked.setOptions({ breaks: true, gfm: true });
-        const html = marked.parse(body);
-
-        reader.innerHTML = `
-          <header class='reader-head'>
-            <div class='reader-meta'>${novel.title} · ${novel.author || '작가 미상'}</div>
-            <h1>제${epNo}화. ${title}</h1>
-            <div class='reader-meta'>${formatDate(meta.date || current.date)}</div>
-          </header>
-          <section class='reader-content'>${html}</section>
-          ${renderNav(novel, episodes, idx)}
-        `;
-
-        const isDark = window.NovelsApp.getTheme() === 'dark';
-        document.getElementById('themeBtn').textContent = isDark ? '☀️ 라이트' : '🌙 다크';
-      } catch (err) {
-        renderError(`오류: ${err.message}`);
-      }
-    }
-
-    document.getElementById('themeBtn').addEventListener('click', () => {
-      const theme = window.NovelsApp.toggleTheme();
-      document.getElementById('themeBtn').textContent = theme === 'dark' ? '☀️ 라이트' : '🌙 다크';
-    });
-
-    document.querySelectorAll('[data-size]').forEach((btn) => {
-      btn.addEventListener('click', () => setFontSize(btn.dataset.size));
-    });
-
-    init();
-  </script>
+  <p>novels.eastsea.xyz로 이동 중…</p>
 </body>
 </html>

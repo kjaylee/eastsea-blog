@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>소설 상세 - novels.eastsea.xyz</title>
+  <meta name="description" content="소설 상세 정보 및 전체 에피소드 목록" />
+  <link rel="stylesheet" href="app.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="container inner">
+      <a class="brand" href="index.html">📚 소설 포털</a>
+      <nav class="nav-links">
+        <a href="https://eastsea.xyz">eastsea.xyz</a>
+        <button id="themeBtn" class="btn" type="button">🌙 다크모드</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <section id="view" class="loading" style="margin-top:24px;">작품 정보를 불러오는 중…</section>
+  </main>
+
+  <script src="app.js"></script>
+  <script>
+    const {
+      loadManifest,
+      formatDate,
+      getCoverPath,
+      getEpisodePath,
+      cleanEpisodeTitle,
+      markdownToSynopsis,
+      normEp
+    } = window.NovelsApp;
+
+    const params = new URLSearchParams(location.search);
+    const slug = params.get('slug');
+    const root = document.getElementById('view');
+
+    document.getElementById('themeBtn').addEventListener('click', () => {
+      const theme = window.NovelsApp.toggleTheme();
+      document.getElementById('themeBtn').textContent = theme === 'dark' ? '☀️ 라이트모드' : '🌙 다크모드';
+    });
+
+    function episodeItem(novelSlug, ep) {
+      const epNum = normEp(ep.num);
+      return `
+        <a class="episode-item" href="read.html?novel=${encodeURIComponent(novelSlug)}&ep=${epNum}">
+          <div class="episode-main">
+            <div class="ep-title">${cleanEpisodeTitle(ep.title, epNum)}</div>
+            <div class="meta">제${parseInt(epNum, 10)}화</div>
+          </div>
+          <div class="meta">${formatDate(ep.date)}</div>
+        </a>`;
+    }
+
+    async function getSynopsis(novel) {
+      try {
+        const first = (novel.episodes || []).slice().sort((a, b) => String(a.num).localeCompare(String(b.num)))[0];
+        if (!first) return '작품 소개가 준비 중입니다.';
+        const res = await fetch(getEpisodePath(novel.slug, first.num));
+        if (!res.ok) return '작품 소개가 준비 중입니다.';
+        const md = await res.text();
+        return markdownToSynopsis(md);
+      } catch (_) {
+        return '작품 소개가 준비 중입니다.';
+      }
+    }
+
+    (async function init() {
+      try {
+        if (!slug) throw new Error('slug 쿼리가 필요합니다. 예) novel.html?slug=king-of-myriad-worlds');
+
+        const { novels } = await loadManifest();
+        const novel = novels.find((n) => n.slug === slug);
+        if (!novel) throw new Error('해당 소설을 찾을 수 없습니다.');
+
+        const episodes = Array.isArray(novel.episodes) ? [...novel.episodes] : [];
+        let order = 'desc';
+        const synopsis = await getSynopsis(novel);
+
+        function renderEpisodes() {
+          const arr = [...episodes].sort((a, b) => {
+            const ca = String(a.num);
+            const cb = String(b.num);
+            return order === 'desc' ? cb.localeCompare(ca) : ca.localeCompare(cb);
+          });
+
+          const listHtml = arr.length
+            ? arr.map((ep) => episodeItem(novel.slug, ep)).join('')
+            : '<div class="empty">에피소드가 없습니다.</div>';
+
+          document.getElementById('episodeList').innerHTML = listHtml;
+          document.getElementById('sortBtn').textContent = order === 'desc' ? '최신순' : '오래된순';
+        }
+
+        document.title = `${novel.title || novel.slug} - novels.eastsea.xyz`;
+        root.className = '';
+        root.innerHTML = `
+          <section class="hero">
+            <div class="cover-wrap">
+              <img src="${getCoverPath(novel.slug)}" alt="${novel.title || novel.slug} 표지" onerror="this.style.display='none'; this.parentNode.style.background='var(--bg-elevated)'" />
+            </div>
+            <div class="panel">
+              <h1 style="margin:0; font-size:clamp(24px,3vw,34px); letter-spacing:-0.02em;">${novel.title || novel.slug}</h1>
+              <p class="meta" style="margin-top:6px;">✍️ ${novel.author || '작가 미상'}</p>
+              <p class="meta">총 ${novel.totalEpisodes || episodes.length}화 · 최신 ${formatDate(novel.latestDate)}</p>
+              <div class="chips" style="margin-top:8px;">${(novel.genre || []).map(g => `<span class='chip'>${g}</span>`).join('')}</div>
+              <div class="synopsis"><strong>줄거리</strong><br />${synopsis}</div>
+              <div style="margin-top:14px; display:flex; gap:8px; flex-wrap:wrap;">
+                <a class="btn primary" href="read.html?novel=${encodeURIComponent(novel.slug)}&ep=${normEp(episodes[0]?.num || '001')}">첫 화 읽기</a>
+                <a class="btn" href="index.html">목록으로</a>
+              </div>
+            </div>
+          </section>
+
+          <section style="margin-top:20px;" class="panel">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+              <h2 style="margin:0; font-size:20px;">에피소드 목록</h2>
+              <button id="sortBtn" class="btn" type="button">최신순</button>
+            </div>
+            <div id="episodeList" class="episode-list"></div>
+          </section>
+        `;
+
+        document.getElementById('sortBtn').addEventListener('click', () => {
+          order = order === 'desc' ? 'asc' : 'desc';
+          renderEpisodes();
+        });
+
+        renderEpisodes();
+
+        const isDark = window.NovelsApp.getTheme() === 'dark';
+        document.getElementById('themeBtn').textContent = isDark ? '☀️ 라이트모드' : '🌙 다크모드';
+      } catch (err) {
+        root.className = 'error';
+        root.innerHTML = `오류: ${err.message}<br /><br /><a class='btn' href='index.html'>목록으로</a>`;
+      }
+    })();
+  </script>
+</body>
+</html>

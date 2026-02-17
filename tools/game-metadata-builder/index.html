@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>게임 메타데이터 원클릭 생성기 - Game Metadata Builder</title>
+  <style>
+    :root{
+      --bg:#080d1a;--panel:#111b31;--panel-2:#172643;--line:#304a78;
+      --text:#edf3ff;--muted:#a8b7d7;--accent:#61a9ff;--ok:#34d399;
+      color-scheme:dark;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;padding:16px;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:var(--text);background:radial-gradient(900px 720px at 15% -10%,#243f72 0%,transparent 45%),var(--bg)}
+    .app{max-width:1200px;margin:0 auto;display:grid;gap:14px}
+    h1{margin:0;font-size:clamp(1.3rem,3.6vw,2rem)}
+    .sub{margin:6px 0 0;color:var(--muted)}
+    .card{background:linear-gradient(180deg,var(--panel-2),var(--panel));border:1px solid var(--line);border-radius:16px;padding:14px}
+    .grid{display:grid;gap:10px}
+    .form-grid{display:grid;gap:10px;grid-template-columns:repeat(2,minmax(0,1fr))}
+    .line{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    label{display:grid;gap:6px;color:var(--muted);font-size:.9rem}
+    input,textarea,button,select{width:100%;border:1px solid #385588;background:#0a152a;color:var(--text);border-radius:10px;padding:10px 12px;font:inherit}
+    textarea{min-height:92px;resize:vertical}
+    button{cursor:pointer;font-weight:700;background:linear-gradient(180deg,#3d77dc,#2f5fb8)}
+    button.ghost{background:#132241}
+    .blocks{display:grid;gap:12px}
+    .block{background:#0c1528;border:1px solid #2c4470;border-radius:12px;padding:10px}
+    .head{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:8px}
+    .head strong{font-size:.95rem}
+    .status{font-size:.88rem;color:var(--ok);min-height:1.2rem}
+    @media (max-width:800px){.form-grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>게임 메타데이터 원클릭 생성기</h1>
+      <p class="sub">SEO, Open Graph, Twitter Card, JSON-LD, manifest, games-list 항목을 한 번에 생성합니다.</p>
+    </header>
+
+    <section class="card grid">
+      <div class="form-grid">
+        <label>게임 제목 (KR)
+          <input id="titleKr" value="섀도우 리전 아이들" />
+        </label>
+        <label>Game Title (EN)
+          <input id="titleEn" value="Shadow Legion Idle" />
+        </label>
+        <label>Slug
+          <input id="slug" value="shadow-legion-idle" />
+        </label>
+        <label>장르
+          <select id="genre">
+            <option>Idle</option>
+            <option>RPG</option>
+            <option>Action</option>
+            <option>Puzzle</option>
+            <option>Strategy</option>
+            <option>Arcade</option>
+            <option>Simulation</option>
+          </select>
+        </label>
+      </div>
+      <label>설명 (KR/EN 혼합 가능)
+        <textarea id="description">소환과 성장, 자동 전투를 결합한 방치형 RPG. 모바일과 데스크톱에서 즉시 플레이 가능합니다.</textarea>
+      </label>
+      <div class="line">
+        <button id="generateBtn" style="max-width:220px">메타데이터 생성</button>
+        <button id="sampleBtn" class="ghost" style="max-width:220px">샘플 입력 복원</button>
+      </div>
+      <div id="status" class="status"></div>
+    </section>
+
+    <section class="card blocks">
+      <div class="block">
+        <div class="head"><strong>HTML &lt;head&gt; 블록</strong><button data-copy="headOut">복사</button></div>
+        <textarea id="headOut" readonly></textarea>
+      </div>
+      <div class="block">
+        <div class="head"><strong>JSON-LD VideoGame</strong><button data-copy="jsonldOut">복사</button></div>
+        <textarea id="jsonldOut" readonly></textarea>
+      </div>
+      <div class="block">
+        <div class="head"><strong>manifest.json entry</strong><button data-copy="manifestOut">복사</button></div>
+        <textarea id="manifestOut" readonly></textarea>
+      </div>
+      <div class="block">
+        <div class="head"><strong>games-list.json entry</strong><button data-copy="gamesListOut">복사</button></div>
+        <textarea id="gamesListOut" readonly></textarea>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    const escHtml = (s) => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    const safeSlug = (s) => (s || '')
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-');
+
+    function generate() {
+      const titleKr = $("titleKr").value.trim();
+      const titleEn = $("titleEn").value.trim();
+      const slug = safeSlug($("slug").value.trim());
+      const genre = $("genre").value.trim();
+      const desc = $("description").value.trim();
+
+      if (!titleEn || !slug || !desc) {
+        $("status").textContent = '영문 제목, slug, 설명은 필수입니다.';
+        return;
+      }
+
+      $("slug").value = slug;
+      const pageUrl = `https://games.eastsea.xyz/${slug}/`;
+      const imageUrl = `https://games.eastsea.xyz/${slug}/og-image.png`;
+      const fullTitle = `${titleKr} | ${titleEn}`;
+
+      const headBlock = `<!-- SEO -->\n<title>${escHtml(fullTitle)} - EastSea Games</title>\n<meta name="description" content="${escHtml(desc)}">\n<link rel="canonical" href="${pageUrl}">\n<meta name="robots" content="index,follow">\n\n<!-- Open Graph -->\n<meta property="og:type" content="website">\n<meta property="og:site_name" content="EastSea Games">\n<meta property="og:locale" content="ko_KR">\n<meta property="og:title" content="${escHtml(fullTitle)}">\n<meta property="og:description" content="${escHtml(desc)}">\n<meta property="og:url" content="${pageUrl}">\n<meta property="og:image" content="${imageUrl}">\n\n<!-- Twitter -->\n<meta name="twitter:card" content="summary_large_image">\n<meta name="twitter:title" content="${escHtml(fullTitle)}">\n<meta name="twitter:description" content="${escHtml(desc)}">\n<meta name="twitter:image" content="${imageUrl}">`;
+
+      const jsonLdObject = {
+        "@context": "https://schema.org",
+        "@type": "VideoGame",
+        "name": `${titleEn}`,
+        "alternateName": titleKr,
+        "url": pageUrl,
+        "description": desc,
+        "genre": genre,
+        "applicationCategory": "Game",
+        "operatingSystem": "Web Browser",
+        "inLanguage": ["ko", "en"],
+        "publisher": {
+          "@type": "Organization",
+          "name": "EastSea"
+        },
+        "image": imageUrl
+      };
+
+      const manifestEntry = {
+        id: slug,
+        name: titleEn,
+        short_name: titleEn.slice(0, 12),
+        description: desc,
+        start_url: `/${slug}/`,
+        scope: `/${slug}/`,
+        display: 'fullscreen',
+        orientation: 'landscape',
+        categories: ['games', genre.toLowerCase()],
+        icons: [
+          { src: `/${slug}/icons/icon-192.png`, sizes: '192x192', type: 'image/png' },
+          { src: `/${slug}/icons/icon-512.png`, sizes: '512x512', type: 'image/png' }
+        ]
+      };
+
+      const gamesListEntry = {
+        slug,
+        title_ko: titleKr,
+        title_en: titleEn,
+        genre,
+        url: pageUrl,
+        description: desc,
+        thumbnail: `https://games.eastsea.xyz/${slug}/thumb.png`,
+        tags: [genre.toLowerCase(), 'webgame', 'eastsea'],
+        updated_at: new Date().toISOString().slice(0, 10)
+      };
+
+      $("headOut").value = headBlock;
+      $("jsonldOut").value = JSON.stringify(jsonLdObject, null, 2);
+      $("manifestOut").value = JSON.stringify(manifestEntry, null, 2) + ',';
+      $("gamesListOut").value = JSON.stringify(gamesListEntry, null, 2) + ',';
+
+      $("status").textContent = `생성 완료: ${slug}`;
+    }
+
+    async function copyText(targetId, btn) {
+      const text = $(targetId).value;
+      if (!text) return;
+      await navigator.clipboard.writeText(text);
+      const prev = btn.textContent;
+      btn.textContent = '복사됨!';
+      setTimeout(() => btn.textContent = prev, 1000);
+    }
+
+    document.querySelectorAll('[data-copy]').forEach(btn => {
+      btn.addEventListener('click', () => copyText(btn.dataset.copy, btn));
+    });
+
+    ['titleKr','titleEn','slug','genre','description'].forEach(id => {
+      $(id).addEventListener('input', generate);
+    });
+
+    $("generateBtn").addEventListener('click', generate);
+    $("sampleBtn").addEventListener('click', () => {
+      $("titleKr").value = '섀도우 리전 아이들';
+      $("titleEn").value = 'Shadow Legion Idle';
+      $("slug").value = 'shadow-legion-idle';
+      $("genre").value = 'Idle';
+      $("description").value = '소환과 성장, 자동 전투를 결합한 방치형 RPG. 모바일과 데스크톱에서 즉시 플레이 가능합니다.';
+      generate();
+    });
+
+    generate();
+  </script>
+</body>
+</html>

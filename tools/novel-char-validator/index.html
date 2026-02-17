@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>소설 글자수 검증기 - Novel Character Validator</title>
+  <style>
+    :root{
+      --bg:#080d19;--panel:#101a2f;--panel-2:#162543;--line:#304976;
+      --text:#eef3ff;--muted:#a7b6d6;--good:#34d399;--bad:#f87171;--warn:#fbbf24;
+      color-scheme:dark;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;padding:16px;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:var(--text);background:radial-gradient(900px 760px at 12% -12%,#1f3d72 0%,transparent 45%),var(--bg)}
+    .app{max-width:1100px;margin:0 auto;display:grid;gap:14px}
+    h1{margin:0;font-size:clamp(1.3rem,3.8vw,2rem)}
+    .sub{margin:6px 0 0;color:var(--muted)}
+    .card{background:linear-gradient(180deg,var(--panel-2),var(--panel));border:1px solid var(--line);border-radius:16px;padding:14px}
+    .grid{display:grid;gap:10px}
+    textarea{width:100%;min-height:360px;border:1px solid #355283;background:#0a1428;color:var(--text);border-radius:12px;padding:12px;font:inherit;line-height:1.65;resize:vertical}
+    .stats{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
+    .pill{background:#0b1529;border:1px solid #304a76;border-radius:12px;padding:10px}
+    .pill .k{display:block;color:var(--muted);font-size:.84rem}
+    .pill .v{font-size:1.26rem;font-weight:700}
+    .verdict{display:flex;justify-content:space-between;gap:8px;align-items:center;background:#0b152a;border:1px solid #304a76;border-radius:12px;padding:12px}
+    .badge{padding:6px 10px;border-radius:999px;font-size:.85rem;font-weight:700}
+    .badge.good{background:rgba(52,211,153,.18);color:#8ff3d4}
+    .badge.bad{background:rgba(248,113,113,.18);color:#ffb4b4}
+    .badge.warn{background:rgba(251,191,36,.2);color:#ffe09a}
+    .guide{font-size:.95rem;color:var(--muted)}
+    .meter{height:10px;background:#0c1425;border:1px solid #294167;border-radius:999px;overflow:hidden}
+    .meter > div{height:100%;width:0%;background:linear-gradient(90deg,#f87171,#fbbf24,#34d399,#34d399,#fbbf24);transition:width .2s ease}
+    .controls{display:flex;gap:10px;flex-wrap:wrap}
+    button{border:1px solid #3b598f;background:#122449;color:var(--text);padding:10px 12px;border-radius:10px;cursor:pointer;font-weight:700}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>소설 글자수 검증기</h1>
+      <p class="sub">연재 기준(7,000~9,000자)을 실시간으로 검증하고 부족/초과 분량 가이드를 제공합니다.</p>
+    </header>
+
+    <section class="card grid">
+      <textarea id="content" placeholder="여기에 소설 챕터 원문을 붙여넣으세요..."></textarea>
+      <div class="controls">
+        <button id="sampleBtn">샘플 텍스트 넣기</button>
+        <button id="clearBtn">초기화</button>
+      </div>
+    </section>
+
+    <section class="card grid">
+      <div class="stats">
+        <div class="pill"><span class="k">총 글자수 (공백 포함)</span><span id="totalChars" class="v">0</span></div>
+        <div class="pill"><span class="k">공백 제외 글자수</span><span id="charsNoSpace" class="v">0</span></div>
+        <div class="pill"><span class="k">단어 수</span><span id="wordCount" class="v">0</span></div>
+        <div class="pill"><span class="k">문단 수</span><span id="paragraphCount" class="v">0</span></div>
+        <div class="pill"><span class="k">예상 읽기 시간</span><span id="readingTime" class="v">0분</span></div>
+      </div>
+      <div class="meter"><div id="meterFill"></div></div>
+      <div class="verdict">
+        <div>
+          <strong id="verdictTitle">분량 상태: 대기</strong>
+          <div id="guide" class="guide">텍스트를 입력하면 자동으로 검증됩니다.</div>
+        </div>
+        <span id="badge" class="badge">-</span>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const MIN = 7000;
+    const MAX = 9000;
+    const $ = (id) => document.getElementById(id);
+
+    function format(n){ return Number(n).toLocaleString('ko-KR'); }
+
+    function analyze(){
+      const text = $("content").value;
+      const totalChars = text.length;
+      const charsNoSpace = text.replace(/\s/g,'').length;
+      const words = (text.trim().match(/\S+/g) || []).length;
+      const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim().length).length;
+      const readMin = Math.max(totalChars / 500, words / 220);
+
+      $("totalChars").textContent = format(totalChars);
+      $("charsNoSpace").textContent = format(charsNoSpace);
+      $("wordCount").textContent = format(words);
+      $("paragraphCount").textContent = format(paragraphs);
+      $("readingTime").textContent = `${Math.max(1, Math.round(readMin))}분`;
+
+      const meter = Math.max(0, Math.min(100, (totalChars / 10000) * 100));
+      $("meterFill").style.width = meter + '%';
+
+      const badge = $("badge");
+      const verdictTitle = $("verdictTitle");
+      const guide = $("guide");
+      badge.className = 'badge';
+
+      if (!text.trim()) {
+        verdictTitle.textContent = '분량 상태: 대기';
+        guide.textContent = '텍스트를 입력하면 자동으로 검증됩니다.';
+        badge.textContent = '-';
+        return;
+      }
+
+      if (totalChars < MIN) {
+        const need = MIN - totalChars;
+        verdictTitle.textContent = '분량 상태: FAIL (부족)';
+        guide.textContent = `최소 기준보다 ${format(need)}자 부족합니다. 장면 확장, 내적 독백, 묘사 보강을 추천합니다.`;
+        badge.classList.add('bad');
+        badge.textContent = 'TOO SHORT';
+      } else if (totalChars > MAX) {
+        const over = totalChars - MAX;
+        verdictTitle.textContent = '분량 상태: FAIL (초과)';
+        guide.textContent = `최대 기준보다 ${format(over)}자 초과했습니다. 군더더기 문장 압축 또는 2화 분할을 추천합니다.`;
+        badge.classList.add('warn');
+        badge.textContent = 'TOO LONG';
+      } else {
+        verdictTitle.textContent = '분량 상태: PASS ✅';
+        guide.textContent = `발행 기준(${format(MIN)}~${format(MAX)}자) 내에 있습니다. 현재 ${format(totalChars)}자.`;
+        badge.classList.add('good');
+        badge.textContent = 'PASS';
+      }
+    }
+
+    $("content").addEventListener('input', analyze);
+
+    $("sampleBtn").addEventListener('click', () => {
+      const base = '그날의 바다는 낯선 빛으로 반짝였다. '; // 20 chars-ish
+      $("content").value = Array.from({length: 360}, (_, i) => `${base}${i+1}번째 파도가 방파제를 넘었다.`).join('\n\n');
+      analyze();
+    });
+
+    $("clearBtn").addEventListener('click', () => {
+      $("content").value = '';
+      analyze();
+    });
+
+    analyze();
+  </script>
+</body>
+</html>

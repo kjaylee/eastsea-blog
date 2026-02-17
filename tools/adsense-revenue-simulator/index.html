@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AdSense 수익 시뮬레이터 - Adsense Revenue Simulator</title>
+  <style>
+    :root{--bg:#080d18;--panel:#121d34;--panel2:#1a2a49;--line:#31507f;--text:#edf3ff;--muted:#a9b8d8;--accent:#60a5fa;--ok:#34d399;color-scheme:dark}
+    *{box-sizing:border-box}
+    body{margin:0;padding:16px;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:radial-gradient(900px 700px at 15% -10%,#233f70 0%,transparent 46%),var(--bg);color:var(--text)}
+    .app{max-width:1120px;margin:0 auto;display:grid;gap:14px}
+    h1{margin:0;font-size:clamp(1.3rem,3.7vw,2rem)}
+    .sub{margin:6px 0 0;color:var(--muted)}
+    .card{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:16px;padding:14px}
+    .grid{display:grid;gap:10px}
+    .form{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+    label{display:grid;gap:6px;color:var(--muted);font-size:.9rem}
+    input,button{width:100%;border:1px solid #37588c;background:#0a152a;color:var(--text);border-radius:10px;padding:10px 12px;font:inherit}
+    button{cursor:pointer;font-weight:700;background:linear-gradient(180deg,#3d78dd,#2f60b9)}
+    .preset{display:flex;gap:8px;flex-wrap:wrap}
+    .preset button{width:auto;background:#132445}
+    .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+    .pill{background:#0b162b;border:1px solid #2f4b78;border-radius:12px;padding:10px}
+    .pill span{display:block;color:var(--muted);font-size:.82rem}
+    .pill strong{font-size:1.2rem}
+    canvas{width:100%;max-width:100%;background:#0a1426;border:1px solid #2c4671;border-radius:10px}
+    .line{display:flex;gap:10px;align-items:end;flex-wrap:wrap}
+    .status{font-size:.88rem;color:var(--ok)}
+    @media (max-width:900px){.form{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @media (max-width:560px){.form{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>AdSense 수익 시뮬레이터</h1>
+      <p class="sub">트래픽/CTR/CPC 기반 예상 수익과 손익분기 페이지뷰를 즉시 계산합니다.</p>
+    </header>
+
+    <section class="card grid">
+      <div class="form">
+        <label>일일 페이지뷰
+          <input id="pageviews" type="number" min="0" value="0" />
+        </label>
+        <label>CTR (%)
+          <input id="ctr" type="number" min="0" step="0.01" value="1.5" />
+        </label>
+        <label>CPC ($)
+          <input id="cpc" type="number" min="0" step="0.01" value="0.08" />
+        </label>
+        <label>RPM Override ($) (선택)
+          <input id="rpm" type="number" min="0" step="0.01" placeholder="비워두면 CTR/CPC 기반" />
+        </label>
+      </div>
+      <div class="preset">
+        <button data-preset="0">Current (traffic 0)</button>
+        <button data-preset="100">100 DAU</button>
+        <button data-preset="1000">1K DAU</button>
+        <button data-preset="10000">10K DAU</button>
+      </div>
+      <div id="status" class="status"></div>
+    </section>
+
+    <section class="card grid">
+      <div class="stats">
+        <div class="pill"><span>추정 클릭/일</span><strong id="clicks">0</strong></div>
+        <div class="pill"><span>유효 RPM</span><strong id="rpmUsed">$0.00</strong></div>
+        <div class="pill"><span>일 수익</span><strong id="daily">$0.00</strong></div>
+        <div class="pill"><span>월 수익 (30일)</span><strong id="monthly">$0.00</strong></div>
+        <div class="pill"><span>연 수익 (365일)</span><strong id="yearly">$0.00</strong></div>
+      </div>
+      <canvas id="chart" width="860" height="260"></canvas>
+    </section>
+
+    <section class="card grid">
+      <h3 style="margin:0">손익분기 계산기</h3>
+      <div class="line">
+        <label style="max-width:260px">목표 월수익 ($)
+          <input id="targetMonthly" type="number" min="0" step="1" value="1000" />
+        </label>
+        <button id="calcBreakeven" style="max-width:220px">필요 페이지뷰 계산</button>
+      </div>
+      <div class="stats">
+        <div class="pill"><span>필요 월 페이지뷰</span><strong id="needMonthlyPv">0</strong></div>
+        <div class="pill"><span>필요 일 페이지뷰</span><strong id="needDailyPv">0</strong></div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    function money(v){ return '$' + Number(v).toFixed(2); }
+    function num(v){ return Number(v).toLocaleString('en-US', {maximumFractionDigits: 0}); }
+
+    function calculate() {
+      const pv = Math.max(0, Number($("pageviews").value) || 0);
+      const ctr = Math.max(0, Number($("ctr").value) || 0);
+      const cpc = Math.max(0, Number($("cpc").value) || 0);
+      const rpmInput = $("rpm").value.trim();
+      const rpm = rpmInput ? Math.max(0, Number(rpmInput) || 0) : (ctr * cpc * 10);
+
+      const clicks = pv * (ctr / 100);
+      const daily = (pv / 1000) * rpm;
+      const monthly = daily * 30;
+      const yearly = daily * 365;
+
+      $("clicks").textContent = clicks.toFixed(1);
+      $("rpmUsed").textContent = money(rpm);
+      $("daily").textContent = money(daily);
+      $("monthly").textContent = money(monthly);
+      $("yearly").textContent = money(yearly);
+      $("status").textContent = rpmInput ? 'RPM override 적용 중' : 'CTR/CPC 기반 RPM 자동 계산 중';
+
+      drawChart([daily, monthly, yearly]);
+      calcBreakeven(rpm);
+    }
+
+    function drawChart(values) {
+      const canvas = $("chart");
+      const ctx = canvas.getContext('2d');
+      const w = canvas.width;
+      const h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+
+      const labels = ['Daily', 'Monthly', 'Yearly'];
+      const max = Math.max(...values, 1);
+      const barW = 140;
+      const gap = 90;
+      const startX = 120;
+      const baseY = h - 36;
+
+      ctx.strokeStyle = '#27426d';
+      ctx.beginPath();
+      ctx.moveTo(60, baseY);
+      ctx.lineTo(w - 40, baseY);
+      ctx.stroke();
+
+      values.forEach((v, i) => {
+        const x = startX + i * (barW + gap);
+        const barH = (v / max) * (h - 90);
+        const y = baseY - barH;
+
+        const grad = ctx.createLinearGradient(0, y, 0, baseY);
+        grad.addColorStop(0, '#60a5fa');
+        grad.addColorStop(1, '#2563eb');
+        ctx.fillStyle = grad;
+        ctx.fillRect(x, y, barW, barH);
+
+        ctx.fillStyle = '#dce9ff';
+        ctx.font = 'bold 14px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(labels[i], x + barW / 2, h - 14);
+
+        ctx.font = '12px Inter, sans-serif';
+        ctx.fillStyle = '#9cb2d9';
+        ctx.fillText(money(v), x + barW / 2, y - 8);
+      });
+    }
+
+    function calcBreakeven(rpmOverride) {
+      const target = Math.max(0, Number($("targetMonthly").value) || 0);
+      const ctr = Math.max(0, Number($("ctr").value) || 0);
+      const cpc = Math.max(0, Number($("cpc").value) || 0);
+      const rpmInput = $("rpm").value.trim();
+      const rpm = rpmInput ? Math.max(0, Number(rpmInput) || 0) : (typeof rpmOverride === 'number' ? rpmOverride : ctr * cpc * 10);
+
+      if (!rpm) {
+        $("needMonthlyPv").textContent = '∞';
+        $("needDailyPv").textContent = '∞';
+        return;
+      }
+
+      const monthlyPv = (target / rpm) * 1000;
+      const dailyPv = monthlyPv / 30;
+
+      $("needMonthlyPv").textContent = num(monthlyPv);
+      $("needDailyPv").textContent = num(dailyPv);
+    }
+
+    ['pageviews','ctr','cpc','rpm','targetMonthly'].forEach(id => {
+      $(id).addEventListener('input', calculate);
+    });
+
+    document.querySelectorAll('[data-preset]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        $("pageviews").value = btn.dataset.preset;
+        $("ctr").value = 1.5;
+        $("cpc").value = 0.08;
+        $("rpm").value = '';
+        calculate();
+      });
+    });
+
+    $("calcBreakeven").addEventListener('click', () => calculate());
+
+    calculate();
+  </script>
+</body>
+</html>

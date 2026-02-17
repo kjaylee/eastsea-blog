@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>주차요금 계산기 | Parking Fee Calculator</title>
+  <meta name="description" content="입차/출차 시간과 요금 정책으로 예상 주차비를 계산하는 도구" />
+  <style>
+    :root{--bg:#f4f6fb;--panel:#fff;--text:#17233b;--muted:#63708a;--line:#d9e0ef;--pri:#2563eb}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;background:var(--bg);color:var(--text);padding:16px;line-height:1.5}
+    .wrap{max-width:900px;margin:0 auto}
+    .back{display:inline-block;margin-bottom:10px;color:var(--muted);text-decoration:none}
+    .panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 10px 28px rgba(15,23,42,.06)}
+    h1{font-size:clamp(1.35rem,4.4vw,1.95rem);margin-bottom:6px}
+    .sub{color:var(--muted);font-size:.94rem;margin-bottom:14px}
+    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    label{display:block;margin-bottom:5px;font-size:.82rem;font-weight:700;color:#344463}
+    input{width:100%;padding:11px;border:1px solid var(--line);border-radius:10px;font-size:1rem}
+    input:focus{outline:none;border-color:var(--pri);box-shadow:0 0 0 3px rgba(37,99,235,.15)}
+    .cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:14px}
+    .card{border:1px solid var(--line);border-radius:12px;background:#fbfcff;padding:12px}
+    .k{font-size:.8rem;color:var(--muted);font-weight:700}
+    .v{font-size:1.12rem;font-weight:800;margin-top:4px}
+    .notice{margin-top:10px;font-size:.82rem;color:var(--muted)}
+    .actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+    button{border:none;padding:10px 14px;border-radius:10px;cursor:pointer;font-weight:700}
+    .primary{background:#2563eb;color:#fff}
+    .light{background:#eaf0ff;color:#1e3a8a}
+    @media (max-width:700px){.grid,.cards{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <a href="/tools/" class="back">← 도구 목록으로</a>
+    <section class="panel">
+      <h1>🅿️ 주차요금 계산기</h1>
+      <p class="sub">입차/출차 시간을 입력하면 기본요금 + 추가요금을 자동 계산합니다. 1일 최대요금도 반영됩니다.</p>
+
+      <div class="grid">
+        <div>
+          <label for="inTime">입차 시간</label>
+          <input id="inTime" type="datetime-local" />
+        </div>
+        <div>
+          <label for="outTime">출차 시간</label>
+          <input id="outTime" type="datetime-local" />
+        </div>
+        <div>
+          <label for="baseMin">기본 시간 (분)</label>
+          <input id="baseMin" type="number" min="0" step="1" value="30" />
+        </div>
+        <div>
+          <label for="baseFee">기본 요금 (원)</label>
+          <input id="baseFee" type="number" min="0" step="100" value="2000" />
+        </div>
+        <div>
+          <label for="unitMin">추가 단위 시간 (분)</label>
+          <input id="unitMin" type="number" min="1" step="1" value="10" />
+        </div>
+        <div>
+          <label for="unitFee">추가 단위 요금 (원)</label>
+          <input id="unitFee" type="number" min="0" step="100" value="500" />
+        </div>
+        <div>
+          <label for="dailyMax">1일 최대 요금 (원, 0이면 미적용)</label>
+          <input id="dailyMax" type="number" min="0" step="100" value="30000" />
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="primary" id="calcBtn">계산하기</button>
+        <button class="light" id="sampleBtn">오늘 기준 샘플</button>
+      </div>
+
+      <div class="cards" id="result"></div>
+      <p class="notice">※ 실제 현장 정책(무료시간, 심야할인, 주말요금 등)은 주차장마다 다를 수 있습니다.</p>
+    </section>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const won = (n) => '₩' + Math.round(n).toLocaleString('ko-KR');
+
+    function setDefaultTime(){
+      const now = new Date();
+      const entry = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+      $("inTime").value = toLocal(entry);
+      $("outTime").value = toLocal(now);
+    }
+
+    function toLocal(d){
+      const pad = (n) => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+
+    function calc(){
+      const inAt = new Date($("inTime").value);
+      const outAt = new Date($("outTime").value);
+      if (!$("inTime").value || !$("outTime").value || outAt <= inAt){
+        $("result").innerHTML = '<article class="card"><div class="k">오류</div><div class="v">출차 시간은 입차 시간보다 늦어야 합니다.</div></article>';
+        return;
+      }
+
+      const baseMin = Number($("baseMin").value || 0);
+      const baseFee = Number($("baseFee").value || 0);
+      const unitMin = Math.max(1, Number($("unitMin").value || 10));
+      const unitFee = Number($("unitFee").value || 0);
+      const dailyMax = Number($("dailyMax").value || 0);
+
+      const totalMinutes = Math.ceil((outAt - inAt) / 60000);
+      let fee = baseFee;
+      if (totalMinutes > baseMin) {
+        fee += Math.ceil((totalMinutes - baseMin) / unitMin) * unitFee;
+      }
+
+      const days = Math.ceil(totalMinutes / 1440);
+      const capped = dailyMax > 0 ? Math.min(fee, dailyMax * days) : fee;
+
+      const hours = Math.floor(totalMinutes / 60);
+      const mins = totalMinutes % 60;
+      const effectiveRate = capped / Math.max(1, totalMinutes);
+
+      $("result").innerHTML = `
+        <article class="card"><div class="k">총 주차 시간</div><div class="v">${hours}시간 ${mins}분</div></article>
+        <article class="card"><div class="k">계산 기준 일수</div><div class="v">${days}일</div></article>
+        <article class="card"><div class="k">기본+추가 계산 요금</div><div class="v">${won(fee)}</div></article>
+        <article class="card"><div class="k">최종 예상 요금</div><div class="v">${won(capped)}</div></article>
+        <article class="card"><div class="k">분당 평균 비용</div><div class="v">${won(effectiveRate)}</div></article>
+      `;
+    }
+
+    $("calcBtn").addEventListener("click", calc);
+    $("sampleBtn").addEventListener("click", () => { setDefaultTime(); calc(); });
+    ["inTime","outTime","baseMin","baseFee","unitMin","unitFee","dailyMax"].forEach(id => {
+      $(id).addEventListener("input", calc);
+      $(id).addEventListener("change", calc);
+    });
+
+    setDefaultTime();
+    calc();
+  </script>
+</body>
+</html>

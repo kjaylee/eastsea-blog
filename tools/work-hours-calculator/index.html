@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>근무시간 계산기 | Work Hours Calculator</title>
+  <meta name="description" content="출근/퇴근 시간, 휴게시간으로 실근무시간과 예상 급여를 계산하는 도구" />
+  <style>
+    :root{--bg:#f3f6fb;--panel:#fff;--text:#16243b;--muted:#64748b;--line:#d6e0ef;--pri:#7c3aed}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;background:var(--bg);color:var(--text);padding:16px;line-height:1.5}
+    .wrap{max-width:900px;margin:0 auto}
+    .back{display:inline-block;margin-bottom:10px;text-decoration:none;color:var(--muted)}
+    .panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 10px 28px rgba(15,23,42,.06)}
+    h1{font-size:clamp(1.35rem,4.5vw,1.95rem);margin-bottom:6px}
+    .sub{font-size:.94rem;color:var(--muted);margin-bottom:14px}
+    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    label{display:block;margin-bottom:5px;font-size:.82rem;font-weight:700;color:#384965}
+    input{width:100%;padding:11px;border:1px solid var(--line);border-radius:10px;font-size:1rem}
+    input:focus{outline:none;border-color:var(--pri);box-shadow:0 0 0 3px rgba(124,58,237,.14)}
+    .cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:14px}
+    .card{border:1px solid var(--line);border-radius:12px;background:#fcfbff;padding:12px}
+    .k{font-size:.8rem;color:var(--muted);font-weight:700}
+    .v{margin-top:4px;font-size:1.14rem;font-weight:800}
+    .hint{margin-top:10px;color:var(--muted);font-size:.83rem}
+    @media (max-width:700px){.grid,.cards{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <a class="back" href="/tools/">← 도구 목록으로</a>
+    <section class="panel">
+      <h1>🕒 근무시간 계산기</h1>
+      <p class="sub">출·퇴근 시간과 휴게시간을 입력하면 실근무시간, 연장근무, 일급/월급(예상)을 계산합니다.</p>
+
+      <div class="grid">
+        <div>
+          <label for="start">출근 시간</label>
+          <input id="start" type="time" value="09:00" />
+        </div>
+        <div>
+          <label for="end">퇴근 시간</label>
+          <input id="end" type="time" value="18:00" />
+        </div>
+        <div>
+          <label for="breakMin">휴게시간 (분)</label>
+          <input id="breakMin" type="number" min="0" step="10" value="60" />
+        </div>
+        <div>
+          <label for="hourlyPay">시급 (원)</label>
+          <input id="hourlyPay" type="number" min="0" step="100" value="10030" />
+        </div>
+        <div>
+          <label for="stdHours">기본 근무시간 (시간/일)</label>
+          <input id="stdHours" type="number" min="1" step="0.5" value="8" />
+        </div>
+        <div>
+          <label for="workDays">월 근무일수 (일)</label>
+          <input id="workDays" type="number" min="1" max="31" step="1" value="22" />
+        </div>
+        <div>
+          <label for="otRate">연장수당 배율</label>
+          <input id="otRate" type="number" min="1" step="0.1" value="1.5" />
+        </div>
+      </div>
+
+      <div class="cards" id="result"></div>
+      <p class="hint">※ 퇴근 시간이 출근 시간보다 이르면 자동으로 다음날 퇴근(야간근무)으로 계산됩니다.</p>
+    </section>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const won = (n) => '₩' + Math.round(n).toLocaleString('ko-KR');
+
+    function timeToMin(t){
+      const [h,m] = t.split(':').map(Number);
+      return h * 60 + m;
+    }
+
+    function calc(){
+      const start = timeToMin($("start").value || '00:00');
+      let end = timeToMin($("end").value || '00:00');
+      if (end <= start) end += 24 * 60;
+
+      const breakMin = Math.max(0, Number($("breakMin").value || 0));
+      const hourlyPay = Math.max(0, Number($("hourlyPay").value || 0));
+      const stdHours = Math.max(1, Number($("stdHours").value || 8));
+      const workDays = Math.max(1, Number($("workDays").value || 22));
+      const otRate = Math.max(1, Number($("otRate").value || 1.5));
+
+      const grossMin = Math.max(0, end - start);
+      const netMin = Math.max(0, grossMin - breakMin);
+      const netHours = netMin / 60;
+      const overtime = Math.max(0, netHours - stdHours);
+      const regular = netHours - overtime;
+
+      const dayPay = (regular * hourlyPay) + (overtime * hourlyPay * otRate);
+      const monthPay = dayPay * workDays;
+      const weeklyHours = netHours * 5;
+
+      const h = Math.floor(netMin / 60);
+      const m = Math.round(netMin % 60);
+
+      $("result").innerHTML = `
+        <article class="card"><div class="k">실근무시간</div><div class="v">${h}시간 ${m}분</div></article>
+        <article class="card"><div class="k">연장근무시간</div><div class="v">${overtime.toFixed(2)}시간</div></article>
+        <article class="card"><div class="k">기본근무시간</div><div class="v">${regular.toFixed(2)}시간</div></article>
+        <article class="card"><div class="k">예상 일급</div><div class="v">${won(dayPay)}</div></article>
+        <article class="card"><div class="k">예상 월급</div><div class="v">${won(monthPay)}</div></article>
+        <article class="card"><div class="k">주 5일 환산 근무시간</div><div class="v">${weeklyHours.toFixed(1)}시간</div></article>
+      `;
+    }
+
+    ["start","end","breakMin","hourlyPay","stdHours","workDays","otRate"].forEach(id=>{
+      $(id).addEventListener("input", calc);
+      $(id).addEventListener("change", calc);
+    });
+
+    calc();
+  </script>
+</body>
+</html>

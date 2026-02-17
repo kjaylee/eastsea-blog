@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>체지방률 계산기 | Body Fat Calculator</title>
+  <meta name="description" content="미 해군 공식(US Navy Method) 기반 체지방률 계산기" />
+  <style>
+    :root{--bg:#f4f8fc;--panel:#fff;--text:#13273f;--muted:#64748b;--line:#d7e2f0;--pri:#0f766e}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;background:var(--bg);color:var(--text);padding:16px;line-height:1.55}
+    .wrap{max-width:880px;margin:0 auto}
+    .back{display:inline-block;text-decoration:none;color:var(--muted);margin-bottom:10px}
+    .panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 10px 26px rgba(15,23,42,.06)}
+    h1{font-size:clamp(1.4rem,4.6vw,2rem);margin-bottom:6px}
+    .sub{font-size:.94rem;color:var(--muted);margin-bottom:14px}
+    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    label{display:block;font-size:.82rem;font-weight:700;color:#2a425f;margin-bottom:5px}
+    input,select{width:100%;padding:11px;border:1px solid var(--line);border-radius:10px;font-size:1rem}
+    input:focus,select:focus{outline:none;border-color:var(--pri);box-shadow:0 0 0 3px rgba(15,118,110,.12)}
+    .cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:14px}
+    .card{border:1px solid var(--line);border-radius:12px;padding:12px;background:#fbfffe}
+    .k{font-size:.8rem;color:var(--muted);font-weight:700}
+    .v{margin-top:4px;font-size:1.18rem;font-weight:800}
+    .tip{margin-top:12px;font-size:.82rem;color:var(--muted)}
+    .hidden{display:none}
+    @media (max-width:700px){.grid,.cards{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <a class="back" href="/tools/">← 도구 목록으로</a>
+    <section class="panel">
+      <h1>📏 체지방률 계산기</h1>
+      <p class="sub">US Navy Method를 사용해 체지방률(%)을 계산합니다. 단위는 모두 cm로 입력하세요.</p>
+
+      <div class="grid">
+        <div>
+          <label for="sex">성별</label>
+          <select id="sex">
+            <option value="male">남성</option>
+            <option value="female">여성</option>
+          </select>
+        </div>
+        <div>
+          <label for="age">나이</label>
+          <input id="age" type="number" min="1" max="120" value="30" />
+        </div>
+        <div>
+          <label for="height">키 (cm)</label>
+          <input id="height" type="number" min="100" max="230" step="0.1" value="170" />
+        </div>
+        <div>
+          <label for="weight">몸무게 (kg)</label>
+          <input id="weight" type="number" min="25" max="250" step="0.1" value="68" />
+        </div>
+        <div>
+          <label for="neck">목둘레 (cm)</label>
+          <input id="neck" type="number" min="20" max="60" step="0.1" value="36" />
+        </div>
+        <div>
+          <label for="waist">허리둘레 (cm)</label>
+          <input id="waist" type="number" min="40" max="180" step="0.1" value="82" />
+        </div>
+        <div id="hipWrap" class="hidden">
+          <label for="hip">엉덩이둘레 (cm, 여성만)</label>
+          <input id="hip" type="number" min="50" max="180" step="0.1" value="95" />
+        </div>
+      </div>
+
+      <div class="cards" id="result"></div>
+      <p class="tip">※ 의료 진단이 아닌 참고용 계산입니다. 측정 위치/자세에 따라 수치가 달라질 수 있습니다.</p>
+    </section>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    function cmToIn(cm){ return cm / 2.54; }
+
+    function classify(sex, bf){
+      if (sex === 'male'){
+        if (bf < 6) return '필수지방 이하';
+        if (bf < 14) return '운동선수 수준';
+        if (bf < 18) return '건강/피트니스';
+        if (bf < 25) return '평균';
+        return '체지방 과다';
+      }
+      if (bf < 14) return '필수지방 이하';
+      if (bf < 21) return '운동선수 수준';
+      if (bf < 25) return '건강/피트니스';
+      if (bf < 32) return '평균';
+      return '체지방 과다';
+    }
+
+    function calc(){
+      const sex = $("sex").value;
+      const age = Number($("age").value || 0);
+      const height = Number($("height").value || 0);
+      const weight = Number($("weight").value || 0);
+      const neck = Number($("neck").value || 0);
+      const waist = Number($("waist").value || 0);
+      const hip = Number($("hip").value || 0);
+
+      $("hipWrap").classList.toggle('hidden', sex !== 'female');
+
+      const hIn = cmToIn(height);
+      const neckIn = cmToIn(neck);
+      const waistIn = cmToIn(waist);
+      const hipIn = cmToIn(hip);
+
+      let bf = NaN;
+      if (sex === 'male'){
+        if (waistIn <= neckIn || hIn <= 0) {
+          $("result").innerHTML = '<article class="card"><div class="k">오류</div><div class="v">허리둘레는 목둘레보다 커야 합니다.</div></article>';
+          return;
+        }
+        bf = 86.010 * Math.log10(waistIn - neckIn) - 70.041 * Math.log10(hIn) + 36.76;
+      } else {
+        if (waistIn + hipIn <= neckIn || hIn <= 0) {
+          $("result").innerHTML = '<article class="card"><div class="k">오류</div><div class="v">치수 입력값을 다시 확인하세요.</div></article>';
+          return;
+        }
+        bf = 163.205 * Math.log10(waistIn + hipIn - neckIn) - 97.684 * Math.log10(hIn) - 78.387;
+      }
+
+      bf = Math.max(2, Math.min(60, bf));
+      const fatMass = weight * (bf / 100);
+      const leanMass = weight - fatMass;
+      const bmi = weight / ((height / 100) ** 2);
+      const category = classify(sex, bf);
+
+      $("result").innerHTML = `
+        <article class="card"><div class="k">체지방률</div><div class="v">${bf.toFixed(1)}%</div></article>
+        <article class="card"><div class="k">판정</div><div class="v">${category}</div></article>
+        <article class="card"><div class="k">체지방량</div><div class="v">${fatMass.toFixed(1)} kg</div></article>
+        <article class="card"><div class="k">제지방량</div><div class="v">${leanMass.toFixed(1)} kg</div></article>
+        <article class="card"><div class="k">BMI</div><div class="v">${bmi.toFixed(1)}</div></article>
+        <article class="card"><div class="k">입력 나이</div><div class="v">${age}세</div></article>
+      `;
+    }
+
+    ["sex","age","height","weight","neck","waist","hip"].forEach(id=>{
+      $(id).addEventListener("input", calc);
+      $(id).addEventListener("change", calc);
+    });
+    calc();
+  </script>
+</body>
+</html>

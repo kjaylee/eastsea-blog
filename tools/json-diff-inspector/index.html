@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>JSON Diff Inspector</title>
+  <style>
+    :root{
+      --bg:#0d1220;--panel:#141c32;--line:#2c3a5a;--txt:#eef3ff;--muted:#a6b2d8;
+      --add:#1ecf95;--del:#ff6f91;--chg:#f7be4a;--radius:14px;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; padding:16px; min-height:100vh; color:var(--txt);
+      font-family:Inter,Pretendard,system-ui,sans-serif;
+      background:radial-gradient(circle at 10% 10%, rgba(100,126,255,.2), transparent 32%),var(--bg);
+    }
+    .wrap{max-width:1180px;margin:0 auto;display:grid;gap:12px}
+    .head{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px}
+    h1{margin:0;font-size:1.25rem}
+    .sub{color:var(--muted);margin:.4rem 0 0}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:12px}
+    textarea{
+      width:100%;height:280px;resize:vertical;
+      background:#0b1326;color:#e8edff;border:1px solid #33466e;border-radius:10px;padding:10px;
+      font:500 13px/1.5 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;
+    }
+    .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    button,select,input{font:inherit}
+    button{
+      border:0;border-radius:10px;padding:9px 12px;cursor:pointer;font-weight:600;color:#fff;
+      background:linear-gradient(120deg,#5f7fff,#7b65ff)
+    }
+    button.alt{background:#2b3756}
+    .pill{padding:5px 9px;border-radius:999px;background:#273454;color:#c9d6ff;font-size:.8rem}
+    .results{max-height:380px;overflow:auto;display:grid;gap:8px;margin-top:8px}
+    .item{border:1px solid #314161;border-radius:10px;padding:9px;background:#0d162b}
+    .item.add{border-color:rgba(30,207,149,.45);background:rgba(30,207,149,.08)}
+    .item.del{border-color:rgba(255,111,145,.45);background:rgba(255,111,145,.08)}
+    .item.chg{border-color:rgba(247,190,74,.45);background:rgba(247,190,74,.08)}
+    code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+    .meta{font-size:.86rem;color:var(--muted)}
+    @media(max-width:860px){.grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="head">
+      <h1>JSON Diff Inspector</h1>
+      <p class="sub">Compare two JSON documents and inspect added, removed, and changed paths.</p>
+    </section>
+
+    <section class="grid">
+      <article class="card">
+        <div class="row" style="justify-content:space-between;margin-bottom:8px">
+          <strong>Original JSON</strong>
+          <button class="alt" id="fmtA">Format</button>
+        </div>
+        <textarea id="a" spellcheck="false">{
+  "name": "EastSea",
+  "users": 120,
+  "active": true,
+  "settings": { "theme": "dark", "region": "KR" },
+  "tags": ["tool", "web"]
+}</textarea>
+      </article>
+
+      <article class="card">
+        <div class="row" style="justify-content:space-between;margin-bottom:8px">
+          <strong>Updated JSON</strong>
+          <button class="alt" id="fmtB">Format</button>
+        </div>
+        <textarea id="b" spellcheck="false">{
+  "name": "EastSea Tools",
+  "users": 215,
+  "active": true,
+  "settings": { "theme": "light", "region": "KR", "lang": "en" },
+  "tags": ["tool", "web", "utility"],
+  "plan": "pro"
+}</textarea>
+      </article>
+    </section>
+
+    <section class="card">
+      <div class="row">
+        <button id="compareBtn">Compare JSON</button>
+        <button class="alt" id="copyBtn">Copy Summary</button>
+        <span class="pill">Adds: <strong id="adds">0</strong></span>
+        <span class="pill">Removes: <strong id="dels">0</strong></span>
+        <span class="pill">Changes: <strong id="chgs">0</strong></span>
+        <select id="filter" style="margin-left:auto;background:#0b1326;border:1px solid #33466e;color:#eef3ff;border-radius:10px;padding:8px">
+          <option value="all">Show all</option>
+          <option value="add">Added only</option>
+          <option value="del">Removed only</option>
+          <option value="chg">Changed only</option>
+        </select>
+      </div>
+      <p id="status" class="meta" style="margin:8px 0 0">Ready.</p>
+      <div id="results" class="results"></div>
+    </section>
+  </main>
+
+  <script>
+    const $ = s=>document.querySelector(s);
+    const state = { rows: [] };
+
+    function parse(text){ return JSON.parse(text); }
+
+    function isObj(v){ return v && typeof v === 'object' && !Array.isArray(v); }
+
+    function diff(a,b,path='$',rows=[]){
+      if (Object.is(a,b)) return rows;
+
+      const aObj = isObj(a), bObj = isObj(b);
+      if (aObj && bObj) {
+        const keys = new Set([...Object.keys(a),...Object.keys(b)]);
+        for (const k of keys) {
+          const p = `${path}.${k}`;
+          if (!(k in b)) rows.push({type:'del',path:p,before:a[k],after:undefined});
+          else if (!(k in a)) rows.push({type:'add',path:p,before:undefined,after:b[k]});
+          else diff(a[k],b[k],p,rows);
+        }
+        return rows;
+      }
+
+      if (Array.isArray(a) && Array.isArray(b)) {
+        const max = Math.max(a.length,b.length);
+        for(let i=0;i<max;i++){
+          const p = `${path}[${i}]`;
+          if(i>=a.length) rows.push({type:'add',path:p,before:undefined,after:b[i]});
+          else if(i>=b.length) rows.push({type:'del',path:p,before:a[i],after:undefined});
+          else diff(a[i],b[i],p,rows);
+        }
+        return rows;
+      }
+
+      rows.push({type:'chg',path,before:a,after:b});
+      return rows;
+    }
+
+    function summarize(){
+      const adds = state.rows.filter(r=>r.type==='add').length;
+      const dels = state.rows.filter(r=>r.type==='del').length;
+      const chgs = state.rows.filter(r=>r.type==='chg').length;
+      $('#adds').textContent = adds;
+      $('#dels').textContent = dels;
+      $('#chgs').textContent = chgs;
+      return {adds,dels,chgs};
+    }
+
+    function escapeHtml(s){
+      return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
+    }
+
+    function j(v){ return v===undefined ? '—' : JSON.stringify(v,null,2); }
+
+    function render(){
+      const f = $('#filter').value;
+      const list = state.rows.filter(r=>f==='all'||r.type===f);
+      const out = $('#results');
+      out.innerHTML = '';
+      if(!list.length){ out.innerHTML = '<p class="meta">No differences for this filter.</p>'; return; }
+      list.forEach(r=>{
+        const div = document.createElement('article');
+        div.className = `item ${r.type}`;
+        div.innerHTML = `<div><strong>${r.type.toUpperCase()}</strong> <code>${escapeHtml(r.path)}</code></div>
+          <div class="meta">before</div><pre><code>${escapeHtml(j(r.before))}</code></pre>
+          <div class="meta">after</div><pre><code>${escapeHtml(j(r.after))}</code></pre>`;
+        out.appendChild(div);
+      });
+    }
+
+    function formatBox(id){
+      try { const v=parse($(id).value); $(id).value = JSON.stringify(v,null,2); }
+      catch(e){ $('#status').textContent = `Cannot format ${id}: ${e.message}`; }
+    }
+
+    $('#fmtA').onclick = ()=>formatBox('#a');
+    $('#fmtB').onclick = ()=>formatBox('#b');
+
+    $('#compareBtn').onclick = ()=>{
+      try {
+        const a = parse($('#a').value);
+        const b = parse($('#b').value);
+        state.rows = diff(a,b);
+        const {adds,dels,chgs} = summarize();
+        $('#status').textContent = `Compared successfully: ${state.rows.length} total differences (${adds} add, ${dels} remove, ${chgs} change).`;
+        render();
+      } catch (e) {
+        $('#status').textContent = `JSON parse error: ${e.message}`;
+      }
+    };
+
+    $('#filter').onchange = render;
+
+    $('#copyBtn').onclick = async ()=>{
+      const lines = state.rows.map(r=>`${r.type.toUpperCase()} ${r.path}\n  before: ${JSON.stringify(r.before)}\n  after : ${JSON.stringify(r.after)}`);
+      if(!lines.length){ $('#status').textContent = 'No diff to copy yet.'; return; }
+      try { await navigator.clipboard.writeText(lines.join('\n\n')); $('#status').textContent='Diff summary copied to clipboard.'; }
+      catch { $('#status').textContent='Copy failed (clipboard permission blocked).'; }
+    };
+
+    $('#compareBtn').click();
+  </script>
+</body>
+</html>

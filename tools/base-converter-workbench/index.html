@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Base Converter Workbench</title>
+  <style>
+    :root{--bg:#0d1120;--panel:#151c34;--line:#2d3a5f;--txt:#edf2ff;--muted:#a8b2da;--acc:#6c8dff;--good:#31d4b4;--radius:14px}
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100vh;padding:16px;font-family:Inter,Pretendard,system-ui,sans-serif;color:var(--txt);background:radial-gradient(circle at 10% 10%,rgba(108,141,255,.2),transparent 30%),var(--bg)}
+    .wrap{max-width:980px;margin:0 auto;display:grid;gap:12px}
+    .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px}
+    h1{margin:0 0 5px;font-size:1.22rem}.muted{color:var(--muted);font-size:.9rem}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    @media(max-width:760px){.grid{grid-template-columns:1fr}}
+    label{display:block;color:var(--muted);font-size:.8rem;margin-bottom:6px}
+    input,textarea,select,button{font:inherit}
+    input,textarea,select{width:100%;background:#0b1328;color:var(--txt);border:1px solid #34436e;border-radius:10px;padding:9px}
+    textarea{height:100px;resize:vertical}
+    .row{display:flex;gap:8px;flex-wrap:wrap}
+    button{border:0;border-radius:10px;padding:10px 12px;cursor:pointer;font-weight:700;background:#2b3761;color:#fff}
+    button.primary{background:linear-gradient(120deg,var(--acc),#715fff)}
+    button.good{background:linear-gradient(120deg,var(--good),#1fb39e)}
+    .out{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.95rem;word-break:break-all}
+    .hint{font-size:.83rem;color:var(--muted)}
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="card">
+      <h1>Base Converter Workbench</h1>
+      <p class="muted">Convert values across binary, octal, decimal, hex, and ASCII instantly.</p>
+      <div class="grid">
+        <div>
+          <label for="input">Input value</label>
+          <textarea id="input" spellcheck="false" placeholder="e.g. 101010, 42, 0x2A, 0o52, or text"></textarea>
+        </div>
+        <div>
+          <label for="base">Input type</label>
+          <select id="base">
+            <option value="auto">Auto detect</option>
+            <option value="2">Binary (base 2)</option>
+            <option value="8">Octal (base 8)</option>
+            <option value="10">Decimal (base 10)</option>
+            <option value="16">Hex (base 16)</option>
+            <option value="text">Text / ASCII</option>
+          </select>
+          <div class="row" style="margin-top:8px">
+            <button class="primary" id="convertBtn">Convert</button>
+            <button class="good" id="swapBtn">Use HEX as input</button>
+            <button id="clearBtn">Clear</button>
+          </div>
+          <p class="hint" id="status">Ready.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="card grid">
+      <div>
+        <label>Binary</label>
+        <div class="out" id="out2">-</div>
+      </div>
+      <div>
+        <label>Octal</label>
+        <div class="out" id="out8">-</div>
+      </div>
+      <div>
+        <label>Decimal</label>
+        <div class="out" id="out10">-</div>
+      </div>
+      <div>
+        <label>Hex</label>
+        <div class="out" id="out16">-</div>
+      </div>
+      <div style="grid-column:1/-1">
+        <label>ASCII / UTF-8 text</label>
+        <div class="out" id="outText">-</div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const $ = s => document.querySelector(s);
+
+    function setOut({b2,b8,b10,b16,text}){
+      $('#out2').textContent=b2||'-';
+      $('#out8').textContent=b8||'-';
+      $('#out10').textContent=b10||'-';
+      $('#out16').textContent=b16||'-';
+      $('#outText').textContent=text||'-';
+    }
+
+    function parseBigIntFromBase(digits, base){
+      const chars = '0123456789abcdef';
+      let n = 0n;
+      const b = BigInt(base);
+      for (const ch of digits.toLowerCase()) {
+        const v = chars.indexOf(ch);
+        if (v < 0 || v >= base) throw new Error(`Invalid digit '${ch}' for base ${base}.`);
+        n = n * b + BigInt(v);
+      }
+      return n;
+    }
+
+    function bigIntFromText(text){
+      const bytes = new TextEncoder().encode(text);
+      let hex = '0x';
+      for (const b of bytes) hex += b.toString(16).padStart(2,'0');
+      return BigInt(hex === '0x' ? '0x0' : hex);
+    }
+
+    function textFromBigInt(n){
+      if (n < 0n) return '(negative value cannot map to UTF-8 bytes)';
+      let hex = n.toString(16);
+      if(hex.length%2) hex = '0'+hex;
+      const pairs = hex.match(/.{1,2}/g) || ['00'];
+      const arr = new Uint8Array(pairs.map(h=>parseInt(h,16)));
+      try { return new TextDecoder().decode(arr); } catch { return '(not valid UTF-8 text)'; }
+    }
+
+    function convert(){
+      const input = $('#input').value;
+      const mode = $('#base').value;
+
+      try {
+        let n;
+        if (mode === 'text') n = bigIntFromText(input);
+        else {
+          const v=input.trim();
+          const normalized = v.replace(/[_\s,]/g,'');
+          let base = mode;
+          if (mode === 'auto') {
+            if (/^0b[01]+$/i.test(normalized) || /^[01]+$/.test(normalized)) base='2';
+            else if (/^0o[0-7]+$/i.test(normalized)) base='8';
+            else if (/^0x[0-9a-f]+$/i.test(normalized)) base='16';
+            else if (/^-?\d+$/.test(normalized)) base='10';
+            else if (/^[0-9a-f]+$/i.test(normalized)) base='16';
+            else throw new Error('Auto-detect failed.');
+          }
+          let digits = normalized.replace(/^0[bxo]/i,'');
+          if(base==='2' && /[^01]/.test(digits)) throw new Error('Invalid binary input.');
+          if(base==='8' && /[^0-7]/.test(digits)) throw new Error('Invalid octal input.');
+          if(base==='10' && /[^0-9-]/.test(digits)) throw new Error('Invalid decimal input.');
+          if(base==='16' && /[^0-9a-f]/i.test(digits)) throw new Error('Invalid hex input.');
+          n = base==='10' ? BigInt(digits) : parseBigIntFromBase(digits, Number(base));
+        }
+
+        setOut({
+          b2: n.toString(2),
+          b8: n.toString(8),
+          b10: n.toString(10),
+          b16: '0x' + n.toString(16).toUpperCase(),
+          text: textFromBigInt(n)
+        });
+        $('#status').textContent = 'Converted successfully.';
+      } catch (e) {
+        $('#status').textContent = e.message;
+        setOut({});
+      }
+    }
+
+    $('#convertBtn').onclick = convert;
+    $('#clearBtn').onclick = ()=>{ $('#input').value=''; setOut({}); $('#status').textContent='Cleared.'; };
+    $('#swapBtn').onclick = ()=>{
+      const h = $('#out16').textContent;
+      if(h && h !== '-'){
+        $('#input').value = h;
+        $('#base').value = '16';
+        convert();
+      }
+    };
+    $('#input').addEventListener('keydown',e=>{ if((e.metaKey||e.ctrlKey)&&e.key==='Enter') convert(); });
+
+    $('#input').value = '0x2A';
+    convert();
+  </script>
+</body>
+</html>

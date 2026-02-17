@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>학점 계산기 | Grade Calculator</title>
+  <meta name="description" content="과목별 가중치와 점수를 입력해 가중 평균 성적과 목표 성적 달성에 필요한 기말 점수를 계산하는 교육용 도구" />
+  <style>
+    :root{--bg:#f5f7fb;--card:#fff;--text:#13213b;--muted:#60708a;--line:#dbe3f2;--pri:#2563eb;--pri2:#1d4ed8;--warn:#b45309}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;background:var(--bg);color:var(--text);padding:16px;line-height:1.55}
+    .wrap{max-width:980px;margin:0 auto}
+    .back{display:inline-block;margin-bottom:10px;color:var(--muted);text-decoration:none}
+    .panel{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 8px 26px rgba(15,23,42,.06)}
+    h1{font-size:clamp(1.35rem,4.5vw,2rem);margin-bottom:6px}
+    .sub{color:var(--muted);font-size:.95rem;margin-bottom:14px}
+    .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+    button{border:none;border-radius:10px;padding:10px 14px;font-weight:700;cursor:pointer}
+    .primary{background:linear-gradient(135deg,var(--pri),var(--pri2));color:#fff}
+    .ghost{background:#ecf2ff;color:#1e3a8a}
+    .danger{background:#fff1f2;color:#be123c}
+    table{width:100%;border-collapse:collapse;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff}
+    th,td{border-bottom:1px solid var(--line);padding:10px;font-size:.92rem}
+    th{background:#f0f5ff;text-align:left;color:#35507a;font-size:.82rem}
+    tr:last-child td{border-bottom:none}
+    input{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:.95rem}
+    input:focus{outline:none;border-color:var(--pri);box-shadow:0 0 0 3px rgba(37,99,235,.15)}
+    .stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:12px}
+    .card{border:1px solid var(--line);border-radius:12px;padding:12px;background:#fbfdff}
+    .k{font-size:.8rem;color:var(--muted);font-weight:700}
+    .v{margin-top:4px;font-size:1.12rem;font-weight:800}
+    .warning{margin-top:10px;color:var(--warn);font-weight:700;font-size:.9rem}
+    .goal{margin-top:14px;padding:12px;border:1px solid var(--line);border-radius:12px;background:#fff}
+    .goal-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    .small{font-size:.83rem;color:var(--muted);margin-top:8px}
+    @media (max-width:780px){.stats,.goal-grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <a class="back" href="/tools/">← 도구 목록으로</a>
+    <section class="panel">
+      <h1>🎓 학점 계산기</h1>
+      <p class="sub">과제/중간/퀴즈 등 항목별 가중치와 점수를 입력해 현재 성적과 목표 달성 가능성을 확인하세요.</p>
+
+      <div class="toolbar">
+        <button class="primary" id="addRowBtn">항목 추가</button>
+        <button class="ghost" id="sampleBtn">샘플 불러오기</button>
+        <button class="danger" id="clearBtn">전체 초기화</button>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th style="width:36%">항목 이름</th>
+            <th style="width:22%">가중치(%)</th>
+            <th style="width:22%">점수(0~100)</th>
+            <th style="width:20%">삭제</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+
+      <div class="stats" id="stats"></div>
+      <div class="warning" id="warning"></div>
+
+      <section class="goal">
+        <h2 style="font-size:1rem;margin-bottom:8px">목표 점수 역산 (남은 기말고사)</h2>
+        <div class="goal-grid">
+          <div>
+            <label for="finalWeight" style="display:block;font-size:.83rem;font-weight:700;color:#33415f;margin-bottom:4px">기말고사 가중치(%)</label>
+            <input id="finalWeight" type="number" min="1" max="100" step="1" value="30" />
+          </div>
+          <div>
+            <label for="targetGrade" style="display:block;font-size:.83rem;font-weight:700;color:#33415f;margin-bottom:4px">목표 최종 성적(0~100)</label>
+            <input id="targetGrade" type="number" min="0" max="100" step="0.1" value="90" />
+          </div>
+        </div>
+        <p class="small" id="goalResult"></p>
+      </section>
+    </section>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const rowsEl = $("rows");
+
+    function makeRow(name = '', weight = '', score = '') {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><input type="text" class="name" placeholder="예: 중간고사" value="${name}" /></td>
+        <td><input type="number" class="weight" min="0" max="100" step="0.1" value="${weight}" /></td>
+        <td><input type="number" class="score" min="0" max="100" step="0.1" value="${score}" /></td>
+        <td><button class="danger removeBtn" type="button">삭제</button></td>
+      `;
+
+      tr.querySelectorAll('input').forEach(inp => inp.addEventListener('input', calculate));
+      tr.querySelector('.removeBtn').addEventListener('click', () => {
+        tr.remove();
+        calculate();
+      });
+
+      rowsEl.appendChild(tr);
+    }
+
+    function getRowsData(){
+      return [...rowsEl.querySelectorAll('tr')].map(tr => ({
+        weight: Number(tr.querySelector('.weight').value || 0),
+        score: Number(tr.querySelector('.score').value || 0)
+      }));
+    }
+
+    function calculate(){
+      const data = getRowsData();
+      const weightSum = data.reduce((a,b) => a + b.weight, 0);
+      const weightedScore = data.reduce((a,b) => a + (b.weight * b.score), 0) / (weightSum || 1);
+      const normalized = data.reduce((a,b) => a + (b.weight/100) * b.score, 0);
+
+      $("stats").innerHTML = `
+        <article class="card"><div class="k">입력된 가중치 합계</div><div class="v">${weightSum.toFixed(1)}%</div></article>
+        <article class="card"><div class="k">가중 평균 (입력 항목 기준)</div><div class="v">${isFinite(weightedScore) ? weightedScore.toFixed(2) : '0.00'}점</div></article>
+        <article class="card"><div class="k">현재 누적 기여점수</div><div class="v">${normalized.toFixed(2)} / 100</div></article>
+      `;
+
+      if(weightSum < 100){
+        $("warning").textContent = `아직 ${ (100 - weightSum).toFixed(1) }% 가중치가 비어 있습니다.`;
+      } else if(weightSum > 100){
+        $("warning").textContent = `가중치 합계가 100%를 초과했습니다. (${weightSum.toFixed(1)}%)`;
+      } else {
+        $("warning").textContent = '가중치 합계가 100%로 정확합니다.';
+      }
+
+      const finalWeight = Math.max(1, Number($("finalWeight").value || 30));
+      const target = Number($("targetGrade").value || 90);
+      const nonFinalWeight = 100 - finalWeight;
+
+      let nonFinalContribution = 0;
+      data.forEach(d => {
+        nonFinalContribution += (d.weight / 100) * d.score;
+      });
+
+      const needed = (target - nonFinalContribution) / (finalWeight / 100);
+      if (!isFinite(needed)) {
+        $("goalResult").textContent = '입력값을 확인해 주세요.';
+      } else if (needed <= 0) {
+        $("goalResult").textContent = `이미 목표를 달성했습니다. (기말 필요 점수: 0점 이하)`;
+      } else if (needed > 100) {
+        $("goalResult").textContent = `목표 달성이 어렵습니다. 기말 필요 점수: ${needed.toFixed(2)}점 (>100)`;
+      } else {
+        $("goalResult").textContent = `목표 ${target.toFixed(1)}점을 위해 기말(${finalWeight}%)에서 ${needed.toFixed(2)}점이 필요합니다.`;
+      }
+    }
+
+    function loadSample(){
+      rowsEl.innerHTML = '';
+      makeRow('과제', 20, 95);
+      makeRow('퀴즈', 10, 88);
+      makeRow('중간고사', 40, 84);
+      makeRow('출석', 10, 100);
+      calculate();
+    }
+
+    function clearAll(){
+      rowsEl.innerHTML = '';
+      makeRow('', '', '');
+      makeRow('', '', '');
+      calculate();
+    }
+
+    $("addRowBtn").addEventListener('click', () => { makeRow('', '', ''); calculate(); });
+    $("sampleBtn").addEventListener('click', loadSample);
+    $("clearBtn").addEventListener('click', clearAll);
+    ["finalWeight", "targetGrade"].forEach(id => $(id).addEventListener('input', calculate));
+
+    clearAll();
+  </script>
+</body>
+</html>

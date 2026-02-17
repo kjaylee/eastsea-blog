@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>레시피 분량 조절기 | Recipe Scaler</title>
+  <meta name="description" content="원래 인분과 목표 인분을 입력해 재료 양을 자동으로 스케일링하는 요리/주방 도구" />
+  <style>
+    :root{--bg:#f7f9fc;--card:#fff;--text:#13213b;--muted:#60708a;--line:#dbe3f2;--pri:#2563eb;--pri2:#1d4ed8}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;background:var(--bg);color:var(--text);padding:16px;line-height:1.55}
+    .wrap{max-width:980px;margin:0 auto}
+    .back{display:inline-block;margin-bottom:10px;color:var(--muted);text-decoration:none}
+    .panel{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 8px 26px rgba(15,23,42,.06)}
+    h1{font-size:clamp(1.35rem,4.5vw,2rem);margin-bottom:6px}
+    .sub{color:var(--muted);font-size:.95rem;margin-bottom:14px}
+    .top{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+    label{display:block;font-size:.83rem;font-weight:700;color:#33415f;margin-bottom:5px}
+    input,select{width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;font-size:.95rem}
+    input:focus,select:focus{outline:none;border-color:var(--pri);box-shadow:0 0 0 3px rgba(37,99,235,.14)}
+    .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+    button{border:none;border-radius:10px;padding:10px 14px;font-weight:700;cursor:pointer}
+    .primary{background:linear-gradient(135deg,var(--pri),var(--pri2));color:#fff}
+    .ghost{background:#ecf2ff;color:#1e3a8a}
+    .danger{background:#fff1f2;color:#be123c}
+    table{width:100%;border-collapse:collapse;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff}
+    th,td{padding:10px;border-bottom:1px solid var(--line);font-size:.92rem;text-align:left}
+    th{background:#f0f5ff;font-size:.82rem;color:#35507a}
+    tr:last-child td{border-bottom:none}
+    .result{margin-top:12px;border:1px solid var(--line);border-radius:12px;padding:12px;background:#fbfdff}
+    .result ul{margin-top:8px;padding-left:18px}
+    .result li{margin-bottom:4px}
+    .muted{color:var(--muted);font-size:.84rem;margin-top:8px}
+    @media (max-width:780px){.top{grid-template-columns:1fr}th:nth-child(4),td:nth-child(4){display:none}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <a class="back" href="/tools/">← 도구 목록으로</a>
+    <section class="panel">
+      <h1>🍳 레시피 분량 조절기</h1>
+      <p class="sub">기준 인분 대비 목표 인분을 입력하면 모든 재료 양을 자동으로 맞춰 줍니다.</p>
+
+      <div class="top">
+        <div>
+          <label for="baseServings">기준 인분</label>
+          <input id="baseServings" type="number" min="1" step="0.5" value="2" />
+        </div>
+        <div>
+          <label for="targetServings">목표 인분</label>
+          <input id="targetServings" type="number" min="1" step="0.5" value="4" />
+        </div>
+        <div>
+          <label for="precision">소수점 자리수</label>
+          <select id="precision">
+            <option value="0">0자리</option>
+            <option value="1" selected>1자리</option>
+            <option value="2">2자리</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <button class="primary" id="addBtn">재료 추가</button>
+        <button class="ghost" id="sampleBtn">샘플 불러오기</button>
+        <button class="danger" id="clearBtn">전체 초기화</button>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th style="width:20%">양</th>
+            <th style="width:20%">단위</th>
+            <th style="width:45%">재료명</th>
+            <th style="width:15%">삭제</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+
+      <section class="result">
+        <strong id="ratioText">배율: 2.00x</strong>
+        <ul id="scaledList"></ul>
+        <p class="muted">※ 소금/향신료는 기호에 따라 선형 비율보다 적게 조절하는 것이 좋습니다.</p>
+      </section>
+    </section>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const rowsEl = $("rows");
+
+    function formatNum(n, p){
+      return Number(n).toFixed(p).replace(/\.0+$/, '').replace(/(\.\d*[1-9])0+$/, '$1');
+    }
+
+    function addRow(qty='', unit='', name=''){
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><input type="number" class="qty" min="0" step="0.01" value="${qty}" /></td>
+        <td><input type="text" class="unit" placeholder="g / ml / tbsp" value="${unit}" /></td>
+        <td><input type="text" class="name" placeholder="재료명" value="${name}" /></td>
+        <td><button class="danger removeBtn" type="button">삭제</button></td>
+      `;
+      tr.querySelectorAll('input').forEach(inp => inp.addEventListener('input', render));
+      tr.querySelector('.removeBtn').addEventListener('click', () => { tr.remove(); render(); });
+      rowsEl.appendChild(tr);
+    }
+
+    function getRows(){
+      return [...rowsEl.querySelectorAll('tr')].map(tr => ({
+        qty: Number(tr.querySelector('.qty').value || 0),
+        unit: tr.querySelector('.unit').value.trim(),
+        name: tr.querySelector('.name').value.trim()
+      }));
+    }
+
+    function render(){
+      const base = Math.max(0.1, Number($("baseServings").value || 1));
+      const target = Math.max(0.1, Number($("targetServings").value || 1));
+      const precision = Number($("precision").value || 1);
+      const ratio = target / base;
+      $("ratioText").textContent = `배율: ${ratio.toFixed(2)}x (${base}인분 → ${target}인분)`;
+
+      const items = getRows().filter(r => r.name || r.qty > 0);
+      if(items.length === 0){
+        $("scaledList").innerHTML = '<li>재료를 입력하면 결과가 표시됩니다.</li>';
+        return;
+      }
+
+      $("scaledList").innerHTML = items.map(r => {
+        const scaled = r.qty * ratio;
+        const qtyText = formatNum(scaled, precision);
+        const unitText = r.unit ? ` ${r.unit}` : '';
+        const nameText = r.name || '재료';
+        return `<li><strong>${qtyText}${unitText}</strong> — ${nameText}</li>`;
+      }).join('');
+    }
+
+    function loadSample(){
+      rowsEl.innerHTML = '';
+      addRow(200, 'g', '파스타 면');
+      addRow(120, 'g', '베이컨');
+      addRow(1, 'cup', '생크림');
+      addRow(0.5, 'tsp', '소금');
+      addRow(0.25, 'tsp', '후추');
+      render();
+    }
+
+    function clearAll(){
+      rowsEl.innerHTML = '';
+      addRow('', '', '');
+      addRow('', '', '');
+      render();
+    }
+
+    $("addBtn").addEventListener('click', () => { addRow('', '', ''); render(); });
+    $("sampleBtn").addEventListener('click', loadSample);
+    $("clearBtn").addEventListener('click', clearAll);
+    ["baseServings", "targetServings", "precision"].forEach(id => $(id).addEventListener('input', render));
+
+    clearAll();
+  </script>
+</body>
+</html>

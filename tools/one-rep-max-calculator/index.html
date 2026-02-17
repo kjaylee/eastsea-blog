@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>1RM 계산기 | One-Rep Max Calculator</title>
+  <meta name="description" content="중량과 반복 횟수로 1회 최대 중량(1RM), 훈련 중량, 퍼센트별 목표 중량을 계산하는 피트니스 도구" />
+  <style>
+    :root{--bg:#f5f7fb;--card:#fff;--text:#12203a;--muted:#5d6b84;--line:#d9e2f3;--pri:#2563eb;--pri2:#1d4ed8;--ok:#0f766e}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;background:var(--bg);color:var(--text);line-height:1.55;padding:16px}
+    .wrap{max-width:900px;margin:0 auto}
+    .back{display:inline-block;margin-bottom:12px;color:var(--muted);text-decoration:none}
+    .panel{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 8px 26px rgba(15,23,42,.06)}
+    h1{font-size:clamp(1.35rem,4.5vw,2rem);margin-bottom:6px}
+    .sub{color:var(--muted);margin-bottom:14px;font-size:.95rem}
+    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    label{display:block;font-size:.84rem;font-weight:700;color:#30415f;margin-bottom:5px}
+    input,select{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:10px;font-size:1rem;background:#fff}
+    input:focus,select:focus{outline:none;border-color:var(--pri);box-shadow:0 0 0 3px rgba(37,99,235,.15)}
+    .btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+    button{border:none;border-radius:10px;padding:10px 14px;font-weight:700;cursor:pointer}
+    .primary{background:linear-gradient(135deg,var(--pri),var(--pri2));color:#fff}
+    .ghost{background:#ecf2ff;color:#1e3a8a}
+    .cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:14px}
+    .card{border:1px solid var(--line);border-radius:12px;padding:12px;background:#fbfdff}
+    .k{font-size:.8rem;color:var(--muted);font-weight:700}
+    .v{margin-top:4px;font-size:1.15rem;font-weight:800}
+    .good{color:var(--ok)}
+    table{width:100%;border-collapse:collapse;margin-top:14px;background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+    th,td{padding:10px;border-bottom:1px solid var(--line);text-align:left;font-size:.93rem}
+    th{background:#f0f5ff;font-size:.82rem;color:#35507a}
+    tr:last-child td{border-bottom:none}
+    .note{margin-top:12px;font-size:.82rem;color:var(--muted)}
+    @media (max-width:760px){.grid,.cards{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <a class="back" href="/tools/">← 도구 목록으로</a>
+    <section class="panel">
+      <h1>🏋️ 1RM 계산기</h1>
+      <p class="sub">들어 올린 무게와 반복 횟수로 1회 최대 중량(One-Rep Max)을 추정하고 훈련 강도를 설정하세요.</p>
+
+      <div class="grid">
+        <div>
+          <label for="weight">들어 올린 무게</label>
+          <input id="weight" type="number" min="0" step="0.1" value="80" />
+        </div>
+        <div>
+          <label for="unit">단위</label>
+          <select id="unit">
+            <option value="kg" selected>kg</option>
+            <option value="lb">lb</option>
+          </select>
+        </div>
+        <div>
+          <label for="reps">반복 횟수 (1~15)</label>
+          <input id="reps" type="number" min="1" max="15" step="1" value="5" />
+        </div>
+        <div>
+          <label for="bodyweight">체중 (선택)</label>
+          <input id="bodyweight" type="number" min="0" step="0.1" value="70" />
+        </div>
+      </div>
+
+      <div class="btns">
+        <button class="primary" id="calcBtn">계산하기</button>
+        <button class="ghost" id="resetBtn">초기화</button>
+      </div>
+
+      <div class="cards" id="summary"></div>
+      <table>
+        <thead>
+          <tr><th>강도</th><th>추천 중량</th></tr>
+        </thead>
+        <tbody id="intensityRows"></tbody>
+      </table>
+
+      <p class="note">※ 공식: Epley / Brzycki / Lombardi 평균값. 1RM은 추정치이므로 컨디션에 따라 차이가 날 수 있습니다.</p>
+    </section>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const toKg = (value, unit) => unit === 'lb' ? value * 0.45359237 : value;
+    const fromKg = (value, unit) => unit === 'lb' ? value / 0.45359237 : value;
+    const fmt = (n, unit) => `${n.toFixed(1)} ${unit}`;
+
+    function calc1RM(weightKg, reps) {
+      const epley = weightKg * (1 + reps / 30);
+      const brzycki = weightKg * 36 / (37 - reps);
+      const lombardi = weightKg * Math.pow(reps, 0.1);
+      return (epley + brzycki + lombardi) / 3;
+    }
+
+    function render() {
+      const weightInput = Number($("weight").value || 0);
+      const reps = Math.max(1, Math.min(15, Number($("reps").value || 1)));
+      const unit = $("unit").value;
+      const bwInput = Number($("bodyweight").value || 0);
+
+      if (weightInput <= 0) {
+        $("summary").innerHTML = '<article class="card"><div class="k">안내</div><div class="v">무게를 입력하세요.</div></article>';
+        $("intensityRows").innerHTML = '';
+        return;
+      }
+
+      const weightKg = toKg(weightInput, unit);
+      const oneRMKg = calc1RM(weightKg, reps);
+      const trainingMaxKg = oneRMKg * 0.9;
+      const relative = bwInput > 0 ? oneRMKg / toKg(bwInput, unit) : null;
+
+      $("summary").innerHTML = `
+        <article class="card"><div class="k">추정 1RM</div><div class="v">${fmt(fromKg(oneRMKg, unit), unit)}</div></article>
+        <article class="card"><div class="k">훈련 최대중량 (90%)</div><div class="v">${fmt(fromKg(trainingMaxKg, unit), unit)}</div></article>
+        <article class="card"><div class="k">체중 대비 1RM</div><div class="v ${relative ? 'good' : ''}">${relative ? relative.toFixed(2) + ' x BW' : '체중 입력 시 계산'}</div></article>
+      `;
+
+      const levels = [95, 90, 85, 80, 75, 70, 65, 60];
+      $("intensityRows").innerHTML = levels.map(p => {
+        const v = fromKg(oneRMKg * (p / 100), unit);
+        return `<tr><td>${p}%</td><td>${fmt(v, unit)}</td></tr>`;
+      }).join('');
+    }
+
+    function reset() {
+      $("weight").value = 80;
+      $("reps").value = 5;
+      $("unit").value = 'kg';
+      $("bodyweight").value = 70;
+      render();
+    }
+
+    $("calcBtn").addEventListener('click', render);
+    $("resetBtn").addEventListener('click', reset);
+    ["weight", "reps", "unit", "bodyweight"].forEach(id => $(id).addEventListener('input', render));
+    render();
+  </script>
+</body>
+</html>

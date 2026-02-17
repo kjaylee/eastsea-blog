@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>딥워크 세션 플래너 | Deep Work Session Planner</title>
+  <meta name="description" content="집중 블록, 짧은 휴식, 긴 휴식 규칙으로 하루 집중 일정을 자동 생성하는 생산성 도구" />
+  <style>
+    :root{--bg:#f4f7fb;--card:#fff;--text:#13213b;--muted:#5f6f88;--line:#dbe3f2;--pri:#2563eb;--pri2:#1d4ed8;--chip:#eef3ff}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;background:var(--bg);color:var(--text);padding:16px;line-height:1.55}
+    .wrap{max-width:920px;margin:0 auto}
+    .back{display:inline-block;margin-bottom:10px;color:var(--muted);text-decoration:none}
+    .panel{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 8px 28px rgba(15,23,42,.06)}
+    h1{font-size:clamp(1.35rem,4.4vw,2rem);margin-bottom:6px}
+    .sub{color:var(--muted);font-size:.95rem;margin-bottom:14px}
+    .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+    label{display:block;font-size:.82rem;font-weight:700;color:#31415f;margin-bottom:5px}
+    input{width:100%;padding:11px;border:1px solid var(--line);border-radius:10px;font-size:1rem}
+    input:focus{outline:none;border-color:var(--pri);box-shadow:0 0 0 3px rgba(37,99,235,.15)}
+    .btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+    button{border:none;border-radius:10px;padding:10px 14px;font-weight:700;cursor:pointer}
+    .primary{background:linear-gradient(135deg,var(--pri),var(--pri2));color:#fff}
+    .ghost{background:#ecf2ff;color:#1e3a8a}
+    .stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:14px}
+    .stat{border:1px solid var(--line);border-radius:12px;padding:12px;background:#fbfdff}
+    .k{font-size:.8rem;color:var(--muted);font-weight:700}
+    .v{margin-top:3px;font-size:1.1rem;font-weight:800}
+    .timeline{margin-top:14px;border:1px solid var(--line);border-radius:12px;background:#fff;overflow:hidden}
+    .row{display:grid;grid-template-columns:120px 1fr 90px;gap:10px;padding:10px 12px;border-bottom:1px solid var(--line);align-items:center}
+    .row:last-child{border-bottom:none}
+    .badge{display:inline-block;padding:4px 9px;border-radius:999px;background:var(--chip);font-weight:700;font-size:.78rem;color:#2f4f88}
+    .focus{background:#e8f8ef;color:#0f766e}
+    .short{background:#eef2ff;color:#1d4ed8}
+    .long{background:#fff2e8;color:#c2410c}
+    .note{margin-top:12px;font-size:.82rem;color:var(--muted)}
+    @media (max-width:760px){.grid,.stats{grid-template-columns:1fr}.row{grid-template-columns:1fr;gap:6px}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <a class="back" href="/tools/">← 도구 목록으로</a>
+    <section class="panel">
+      <h1>🧠 딥워크 세션 플래너</h1>
+      <p class="sub">시작 시간과 집중/휴식 규칙을 입력하면 하루 작업 타임라인을 자동 생성합니다.</p>
+
+      <div class="grid">
+        <div>
+          <label for="start">시작 시간</label>
+          <input id="start" type="time" value="09:00" />
+        </div>
+        <div>
+          <label for="focusMin">집중 시간 (분)</label>
+          <input id="focusMin" type="number" min="10" step="5" value="50" />
+        </div>
+        <div>
+          <label for="shortBreak">짧은 휴식 (분)</label>
+          <input id="shortBreak" type="number" min="1" step="1" value="10" />
+        </div>
+        <div>
+          <label for="longBreak">긴 휴식 (분)</label>
+          <input id="longBreak" type="number" min="5" step="5" value="30" />
+        </div>
+        <div>
+          <label for="cyclesBeforeLong">긴 휴식 전 사이클 수</label>
+          <input id="cyclesBeforeLong" type="number" min="2" step="1" value="4" />
+        </div>
+        <div>
+          <label for="totalCycles">총 집중 사이클 수</label>
+          <input id="totalCycles" type="number" min="1" step="1" value="8" />
+        </div>
+      </div>
+
+      <div class="btns">
+        <button class="primary" id="makeBtn">일정 만들기</button>
+        <button class="ghost" id="resetBtn">초기화</button>
+      </div>
+
+      <div class="stats" id="stats"></div>
+      <div class="timeline" id="timeline"></div>
+      <p class="note">※ 자동 계산 기준: 마지막 집중 세션 뒤에는 휴식을 붙이지 않습니다.</p>
+    </section>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    function toMinutes(timeStr){
+      const [h,m] = (timeStr || '00:00').split(':').map(Number);
+      return (h * 60 + m) % (24 * 60);
+    }
+
+    function toTimeText(totalMin){
+      const m = ((totalMin % (24*60)) + (24*60)) % (24*60);
+      const hh = String(Math.floor(m / 60)).padStart(2, '0');
+      const mm = String(m % 60).padStart(2, '0');
+      return `${hh}:${mm}`;
+    }
+
+    function makePlan(){
+      const startMin = toMinutes($("start").value);
+      const focusMin = Math.max(10, Number($("focusMin").value || 50));
+      const shortBreak = Math.max(1, Number($("shortBreak").value || 10));
+      const longBreak = Math.max(5, Number($("longBreak").value || 30));
+      const cyclesBeforeLong = Math.max(2, Number($("cyclesBeforeLong").value || 4));
+      const totalCycles = Math.max(1, Number($("totalCycles").value || 8));
+
+      let cursor = startMin;
+      let focusTotal = 0;
+      let breakTotal = 0;
+      const rows = [];
+
+      for(let i=1; i<=totalCycles; i++){
+        const from = cursor;
+        const to = cursor + focusMin;
+        rows.push({type:'focus', label:`집중 ${i}세션`, from, to, dur:focusMin});
+        cursor = to;
+        focusTotal += focusMin;
+
+        if(i < totalCycles){
+          const long = i % cyclesBeforeLong === 0;
+          const breakDur = long ? longBreak : shortBreak;
+          const bFrom = cursor;
+          const bTo = cursor + breakDur;
+          rows.push({type: long ? 'long' : 'short', label: long ? '긴 휴식' : '짧은 휴식', from:bFrom, to:bTo, dur:breakDur});
+          cursor = bTo;
+          breakTotal += breakDur;
+        }
+      }
+
+      const finish = cursor;
+      const total = focusTotal + breakTotal;
+
+      $("stats").innerHTML = `
+        <article class="stat"><div class="k">종료 예정 시간</div><div class="v">${toTimeText(finish)}</div></article>
+        <article class="stat"><div class="k">집중 총합</div><div class="v">${focusTotal}분</div></article>
+        <article class="stat"><div class="k">휴식 총합 / 전체</div><div class="v">${breakTotal}분 / ${total}분</div></article>
+      `;
+
+      $("timeline").innerHTML = rows.map(r => `
+        <div class="row">
+          <div><span class="badge ${r.type}">${r.type === 'focus' ? '집중' : (r.type === 'long' ? '긴 휴식' : '짧은 휴식')}</span></div>
+          <div>${r.label}</div>
+          <div>${toTimeText(r.from)}–${toTimeText(r.to)} (${r.dur}분)</div>
+        </div>
+      `).join('');
+    }
+
+    function reset(){
+      $("start").value = '09:00';
+      $("focusMin").value = 50;
+      $("shortBreak").value = 10;
+      $("longBreak").value = 30;
+      $("cyclesBeforeLong").value = 4;
+      $("totalCycles").value = 8;
+      makePlan();
+    }
+
+    $("makeBtn").addEventListener('click', makePlan);
+    $("resetBtn").addEventListener('click', reset);
+    ["start","focusMin","shortBreak","longBreak","cyclesBeforeLong","totalCycles"].forEach(id => $(id).addEventListener('input', makePlan));
+    makePlan();
+  </script>
+</body>
+</html>

@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>팁 계산기 | Tip Calculator</title>
+  <meta name="description" content="식사 금액, 팁 비율, 인원 수를 기반으로 총액과 1인당 부담 금액을 계산하는 금융 도구" />
+  <style>
+    :root{--bg:#f4f7fb;--card:#fff;--text:#13213b;--muted:#61708a;--line:#dbe3f2;--pri:#2563eb;--pri2:#1d4ed8}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;background:var(--bg);color:var(--text);padding:16px;line-height:1.55}
+    .wrap{max-width:860px;margin:0 auto}
+    .back{display:inline-block;margin-bottom:10px;color:var(--muted);text-decoration:none}
+    .panel{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 8px 28px rgba(15,23,42,.06)}
+    h1{font-size:clamp(1.4rem,4.5vw,2rem);margin-bottom:6px}
+    .sub{color:var(--muted);font-size:.95rem;margin-bottom:14px}
+    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    label{display:block;font-size:.83rem;font-weight:700;color:#33415f;margin-bottom:5px}
+    input{width:100%;padding:11px;border:1px solid var(--line);border-radius:10px;font-size:1rem}
+    input:focus{outline:none;border-color:var(--pri);box-shadow:0 0 0 3px rgba(37,99,235,.15)}
+    .range-wrap{display:flex;gap:8px;align-items:center}
+    .range-wrap input[type="range"]{flex:1;padding:0}
+    .chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+    .chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 10px;font-weight:700;cursor:pointer;font-size:.84rem}
+    .btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+    button{border:none;border-radius:10px;padding:10px 14px;font-weight:700;cursor:pointer}
+    .primary{background:linear-gradient(135deg,var(--pri),var(--pri2));color:#fff}
+    .ghost{background:#ecf2ff;color:#1e3a8a}
+    .cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:14px}
+    .card{border:1px solid var(--line);border-radius:12px;padding:12px;background:#fbfdff}
+    .k{font-size:.8rem;color:var(--muted);font-weight:700}
+    .v{margin-top:4px;font-size:1.15rem;font-weight:800}
+    .note{margin-top:10px;font-size:.82rem;color:var(--muted)}
+    @media (max-width:760px){.grid,.cards{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <a class="back" href="/tools/">← 도구 목록으로</a>
+    <section class="panel">
+      <h1>💵 팁 계산기</h1>
+      <p class="sub">팁 비율과 인원 수를 입력하면 총 결제액과 1인당 부담액을 바로 확인할 수 있습니다.</p>
+
+      <div class="grid">
+        <div>
+          <label for="bill">기본 금액</label>
+          <input id="bill" type="number" min="0" step="0.01" value="68000" />
+        </div>
+        <div>
+          <label for="tax">추가 세금/봉사료 (선택)</label>
+          <input id="tax" type="number" min="0" step="0.01" value="0" />
+        </div>
+        <div>
+          <label for="people">인원 수</label>
+          <input id="people" type="number" min="1" step="1" value="2" />
+        </div>
+        <div>
+          <label for="tipPercent">팁 비율</label>
+          <div class="range-wrap">
+            <input id="tipPercent" type="range" min="0" max="40" step="1" value="15" />
+            <input id="tipPercentInput" type="number" min="0" max="100" step="1" value="15" style="width:92px" />
+          </div>
+          <div class="chips">
+            <button class="chip" type="button" data-tip="10">10%</button>
+            <button class="chip" type="button" data-tip="15">15%</button>
+            <button class="chip" type="button" data-tip="18">18%</button>
+            <button class="chip" type="button" data-tip="20">20%</button>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:10px">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.9rem;color:#33415f">
+          <input id="roundUp" type="checkbox" style="width:auto;transform:scale(1.15)" />
+          1인당 금액 100원 단위 올림
+        </label>
+      </div>
+
+      <div class="btns">
+        <button class="primary" id="calcBtn">계산하기</button>
+        <button class="ghost" id="resetBtn">초기화</button>
+      </div>
+
+      <div class="cards" id="result"></div>
+      <p class="note">※ 통화 단위는 입력한 숫자 단위를 그대로 사용합니다. (원/달러 등)</p>
+    </section>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const fmt = (n) => Number(n).toLocaleString('ko-KR', {maximumFractionDigits:2});
+
+    function syncTip(fromRange){
+      if(fromRange){
+        $("tipPercentInput").value = $("tipPercent").value;
+      } else {
+        const v = Math.max(0, Math.min(100, Number($("tipPercentInput").value || 0)));
+        $("tipPercent").value = Math.min(40, v);
+        $("tipPercentInput").value = v;
+      }
+      calculate();
+    }
+
+    function calculate(){
+      const bill = Number($("bill").value || 0);
+      const tax = Number($("tax").value || 0);
+      const people = Math.max(1, Number($("people").value || 1));
+      const tipPct = Number($("tipPercentInput").value || 0);
+      const roundUp = $("roundUp").checked;
+
+      const base = bill + tax;
+      const tip = bill * (tipPct / 100);
+      const total = base + tip;
+      let perPerson = total / people;
+      if(roundUp) perPerson = Math.ceil(perPerson / 100) * 100;
+
+      $("result").innerHTML = `
+        <article class="card"><div class="k">팁 금액</div><div class="v">${fmt(tip)}</div></article>
+        <article class="card"><div class="k">총 결제 금액</div><div class="v">${fmt(total)}</div></article>
+        <article class="card"><div class="k">1인당 부담액</div><div class="v">${fmt(perPerson)}</div></article>
+        <article class="card"><div class="k">기본+추가금</div><div class="v">${fmt(base)}</div></article>
+        <article class="card"><div class="k">팁 비율</div><div class="v">${tipPct.toFixed(1)}%</div></article>
+        <article class="card"><div class="k">팁 제외 1인당</div><div class="v">${fmt(base / people)}</div></article>
+      `;
+    }
+
+    function reset(){
+      $("bill").value = 68000;
+      $("tax").value = 0;
+      $("people").value = 2;
+      $("tipPercent").value = 15;
+      $("tipPercentInput").value = 15;
+      $("roundUp").checked = false;
+      calculate();
+    }
+
+    $("tipPercent").addEventListener('input', () => syncTip(true));
+    $("tipPercentInput").addEventListener('input', () => syncTip(false));
+    ["bill", "tax", "people", "roundUp"].forEach(id => $(id).addEventListener('input', calculate));
+    $("calcBtn").addEventListener('click', calculate);
+    $("resetBtn").addEventListener('click', reset);
+    document.querySelectorAll('.chip').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const v = Number(btn.dataset.tip);
+        $("tipPercent").value = Math.min(40, v);
+        $("tipPercentInput").value = v;
+        calculate();
+      });
+    });
+
+    calculate();
+  </script>
+</body>
+</html>

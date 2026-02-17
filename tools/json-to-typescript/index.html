@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JSON to TypeScript Interface Generator | tools.eastsea.xyz</title>
+  <style>
+    :root {
+      --bg:#0f172a;--panel:#111827;--panel2:#0b1220;--text:#e5e7eb;--muted:#94a3b8;
+      --line:#243244;--pri:#22c55e;--pri2:#06b6d4;--err:#f87171;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:linear-gradient(160deg,#0f172a,#091225);color:var(--text);font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:18px}
+    .app{max-width:1100px;margin:auto}
+    .hero,.card{background:rgba(17,24,39,.92);border:1px solid var(--line);border-radius:16px;box-shadow:0 14px 40px rgba(0,0,0,.25)}
+    .hero{padding:20px;margin-bottom:14px;background:linear-gradient(120deg,rgba(34,197,94,.14),rgba(6,182,212,.14))}
+    h1{margin:0 0 8px;font-size:clamp(1.35rem,2.5vw,1.9rem)}
+    p{margin:0;color:var(--muted)}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    @media (max-width:900px){.grid{grid-template-columns:1fr}}
+    .card{padding:14px}
+    .row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:10px}
+    @media (max-width:650px){.row{grid-template-columns:1fr}}
+    label{display:flex;gap:8px;align-items:center;color:#cbd5e1;font-size:.92rem}
+    input[type="text"],textarea{width:100%;background:var(--panel2);color:var(--text);border:1px solid #334155;border-radius:10px;padding:10px 11px;font:inherit}
+    textarea{min-height:300px;resize:vertical}
+    .btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+    button{border:none;background:linear-gradient(90deg,var(--pri),var(--pri2));color:#06231d;font-weight:700;padding:10px 14px;border-radius:10px;cursor:pointer}
+    button.alt{background:#1e293b;color:#e2e8f0;border:1px solid #334155}
+    pre{margin:0;min-height:300px;white-space:pre;overflow:auto;border-radius:10px;border:1px solid #223248;background:#070f1d;padding:12px;color:#bae6fd}
+    .error{margin-top:8px;color:var(--err);font-size:.92rem;min-height:1.2em}
+    .tiny{font-size:.85rem;color:var(--muted);margin-top:8px}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <section class="hero">
+      <h1>JSON → TypeScript Interface Generator</h1>
+      <p>Paste JSON and generate strongly typed interfaces with nested type inference.</p>
+    </section>
+
+    <div class="grid">
+      <section class="card">
+        <div class="row">
+          <div>
+            <label for="rootName">Root interface name</label>
+            <input id="rootName" type="text" value="Root" />
+          </div>
+          <label><input id="useReadonly" type="checkbox" /> readonly fields</label>
+          <label><input id="useSemi" type="checkbox" checked /> semicolons</label>
+        </div>
+        <textarea id="jsonInput" spellcheck="false">{
+  "id": 101,
+  "name": "Miss Kim",
+  "active": true,
+  "tags": ["tool", "web"],
+  "profile": {
+    "age": 29,
+    "links": [{ "label": "site", "url": "https://tools.eastsea.xyz" }]
+  }
+}</textarea>
+        <div class="btns">
+          <button id="genBtn">Generate</button>
+          <button id="sampleBtn" class="alt" type="button">Load Complex Sample</button>
+          <button id="copyBtn" class="alt" type="button">Copy Output</button>
+        </div>
+        <div id="err" class="error"></div>
+      </section>
+
+      <section class="card">
+        <pre id="output">// Generated TypeScript will appear here</pre>
+        <div class="tiny">Tip: Arrays are inferred from all elements, and null becomes union type (e.g., string | null).</div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    const $ = id => document.getElementById(id);
+
+    function infer(value, ctx, hint = 'Item') {
+      if (value === null) return 'null';
+      if (Array.isArray(value)) {
+        if (!value.length) return 'unknown[]';
+        const merged = mergeTypes(value.map(v => infer(v, ctx, singular(hint))));
+        return `(${merged})[]`;
+      }
+      const t = typeof value;
+      if (t === 'string' || t === 'number' || t === 'boolean') return t;
+      if (t === 'object') {
+        const name = pascalCase(hint);
+        const finalName = uniqueName(name, ctx);
+        const fields = Object.entries(value).map(([k, v]) => ({ key: k, type: infer(v, ctx, k) }));
+        ctx.interfaces.push({ name: finalName, fields });
+        return finalName;
+      }
+      return 'unknown';
+    }
+
+    function mergeTypes(list) {
+      const flat = list.flatMap(t => t.replace(/[()]/g, '').split('|').map(s => s.trim())).filter(Boolean);
+      return [...new Set(flat)].join(' | ');
+    }
+
+    function uniqueName(base, ctx) {
+      let name = base;
+      let i = 2;
+      while (ctx.used.has(name)) name = `${base}${i++}`;
+      ctx.used.add(name);
+      return name;
+    }
+
+    function pascalCase(str='Type') {
+      return (str || 'Type')
+        .replace(/[^a-zA-Z0-9]+/g, ' ')
+        .trim()
+        .split(' ')
+        .filter(Boolean)
+        .map(w => w[0].toUpperCase() + w.slice(1))
+        .join('') || 'Type';
+    }
+
+    function singular(str='Items') {
+      return str.endsWith('s') ? str.slice(0, -1) : str;
+    }
+
+    function renderTS(interfaces, rootType, options) {
+      const semi = options.semi ? ';' : '';
+      const ro = options.readonly ? 'readonly ' : '';
+      const lines = [];
+
+      for (let i = interfaces.length - 1; i >= 0; i--) {
+        const inf = interfaces[i];
+        if (!inf.fields) continue;
+        lines.push(`export interface ${inf.name} {`);
+        for (const f of inf.fields) {
+          const optional = f.type.includes('null') ? '?' : '';
+          lines.push(`  ${ro}${safeKey(f.key)}${optional}: ${f.type}${semi}`);
+        }
+        lines.push('}\n');
+      }
+
+      if (!interfaces.some(i => i.name === 'Root')) {
+        lines.push(`export type Root = ${rootType}${semi}`);
+      }
+      return lines.join('\n').trim();
+    }
+
+    function safeKey(key) {
+      return /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key) ? key : JSON.stringify(key);
+    }
+
+    function generate() {
+      const err = $('err');
+      err.textContent = '';
+      try {
+        const obj = JSON.parse($('jsonInput').value);
+        const root = pascalCase($('rootName').value || 'Root');
+        const ctx = { interfaces: [], used: new Set([root]) };
+
+        let rootType;
+        if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+          const fields = Object.entries(obj).map(([k, v]) => ({ key: k, type: infer(v, ctx, k) }));
+          ctx.interfaces.push({ name: root, fields });
+          rootType = root;
+        } else {
+          rootType = infer(obj, ctx, root);
+          ctx.interfaces.push({ name: root, fields: [{ key: 'value', type: rootType }] });
+          rootType = root;
+        }
+
+        $('output').textContent = renderTS(ctx.interfaces, rootType, {
+          readonly: $('useReadonly').checked,
+          semi: $('useSemi').checked
+        });
+      } catch (e) {
+        err.textContent = `Invalid JSON: ${e.message}`;
+      }
+    }
+
+    $('genBtn').addEventListener('click', generate);
+    $('jsonInput').addEventListener('input', () => { if ($('jsonInput').value.length < 12000) generate(); });
+    $('rootName').addEventListener('input', generate);
+    $('useReadonly').addEventListener('change', generate);
+    $('useSemi').addEventListener('change', generate);
+
+    $('sampleBtn').addEventListener('click', () => {
+      $('jsonInput').value = `{
+  "status": "ok",
+  "timestamp": 1741000200,
+  "users": [
+    { "id": 1, "name": "A", "roles": ["admin"], "meta": null },
+    { "id": 2, "name": "B", "roles": ["editor", "viewer"], "meta": {"country": "KR"} }
+  ],
+  "pagination": { "page": 1, "hasNext": false }
+}`;
+      generate();
+    });
+
+    $('copyBtn').addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText($('output').textContent);
+        $('copyBtn').textContent = 'Copied!';
+        setTimeout(() => $('copyBtn').textContent = 'Copy Output', 1200);
+      } catch {
+        alert('Clipboard unavailable.');
+      }
+    });
+
+    generate();
+  </script>
+</body>
+</html>

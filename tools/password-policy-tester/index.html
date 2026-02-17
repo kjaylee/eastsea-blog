@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Password Policy Tester | tools.eastsea.xyz</title>
+  <style>
+    :root{--bg:#0b1324;--panel:#101b33;--line:#24344f;--txt:#e6edf7;--muted:#9aa9c4;--good:#22c55e;--warn:#f59e0b;--bad:#ef4444;--pri:#60a5fa}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:var(--txt);background:radial-gradient(circle at 5% 0%,#1f3a66,var(--bg) 38%);padding:16px}
+    .app{max-width:900px;margin:auto}
+    .hero,.card{background:var(--panel);border:1px solid var(--line);border-radius:16px}
+    .hero{padding:20px;margin-bottom:12px;background:linear-gradient(140deg,rgba(96,165,250,.2),rgba(34,197,94,.11))}
+    h1{margin:0 0 8px;font-size:clamp(1.35rem,2.7vw,1.9rem)}
+    p{margin:0;color:var(--muted)}
+    .grid{display:grid;grid-template-columns:1.2fr .8fr;gap:12px}
+    @media (max-width:860px){.grid{grid-template-columns:1fr}}
+    .card{padding:14px}
+    input[type="text"],input[type="number"]{width:100%;padding:11px;border-radius:10px;border:1px solid #344760;background:#0b1428;color:var(--txt);font:inherit}
+    .opts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+    @media (max-width:600px){.opts{grid-template-columns:1fr}}
+    label{display:flex;align-items:center;gap:8px;color:#d0dbec;font-size:.93rem}
+    .meter{height:12px;background:#0a1220;border-radius:999px;border:1px solid #263751;overflow:hidden;margin:12px 0}
+    .meter>div{height:100%;width:0;background:var(--bad);transition:.25s}
+    .score{font-weight:700}
+    ul{list-style:none;padding:0;margin:8px 0 0}
+    li{padding:7px 9px;border-radius:9px;margin-bottom:6px;background:#0b1527;border:1px solid #223247;font-size:.9rem}
+    li.pass{border-color:rgba(34,197,94,.4);color:#86efac}
+    li.fail{border-color:rgba(239,68,68,.35);color:#fecaca}
+    .muted{color:var(--muted);font-size:.88rem}
+    .btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+    button{border:none;border-radius:10px;padding:10px 14px;background:var(--pri);color:#07121f;font-weight:700;cursor:pointer}
+    button.alt{background:#1f2f47;color:var(--txt);border:1px solid #334a66}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <section class="hero">
+      <h1>Password Policy Tester</h1>
+      <p>Validate passwords against your custom security policy and get instant pass/fail feedback.</p>
+    </section>
+
+    <div class="grid">
+      <section class="card">
+        <label for="pw">Password to test</label>
+        <input id="pw" type="text" autocomplete="off" value="P@ssword123!" />
+
+        <div class="opts">
+          <label>Min length <input id="minLen" type="number" min="4" max="64" value="12" /></label>
+          <label><input id="requireUpper" type="checkbox" checked /> Require uppercase</label>
+          <label><input id="requireLower" type="checkbox" checked /> Require lowercase</label>
+          <label><input id="requireNum" type="checkbox" checked /> Require number</label>
+          <label><input id="requireSymbol" type="checkbox" checked /> Require symbol</label>
+          <label><input id="banCommon" type="checkbox" checked /> Block common passwords</label>
+          <label><input id="banUserData" type="checkbox" checked /> Block user keyword</label>
+          <input id="userKeyword" type="text" placeholder="keyword (name/email)" value="misskim" />
+        </div>
+
+        <div class="btns">
+          <button id="evalBtn">Evaluate</button>
+          <button id="genBtn" class="alt" type="button">Generate Strong Password</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="score" id="scoreText">Score: 0/100</div>
+        <div class="meter"><div id="bar"></div></div>
+        <div id="grade" class="muted">Waiting for input...</div>
+        <ul id="results"></ul>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    const common = new Set(['password','123456','qwerty','admin','letmein','welcome','111111','abc123','p@ssword']);
+
+    function testPassword() {
+      const pw = $('pw').value;
+      const minLen = Number($('minLen').value) || 12;
+      const checks = [];
+
+      const add = (name, pass, weight=15) => checks.push({ name, pass, weight });
+
+      add(`Length ≥ ${minLen}`, pw.length >= minLen, 25);
+      if ($('requireUpper').checked) add('Contains uppercase letter', /[A-Z]/.test(pw));
+      if ($('requireLower').checked) add('Contains lowercase letter', /[a-z]/.test(pw));
+      if ($('requireNum').checked) add('Contains number', /\d/.test(pw));
+      if ($('requireSymbol').checked) add('Contains symbol', /[^A-Za-z0-9]/.test(pw));
+      if ($('banCommon').checked) add('Not a common password', !common.has(pw.toLowerCase()), 20);
+      if ($('banUserData').checked) {
+        const kw = $('userKeyword').value.trim().toLowerCase();
+        add('Does not include user keyword', !kw || !pw.toLowerCase().includes(kw), 15);
+      }
+      add('No long repeated chars (aaa111)', !/(.)\1\1/.test(pw), 10);
+
+      const maxScore = checks.reduce((a, c) => a + c.weight, 0);
+      const score = checks.filter(c => c.pass).reduce((a, c) => a + c.weight, 0);
+      const pct = maxScore ? Math.round(score * 100 / maxScore) : 0;
+
+      $('scoreText').textContent = `Score: ${pct}/100`;
+      $('bar').style.width = pct + '%';
+      $('bar').style.background = pct >= 85 ? 'var(--good)' : pct >= 60 ? 'var(--warn)' : 'var(--bad)';
+      $('grade').textContent = pct >= 85 ? 'Strong ✅' : pct >= 60 ? 'Moderate ⚠️ (consider improvements)' : 'Weak ❌ (fails policy)';
+
+      const ul = $('results');
+      ul.innerHTML = '';
+      checks.forEach(c => {
+        const li = document.createElement('li');
+        li.className = c.pass ? 'pass' : 'fail';
+        li.textContent = `${c.pass ? '✓' : '✗'} ${c.name}`;
+        ul.appendChild(li);
+      });
+    }
+
+    function generateStrong() {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*()-_=+[]{}';
+      const len = Math.max(12, Number($('minLen').value) || 12);
+      let pw = '';
+      while (pw.length < len) pw += chars[Math.floor(Math.random() * chars.length)];
+      if (!/[A-Z]/.test(pw)) pw = 'A' + pw.slice(1);
+      if (!/[a-z]/.test(pw)) pw = pw.slice(0,1) + 'b' + pw.slice(2);
+      if (!/\d/.test(pw)) pw = pw.slice(0,2) + '7' + pw.slice(3);
+      if (!/[^A-Za-z0-9]/.test(pw)) pw = pw.slice(0,3) + '!' + pw.slice(4);
+      $('pw').value = pw;
+      testPassword();
+    }
+
+    ['pw','minLen','requireUpper','requireLower','requireNum','requireSymbol','banCommon','banUserData','userKeyword']
+      .forEach(id => $(id).addEventListener('input', testPassword));
+    $('evalBtn').addEventListener('click', testPassword);
+    $('genBtn').addEventListener('click', generateStrong);
+
+    testPassword();
+  </script>
+</body>
+</html>

@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CSV to JSON Converter | tools.eastsea.xyz</title>
+  <style>
+    :root{--bg:#07111f;--panel:#0e1a2d;--line:#22344b;--txt:#e2e8f0;--muted:#94a3b8;--pri:#38bdf8;--pri2:#a78bfa;--ok:#22c55e;--err:#f87171}
+    *{box-sizing:border-box}
+    body{margin:0;background:radial-gradient(circle at 80% 0%,#173057,var(--bg) 45%);color:var(--txt);font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:16px}
+    .app{max-width:1100px;margin:auto}
+    .hero,.card{background:var(--panel);border:1px solid var(--line);border-radius:16px}
+    .hero{padding:20px;margin-bottom:12px;background:linear-gradient(120deg,rgba(56,189,248,.2),rgba(167,139,250,.15))}
+    h1{margin:0 0 8px;font-size:clamp(1.3rem,2.8vw,1.9rem)}
+    .hero p{margin:0;color:var(--muted)}
+    .layout{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    @media (max-width:900px){.layout{grid-template-columns:1fr}}
+    .card{padding:14px}
+    textarea,pre,select,input{width:100%;background:#091426;border:1px solid #2b3f59;color:var(--txt);border-radius:10px;padding:10px;font:inherit}
+    textarea{min-height:280px;resize:vertical}
+    pre{min-height:280px;margin:0;overflow:auto;white-space:pre-wrap;word-break:break-word;color:#d1fae5}
+    .controls{display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;margin-bottom:8px}
+    @media (max-width:680px){.controls{grid-template-columns:1fr}}
+    .btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+    button{border:none;border-radius:10px;padding:10px 14px;cursor:pointer;font-weight:700;background:linear-gradient(90deg,var(--pri),var(--pri2));color:#06121f}
+    button.alt{background:#1e293b;color:#e2e8f0;border:1px solid #334155}
+    .meta{display:flex;gap:12px;flex-wrap:wrap;color:var(--muted);font-size:.9rem;margin-top:8px}
+    .error{color:var(--err);font-size:.9rem;min-height:1.2em;margin-top:8px}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <section class="hero">
+      <h1>CSV → JSON Converter</h1>
+      <p>Convert CSV with quoted values, custom delimiters, and optional header row.</p>
+    </section>
+
+    <div class="layout">
+      <section class="card">
+        <div class="controls">
+          <select id="delimiter">
+            <option value="auto">Delimiter: Auto detect</option>
+            <option value=",">Comma (,)</option>
+            <option value=";">Semicolon (;)</option>
+            <option value="\t">Tab (\t)</option>
+            <option value="|">Pipe (|)</option>
+          </select>
+          <label><input id="header" type="checkbox" checked /> Header row</label>
+          <label><input id="trim" type="checkbox" checked /> Trim cells</label>
+        </div>
+
+        <textarea id="csvInput" spellcheck="false">name,email,score,active
+Alice,alice@example.com,92,true
+"Bob, K",bob@example.com,88,false</textarea>
+
+        <div class="btns">
+          <button id="convertBtn">Convert</button>
+          <button id="sampleBtn" type="button" class="alt">Load Sample</button>
+          <button id="clearBtn" type="button" class="alt">Clear</button>
+        </div>
+        <div id="error" class="error"></div>
+      </section>
+
+      <section class="card">
+        <pre id="jsonOut">[]</pre>
+        <div class="btns">
+          <button id="copyPretty" type="button" class="alt">Copy Pretty JSON</button>
+          <button id="copyMin" type="button" class="alt">Copy Minified</button>
+        </div>
+        <div class="meta">
+          <span id="rows">Rows: 0</span>
+          <span id="cols">Columns: 0</span>
+          <span id="usedDelimiter">Delimiter: -</span>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    const $ = id => document.getElementById(id);
+
+    function detectDelimiter(text) {
+      const firstLine = (text.split(/\r?\n/).find(Boolean) || '');
+      const candidates = [',', ';', '\t', '|'];
+      let best = ',';
+      let score = -1;
+      for (const d of candidates) {
+        const c = firstLine.split(d).length;
+        if (c > score) { score = c; best = d; }
+      }
+      return best;
+    }
+
+    function parseCSV(text, delimiter) {
+      const rows = [];
+      let row = [];
+      let cur = '';
+      let inQuotes = false;
+
+      for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        const next = text[i + 1];
+
+        if (ch === '"') {
+          if (inQuotes && next === '"') { cur += '"'; i++; }
+          else inQuotes = !inQuotes;
+        } else if (ch === delimiter && !inQuotes) {
+          row.push(cur); cur = '';
+        } else if ((ch === '\n' || ch === '\r') && !inQuotes) {
+          if (ch === '\r' && next === '\n') i++;
+          row.push(cur);
+          if (row.some(cell => cell.length > 0)) rows.push(row);
+          row = []; cur = '';
+        } else {
+          cur += ch;
+        }
+      }
+
+      if (cur.length || row.length) {
+        row.push(cur);
+        if (row.some(cell => cell.length > 0)) rows.push(row);
+      }
+      return rows;
+    }
+
+    function maybeCast(v) {
+      if (v === '') return '';
+      if (/^(true|false)$/i.test(v)) return v.toLowerCase() === 'true';
+      if (/^-?\d+(\.\d+)?$/.test(v)) return Number(v);
+      return v;
+    }
+
+    function convert() {
+      const error = $('error');
+      error.textContent = '';
+      try {
+        const text = $('csvInput').value;
+        const delimiter = $('delimiter').value === 'auto' ? detectDelimiter(text) : $('delimiter').value.replace('\\t', '\t');
+        const rows = parseCSV(text, delimiter);
+        if (!rows.length) {
+          $('jsonOut').textContent = '[]';
+          $('rows').textContent = 'Rows: 0';
+          $('cols').textContent = 'Columns: 0';
+          $('usedDelimiter').textContent = 'Delimiter: -';
+          return;
+        }
+
+        const trim = $('trim').checked;
+        const normalized = rows.map(r => r.map(c => trim ? c.trim() : c));
+        const useHeader = $('header').checked;
+        const out = [];
+
+        if (useHeader) {
+          const headers = normalized[0].map((h, i) => h || `column_${i + 1}`);
+          for (let i = 1; i < normalized.length; i++) {
+            const obj = {};
+            headers.forEach((h, idx) => obj[h] = maybeCast(normalized[i][idx] ?? ''));
+            out.push(obj);
+          }
+          $('cols').textContent = `Columns: ${headers.length}`;
+          $('rows').textContent = `Rows: ${Math.max(normalized.length - 1, 0)}`;
+        } else {
+          normalized.forEach(r => out.push(r.map(maybeCast)));
+          $('cols').textContent = `Columns: ${Math.max(...normalized.map(r => r.length))}`;
+          $('rows').textContent = `Rows: ${normalized.length}`;
+        }
+
+        $('usedDelimiter').textContent = `Delimiter: ${delimiter === '\t' ? 'Tab' : delimiter}`;
+        $('jsonOut').textContent = JSON.stringify(out, null, 2);
+      } catch (e) {
+        error.textContent = `Conversion failed: ${e.message}`;
+      }
+    }
+
+    $('convertBtn').addEventListener('click', convert);
+    $('delimiter').addEventListener('change', convert);
+    $('header').addEventListener('change', convert);
+    $('trim').addEventListener('change', convert);
+
+    $('sampleBtn').addEventListener('click', () => {
+      $('csvInput').value = `product|price|stock|tags\n"Gaming Mouse"|39.9|120|"peripheral,usb"\nKeyboard|89|54|"office,wireless"`;
+      $('delimiter').value = '|';
+      $('header').checked = true;
+      convert();
+    });
+
+    $('clearBtn').addEventListener('click', () => {
+      $('csvInput').value = '';
+      convert();
+    });
+
+    $('copyPretty').addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText($('jsonOut').textContent);
+        $('copyPretty').textContent = 'Copied!';
+        setTimeout(() => $('copyPretty').textContent = 'Copy Pretty JSON', 1200);
+      } catch { alert('Clipboard unavailable'); }
+    });
+
+    $('copyMin').addEventListener('click', async () => {
+      try {
+        const min = JSON.stringify(JSON.parse($('jsonOut').textContent));
+        await navigator.clipboard.writeText(min);
+        $('copyMin').textContent = 'Copied!';
+        setTimeout(() => $('copyMin').textContent = 'Copy Minified', 1200);
+      } catch { alert('Nothing valid to copy.'); }
+    });
+
+    convert();
+  </script>
+</body>
+</html>

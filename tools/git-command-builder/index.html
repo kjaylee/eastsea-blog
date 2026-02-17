@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Git Command Builder | tools.eastsea.xyz</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --card: #111831;
+      --muted: #94a3b8;
+      --text: #e2e8f0;
+      --primary: #7c3aed;
+      --primary2: #06b6d4;
+      --ok: #22c55e;
+      --warn: #f59e0b;
+      --border: #24304d;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: radial-gradient(circle at 20% 0%, #1f2a4f, var(--bg) 45%);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .app { max-width: 980px; margin: 0 auto; }
+    .hero {
+      background: linear-gradient(135deg, rgba(124,58,237,.3), rgba(6,182,212,.18));
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 22px;
+      margin-bottom: 16px;
+      box-shadow: 0 20px 50px rgba(0,0,0,.28);
+    }
+    h1 { margin: 0 0 8px; font-size: clamp(1.4rem, 2.8vw, 2rem); }
+    .sub { color: var(--muted); margin: 0; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0,1fr));
+      gap: 14px;
+    }
+    @media (max-width: 840px) { .grid { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px;
+    }
+    label { display:block; font-size:.9rem; color:#cbd5e1; margin-bottom:6px; }
+    input, select, textarea, button {
+      width:100%;
+      border-radius: 10px;
+      border: 1px solid #334155;
+      background: #0b1227;
+      color: var(--text);
+      padding: 10px 12px;
+      font: inherit;
+    }
+    textarea { min-height: 110px; resize: vertical; }
+    .row { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+    .actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; }
+    button {
+      background: linear-gradient(90deg, var(--primary), var(--primary2));
+      border: none;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button.secondary {
+      background: #1f2a44;
+      border: 1px solid #334155;
+      width: auto;
+      padding-inline: 14px;
+    }
+    pre {
+      margin: 0;
+      background: #070d1f;
+      border: 1px solid #1e293b;
+      border-radius: 12px;
+      padding: 14px;
+      overflow:auto;
+      color: #d1fae5;
+      min-height: 130px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .note { color: var(--muted); font-size: .9rem; margin-top: 10px; }
+    .badge {
+      display:inline-block;
+      margin-top: 8px;
+      padding: 5px 10px;
+      border-radius: 999px;
+      font-size: .8rem;
+      background: rgba(34,197,94,.15);
+      color: #86efac;
+    }
+    .warn { background: rgba(245,158,11,.15); color: #fcd34d; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <section class="hero">
+      <h1>Git Command Builder</h1>
+      <p class="sub">Build ready-to-run Git commands for common workflows without memorizing flags.</p>
+    </section>
+
+    <div class="grid">
+      <section class="card">
+        <label for="task">Task</label>
+        <select id="task"></select>
+
+        <div class="row" style="margin-top:10px;">
+          <div>
+            <label for="branch">Branch</label>
+            <input id="branch" placeholder="feature/my-task" value="feature/new-work" />
+          </div>
+          <div>
+            <label for="base">Base branch</label>
+            <input id="base" placeholder="main" value="main" />
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:10px;">
+          <div>
+            <label for="remote">Remote</label>
+            <input id="remote" value="origin" />
+          </div>
+          <div>
+            <label for="repo">Repo URL (for clone)</label>
+            <input id="repo" placeholder="https://github.com/user/repo.git" />
+          </div>
+        </div>
+
+        <label for="message" style="margin-top:10px;">Commit message / note</label>
+        <input id="message" placeholder="feat: add new component" value="feat: update feature" />
+
+        <label for="files" style="margin-top:10px;">Files pattern</label>
+        <input id="files" value="." placeholder=". or src/**/*.js" />
+
+        <div class="actions">
+          <button id="buildBtn">Generate Command</button>
+          <button class="secondary" id="copyBtn" type="button">Copy</button>
+          <button class="secondary" id="resetBtn" type="button">Reset</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <label>Generated command</label>
+        <pre id="output">Select a task and click "Generate Command".</pre>
+        <span id="safety" class="badge">Safe mode</span>
+        <p id="desc" class="note">Tip: Generated commands are multi-line for readability. You can paste directly into terminal.</p>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    const tasks = {
+      clone: {
+        label: 'Clone a repository',
+        safe: true,
+        desc: 'Clone and enter the project folder.',
+        build: v => `git clone ${v.repo || 'https://github.com/user/repo.git'}\ncd ${repoName(v.repo)}`
+      },
+      startFeature: {
+        label: 'Start feature branch',
+        safe: true,
+        desc: 'Sync base branch and create a new feature branch.',
+        build: v => `git checkout ${v.base}\ngit pull ${v.remote} ${v.base}\ngit checkout -b ${v.branch}`
+      },
+      commit: {
+        label: 'Add + commit + push',
+        safe: true,
+        desc: 'Stage files, create commit, and push current branch.',
+        build: v => `git add ${v.files}\ngit commit -m "${escapeQuote(v.message)}"\ngit push ${v.remote} $(git branch --show-current)`
+      },
+      updateBranch: {
+        label: 'Rebase feature on base',
+        safe: true,
+        desc: 'Rebase your branch on the latest base branch.',
+        build: v => `git fetch ${v.remote}\ngit checkout ${v.base}\ngit pull ${v.remote} ${v.base}\ngit checkout ${v.branch}\ngit rebase ${v.base}`
+      },
+      squashLast: {
+        label: 'Squash last 2 commits',
+        safe: false,
+        desc: 'Interactive rebase to squash recent commits (history rewrite).',
+        build: () => `git rebase -i HEAD~2\n# mark second commit as 'squash' then save`
+      },
+      undoLastKeep: {
+        label: 'Undo last commit (keep changes)',
+        safe: false,
+        desc: 'Moves HEAD back one commit but keeps modified files staged.',
+        build: () => `git reset --soft HEAD~1`
+      },
+      deleteBranch: {
+        label: 'Delete local + remote branch',
+        safe: false,
+        desc: 'Deletes branch locally and remotely. Use with caution.',
+        build: v => `git branch -d ${v.branch}\ngit push ${v.remote} --delete ${v.branch}`
+      },
+      stashFlow: {
+        label: 'Quick stash workflow',
+        safe: true,
+        desc: 'Stash changes with message and re-apply latest stash.',
+        build: v => `git stash push -m "${escapeQuote(v.message || 'WIP stash')}"\n# ... switch branches / pull updates ...\ngit stash pop`
+      },
+      cherryPick: {
+        label: 'Cherry-pick commit',
+        safe: true,
+        desc: 'Apply one commit hash on current branch.',
+        build: v => `git cherry-pick <commit-hash>\n# Optional: git cherry-pick --abort on conflict`
+      }
+    };
+
+    const el = id => document.getElementById(id);
+    const taskEl = el('task');
+    Object.entries(tasks).forEach(([key, t]) => {
+      const opt = document.createElement('option');
+      opt.value = key;
+      opt.textContent = t.label;
+      taskEl.appendChild(opt);
+    });
+
+    taskEl.value = 'startFeature';
+
+    function values() {
+      return {
+        branch: el('branch').value.trim() || 'feature/new-work',
+        base: el('base').value.trim() || 'main',
+        remote: el('remote').value.trim() || 'origin',
+        repo: el('repo').value.trim(),
+        message: el('message').value.trim() || 'chore: update',
+        files: el('files').value.trim() || '.'
+      };
+    }
+
+    function render() {
+      const key = taskEl.value;
+      const task = tasks[key];
+      const cmd = task.build(values());
+      el('output').textContent = cmd;
+      el('desc').textContent = task.desc;
+      const safe = el('safety');
+      safe.textContent = task.safe ? 'Safe mode' : 'Caution: history/destructive command';
+      safe.className = `badge ${task.safe ? '' : 'warn'}`;
+    }
+
+    function repoName(url) {
+      if (!url) return 'repo';
+      const cleaned = url.split('/').pop()?.replace(/\.git$/, '');
+      return cleaned || 'repo';
+    }
+
+    function escapeQuote(str) {
+      return (str || '').replace(/"/g, '\\"');
+    }
+
+    el('buildBtn').addEventListener('click', render);
+    ['branch','base','remote','repo','message','files','task'].forEach(id => el(id).addEventListener('input', render));
+
+    el('copyBtn').addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(el('output').textContent);
+        el('copyBtn').textContent = 'Copied!';
+        setTimeout(() => el('copyBtn').textContent = 'Copy', 1200);
+      } catch {
+        alert('Clipboard access failed. Copy manually.');
+      }
+    });
+
+    el('resetBtn').addEventListener('click', () => {
+      el('branch').value = 'feature/new-work';
+      el('base').value = 'main';
+      el('remote').value = 'origin';
+      el('repo').value = '';
+      el('message').value = 'feat: update feature';
+      el('files').value = '.';
+      taskEl.value = 'startFeature';
+      render();
+    });
+
+    render();
+  </script>
+</body>
+</html>

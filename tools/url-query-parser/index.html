@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>URL Query Parser & Builder | tools.eastsea.xyz</title>
+  <style>
+    :root{--bg:#0a0f1e;--panel:#121a2f;--line:#26324b;--txt:#e2e8f0;--muted:#8fa0bf;--pri:#22d3ee;--pri2:#818cf8}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:radial-gradient(circle at 100% 0%,#1f2d4f,var(--bg) 45%);color:var(--txt);padding:16px}
+    .app{max-width:980px;margin:auto}
+    .hero,.card{background:var(--panel);border:1px solid var(--line);border-radius:16px}
+    .hero{padding:20px;margin-bottom:12px;background:linear-gradient(120deg,rgba(34,211,238,.16),rgba(129,140,248,.18))}
+    h1{margin:0 0 8px;font-size:clamp(1.35rem,2.6vw,1.95rem)}
+    p{margin:0;color:var(--muted)}
+    .card{padding:14px;margin-bottom:12px}
+    input,textarea,button{width:100%;background:#0a1324;border:1px solid #334257;color:var(--txt);border-radius:10px;padding:10px 11px;font:inherit}
+    textarea{min-height:110px;resize:vertical}
+    .btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+    button{cursor:pointer;border:none;background:linear-gradient(90deg,var(--pri),var(--pri2));color:#041323;font-weight:700;width:auto;padding-inline:14px}
+    button.alt{background:#1f2937;color:#e5e7eb;border:1px solid #334155}
+    table{width:100%;border-collapse:collapse;margin-top:10px;font-size:.93rem}
+    th,td{border-bottom:1px solid #223247;padding:8px;text-align:left;vertical-align:top}
+    th{color:#cbd5e1;font-weight:600}
+    .pill{display:inline-block;padding:3px 8px;border-radius:999px;background:#14243e;border:1px solid #2f4568;color:#c0d4f7;font-size:.8rem}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    @media (max-width:860px){.grid{grid-template-columns:1fr}}
+    .small{font-size:.88rem;color:var(--muted)}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <section class="hero">
+      <h1>URL Query Parser & Builder</h1>
+      <p>Parse URL parameters, decode values, edit quickly, and rebuild a clean query string.</p>
+    </section>
+
+    <section class="card">
+      <label for="url">Input URL</label>
+      <input id="url" value="https://tools.eastsea.xyz/search?q=web+tools&lang=en&tag=dev&tag=frontend" />
+      <div class="btns">
+        <button id="parseBtn">Parse URL</button>
+        <button id="clearBtn" class="alt" type="button">Clear</button>
+      </div>
+    </section>
+
+    <div class="grid">
+      <section class="card">
+        <div class="small">Detected parameters <span id="count" class="pill">0</span></div>
+        <table>
+          <thead><tr><th>Key</th><th>Value</th><th>Decoded</th></tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </section>
+
+      <section class="card">
+        <label for="base">Base URL</label>
+        <input id="base" placeholder="https://example.com/path" />
+
+        <label for="pairs" style="margin-top:10px;display:block">Editable key=value pairs (one per line)</label>
+        <textarea id="pairs" spellcheck="false"></textarea>
+
+        <div class="btns">
+          <button id="buildBtn" type="button">Build URL</button>
+          <button id="copyBtn" class="alt" type="button">Copy</button>
+          <button id="copyJsonBtn" class="alt" type="button">Copy JSON</button>
+        </div>
+
+        <label for="output" style="margin-top:10px;display:block">Rebuilt URL</label>
+        <textarea id="output" readonly></textarea>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    const $ = id => document.getElementById(id);
+
+    function parseUrl() {
+      const raw = $('url').value.trim();
+      if (!raw) return reset();
+      let u;
+      try { u = new URL(raw); }
+      catch {
+        alert('Please enter a valid absolute URL (including http/https).');
+        return;
+      }
+
+      $('base').value = `${u.origin}${u.pathname}`;
+      const entries = [...u.searchParams.entries()];
+      $('count').textContent = String(entries.length);
+
+      const tbody = $('tbody');
+      tbody.innerHTML = '';
+
+      const lines = [];
+      entries.forEach(([k, v]) => {
+        lines.push(`${k}=${v}`);
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${escapeHtml(k)}</td><td>${escapeHtml(v)}</td><td>${escapeHtml(safeDecode(v))}</td>`;
+        tbody.appendChild(tr);
+      });
+
+      $('pairs').value = lines.join('\n');
+      buildUrl();
+    }
+
+    function buildUrl() {
+      const base = $('base').value.trim();
+      if (!base) {
+        $('output').value = '';
+        return;
+      }
+
+      let u;
+      try { u = new URL(base); }
+      catch {
+        $('output').value = 'Invalid base URL';
+        return;
+      }
+
+      const lines = $('pairs').value.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      lines.forEach(line => {
+        const idx = line.indexOf('=');
+        if (idx === -1) {
+          u.searchParams.append(line, '');
+        } else {
+          const key = line.slice(0, idx).trim();
+          const val = line.slice(idx + 1);
+          if (key) u.searchParams.append(key, val);
+        }
+      });
+
+      $('output').value = u.toString();
+    }
+
+    function safeDecode(v) {
+      try { return decodeURIComponent(v.replace(/\+/g, ' ')); }
+      catch { return v; }
+    }
+
+    function escapeHtml(s='') {
+      return s
+        .replaceAll('&','&amp;')
+        .replaceAll('<','&lt;')
+        .replaceAll('>','&gt;')
+        .replaceAll('"','&quot;');
+    }
+
+    function reset() {
+      $('base').value = '';
+      $('pairs').value = '';
+      $('output').value = '';
+      $('tbody').innerHTML = '';
+      $('count').textContent = '0';
+    }
+
+    $('parseBtn').addEventListener('click', parseUrl);
+    $('buildBtn').addEventListener('click', buildUrl);
+    $('pairs').addEventListener('input', buildUrl);
+    $('base').addEventListener('input', buildUrl);
+
+    $('copyBtn').addEventListener('click', async () => {
+      if (!$('output').value) return;
+      try {
+        await navigator.clipboard.writeText($('output').value);
+        $('copyBtn').textContent = 'Copied!';
+        setTimeout(() => $('copyBtn').textContent = 'Copy', 1200);
+      } catch { alert('Clipboard unavailable'); }
+    });
+
+    $('copyJsonBtn').addEventListener('click', async () => {
+      const json = {};
+      $('pairs').value.split(/\r?\n/).map(l => l.trim()).filter(Boolean).forEach(line => {
+        const i = line.indexOf('=');
+        const k = i === -1 ? line : line.slice(0, i).trim();
+        const v = i === -1 ? '' : line.slice(i + 1);
+        if (!k) return;
+        if (json[k] === undefined) json[k] = v;
+        else if (Array.isArray(json[k])) json[k].push(v);
+        else json[k] = [json[k], v];
+      });
+      try {
+        await navigator.clipboard.writeText(JSON.stringify(json, null, 2));
+        $('copyJsonBtn').textContent = 'Copied!';
+        setTimeout(() => $('copyJsonBtn').textContent = 'Copy JSON', 1200);
+      } catch { alert('Clipboard unavailable'); }
+    });
+
+    $('clearBtn').addEventListener('click', () => {
+      $('url').value = '';
+      reset();
+    });
+
+    parseUrl();
+  </script>
+</body>
+</html>

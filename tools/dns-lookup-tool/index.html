@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DNS Lookup Tool</title>
+  <style>
+    :root {
+      --bg: #0b1120;
+      --panel: #121a2e;
+      --text: #edf2ff;
+      --muted: #9aacd9;
+      --border: #2f3f68;
+      --accent: #76a7ff;
+      --bad: #ff8fa4;
+      --ok: #3fdaa2;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Inter, -apple-system, Segoe UI, Roboto, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(800px 520px at 100% -10%, #223b8b 0%, transparent 60%),
+        radial-gradient(900px 540px at -10% 100%, #0a5368 0%, transparent 60%),
+        var(--bg);
+      padding: 18px;
+    }
+    .app {
+      width: min(980px, 100%);
+      margin: 0 auto;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,.02);
+      border-radius: 18px;
+      padding: 16px;
+      box-shadow: 0 20px 42px rgba(0,0,0,.34);
+    }
+    h1 { margin: 4px 0; font-size: clamp(1.2rem,2.3vw,1.8rem); }
+    .sub { margin: 6px 0 14px; color: var(--muted); }
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 130px 130px auto;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    input, select, button {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--panel);
+      color: var(--text);
+      padding: 10px 12px;
+      font: inherit;
+    }
+    button { cursor: pointer; }
+    button.primary { background: linear-gradient(90deg, #6f88ff, #59b6ff); border: none; }
+    button:hover { filter: brightness(1.08); }
+    .meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--muted);
+      font-size: .9rem;
+      margin: 6px 0 10px;
+      flex-wrap: wrap;
+    }
+    .table-wrap {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: auto;
+      background: #0c1326;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 640px;
+    }
+    th, td {
+      border-bottom: 1px solid #25345c;
+      text-align: left;
+      padding: 10px;
+      font-size: .92rem;
+      vertical-align: top;
+    }
+    th { color: #c6d7ff; font-weight: 600; background: #111b35; }
+    .status { min-height: 22px; margin-top: 10px; color: var(--muted); }
+    .status.ok { color: var(--ok); }
+    .status.err { color: var(--bad); }
+    @media (max-width: 860px) {
+      .controls { grid-template-columns: 1fr 1fr; }
+      .controls button { grid-column: 1 / -1; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>DNS Lookup Tool</h1>
+    <p class="sub">Client-side DNS queries via DNS-over-HTTPS (Cloudflare). Useful for quick troubleshooting.</p>
+
+    <div class="controls">
+      <input id="domain" value="example.com" placeholder="Domain (example.com)" />
+      <select id="type">
+        <option>A</option><option>AAAA</option><option>CNAME</option><option>MX</option><option>TXT</option><option>NS</option><option>SOA</option><option>CAA</option>
+      </select>
+      <select id="dnssec">
+        <option value="0">DNSSEC Off</option>
+        <option value="1">DNSSEC On</option>
+      </select>
+      <button id="lookup" class="primary">Lookup</button>
+    </div>
+
+    <div class="meta">
+      <span id="metaLeft">Ready.</span>
+      <span id="metaRight"></span>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>#</th><th>Name</th><th>Type</th><th>TTL</th><th>Data</th></tr>
+        </thead>
+        <tbody id="tbody">
+          <tr><td colspan="5" style="color:var(--muted)">No records yet.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p id="status" class="status"></p>
+  </main>
+
+  <script>
+    const typeMap = {1:'A',2:'NS',5:'CNAME',6:'SOA',15:'MX',16:'TXT',28:'AAAA',257:'CAA'};
+    const domainEl = document.getElementById('domain');
+    const typeEl = document.getElementById('type');
+    const dnssecEl = document.getElementById('dnssec');
+    const bodyEl = document.getElementById('tbody');
+    const statusEl = document.getElementById('status');
+    const metaLeft = document.getElementById('metaLeft');
+    const metaRight = document.getElementById('metaRight');
+
+    function status(msg, kind='') {
+      statusEl.textContent = msg;
+      statusEl.className = `status ${kind}`.trim();
+    }
+
+    function renderRows(records = []) {
+      if (!records.length) {
+        bodyEl.innerHTML = '<tr><td colspan="5" style="color:var(--muted)">No answers found.</td></tr>';
+        return;
+      }
+      bodyEl.innerHTML = records.map((r, i) => `
+        <tr>
+          <td>${i+1}</td>
+          <td>${r.name || '-'}</td>
+          <td>${typeMap[r.type] || r.type}</td>
+          <td>${r.TTL ?? '-'}</td>
+          <td style="word-break:break-all">${String(r.data ?? '-')}</td>
+        </tr>
+      `).join('');
+    }
+
+    async function lookup() {
+      const domain = domainEl.value.trim();
+      const type = typeEl.value;
+      const dnssec = dnssecEl.value;
+      if (!domain) {
+        status('Please enter a domain.', 'err');
+        return;
+      }
+
+      const url = `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=${encodeURIComponent(type)}&do=${dnssec}`;
+      metaLeft.textContent = `Querying ${domain} (${type})...`;
+      metaRight.textContent = '';
+      status('Fetching DNS response...');
+      bodyEl.innerHTML = '<tr><td colspan="5" style="color:var(--muted)">Loading...</td></tr>';
+
+      try {
+        const start = performance.now();
+        const res = await fetch(url, { headers: { accept: 'application/dns-json' } });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        const ms = Math.round(performance.now() - start);
+
+        renderRows(data.Answer || []);
+        metaLeft.textContent = `Status: ${data.Status} • AD: ${data.AD ? 'yes' : 'no'} • CD: ${data.CD ? 'yes' : 'no'}`;
+        metaRight.textContent = `${ms} ms`;
+        status(`Lookup complete: ${(data.Answer || []).length} answer(s).`, 'ok');
+      } catch (err) {
+        renderRows([]);
+        metaLeft.textContent = 'Lookup failed';
+        metaRight.textContent = '';
+        status(`Error: ${err.message}`, 'err');
+      }
+    }
+
+    document.getElementById('lookup').addEventListener('click', lookup);
+    domainEl.addEventListener('keydown', e => { if (e.key === 'Enter') lookup(); });
+    typeEl.addEventListener('change', lookup);
+  </script>
+</body>
+</html>

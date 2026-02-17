@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>블로그 포스트 최적화기 - Blog Post Optimizer</title>
+<meta name="description" content="Markdown 블로그 글의 제목/메타/헤딩/이미지 alt/내부링크/가독성/키워드 배치를 점검해 SEO 품질 점수를 제공합니다." />
+<style>
+:root{
+  --bg:#070f1d;
+  --card:#111c32;
+  --card2:#0b1528;
+  --line:#274268;
+  --text:#e8efff;
+  --muted:#a5b8da;
+  --accent:#4fa8ff;
+  --ok:#34d399;
+  --warn:#f59e0b;
+  --bad:#f87171;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Noto Sans KR',sans-serif;background:radial-gradient(930px 680px at 90% -10%,#28456f 0%,var(--bg) 50%) fixed;color:var(--text);padding:18px}
+.container{max-width:1180px;margin:0 auto}
+h1{margin:0 0 6px;font-size:clamp(1.4rem,3vw,2rem)}
+.sub{margin:0 0 16px;color:var(--muted)}
+.card{background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--line);border-radius:16px;padding:14px;box-shadow:0 8px 24px rgba(0,0,0,.24)}
+.grid{display:grid;gap:14px}
+.grid-2{grid-template-columns:1fr 1fr}
+label{display:block;color:var(--muted);font-size:.88rem;margin-bottom:6px}
+input,textarea,button{font:inherit}
+input,textarea{width:100%;border:1px solid var(--line);border-radius:10px;background:#0a1223;color:var(--text);padding:10px 12px}
+textarea{min-height:230px;resize:vertical}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.btn{padding:9px 12px;border-radius:10px;border:1px solid #2f5183;background:#182b4b;color:#e5f0ff;cursor:pointer}
+.btn.primary{border:0;background:linear-gradient(135deg,#1b70d8,#4ba8ff);font-weight:700;color:#fff}
+.btn:hover{filter:brightness(1.07)}
+.score-wrap{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.score{width:120px;height:120px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(#4db1ff 0deg,#4db1ff 0deg,#1b2b46 0deg);border:1px solid var(--line)}
+.score .inner{width:88px;height:88px;border-radius:50%;background:#091225;display:grid;place-items:center;text-align:center}
+.score .num{font-size:1.4rem;font-weight:800}
+.grade{font-size:1.8rem;font-weight:800}
+.metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.metric{padding:10px;border:1px solid var(--line);border-radius:10px;background:#0a1326}
+.metric b{display:block;margin-bottom:4px}
+.metric.ok{border-color:#1f6655;background:#0b2a22}
+.metric.warn{border-color:#7b5820;background:#2b220f}
+.metric.bad{border-color:#7e3333;background:#2d1515}
+ul{margin:0;padding-left:18px;line-height:1.65}
+@media(max-width:900px){.grid-2{grid-template-columns:1fr}.metrics{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🧠 블로그 포스트 최적화기</h1>
+  <p class="sub">Markdown 원문을 넣으면 SEO + 가독성 기준으로 0~100 점수와 개선 제안을 제공합니다.</p>
+
+  <div class="card">
+    <div class="grid grid-2">
+      <div>
+        <label for="keyword">타깃 키워드</label>
+        <input id="keyword" placeholder="예: 웹 게임 수익화" />
+      </div>
+      <div>
+        <label for="domain">내부 링크 도메인</label>
+        <input id="domain" value="eastsea.monster" />
+      </div>
+    </div>
+
+    <label for="md" style="margin-top:8px">블로그 Markdown</label>
+    <textarea id="md" placeholder="---\ntitle: ...\ndescription: ...\n---\n\n# Heading...\n"></textarea>
+
+    <div class="row" style="margin-top:10px">
+      <button id="analyzeBtn" class="btn primary">최적화 점검</button>
+      <button id="sampleBtn" class="btn">샘플</button>
+      <button id="clearBtn" class="btn">지우기</button>
+    </div>
+  </div>
+
+  <div class="grid grid-2" style="margin-top:14px">
+    <div class="card">
+      <h2 style="margin:0 0 10px;font-size:1.1rem">점수 카드</h2>
+      <div class="score-wrap">
+        <div id="scoreCircle" class="score"><div class="inner"><div class="num" id="scoreNum">0</div><small>/100</small></div></div>
+        <div>
+          <div class="grade" id="grade">F</div>
+          <div id="summary" style="color:var(--muted)">아직 분석 전입니다.</div>
+        </div>
+      </div>
+      <div id="metrics" class="metrics" style="margin-top:12px"></div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin:0 0 10px;font-size:1.1rem">💡 개선 제안</h2>
+      <ul id="suggestions"></ul>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = (s) => document.querySelector(s);
+  const dom = {
+    keyword: $('#keyword'), domain: $('#domain'), md: $('#md'),
+    analyzeBtn: $('#analyzeBtn'), sampleBtn: $('#sampleBtn'), clearBtn: $('#clearBtn'),
+    scoreCircle: $('#scoreCircle'), scoreNum: $('#scoreNum'), grade: $('#grade'), summary: $('#summary'),
+    metrics: $('#metrics'), suggestions: $('#suggestions')
+  };
+
+  function parseFrontMatter(md){
+    const fm = { title:'', description:'' };
+    const m = md.match(/^---\n([\s\S]*?)\n---/);
+    if(!m) return fm;
+    const block = m[1];
+    block.split('\n').forEach(line => {
+      const idx = line.indexOf(':');
+      if(idx > -1){
+        const k = line.slice(0,idx).trim().toLowerCase();
+        const v = line.slice(idx+1).trim().replace(/^['"]|['"]$/g,'');
+        if(k === 'title') fm.title = v;
+        if(k === 'description' || k === 'meta_description' || k === 'seo_description') fm.description = v;
+      }
+    });
+    return fm;
+  }
+
+  function firstH1(md){
+    const m = md.match(/^#\s+(.+)$/m);
+    return m ? m[1].trim() : '';
+  }
+
+  function headingInfo(md){
+    const arr = [];
+    const re = /^(#{1,6})\s+(.+)$/gm;
+    let m;
+    while((m = re.exec(md))){
+      arr.push({ level: m[1].length, text: m[2].trim() });
+    }
+    if(!arr.length) return {ok:false, detail:'헤딩이 없습니다.'};
+
+    if(arr[0].level !== 1) return {ok:false, detail:'첫 헤딩이 H1이 아닙니다.'};
+
+    for(let i=1;i<arr.length;i++){
+      if(arr[i].level - arr[i-1].level > 1){
+        return {ok:false, detail:`헤딩 레벨 점프가 있습니다 (H${arr[i-1].level}→H${arr[i].level}).`};
+      }
+    }
+    return {ok:true, detail:`헤딩 ${arr.length}개, 구조 정상`};
+  }
+
+  function extractImages(md){
+    const list = [];
+    const re = /!\[([^\]]*)\]\(([^)]+)\)/g;
+    let m;
+    while((m = re.exec(md))){
+      list.push({ alt: m[1].trim(), src: m[2].trim() });
+    }
+    return list;
+  }
+
+  function extractLinks(md){
+    const list = [];
+    const re = /\[([^\]]+)\]\(([^)]+)\)/g;
+    let m;
+    while((m = re.exec(md))){
+      const idx = m.index;
+      if(idx > 0 && md[idx-1] === '!') continue;
+      list.push({ text: m[1], href: m[2] });
+    }
+    return list;
+  }
+
+  function plainText(md){
+    return md
+      .replace(/```[\s\S]*?```/g,' ')
+      .replace(/`[^`]*`/g,' ')
+      .replace(/!\[[^\]]*\]\([^)]+\)/g,' ')
+      .replace(/\[([^\]]+)\]\([^)]+\)/g,'$1')
+      .replace(/^#{1,6}\s+/gm,'')
+      .replace(/[>*_~\-]/g,' ')
+      .replace(/\s+/g,' ')
+      .trim();
+  }
+
+  function countSyllablesEn(word){
+    let w = word.toLowerCase().replace(/[^a-z]/g,'');
+    if(!w) return 0;
+    if(w.length <= 3) return 1;
+    const m = w.match(/[aeiouy]+/g);
+    let s = m ? m.length : 1;
+    if(w.endsWith('e')) s--;
+    return Math.max(1,s);
+  }
+
+  function readabilityScore(text){
+    const words = text.match(/[a-zA-Z]+|[가-힣]+/g) || [];
+    const sentences = text.split(/[.!?]+|\n+/).filter(s => s.trim().length > 0);
+    if(words.length < 20 || sentences.length < 2) return {score:50, detail:'텍스트가 짧아 보수적으로 계산됨'};
+
+    const koreanCount = (text.match(/[가-힣]/g) || []).length;
+    const latinCount = (text.match(/[a-zA-Z]/g) || []).length;
+    const isKorean = koreanCount > latinCount * 0.6;
+
+    if(isKorean){
+      const avgWords = words.length / sentences.length;
+      const longSentRatio = sentences.filter(s => (s.match(/[a-zA-Z]+|[가-힣]+/g)||[]).length > 28).length / sentences.length;
+      const score = Math.max(0, Math.min(100, 100 - Math.abs(avgWords - 18) * 3 - longSentRatio * 40));
+      return {score, detail:`평균 문장 길이 ${avgWords.toFixed(1)}단어`};
+    }
+
+    let syllables = 0;
+    words.forEach(w => syllables += countSyllablesEn(w));
+    const wps = words.length / sentences.length;
+    const spw = syllables / words.length;
+    const flesch = 206.835 - 1.015 * wps - 84.6 * spw;
+    const score = Math.max(0, Math.min(100, flesch));
+    return {score, detail:`Flesch ${score.toFixed(1)}`};
+  }
+
+  function firstParagraph(md){
+    const chunks = md.split(/\n\s*\n/).map(s => s.trim()).filter(Boolean);
+    return chunks.find(c => !/^#/.test(c) && !/^---/.test(c)) || '';
+  }
+
+  function grade(score){
+    if(score >= 90) return 'A';
+    if(score >= 80) return 'B';
+    if(score >= 70) return 'C';
+    if(score >= 60) return 'D';
+    return 'F';
+  }
+
+  function metricCard(title, state, detail){
+    return `<div class="metric ${state}"><b>${title}</b><div>${detail}</div></div>`;
+  }
+
+  function run(){
+    const md = dom.md.value.trim();
+    const keyword = dom.keyword.value.trim().toLowerCase();
+    const domain = dom.domain.value.trim().toLowerCase();
+
+    if(!md){ alert('Markdown을 입력해주세요.'); return; }
+
+    const fm = parseFrontMatter(md);
+    const title = fm.title || firstH1(md);
+    const desc = fm.description || '';
+
+    const heading = headingInfo(md);
+    const images = extractImages(md);
+    const missingAlt = images.filter(i => !i.alt).length;
+
+    const links = extractLinks(md);
+    const internalLinks = links.filter(l => {
+      const href = l.href.toLowerCase();
+      return href.startsWith('/') || (domain && href.includes(domain));
+    }).length;
+
+    const readability = readabilityScore(plainText(md));
+    const firstPara = firstParagraph(md).toLowerCase();
+    const hasKeywordFirst = keyword ? firstPara.includes(keyword) : false;
+
+    const scores = [];
+    const suggestions = [];
+
+    // 1. title length 50-60 (15)
+    let sTitle = 0;
+    if(title){
+      if(title.length >= 50 && title.length <= 60) sTitle = 15;
+      else if(title.length >= 40 && title.length <= 70) sTitle = 8;
+    }
+    scores.push(sTitle);
+    if(sTitle < 15) suggestions.push(`제목 길이를 50~60자로 조정하세요. (현재 ${title ? title.length : 0}자)`);
+
+    // 2. meta description length 150-160 (15)
+    let sDesc = 0;
+    if(desc){
+      if(desc.length >= 150 && desc.length <= 160) sDesc = 15;
+      else if(desc.length >= 120 && desc.length <= 180) sDesc = 8;
+    }
+    scores.push(sDesc);
+    if(sDesc < 15) suggestions.push(`메타 설명을 150~160자로 작성하세요. (현재 ${desc ? desc.length : 0}자)`);
+
+    // 3. heading structure (20)
+    const sHead = heading.ok ? 20 : 8;
+    scores.push(sHead);
+    if(!heading.ok) suggestions.push(`헤딩 구조를 H1 → H2 → H3 순서로 정리하세요. (${heading.detail})`);
+
+    // 4. image alt (10)
+    let sImg = 10;
+    if(images.length && missingAlt > 0) sImg = Math.max(0, 10 - missingAlt * 4);
+    scores.push(sImg);
+    if(images.length && missingAlt > 0) suggestions.push(`이미지 alt 누락 ${missingAlt}개를 보완하세요.`);
+
+    // 5. internal links count (10)
+    const sInternal = internalLinks >= 3 ? 10 : internalLinks >= 1 ? 6 : 0;
+    scores.push(sInternal);
+    if(sInternal < 10) suggestions.push('내부 링크를 최소 3개 이상 배치해 체류/크롤링 효율을 높이세요.');
+
+    // 6. readability (20)
+    const sRead = readability.score >= 70 ? 20 : readability.score >= 55 ? 14 : readability.score >= 40 ? 8 : 3;
+    scores.push(sRead);
+    if(sRead < 20) suggestions.push(`가독성을 개선하세요. 문장 길이를 줄이고 문단을 분리하세요. (${readability.detail})`);
+
+    // 7. keyword in first paragraph (10)
+    const sKeyword = keyword ? (hasKeywordFirst ? 10 : 0) : 4;
+    scores.push(sKeyword);
+    if(keyword && !hasKeywordFirst) suggestions.push('타깃 키워드를 첫 문단에 자연스럽게 포함하세요.');
+
+    const total = Math.round(scores.reduce((a,b)=>a+b,0));
+
+    dom.scoreNum.textContent = total;
+    dom.grade.textContent = grade(total);
+    dom.summary.textContent = `${title ? `제목: ${title.slice(0,40)}${title.length>40?'...':''}` : '제목 미감지'} · 내부링크 ${internalLinks}개 · 이미지 ${images.length}개`;
+    dom.scoreCircle.style.background = `conic-gradient(#4db1ff ${total*3.6}deg, #1b2b46 0deg)`;
+
+    const m = [];
+    m.push(metricCard('제목 길이 (50~60)', sTitle>=15?'ok':sTitle>=8?'warn':'bad', `${title ? title.length : 0}자`));
+    m.push(metricCard('메타 설명 (150~160)', sDesc>=15?'ok':sDesc>=8?'warn':'bad', `${desc ? desc.length : 0}자`));
+    m.push(metricCard('헤딩 구조', heading.ok?'ok':'bad', heading.detail));
+    m.push(metricCard('이미지 alt', sImg===10?'ok':sImg>=6?'warn':'bad', `이미지 ${images.length}개 / 누락 ${missingAlt}개`));
+    m.push(metricCard('내부 링크 수', sInternal===10?'ok':sInternal>=6?'warn':'bad', `${internalLinks}개`));
+    m.push(metricCard('가독성', sRead>=20?'ok':sRead>=14?'warn':'bad', readability.detail));
+    m.push(metricCard('첫 문단 키워드', sKeyword===10?'ok':sKeyword>0?'warn':'bad', keyword ? (hasKeywordFirst ? '포함됨' : '미포함') : '키워드 미입력'));
+    dom.metrics.innerHTML = m.join('');
+
+    dom.suggestions.innerHTML = (suggestions.length ? suggestions : ['모든 핵심 기준이 양호합니다.']).map(s => `<li>${s}</li>`).join('');
+  }
+
+  dom.analyzeBtn.addEventListener('click', run);
+  dom.sampleBtn.addEventListener('click', () => {
+    dom.keyword.value = '게임 배포 전략';
+    dom.domain.value = 'eastsea.monster';
+    dom.md.value = `---
+title: 게임 배포 전략과 수익화를 동시에 높이는 실전 운영 가이드
+description: 게임 배포 전략을 강화해 유입, 유지, 수익을 함께 높이는 운영 방법을 정리했습니다. 채널별 퍼널과 콘텐츠 설계, 데이터 기반 개선 루프를 실무 관점에서 설명합니다.
+---
+
+# 게임 배포 전략과 수익화를 동시에 높이는 실전 운영 가이드
+
+게임 배포 전략은 단순 노출보다 채널별 전환 흐름 설계가 핵심입니다. Telegram Mini App, itch.io, 웹 SEO를 연결하면 반복 유입을 만들 수 있습니다.
+
+## 채널 우선순위 설정
+### Telegram Mini App
+초기 반응과 반복 방문을 빠르게 검증합니다.
+
+### itch.io
+초기 매출 실험과 커뮤니티 피드백을 얻기 좋습니다.
+
+## 실행 체크리스트
+- [배포 대시보드](/tools/revenue-dashboard-calculator/)를 사용해 월 수익을 점검합니다.
+- [키워드 분석기](/tools/keyword-density-analyzer/)로 SEO 텍스트를 개선합니다.
+- [소셜 미리보기](/tools/social-share-preview/)로 공유 카드 품질을 확인합니다.
+
+![배포 대시보드 예시](https://eastsea.monster/assets/og-image.png)
+`;
+  });
+  dom.clearBtn.addEventListener('click', () => {
+    dom.md.value = '';
+    dom.metrics.innerHTML = '';
+    dom.suggestions.innerHTML = '';
+    dom.scoreNum.textContent = '0';
+    dom.grade.textContent = 'F';
+    dom.summary.textContent = '아직 분석 전입니다.';
+    dom.scoreCircle.style.background = 'conic-gradient(#4db1ff 0deg,#1b2b46 0deg)';
+  });
+})();
+</script>
+</body>
+</html>

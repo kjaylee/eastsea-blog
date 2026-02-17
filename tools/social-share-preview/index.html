@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>소셜 공유 미리보기 - Social Share Preview</title>
+<meta name="description" content="URL 또는 HTML 소스를 넣어 Google SERP, X(Twitter), Facebook/LinkedIn, Telegram, KakaoTalk 공유 미리보기를 확인하세요." />
+<style>
+:root{
+  --bg:#070d1a;
+  --card:#101a31;
+  --card2:#0c1528;
+  --line:#263d63;
+  --text:#e8eeff;
+  --muted:#a8b8da;
+  --accent:#4fa7ff;
+  --warn:#f59e0b;
+  --bad:#f87171;
+  --good:#34d399;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Noto Sans KR',sans-serif;background:radial-gradient(900px 640px at 90% -10%,#27416f 0%,var(--bg) 50%) fixed;color:var(--text);padding:18px}
+.container{max-width:1180px;margin:0 auto}
+h1{margin:0 0 6px;font-size:clamp(1.4rem,3vw,2rem)}
+.sub{margin:0 0 16px;color:var(--muted)}
+.card{background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--line);border-radius:16px;padding:14px;box-shadow:0 8px 24px rgba(0,0,0,.24)}
+label{display:block;font-size:.9rem;color:var(--muted);margin-bottom:6px}
+input,textarea,button{font:inherit}
+input[type="url"],textarea{width:100%;background:#0a1223;border:1px solid var(--line);color:var(--text);border-radius:10px;padding:10px 12px}
+textarea{min-height:130px;resize:vertical}
+.row{display:flex;flex-wrap:wrap;gap:8px}
+.btn{padding:9px 12px;border-radius:10px;border:1px solid #2d4f82;background:#182a4a;color:#e6f0ff;cursor:pointer}
+.btn.primary{background:linear-gradient(135deg,#1a6ed8,#4ba8ff);border:0;color:#fff;font-weight:700}
+.btn:hover{filter:brightness(1.07)}
+.grid{display:grid;gap:14px}
+.grid-2{grid-template-columns:1fr 1fr}
+.warn-list{margin:0;padding-left:18px;line-height:1.7}
+.warn-item{margin-bottom:4px}
+.warn-high{color:#ffb3b3}
+.warn-mid{color:#ffd68f}
+.warn-low{color:#bcf3d4}
+.preview{border:1px solid var(--line);border-radius:12px;background:#0a1222;padding:12px}
+.preview h3{margin:0 0 8px;font-size:1rem;color:#d8e6ff}
+.serp-title{color:#8ab4f8;font-size:1.06rem;margin:0 0 4px}
+.serp-url{color:#8de4b8;font-size:.83rem}
+.serp-desc{color:#c7d3eb;font-size:.9rem;margin-top:4px;line-height:1.4}
+.social-card{display:grid;grid-template-columns:120px 1fr;gap:10px;border:1px solid #2a4369;border-radius:10px;overflow:hidden;background:#0d182f}
+.thumb{background:#243650;background-size:cover;background-position:center;height:90px}
+.social-meta{padding:8px}
+.social-title{font-weight:700;margin:0 0 4px}
+.social-desc{font-size:.86rem;color:#c7d5ef;line-height:1.35;margin:0}
+.social-site{font-size:.76rem;color:#8fa5cb;margin-top:6px;text-transform:uppercase}
+.telegram{background:#0b2741;border-color:#2b6ca1}
+.kakao{background:#2f2a0f;border-color:#8a7420}
+.kakao .social-site{color:#ffde75}
+.meta-table{width:100%;border-collapse:collapse;font-size:.88rem}
+.meta-table td{padding:6px 8px;border-bottom:1px dashed #234169;vertical-align:top}
+.meta-table td:first-child{color:#9db2d7;width:140px}
+.small{font-size:.84rem;color:var(--muted)}
+@media(max-width:960px){.grid-2{grid-template-columns:1fr}.social-card{grid-template-columns:1fr}.thumb{height:140px}}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🔎 소셜 공유 미리보기</h1>
+  <p class="sub">URL 메타데이터를 읽어 SERP/X/Facebook/Telegram/Kakao 공유 노출 형태와 누락 경고를 확인합니다.</p>
+
+  <div class="card">
+    <label for="urlInput">페이지 URL</label>
+    <div class="row">
+      <input id="urlInput" type="url" placeholder="https://eastsea.monster/..." style="flex:1" />
+      <button id="fetchBtn" class="btn primary">URL 분석</button>
+      <button id="sampleBtn" class="btn">샘플</button>
+    </div>
+    <details style="margin-top:10px">
+      <summary style="cursor:pointer;color:#bfd5ff">CORS 실패 시 HTML 소스 붙여넣기</summary>
+      <textarea id="htmlInput" placeholder="<html>...</html>"></textarea>
+      <div class="row" style="margin-top:8px">
+        <button id="htmlBtn" class="btn">붙여넣은 HTML 분석</button>
+      </div>
+    </details>
+    <p id="status" class="small" style="margin-top:8px"></p>
+  </div>
+
+  <div class="grid grid-2" style="margin-top:14px">
+    <div class="card">
+      <h2 style="margin:0 0 10px;font-size:1.1rem">⚠️ 경고 & 진단</h2>
+      <ul id="warnings" class="warn-list"></ul>
+      <h3 style="margin:12px 0 8px;font-size:1rem">메타 요약</h3>
+      <table class="meta-table" id="metaTable"></table>
+    </div>
+
+    <div class="grid" style="gap:12px">
+      <div class="preview">
+        <h3>Google SERP</h3>
+        <div class="serp-title" id="serpTitle">제목 미리보기</div>
+        <div class="serp-url" id="serpUrl">https://example.com/path</div>
+        <div class="serp-desc" id="serpDesc">설명 미리보기</div>
+      </div>
+
+      <div class="preview">
+        <h3>Twitter / X Card</h3>
+        <div class="social-card">
+          <div id="twImg" class="thumb"></div>
+          <div class="social-meta">
+            <p id="twTitle" class="social-title"></p>
+            <p id="twDesc" class="social-desc"></p>
+            <div id="twSite" class="social-site"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="preview">
+        <h3>Facebook / LinkedIn</h3>
+        <div class="social-card">
+          <div id="ogImg" class="thumb"></div>
+          <div class="social-meta">
+            <p id="ogTitle" class="social-title"></p>
+            <p id="ogDesc" class="social-desc"></p>
+            <div id="ogSite" class="social-site"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="preview">
+        <h3>Telegram</h3>
+        <div class="social-card telegram">
+          <div id="tgImg" class="thumb"></div>
+          <div class="social-meta">
+            <p id="tgTitle" class="social-title"></p>
+            <p id="tgDesc" class="social-desc"></p>
+            <div id="tgSite" class="social-site"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="preview">
+        <h3>KakaoTalk</h3>
+        <div class="social-card kakao">
+          <div id="kkImg" class="thumb"></div>
+          <div class="social-meta">
+            <p id="kkTitle" class="social-title"></p>
+            <p id="kkDesc" class="social-desc"></p>
+            <div id="kkSite" class="social-site"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = (s) => document.querySelector(s);
+  const dom = {
+    urlInput: $('#urlInput'), htmlInput: $('#htmlInput'),
+    fetchBtn: $('#fetchBtn'), htmlBtn: $('#htmlBtn'), sampleBtn: $('#sampleBtn'),
+    status: $('#status'), warnings: $('#warnings'), metaTable: $('#metaTable'),
+    serpTitle: $('#serpTitle'), serpUrl: $('#serpUrl'), serpDesc: $('#serpDesc'),
+    twImg: $('#twImg'), twTitle: $('#twTitle'), twDesc: $('#twDesc'), twSite: $('#twSite'),
+    ogImg: $('#ogImg'), ogTitle: $('#ogTitle'), ogDesc: $('#ogDesc'), ogSite: $('#ogSite'),
+    tgImg: $('#tgImg'), tgTitle: $('#tgTitle'), tgDesc: $('#tgDesc'), tgSite: $('#tgSite'),
+    kkImg: $('#kkImg'), kkTitle: $('#kkTitle'), kkDesc: $('#kkDesc'), kkSite: $('#kkSite')
+  };
+
+  function normalizeUrl(v){
+    let u = (v || '').trim();
+    if(!u) return '';
+    if(!/^https?:\/\//i.test(u)) u = 'https://' + u;
+    return u;
+  }
+
+  async function fetchHtmlWithFallback(url){
+    const tries = [
+      url,
+      `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+      `https://r.jina.ai/http://${url.replace(/^https?:\/\//i,'')}`
+    ];
+    let last;
+    for(const t of tries){
+      try {
+        const res = await fetch(t);
+        if(!res.ok) throw new Error(`HTTP ${res.status}`);
+        const text = await res.text();
+        if(text && text.length > 100) return text;
+      } catch (e){ last = e; }
+    }
+    throw last || new Error('요청 실패');
+  }
+
+  function parseMeta(html, baseUrl=''){
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const getMeta = (sel) => doc.querySelector(sel)?.getAttribute('content')?.trim() || '';
+    const title = getMeta('meta[property="og:title"]') || getMeta('meta[name="twitter:title"]') || (doc.querySelector('title')?.textContent || '').trim();
+    const description = getMeta('meta[property="og:description"]') || getMeta('meta[name="twitter:description"]') || getMeta('meta[name="description"]');
+    const image = getMeta('meta[property="og:image"]') || getMeta('meta[name="twitter:image"]') || '';
+    const canonical = doc.querySelector('link[rel="canonical"]')?.getAttribute('href')?.trim() || '';
+    const robots = getMeta('meta[name="robots"]');
+    const siteName = getMeta('meta[property="og:site_name"]') || (safeHostname(baseUrl) || 'site');
+    const twitterCard = getMeta('meta[name="twitter:card"]');
+
+    return {
+      title,
+      description,
+      image: absolutize(image, baseUrl),
+      canonical: absolutize(canonical, baseUrl),
+      robots,
+      siteName,
+      twitterCard,
+      ogTitle: getMeta('meta[property="og:title"]'),
+      ogDescription: getMeta('meta[property="og:description"]'),
+      ogImage: absolutize(getMeta('meta[property="og:image"]'), baseUrl),
+      twTitle: getMeta('meta[name="twitter:title"]'),
+      twDescription: getMeta('meta[name="twitter:description"]'),
+      twImage: absolutize(getMeta('meta[name="twitter:image"]'), baseUrl)
+    };
+  }
+
+  function safeHostname(url){
+    try { return new URL(url).hostname; } catch { return ''; }
+  }
+
+  function absolutize(v, base){
+    if(!v) return '';
+    try {
+      return new URL(v, base || location.href).toString();
+    } catch { return v; }
+  }
+
+  function trunc(text, n){
+    if(!text) return '';
+    return text.length > n ? text.slice(0,n-1) + '…' : text;
+  }
+
+  function renderWarnings(meta, url){
+    const warns = [];
+    const push = (level, text) => warns.push({level, text});
+
+    if(!meta.title) push('high', '제목(title/og:title/twitter:title)이 없습니다.');
+    if(!meta.description) push('high', '설명(meta description/og:description)이 없습니다.');
+    if(!meta.image) push('mid', 'og:image 또는 twitter:image가 없습니다.');
+    if(!meta.canonical) push('mid', 'canonical 링크가 없습니다.');
+
+    if(meta.title && meta.title.length > 60) push('mid', `SERP 제목이 길어 잘릴 수 있습니다 (${meta.title.length}자).`);
+    if(meta.description && meta.description.length > 160) push('mid', `SERP 설명이 길어 잘릴 수 있습니다 (${meta.description.length}자).`);
+    if(meta.twTitle && meta.twTitle.length > 70) push('low', `Twitter 제목이 다소 깁니다 (${meta.twTitle.length}자).`);
+    if(meta.twDescription && meta.twDescription.length > 200) push('low', `Twitter 설명이 다소 깁니다 (${meta.twDescription.length}자).`);
+    if(meta.robots.includes('noindex')) push('high', 'robots에 noindex가 포함되어 있습니다.');
+
+    if(!warns.length) push('low', '치명적인 누락 없이 기본 공유 요소가 준비되어 있습니다.');
+
+    dom.warnings.innerHTML = warns.map(w => `<li class="warn-item warn-${w.level}">${w.text}</li>`).join('');
+
+    const viewUrl = normalizeUrl(url || meta.canonical || 'https://example.com');
+    dom.metaTable.innerHTML = [
+      ['URL', viewUrl],
+      ['Title', meta.title || '-'],
+      ['Description', meta.description || '-'],
+      ['Image', meta.image || '-'],
+      ['Canonical', meta.canonical || '-'],
+      ['Robots', meta.robots || '-'],
+      ['Twitter Card', meta.twitterCard || '-']
+    ].map(([k,v]) => `<tr><td>${k}</td><td>${escapeHtml(String(v))}</td></tr>`).join('');
+  }
+
+  function renderCards(meta, url){
+    const host = safeHostname(url || meta.canonical || 'https://example.com');
+    const title = meta.title || '제목이 없습니다';
+    const desc = meta.description || '설명이 없습니다';
+    const image = meta.image || '';
+
+    dom.serpTitle.textContent = trunc(title, 60);
+    dom.serpUrl.textContent = normalizeUrl(url || meta.canonical || 'https://example.com');
+    dom.serpDesc.textContent = trunc(desc, 160);
+
+    const twTitle = meta.twTitle || meta.ogTitle || title;
+    const twDesc = meta.twDescription || meta.ogDescription || desc;
+    const twImg = meta.twImage || meta.ogImage || image;
+
+    dom.twImg.style.backgroundImage = twImg ? `url('${cssSafe(twImg)}')` : 'none';
+    dom.twTitle.textContent = trunc(twTitle, 70);
+    dom.twDesc.textContent = trunc(twDesc, 200);
+    dom.twSite.textContent = host;
+
+    dom.ogImg.style.backgroundImage = image ? `url('${cssSafe(image)}')` : 'none';
+    dom.ogTitle.textContent = trunc(meta.ogTitle || title, 95);
+    dom.ogDesc.textContent = trunc(meta.ogDescription || desc, 180);
+    dom.ogSite.textContent = meta.siteName || host;
+
+    dom.tgImg.style.backgroundImage = image ? `url('${cssSafe(image)}')` : 'none';
+    dom.tgTitle.textContent = trunc(title, 80);
+    dom.tgDesc.textContent = trunc(desc, 160);
+    dom.tgSite.textContent = host;
+
+    dom.kkImg.style.backgroundImage = image ? `url('${cssSafe(image)}')` : 'none';
+    dom.kkTitle.textContent = trunc(title, 60);
+    dom.kkDesc.textContent = trunc(desc, 120);
+    dom.kkSite.textContent = 'Kakao Link Preview';
+  }
+
+  function cssSafe(v){
+    return String(v).replace(/'/g, "\\'");
+  }
+
+  function escapeHtml(s){
+    return s.replace(/[&<>"']/g, (m) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+
+  async function analyzeUrl(){
+    try {
+      dom.status.textContent = 'URL 분석 중...';
+      const url = normalizeUrl(dom.urlInput.value);
+      if(!url) throw new Error('URL을 입력해주세요.');
+      dom.urlInput.value = url;
+
+      const html = await fetchHtmlWithFallback(url);
+      const meta = parseMeta(html, url);
+      renderWarnings(meta, url);
+      renderCards(meta, url);
+      dom.status.textContent = '분석 완료';
+    } catch (err){
+      dom.status.textContent = `분석 실패: ${err.message || err} (HTML 붙여넣기 모드를 사용하세요)`;
+    }
+  }
+
+  function analyzeHtml(){
+    try {
+      const raw = dom.htmlInput.value.trim();
+      if(!raw) throw new Error('HTML 소스를 붙여넣으세요.');
+      const base = normalizeUrl(dom.urlInput.value);
+      const meta = parseMeta(raw, base);
+      renderWarnings(meta, base);
+      renderCards(meta, base);
+      dom.status.textContent = '붙여넣은 HTML 분석 완료';
+    } catch (err){
+      dom.status.textContent = `HTML 분석 실패: ${err.message || err}`;
+    }
+  }
+
+  dom.fetchBtn.addEventListener('click', analyzeUrl);
+  dom.htmlBtn.addEventListener('click', analyzeHtml);
+  dom.sampleBtn.addEventListener('click', () => {
+    dom.urlInput.value = 'https://eastsea.monster/tools/';
+  });
+
+  renderCards({title:'제목 미리보기',description:'설명 미리보기',siteName:'example.com'}, 'https://example.com/path');
+  renderWarnings({title:'',description:'',image:'',canonical:'',robots:'',siteName:'',twitterCard:'',twTitle:'',twDescription:''}, 'https://example.com');
+})();
+</script>
+</body>
+</html>

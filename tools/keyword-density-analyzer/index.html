@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>키워드 밀도 분석기 - Keyword Density Analyzer</title>
+<meta name="description" content="텍스트 또는 URL의 키워드 빈도/밀도를 분석하고 상위 20개 키워드와 워드클라우드를 제공합니다." />
+<style>
+:root{
+  --bg:#071020;
+  --card:#0f1b32;
+  --card2:#0b1528;
+  --line:#274066;
+  --text:#e7efff;
+  --muted:#a4b6d8;
+  --accent:#4ea8ff;
+  --good:#34d399;
+  --warn:#f59e0b;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Noto Sans KR',sans-serif;background:radial-gradient(1000px 700px at 85% -10%,#243d69 0%,var(--bg) 48%) fixed;color:var(--text);padding:18px}
+.container{max-width:1120px;margin:0 auto}
+h1{margin:0 0 6px;font-size:clamp(1.4rem,3vw,2rem)}
+.sub{margin:0 0 16px;color:var(--muted)}
+.card{background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--line);border-radius:16px;padding:14px;box-shadow:0 10px 28px rgba(0,0,0,.25)}
+label{display:block;font-size:.9rem;color:var(--muted);margin-bottom:6px}
+textarea,input,button{font:inherit}
+textarea,input[type="url"]{width:100%;background:#0a1223;color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+textarea{min-height:180px;resize:vertical}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.btn{padding:9px 12px;border-radius:10px;border:1px solid #2f4d7c;background:#182947;color:#e6f0ff;cursor:pointer}
+.btn.primary{border:0;background:linear-gradient(135deg,#1b6fd9,#48a8ff);font-weight:700;color:#fff}
+.btn:hover{filter:brightness(1.08)}
+.mode{display:flex;gap:6px;margin-bottom:10px}
+.mode button{padding:7px 11px;border-radius:999px;border:1px solid var(--line);background:#0d1830;color:#cfe0ff;cursor:pointer}
+.mode button.active{background:#19355f;border-color:#3c70b8}
+.grid{display:grid;gap:14px;margin-top:14px}
+.grid-2{grid-template-columns:1.1fr .9fr}
+.kpi-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.kpi{padding:10px;background:#091326;border:1px solid var(--line);border-radius:10px}
+.kpi b{display:block;font-size:1.28rem;margin-top:5px}
+table{width:100%;border-collapse:collapse;font-size:.92rem}
+th,td{padding:9px;border-bottom:1px dashed #22406a;text-align:left}
+th{color:#bad0f3;font-weight:700}
+tr.over{background:rgba(245,158,11,.12)}
+.badge{display:inline-block;padding:3px 8px;border-radius:999px;font-size:.75rem;font-weight:700}
+.badge.over{background:rgba(245,158,11,.22);color:#ffd897;border:1px solid #876000}
+canvas{width:100%;height:320px;background:#080f1d;border:1px solid var(--line);border-radius:12px}
+.note{font-size:.86rem;color:var(--muted)}
+.hidden{display:none}
+@media (max-width:930px){.grid-2{grid-template-columns:1fr}.kpi-grid{grid-template-columns:1fr 1fr 1fr}}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>📈 키워드 밀도 분석기</h1>
+  <p class="sub">텍스트 또는 URL 기반 콘텐츠의 상위 키워드, 밀도(%), 과최적화 위험을 분석합니다.</p>
+
+  <div class="card">
+    <div class="mode">
+      <button id="modeText" class="active">텍스트 입력</button>
+      <button id="modeUrl">URL 분석</button>
+    </div>
+
+    <div id="textPanel">
+      <label for="textInput">분석할 텍스트</label>
+      <textarea id="textInput" placeholder="블로그 본문, 랜딩페이지 문구 등을 붙여넣으세요."></textarea>
+    </div>
+
+    <div id="urlPanel" class="hidden">
+      <label for="urlInput">분석할 URL</label>
+      <input id="urlInput" type="url" placeholder="https://eastsea.monster/..." />
+      <p class="note" style="margin-top:6px">직접 요청이 막히면 CORS 우회 프록시를 자동 시도합니다.</p>
+    </div>
+
+    <div class="row" style="margin-top:10px">
+      <button id="analyzeBtn" class="btn primary">분석 실행</button>
+      <button id="sampleBtn" class="btn">샘플 텍스트</button>
+      <button id="clearBtn" class="btn">지우기</button>
+      <span id="status" class="note" style="align-self:center"></span>
+    </div>
+  </div>
+
+  <div class="grid grid-2">
+    <div class="card">
+      <h2 style="margin:0 0 10px;font-size:1.1rem">📊 분석 결과 (Top 20)</h2>
+      <div id="kpi" class="kpi-grid" style="margin-bottom:10px"></div>
+      <div style="overflow:auto;max-height:460px">
+        <table>
+          <thead>
+            <tr><th>#</th><th>키워드</th><th>빈도</th><th>밀도</th><th>상태</th></tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin:0 0 10px;font-size:1.1rem">☁️ 워드 클라우드</h2>
+      <canvas id="cloud" width="520" height="320"></canvas>
+      <p class="note" style="margin-top:8px">빈도가 높은 키워드일수록 크게 표시됩니다.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const stopwords = new Set([
+    'the','a','an','and','or','but','if','then','than','for','to','of','in','on','at','by','with','from','as','is','are','was','were','be','been','being','it','its','this','that','these','those','we','you','your','our','they','their','he','she','his','her','them','can','will','just','not','do','does','did','so','such','into','about','over','under','more','most','very','also','there','here','what','when','where','how','why','who','which',
+    '그리고','하지만','그러나','또한','에서','으로','에게','까지','보다','하는','합니다','이다','있는','있는지','있습니다','있다','였다','대한','및','또는','그','이','저','것','수','등','더','한','를','을','은','는','에','의','가','도','로','과','와'
+  ]);
+
+  const $ = (s) => document.querySelector(s);
+  const dom = {
+    modeText: $('#modeText'), modeUrl: $('#modeUrl'),
+    textPanel: $('#textPanel'), urlPanel: $('#urlPanel'),
+    textInput: $('#textInput'), urlInput: $('#urlInput'),
+    analyzeBtn: $('#analyzeBtn'), sampleBtn: $('#sampleBtn'), clearBtn: $('#clearBtn'),
+    status: $('#status'), tbody: $('#tbody'), kpi: $('#kpi'), cloud: $('#cloud')
+  };
+
+  let mode = 'text';
+
+  function setMode(next){
+    mode = next;
+    dom.modeText.classList.toggle('active', mode === 'text');
+    dom.modeUrl.classList.toggle('active', mode === 'url');
+    dom.textPanel.classList.toggle('hidden', mode !== 'text');
+    dom.urlPanel.classList.toggle('hidden', mode !== 'url');
+  }
+
+  function normalizeUrl(v){
+    let u = (v || '').trim();
+    if(!u) return '';
+    if(!/^https?:\/\//i.test(u)) u = 'https://' + u;
+    return u;
+  }
+
+  async function fetchHtmlWithFallback(url){
+    const tries = [
+      url,
+      `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+      `https://r.jina.ai/http://${url.replace(/^https?:\/\//i,'')}`
+    ];
+    let last;
+    for(const t of tries){
+      try {
+        const res = await fetch(t);
+        if(!res.ok) throw new Error(`HTTP ${res.status}`);
+        const text = await res.text();
+        if(text && text.length > 50) return text;
+      } catch (e){ last = e; }
+    }
+    throw last || new Error('요청 실패');
+  }
+
+  function htmlToText(html){
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    doc.querySelectorAll('script,style,noscript,svg').forEach(el => el.remove());
+    return (doc.body?.innerText || '').replace(/\s+/g,' ').trim();
+  }
+
+  function tokenize(text){
+    const matches = text.toLowerCase().match(/[a-z]{2,}|[가-힣]{2,}/g) || [];
+    return matches.filter(w => !stopwords.has(w));
+  }
+
+  function analyzeTokens(tokens){
+    const total = tokens.length;
+    const map = new Map();
+    for(const t of tokens) map.set(t, (map.get(t)||0) + 1);
+    const arr = [...map.entries()]
+      .map(([word,count]) => ({ word, count, density: total ? (count/total*100) : 0 }))
+      .sort((a,b)=> b.count - a.count);
+    return { total, unique: map.size, top20: arr.slice(0,20), top40: arr.slice(0,40) };
+  }
+
+  function renderKpi(stats){
+    const overCount = stats.top20.filter(x => x.density > 3).length;
+    dom.kpi.innerHTML = `
+      <div class="kpi"><small>총 단어(정규화)</small><b>${stats.total.toLocaleString()}</b></div>
+      <div class="kpi"><small>고유 키워드</small><b>${stats.unique.toLocaleString()}</b></div>
+      <div class="kpi"><small>과최적화 위험</small><b>${overCount}개</b></div>
+    `;
+  }
+
+  function renderTable(stats){
+    dom.tbody.innerHTML = stats.top20.map((row, idx) => {
+      const over = row.density > 3;
+      return `<tr class="${over?'over':''}">
+        <td>${idx+1}</td>
+        <td>${row.word}</td>
+        <td>${row.count}</td>
+        <td>${row.density.toFixed(2)}%</td>
+        <td>${over ? '<span class="badge over">> 3% 주의</span>' : '-'}</td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="5">결과가 없습니다.</td></tr>';
+  }
+
+  function drawWordCloud(list){
+    const canvas = dom.cloud;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = Math.max(320, Math.floor(rect.width * dpr));
+    canvas.height = Math.floor(320 * dpr);
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0,0,rect.width,320);
+
+    if(!list.length){
+      ctx.fillStyle = '#9bb2d8';
+      ctx.font = '16px sans-serif';
+      ctx.fillText('분석 후 워드클라우드가 표시됩니다.', 20, 40);
+      return;
+    }
+
+    const max = list[0].count;
+    const placed = [];
+    const W = rect.width, H = 320;
+
+    list.forEach((item, i) => {
+      const size = 12 + (item.count / max) * 28;
+      ctx.font = `700 ${size}px -apple-system, sans-serif`;
+      const w = ctx.measureText(item.word).width;
+      const h = size;
+      let ok = false;
+      for(let t=0; t<220; t++){
+        const x = 8 + Math.random() * Math.max(10, W - w - 16);
+        const y = 20 + Math.random() * Math.max(10, H - h - 24);
+        const collide = placed.some(p => !(x + w < p.x || x > p.x + p.w || y + h < p.y || y > p.y + p.h));
+        if(!collide){
+          placed.push({x,y,w,h});
+          const hue = 200 + (i*13)%80;
+          ctx.fillStyle = `hsl(${hue} 85% ${60 - Math.min(i,15)}%)`;
+          ctx.fillText(item.word, x, y + h);
+          ok = true;
+          break;
+        }
+      }
+      if(!ok && i < 8){
+        ctx.fillStyle = '#9cc4ff';
+        ctx.fillText(item.word, 10 + i*8, 30 + i*28);
+      }
+    });
+  }
+
+  async function run(){
+    try {
+      dom.status.textContent = '분석 중...';
+      let text = '';
+
+      if(mode === 'text'){
+        text = dom.textInput.value.trim();
+      } else {
+        const url = normalizeUrl(dom.urlInput.value);
+        if(!url) throw new Error('URL을 입력해주세요.');
+        dom.urlInput.value = url;
+        const html = await fetchHtmlWithFallback(url);
+        text = htmlToText(html);
+      }
+
+      if(!text || text.length < 30) throw new Error('분석할 텍스트가 너무 짧습니다.');
+      const tokens = tokenize(text);
+      const stats = analyzeTokens(tokens);
+      renderKpi(stats);
+      renderTable(stats);
+      drawWordCloud(stats.top40);
+      dom.status.textContent = `완료: ${stats.total.toLocaleString()}단어 분석`;
+    } catch (err){
+      dom.status.textContent = `오류: ${err.message || err}`;
+      renderTable({top20:[]});
+      drawWordCloud([]);
+    }
+  }
+
+  dom.modeText.addEventListener('click', () => setMode('text'));
+  dom.modeUrl.addEventListener('click', () => setMode('url'));
+  dom.analyzeBtn.addEventListener('click', run);
+  dom.sampleBtn.addEventListener('click', () => {
+    setMode('text');
+    dom.textInput.value = `SEO 최적화를 위해 키워드 전략이 중요합니다. 키워드 전략은 검색 의도와 콘텐츠 품질을 함께 고려해야 합니다. 같은 키워드를 지나치게 반복하면 검색엔진이 과최적화로 판단할 수 있습니다. 이 도구로 키워드 밀도를 확인하고, 핵심 키워드와 연관 키워드를 균형 있게 배치하세요.`;
+  });
+  dom.clearBtn.addEventListener('click', () => {
+    dom.textInput.value = '';
+    dom.urlInput.value = '';
+    dom.status.textContent = '';
+    dom.kpi.innerHTML = '';
+    dom.tbody.innerHTML = '';
+    drawWordCloud([]);
+  });
+
+  drawWordCloud([]);
+})();
+</script>
+</body>
+</html>

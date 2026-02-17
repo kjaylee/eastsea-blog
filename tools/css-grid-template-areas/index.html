@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>CSS Grid Template Areas Generator - CSS Grid 영역 생성기</title>
+  <style>
+    :root{--bg:#0d1224;--panel:#141d39;--panel2:#1a274b;--line:rgba(255,255,255,.13);--text:#edf2ff;--muted:#a5b6dd;--accent:#6ea9ff}
+    *{box-sizing:border-box}
+    body{margin:0;padding:20px;font-family:Inter,system-ui,"Noto Sans KR",sans-serif;color:var(--text);
+      background:radial-gradient(900px 420px at 10% -20%,#263462 0,transparent 60%),var(--bg)}
+    .wrap{max-width:1200px;margin:0 auto;display:grid;grid-template-columns:380px 1fr;gap:14px}
+    .card{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);border-radius:16px;padding:16px}
+    h1{margin:0 0 6px;font-size:1.2rem}.sub{margin:0 0 12px;color:var(--muted);font-size:.9rem}
+    label{display:block;margin:10px 0 6px;color:#d3def9;font-size:.86rem}
+    input,select,button,textarea{width:100%;border:1px solid var(--line);background:#101938;color:var(--text);border-radius:12px;padding:10px 12px;font-size:.92rem}
+    button{background:linear-gradient(135deg,var(--accent),#5973ff);border:none;font-weight:700;cursor:pointer}
+    .ghost{background:#111a35;border:1px solid var(--line);font-weight:600}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    #editor{display:grid;gap:6px;margin-top:8px}
+    .cell{min-height:42px;border-radius:10px;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:.8rem;cursor:pointer;user-select:none;padding:4px;text-align:center;word-break:break-word}
+    .cell.selected{outline:2px solid #a9c6ff;outline-offset:1px;transform:translateY(-1px)}
+    .cell small{opacity:.75}
+    .legend{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+    .tag{padding:5px 9px;border-radius:999px;border:1px solid var(--line);font-size:.76rem;background:#0f1731}
+    #preview{background:#0b1126;border:1px solid var(--line);border-radius:14px;padding:10px;min-height:280px;display:grid;gap:10px}
+    .block{border-radius:12px;padding:12px;color:#0c1020;font-weight:700;display:flex;align-items:center;justify-content:center;text-transform:capitalize;min-height:52px}
+    textarea{min-height:180px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+    .warn{color:#ffcf66;font-size:.8rem;min-height:1.2em}
+    @media (max-width:980px){.wrap{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="card">
+      <h1>CSS Grid Template Areas Generator</h1>
+      <p class="sub">셀을 선택해 영역명을 지정하면 <code>grid-template-areas</code> 코드를 자동 생성합니다.</p>
+
+      <div class="row">
+        <div>
+          <label for="rows">행(Rows)</label>
+          <select id="rows"><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option></select>
+        </div>
+        <div>
+          <label for="cols">열(Cols)</label>
+          <select id="cols"><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option></select>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="areaName">영역 이름</label>
+          <input id="areaName" placeholder="header / main / sidebar" />
+        </div>
+        <div>
+          <label for="gap">Gap</label>
+          <input id="gap" value="12px" />
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:8px">
+        <button id="assign">선택 셀에 적용</button>
+        <button id="clearSel" class="ghost">선택 해제</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button id="fillDots" class="ghost">빈칸을 '.'으로</button>
+        <button id="reset" class="ghost">기본 레이아웃</button>
+      </div>
+
+      <div id="editor"></div>
+      <div class="legend" id="legend"></div>
+      <div class="warn" id="warn"></div>
+    </section>
+
+    <section class="card">
+      <h2 style="margin:0 0 8px;font-size:1.02rem">실시간 미리보기</h2>
+      <div id="preview"></div>
+      <h2 style="margin:14px 0 8px;font-size:1.02rem">생성 코드</h2>
+      <textarea id="output" readonly></textarea>
+      <div class="row" style="margin-top:8px">
+        <button id="copy">CSS 복사</button>
+        <button id="copyHtml" class="ghost">샘플 HTML 복사</button>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    let rows = 3, cols = 3;
+    let matrix = [];
+    const selected = new Set();
+
+    function defaultLayout(r,c){
+      const base = Array.from({length:r}, () => Array.from({length:c}, () => '.'));
+      if(r >= 3 && c >= 3){
+        for(let x=0;x<c;x++) base[0][x] = 'header';
+        for(let y=1;y<r-1;y++) base[y][0] = 'sidebar';
+        for(let y=1;y<r-1;y++) for(let x=1;x<c;x++) base[y][x] = 'main';
+        for(let x=0;x<c;x++) base[r-1][x] = 'footer';
+      }else{
+        let n=1;
+        for(let y=0;y<r;y++) for(let x=0;x<c;x++) base[y][x] = `area${n++}`;
+      }
+      return base;
+    }
+
+    function colorFor(name){
+      let h=0; for(const ch of name) h=(h*31 + ch.charCodeAt(0))%360;
+      return `hsl(${h} 78% 78%)`;
+    }
+
+    function renderEditor(){
+      const ed = $('editor');
+      ed.style.gridTemplateColumns = `repeat(${cols}, minmax(0,1fr))`;
+      ed.innerHTML = '';
+      for(let y=0;y<rows;y++){
+        for(let x=0;x<cols;x++){
+          const idx = `${y}-${x}`;
+          const name = matrix[y][x];
+          const el = document.createElement('button');
+          el.type='button'; el.className='cell' + (selected.has(idx)?' selected':'');
+          el.style.background = name === '.' ? '#0f1731' : colorFor(name);
+          el.style.color = name === '.' ? '#cfd8ff' : '#111';
+          el.textContent = name;
+          el.addEventListener('click', ()=>{
+            if(selected.has(idx)) selected.delete(idx); else selected.add(idx);
+            renderEditor();
+          });
+          ed.appendChild(el);
+        }
+      }
+    }
+
+    function validateRectangles(){
+      const names = [...new Set(matrix.flat().filter(v => v !== '.'))];
+      for(const n of names){
+        const pos=[];
+        matrix.forEach((row,y)=>row.forEach((v,x)=>{if(v===n) pos.push([y,x]);}));
+        const ys = pos.map(p=>p[0]), xs = pos.map(p=>p[1]);
+        const y0=Math.min(...ys), y1=Math.max(...ys), x0=Math.min(...xs), x1=Math.max(...xs);
+        for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++) if(matrix[y][x]!==n) return n;
+      }
+      return '';
+    }
+
+    function renderLegend(){
+      const list = [...new Set(matrix.flat())];
+      $('legend').innerHTML = list.map(name => `<span class="tag" style="background:${name==='.'?'#0f1731':colorFor(name)};color:${name==='.'?'#cfd8ff':'#111'}">${name}</span>`).join('');
+    }
+
+    function renderPreview(){
+      const preview = $('preview');
+      preview.innerHTML = '';
+      const unique = [...new Set(matrix.flat().filter(v => v !== '.'))];
+
+      preview.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+      preview.style.gridTemplateRows = `repeat(${rows}, minmax(64px,auto))`;
+      preview.style.gap = $('gap').value || '12px';
+      preview.style.gridTemplateAreas = matrix.map(r => `"${r.join(' ')}"`).join(' ');
+
+      unique.forEach(name => {
+        const block = document.createElement('div');
+        block.className = 'block';
+        block.style.gridArea = name;
+        block.style.background = colorFor(name);
+        block.textContent = name;
+        preview.appendChild(block);
+      });
+
+      const bad = validateRectangles();
+      $('warn').textContent = bad ? `⚠ '${bad}' 영역은 사각형이 아니라 일부 브라우저에서 렌더링이 깨질 수 있습니다.` : '';
+    }
+
+    function buildCSS(){
+      const css = `.layout {\n  display: grid;\n  gap: ${$('gap').value || '12px'};\n  grid-template-columns: repeat(${cols}, 1fr);\n  grid-template-areas:\n${matrix.map(r=>`    "${r.join(' ')}"`).join('\n')};\n}\n\n${[...new Set(matrix.flat().filter(v=>v!=='.'))].map(n=>`.${n} { grid-area: ${n}; }`).join('\n')}`;
+      $('output').value = css;
+    }
+
+    function redraw(){ renderEditor(); renderLegend(); renderPreview(); buildCSS(); }
+
+    function applyArea(){
+      const raw = $('areaName').value.trim().toLowerCase();
+      if(!raw){ alert('영역 이름을 입력하세요.'); return; }
+      const name = raw.replace(/[^a-z0-9_-]/g,'-');
+      if(!selected.size){ alert('먼저 셀을 선택하세요.'); return; }
+      selected.forEach(idx => {
+        const [y,x] = idx.split('-').map(Number);
+        matrix[y][x] = name;
+      });
+      selected.clear();
+      redraw();
+    }
+
+    function setSize(){
+      rows = +$('rows').value; cols = +$('cols').value;
+      matrix = defaultLayout(rows, cols);
+      selected.clear();
+      redraw();
+    }
+
+    $('rows').addEventListener('change', setSize);
+    $('cols').addEventListener('change', setSize);
+    $('assign').addEventListener('click', applyArea);
+    $('clearSel').addEventListener('click', ()=>{ selected.clear(); redraw(); });
+    $('gap').addEventListener('input', redraw);
+    $('fillDots').addEventListener('click', ()=>{
+      selected.forEach(idx => { const [y,x]=idx.split('-').map(Number); matrix[y][x]='.';});
+      selected.clear(); redraw();
+    });
+    $('reset').addEventListener('click', ()=>{ matrix = defaultLayout(rows, cols); selected.clear(); redraw(); });
+
+    $('copy').addEventListener('click', async()=>{
+      await navigator.clipboard.writeText($('output').value);
+      $('copy').textContent='복사 완료!'; setTimeout(()=> $('copy').textContent='CSS 복사', 1000);
+    });
+    $('copyHtml').addEventListener('click', async()=>{
+      const html = `<div class="layout">\n${[...new Set(matrix.flat().filter(v=>v!=='.'))].map(n=>`  <section class="${n}">${n}</section>`).join('\n')}\n</div>`;
+      await navigator.clipboard.writeText(html);
+      $('copyHtml').textContent='복사 완료!'; setTimeout(()=> $('copyHtml').textContent='샘플 HTML 복사', 1000);
+    });
+
+    matrix = defaultLayout(rows, cols);
+    redraw();
+  </script>
+</body>
+</html>

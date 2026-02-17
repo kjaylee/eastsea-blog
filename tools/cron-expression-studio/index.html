@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>Cron Expression Studio - 크론 표현식 스튜디오</title>
+  <style>
+    :root{--bg:#0e1325;--panel:#151d39;--panel2:#1b2750;--line:rgba(255,255,255,.12);--text:#edf2ff;--muted:#9db0da;--accent:#77a9ff}
+    *{box-sizing:border-box}
+    body{margin:0;padding:20px;background:radial-gradient(900px 440px at 75% -20%,#24356a 0,transparent 58%),var(--bg);font-family:Inter,system-ui,"Noto Sans KR",sans-serif;color:var(--text)}
+    .wrap{max-width:1080px;margin:0 auto;display:grid;gap:14px;grid-template-columns:1.1fr .9fr}
+    .card{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);border-radius:16px;padding:16px}
+    h1{margin:0 0 6px;font-size:1.2rem}.sub{margin:0 0 12px;color:var(--muted);font-size:.9rem}
+    label{display:block;margin:10px 0 6px;font-size:.85rem;color:#d5e0fa}
+    input,select,button,textarea{width:100%;border:1px solid var(--line);background:#101937;color:var(--text);border-radius:12px;padding:10px 12px;font-size:.92rem}
+    button{background:linear-gradient(135deg,var(--accent),#5b72ff);border:none;font-weight:700;cursor:pointer}
+    .ghost{background:#111a35;border:1px solid var(--line);font-weight:600}
+    .grid5{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;border:1px solid var(--line);font-size:.78rem;background:#0f1730;color:#ccd9ff}
+    .list{margin:8px 0 0;padding-left:16px;color:#e6edff}
+    .list li{margin:6px 0}
+    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+    .error{color:#ffb4b4;min-height:1.2em;font-size:.82rem}
+    textarea{min-height:80px}
+    @media (max-width:980px){.wrap{grid-template-columns:1fr}.grid5{grid-template-columns:1fr 1fr}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="card">
+      <h1>Cron Expression Studio</h1>
+      <p class="sub">크론 표현식을 만들고, 사람이 읽기 쉬운 설명과 다음 실행 시간을 확인하세요.</p>
+
+      <label for="preset">프리셋</label>
+      <select id="preset">
+        <option value="">직접 입력</option>
+        <option value="*/5 * * * *">매 5분</option>
+        <option value="0 * * * *">매 정각</option>
+        <option value="30 9 * * 1-5">평일 오전 9:30</option>
+        <option value="0 0 * * 0">매주 일요일 자정</option>
+        <option value="0 2 1 * *">매월 1일 02:00</option>
+      </select>
+
+      <div class="grid5">
+        <div>
+          <label for="m">분 (0-59)</label>
+          <input id="m" class="mono" value="*/15" />
+        </div>
+        <div>
+          <label for="h">시 (0-23)</label>
+          <input id="h" class="mono" value="*" />
+        </div>
+        <div>
+          <label for="dom">일 (1-31)</label>
+          <input id="dom" class="mono" value="*" />
+        </div>
+        <div>
+          <label for="mon">월 (1-12)</label>
+          <input id="mon" class="mono" value="*" />
+        </div>
+        <div>
+          <label for="dow">요일 (0-7)</label>
+          <input id="dow" class="mono" value="*" />
+        </div>
+      </div>
+
+      <label for="expr">표현식</label>
+      <textarea id="expr" class="mono" readonly></textarea>
+      <div class="row">
+        <button id="copy">표현식 복사</button>
+        <button id="now" class="ghost">현재 시각 기준 재계산</button>
+      </div>
+      <p class="error" id="error"></p>
+    </section>
+
+    <section class="card">
+      <div class="chip">Human Readable</div>
+      <p id="human" style="margin:10px 0 14px;color:#e7edff">-</p>
+
+      <div class="chip">Next 5 Runs (Local Time)</div>
+      <ol id="runs" class="list"></ol>
+
+      <div style="margin-top:14px" class="chip">필드 규칙</div>
+      <ul class="list" style="color:var(--muted)">
+        <li><span class="mono">*</span> 모든 값</li>
+        <li><span class="mono">*/5</span> 간격(step)</li>
+        <li><span class="mono">1,2,5</span> 목록</li>
+        <li><span class="mono">1-5</span> 범위</li>
+        <li><span class="mono">1-10/2</span> 범위 + 간격</li>
+      </ul>
+    </section>
+  </div>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    const fields = ['m','h','dom','mon','dow'];
+
+    function parsePart(part, min, max){
+      const out = new Set();
+      const addRange = (a,b,step=1)=>{ for(let v=a; v<=b; v+=step) out.add(v); };
+
+      for(const token of part.split(',')){
+        const t = token.trim();
+        if(!t) throw new Error('빈 토큰');
+
+        if(t === '*') { addRange(min,max,1); continue; }
+
+        const stepSplit = t.split('/');
+        if(stepSplit.length > 2) throw new Error('잘못된 step 구문');
+        const base = stepSplit[0];
+        const step = stepSplit[1] ? Number(stepSplit[1]) : 1;
+        if(!Number.isInteger(step) || step < 1) throw new Error('step은 1 이상 정수');
+
+        if(base === '*') { addRange(min,max,step); continue; }
+
+        if(base.includes('-')){
+          const [s,e] = base.split('-').map(Number);
+          if(!Number.isInteger(s)||!Number.isInteger(e)||s>e) throw new Error('범위 오류');
+          if(s<min || e>max) throw new Error(`범위 ${min}-${max}`);
+          addRange(s,e,step);
+          continue;
+        }
+
+        const n = Number(base);
+        if(!Number.isInteger(n) || n < min || n > max) throw new Error(`값 ${min}-${max}`);
+        out.add(n);
+      }
+      return out;
+    }
+
+    function normalizeDowSet(set){
+      const out = new Set();
+      set.forEach(v => out.add(v===7?0:v));
+      return out;
+    }
+
+    function buildExpression(){
+      return fields.map(id => $(id).value.trim() || '*').join(' ');
+    }
+
+    function describe(expr){
+      const [m,h,dom,mon,dow] = expr.split(' ');
+      const parts = [];
+      parts.push(m === '*' ? '매 분' : `분: ${m}`);
+      parts.push(h === '*' ? '매 시간' : `시: ${h}`);
+      parts.push(dom === '*' ? '매일' : `일: ${dom}`);
+      parts.push(mon === '*' ? '매월' : `월: ${mon}`);
+      parts.push(dow === '*' ? '요일 무관' : `요일: ${dow}`);
+      return parts.join(' · ');
+    }
+
+    function fmt(d){
+      return d.toLocaleString('ko-KR', {
+        year:'numeric', month:'2-digit', day:'2-digit',
+        hour:'2-digit', minute:'2-digit', weekday:'short'
+      });
+    }
+
+    function nextRuns(expr, count=5){
+      const [mS,hS,domS,monS,dowS] = expr.split(' ');
+      const m = parsePart(mS,0,59);
+      const h = parsePart(hS,0,23);
+      const dom = parsePart(domS,1,31);
+      const mon = parsePart(monS,1,12);
+      const dow = normalizeDowSet(parsePart(dowS,0,7));
+
+      const found = [];
+      const now = new Date();
+      now.setSeconds(0,0);
+
+      // 최대 2년 탐색
+      for(let i=1; i<=60*24*730; i++){
+        const d = new Date(now.getTime() + i*60000);
+        const ok = m.has(d.getMinutes()) &&
+                   h.has(d.getHours()) &&
+                   dom.has(d.getDate()) &&
+                   mon.has(d.getMonth()+1) &&
+                   dow.has(d.getDay());
+        if(ok){
+          found.push(d);
+          if(found.length >= count) break;
+        }
+      }
+      return found;
+    }
+
+    function applyPreset(v){
+      if(!v) return;
+      const [m,h,dom,mon,dow] = v.split(' ');
+      $('m').value = m; $('h').value = h; $('dom').value = dom; $('mon').value = mon; $('dow').value = dow;
+      recalc();
+    }
+
+    function recalc(){
+      const expr = buildExpression();
+      $('expr').value = expr;
+      $('human').textContent = describe(expr);
+      $('error').textContent = '';
+      $('runs').innerHTML = '';
+
+      try{
+        const list = nextRuns(expr,5);
+        if(!list.length){ $('runs').innerHTML = '<li>다음 실행 시점을 찾지 못했습니다.</li>'; return; }
+        $('runs').innerHTML = list.map(d => `<li class="mono">${fmt(d)}</li>`).join('');
+      }catch(e){
+        $('error').textContent = '표현식 오류: ' + e.message;
+      }
+    }
+
+    fields.forEach(id => $(id).addEventListener('input', recalc));
+    $('preset').addEventListener('change', e => applyPreset(e.target.value));
+    $('now').addEventListener('click', recalc);
+    $('copy').addEventListener('click', async()=>{
+      await navigator.clipboard.writeText($('expr').value);
+      $('copy').textContent='복사 완료!'; setTimeout(()=> $('copy').textContent='표현식 복사', 1000);
+    });
+
+    recalc();
+  </script>
+</body>
+</html>

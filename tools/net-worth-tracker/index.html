@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>순자산 트래커 | Net Worth Tracker</title>
+  <meta name="description" content="자산과 부채를 입력해 순자산을 계산하고 저장하는 개인 재무 도구" />
+  <style>
+    :root{--bg:#f6f8ff;--card:#fff;--text:#131f3b;--muted:#60708a;--line:#dbe3f2;--pri:#4f46e5;--pri2:#4338ca;--ok:#0f766e;--bad:#be123c}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;background:var(--bg);color:var(--text);padding:16px;line-height:1.55}
+    .wrap{max-width:1040px;margin:0 auto}
+    .back{display:inline-block;margin-bottom:10px;color:var(--muted);text-decoration:none}
+    .panel{border:1px solid var(--line);border-radius:16px;background:var(--card);padding:16px;box-shadow:0 8px 26px rgba(15,23,42,.06)}
+    h1{font-size:clamp(1.3rem,4.5vw,2rem);margin-bottom:6px}
+    .sub{font-size:.95rem;color:var(--muted);margin-bottom:12px}
+    .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+    button{border:none;border-radius:10px;padding:9px 12px;font-weight:700;cursor:pointer}
+    .primary{background:linear-gradient(135deg,var(--pri),var(--pri2));color:#fff}
+    .ghost{background:#ecebff;color:#312e81}
+    .danger{background:#fff1f2;color:var(--bad)}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .box{border:1px solid var(--line);border-radius:12px;padding:12px;background:#fbfdff}
+    .box h2{font-size:1rem;margin-bottom:8px}
+    table{width:100%;border-collapse:collapse;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff}
+    th,td{padding:8px;border-bottom:1px solid var(--line);font-size:.9rem}
+    th{background:#f0f5ff;text-align:left;color:#35507a;font-size:.8rem}
+    tr:last-child td{border-bottom:none}
+    input{width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;font-size:.92rem}
+    input:focus{outline:none;border-color:var(--pri);box-shadow:0 0 0 3px rgba(79,70,229,.14)}
+    .cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:12px}
+    .card{border:1px solid var(--line);border-radius:12px;padding:12px;background:#fff}
+    .k{font-size:.82rem;color:var(--muted);font-weight:700}
+    .v{font-size:1.2rem;font-weight:800;margin-top:4px}
+    .v.ok{color:var(--ok)}
+    .v.bad{color:var(--bad)}
+    .meter{margin-top:10px;height:12px;background:#ecf1ff;border-radius:999px;overflow:hidden}
+    .assetBar,.debtBar{height:100%;float:left}
+    .assetBar{background:#4f46e5}
+    .debtBar{background:#f43f5e}
+    .small{font-size:.82rem;color:var(--muted);margin-top:6px}
+    @media (max-width:880px){.grid,.cards{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="/tools/">← 도구 목록으로</a>
+  <section class="panel">
+    <h1>💰 순자산 트래커</h1>
+    <p class="sub">현금/투자/부동산 등 자산과 대출/카드 잔액 등 부채를 입력해 현재 순자산을 확인하세요. (로컬 저장 지원)</p>
+
+    <div class="toolbar">
+      <button class="ghost" id="addAssetBtn">자산 항목 추가</button>
+      <button class="ghost" id="addDebtBtn">부채 항목 추가</button>
+      <button class="primary" id="saveBtn">로컬 저장</button>
+      <button class="ghost" id="sampleBtn">샘플</button>
+      <button class="danger" id="clearBtn">초기화</button>
+    </div>
+
+    <div class="grid">
+      <section class="box">
+        <h2>자산</h2>
+        <table>
+          <thead><tr><th style="width:50%">항목</th><th style="width:32%">금액</th><th style="width:18%">삭제</th></tr></thead>
+          <tbody id="assetBody"></tbody>
+        </table>
+      </section>
+
+      <section class="box">
+        <h2>부채</h2>
+        <table>
+          <thead><tr><th style="width:50%">항목</th><th style="width:32%">금액</th><th style="width:18%">삭제</th></tr></thead>
+          <tbody id="debtBody"></tbody>
+        </table>
+      </section>
+    </div>
+
+    <div class="cards">
+      <article class="card"><div class="k">총 자산</div><div class="v" id="assetTotal">₩0</div></article>
+      <article class="card"><div class="k">총 부채</div><div class="v bad" id="debtTotal">₩0</div></article>
+      <article class="card"><div class="k">순자산</div><div class="v" id="netTotal">₩0</div></article>
+    </div>
+
+    <section class="box" style="margin-top:12px">
+      <h2>자산/부채 비중</h2>
+      <div class="meter"><div class="assetBar" id="assetBar" style="width:0"></div><div class="debtBar" id="debtBar" style="width:0"></div></div>
+      <p class="small" id="summary">입력 후 요약이 표시됩니다.</p>
+    </section>
+  </section>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const STORAGE_KEY = 'tool.networth.v1';
+
+  const state = { assets: [], debts: [] };
+  const uid = () => Math.random().toString(36).slice(2, 9);
+
+  function formatKRW(n) {
+    return '₩' + Number(n || 0).toLocaleString('ko-KR', { maximumFractionDigits: 0 });
+  }
+
+  function addAsset(name = '', amount = '') {
+    state.assets.push({ id: uid(), name, amount });
+    render();
+  }
+
+  function addDebt(name = '', amount = '') {
+    state.debts.push({ id: uid(), name, amount });
+    render();
+  }
+
+  function renderRows(list, targetId, isAsset) {
+    const body = $(targetId);
+    body.innerHTML = '';
+
+    list.forEach(item => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><input type="text" value="${item.name}" placeholder="예: ${isAsset ? '현금, ETF' : '신용대출'}" /></td>
+        <td><input type="number" min="0" step="1000" value="${item.amount}" /></td>
+        <td><button class="danger" type="button">삭제</button></td>
+      `;
+
+      const [nameInput, amountInput] = tr.querySelectorAll('input');
+      nameInput.addEventListener('input', () => { item.name = nameInput.value; compute(); });
+      amountInput.addEventListener('input', () => { item.amount = Number(amountInput.value || 0); compute(); });
+      tr.querySelector('button').addEventListener('click', () => {
+        if (isAsset) state.assets = state.assets.filter(x => x.id !== item.id);
+        else state.debts = state.debts.filter(x => x.id !== item.id);
+        render();
+      });
+
+      body.appendChild(tr);
+    });
+  }
+
+  function total(list) {
+    return list.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  }
+
+  function compute() {
+    const assets = total(state.assets);
+    const debts = total(state.debts);
+    const net = assets - debts;
+
+    $('assetTotal').textContent = formatKRW(assets);
+    $('debtTotal').textContent = formatKRW(debts);
+
+    const netEl = $('netTotal');
+    netEl.textContent = formatKRW(net);
+    netEl.classList.toggle('ok', net >= 0);
+    netEl.classList.toggle('bad', net < 0);
+
+    const base = Math.max(assets + debts, 1);
+    $('assetBar').style.width = `${(assets / base) * 100}%`;
+    $('debtBar').style.width = `${(debts / base) * 100}%`;
+
+    const debtRatio = assets > 0 ? (debts / assets) * 100 : 0;
+    $('summary').textContent = net >= 0
+      ? `순자산은 ${formatKRW(net)} 입니다. 부채/자산 비율은 ${debtRatio.toFixed(1)}% 입니다.`
+      : `현재 순자산은 ${formatKRW(net)} (마이너스) 입니다. 부채를 줄이거나 자산 축적 계획을 세워보세요.`;
+  }
+
+  function saveLocal() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    alert('브라우저에 저장했습니다.');
+  }
+
+  function loadLocal() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return false;
+      const parsed = JSON.parse(raw);
+      if (!parsed || !Array.isArray(parsed.assets) || !Array.isArray(parsed.debts)) return false;
+      state.assets = parsed.assets.map(x => ({ id: uid(), name: x.name || '', amount: Number(x.amount || 0) }));
+      state.debts = parsed.debts.map(x => ({ id: uid(), name: x.name || '', amount: Number(x.amount || 0) }));
+      render();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function sample() {
+    state.assets = [];
+    state.debts = [];
+    addAsset('현금/예금', 12000000);
+    addAsset('ETF/주식', 8500000);
+    addAsset('전세보증금', 20000000);
+    addDebt('학자금대출', 4200000);
+    addDebt('카드 할부', 950000);
+    render();
+  }
+
+  function reset() {
+    state.assets = [];
+    state.debts = [];
+    addAsset('', '');
+    addDebt('', '');
+    render();
+  }
+
+  function render() {
+    renderRows(state.assets, 'assetBody', true);
+    renderRows(state.debts, 'debtBody', false);
+    compute();
+  }
+
+  $('addAssetBtn').addEventListener('click', () => addAsset('', ''));
+  $('addDebtBtn').addEventListener('click', () => addDebt('', ''));
+  $('saveBtn').addEventListener('click', saveLocal);
+  $('sampleBtn').addEventListener('click', sample);
+  $('clearBtn').addEventListener('click', reset);
+
+  if (!loadLocal()) reset();
+})();
+</script>
+</body>
+</html>

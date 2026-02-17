@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>이진 탐색 시각화 | Binary Search Visualizer</title>
+  <meta name="description" content="정렬된 배열에서 이진 탐색이 동작하는 과정을 단계별로 시각화하는 교육/개발 도구" />
+  <style>
+    :root{--bg:#f7f9fd;--card:#fff;--text:#13213b;--muted:#5f7089;--line:#dbe4f3;--pri:#2563eb;--pri2:#1d4ed8;--ok:#0f766e;--bad:#be123c;--mid:#f59e0b}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;background:var(--bg);color:var(--text);padding:16px;line-height:1.55}
+    .wrap{max-width:960px;margin:0 auto}
+    .back{display:inline-block;margin-bottom:10px;color:var(--muted);text-decoration:none}
+    .panel{border:1px solid var(--line);border-radius:16px;background:var(--card);padding:16px;box-shadow:0 8px 24px rgba(15,23,42,.06)}
+    h1{font-size:clamp(1.3rem,4.4vw,2rem);margin-bottom:6px}
+    .sub{font-size:.95rem;color:var(--muted);margin-bottom:12px}
+    .field{margin-bottom:10px}
+    label{display:block;font-size:.82rem;font-weight:700;color:#33415f;margin-bottom:4px}
+    input,textarea{width:100%;padding:9px;border:1px solid var(--line);border-radius:8px;font-size:.92rem}
+    textarea{min-height:80px;resize:vertical}
+    input:focus,textarea:focus{outline:none;border-color:var(--pri);box-shadow:0 0 0 3px rgba(37,99,235,.13)}
+    .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+    button{border:none;border-radius:10px;padding:9px 12px;font-weight:700;cursor:pointer}
+    .primary{background:linear-gradient(135deg,var(--pri),var(--pri2));color:#fff}
+    .ghost{background:#eaf2ff;color:#1e3a8a}
+    .array{display:grid;grid-template-columns:repeat(auto-fill,minmax(52px,1fr));gap:6px;margin-top:10px}
+    .cell{border:1px solid var(--line);border-radius:8px;background:#fff;padding:8px;text-align:center;font-weight:700;font-size:.9rem}
+    .cell.low,.cell.high{border-color:#60a5fa;background:#eff6ff}
+    .cell.mid{border-color:#f59e0b;background:#fffbeb;color:#92400e}
+    .cell.found{border-color:#10b981;background:#ecfdf5;color:#065f46}
+    .cell.out{opacity:.35}
+    .steps{margin-top:12px;display:grid;gap:8px}
+    .step{border:1px solid var(--line);border-radius:10px;background:#fbfdff;padding:10px;font-size:.9rem}
+    .step strong{color:#1e3a8a}
+    .summary{margin-top:10px;font-size:.92rem;font-weight:700}
+    .ok{color:var(--ok)}
+    .bad{color:var(--bad)}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="/tools/">← 도구 목록으로</a>
+  <section class="panel">
+    <h1>🔍 이진 탐색 시각화</h1>
+    <p class="sub">정렬된 숫자 배열과 목표 값을 넣으면 low / mid / high 포인터 이동을 단계별로 보여줍니다.</p>
+
+    <div class="field">
+      <label for="arrInput">정렬된 배열 (쉼표 구분)</label>
+      <textarea id="arrInput">2, 5, 8, 12, 16, 21, 25, 29, 34, 42, 49, 57, 63</textarea>
+    </div>
+
+    <div class="field">
+      <label for="targetInput">찾을 값</label>
+      <input id="targetInput" type="number" value="29" />
+    </div>
+
+    <div class="toolbar">
+      <button class="primary" id="runBtn">탐색 실행</button>
+      <button class="ghost" id="sampleMissBtn">실패 케이스</button>
+      <button class="ghost" id="randomBtn">랜덤 배열 생성</button>
+    </div>
+
+    <div id="arrayView" class="array"></div>
+    <div id="summary" class="summary"></div>
+    <div id="steps" class="steps"></div>
+  </section>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+
+  function parseArray(text) {
+    return text
+      .split(',')
+      .map(v => Number(v.trim()))
+      .filter(v => Number.isFinite(v));
+  }
+
+  function runBinarySearch(arr, target) {
+    let low = 0;
+    let high = arr.length - 1;
+    const steps = [];
+
+    while (low <= high) {
+      const mid = Math.floor((low + high) / 2);
+      const midVal = arr[mid];
+
+      steps.push({ low, high, mid, midVal, found: midVal === target });
+
+      if (midVal === target) {
+        return { found: true, index: mid, steps };
+      }
+      if (midVal < target) low = mid + 1;
+      else high = mid - 1;
+    }
+
+    return { found: false, index: -1, steps };
+  }
+
+  function renderArray(arr, state, foundIndex = -1) {
+    const view = $('arrayView');
+    view.innerHTML = '';
+
+    arr.forEach((value, idx) => {
+      const el = document.createElement('div');
+      el.className = 'cell';
+      el.textContent = value;
+
+      if (state) {
+        if (idx < state.low || idx > state.high) el.classList.add('out');
+        if (idx === state.low || idx === state.high) el.classList.add('low');
+        if (idx === state.mid) el.classList.add('mid');
+      }
+      if (idx === foundIndex) el.classList.add('found');
+
+      view.appendChild(el);
+    });
+  }
+
+  function renderResult(arr, target) {
+    const sorted = [...arr].sort((a, b) => a - b);
+    const { found, index, steps } = runBinarySearch(sorted, target);
+
+    const stepsEl = $('steps');
+    stepsEl.innerHTML = steps.map((s, i) => {
+      const direction = s.found ? '✅ 목표값 발견' : (s.midVal < target ? '➡️ 오른쪽 구간 탐색' : '⬅️ 왼쪽 구간 탐색');
+      return `<article class="step"><strong>${i + 1}단계</strong> · low=${s.low}, high=${s.high}, mid=${s.mid} (값 ${s.midVal})<br>${direction}</article>`;
+    }).join('');
+
+    const summary = $('summary');
+    if (found) {
+      summary.className = 'summary ok';
+      summary.textContent = `총 ${steps.length}단계 만에 ${target}를 찾았습니다. (인덱스 ${index})`;
+      renderArray(sorted, steps[steps.length - 1], index);
+    } else {
+      summary.className = 'summary bad';
+      summary.textContent = `${target}는 배열에 없습니다. 총 ${steps.length}단계 검사 후 종료되었습니다.`;
+      renderArray(sorted, steps[steps.length - 1]);
+    }
+  }
+
+  function run() {
+    const arr = parseArray($('arrInput').value);
+    const target = Number($('targetInput').value || 0);
+
+    if (!arr.length) {
+      $('summary').className = 'summary bad';
+      $('summary').textContent = '유효한 숫자 배열을 입력하세요.';
+      $('arrayView').innerHTML = '';
+      $('steps').innerHTML = '';
+      return;
+    }
+
+    renderResult(arr, target);
+  }
+
+  function randomSample() {
+    const size = 14;
+    let n = Math.floor(Math.random() * 5) + 1;
+    const arr = [];
+    for (let i = 0; i < size; i++) {
+      n += Math.floor(Math.random() * 6) + 1;
+      arr.push(n);
+    }
+    $('arrInput').value = arr.join(', ');
+    $('targetInput').value = arr[Math.floor(Math.random() * arr.length)];
+    run();
+  }
+
+  $('runBtn').addEventListener('click', run);
+  $('sampleMissBtn').addEventListener('click', () => {
+    $('arrInput').value = '3, 7, 11, 19, 24, 31, 45, 56, 62';
+    $('targetInput').value = 18;
+    run();
+  });
+  $('randomBtn').addEventListener('click', randomSample);
+
+  run();
+})();
+</script>
+</body>
+</html>

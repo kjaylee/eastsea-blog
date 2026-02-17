@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>의사결정 매트릭스 | Decision Matrix</title>
+  <meta name="description" content="옵션별 점수와 기준 가중치를 입력해 합리적인 선택을 돕는 의사결정 매트릭스 계산기" />
+  <style>
+    :root{--bg:#f5f7fb;--card:#ffffff;--text:#13213b;--muted:#60708a;--line:#dbe3f2;--pri:#2563eb;--pri2:#1d4ed8;--ok:#0f766e;--warn:#b45309;--danger:#be123c}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;background:var(--bg);color:var(--text);line-height:1.55;padding:16px}
+    .wrap{max-width:1100px;margin:0 auto}
+    .back{display:inline-block;margin-bottom:10px;color:var(--muted);text-decoration:none}
+    .panel{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 10px 30px rgba(15,23,42,.06)}
+    h1{font-size:clamp(1.3rem,4.3vw,2rem);margin-bottom:6px}
+    .sub{color:var(--muted);margin-bottom:14px;font-size:.95rem}
+    .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+    button{border:none;border-radius:10px;padding:9px 13px;font-weight:700;cursor:pointer}
+    .primary{background:linear-gradient(135deg,var(--pri),var(--pri2));color:#fff}
+    .ghost{background:#ecf2ff;color:#1e3a8a}
+    .danger{background:#fff1f2;color:var(--danger)}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .box{border:1px solid var(--line);border-radius:12px;padding:12px;background:#fbfdff}
+    .box h2{font-size:1rem;margin-bottom:8px}
+    table{width:100%;border-collapse:collapse;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff}
+    th,td{border-bottom:1px solid var(--line);padding:8px;font-size:.9rem;text-align:left}
+    th{background:#f0f5ff;color:#35507a;font-size:.8rem}
+    tr:last-child td{border-bottom:none}
+    input{width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;font-size:.92rem}
+    input:focus{outline:none;border-color:var(--pri);box-shadow:0 0 0 3px rgba(37,99,235,.13)}
+    .matrix{margin-top:12px;overflow:auto;border:1px solid var(--line);border-radius:12px;background:#fff}
+    .matrix table{border:none;min-width:720px}
+    .result{margin-top:12px;display:grid;grid-template-columns:2fr 1fr;gap:12px}
+    .rank li{display:flex;justify-content:space-between;gap:10px;list-style:none;padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:#fff;margin-bottom:8px}
+    .rank li strong{color:var(--ok)}
+    .hint{font-size:.84rem;color:var(--muted)}
+    .warn{font-size:.85rem;color:var(--warn);margin-top:8px;font-weight:700}
+    @media (max-width:860px){.grid,.result{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="/tools/">← 도구 목록으로</a>
+  <section class="panel">
+    <h1>🧭 의사결정 매트릭스</h1>
+    <p class="sub">기준별 가중치와 옵션 점수를 넣으면 가중 합계로 우선순위를 자동 정렬합니다.</p>
+
+    <div class="toolbar">
+      <button class="primary" id="sampleBtn">샘플 불러오기</button>
+      <button class="ghost" id="addCritBtn">기준 추가</button>
+      <button class="ghost" id="addOptBtn">옵션 추가</button>
+      <button class="danger" id="resetBtn">초기화</button>
+    </div>
+
+    <div class="grid">
+      <section class="box">
+        <h2>평가 기준</h2>
+        <table>
+          <thead><tr><th style="width:52%">기준</th><th style="width:26%">가중치(%)</th><th style="width:22%">삭제</th></tr></thead>
+          <tbody id="criteriaBody"></tbody>
+        </table>
+        <p class="warn" id="weightWarn"></p>
+      </section>
+
+      <section class="box">
+        <h2>비교 옵션</h2>
+        <table>
+          <thead><tr><th style="width:78%">옵션 이름</th><th style="width:22%">삭제</th></tr></thead>
+          <tbody id="optionsBody"></tbody>
+        </table>
+        <p class="hint">점수는 아래 매트릭스에서 1~10 범위로 입력하세요.</p>
+      </section>
+    </div>
+
+    <section class="matrix" id="matrixWrap"></section>
+
+    <div class="result">
+      <section class="box">
+        <h2>순위</h2>
+        <ul id="ranking" class="rank"></ul>
+      </section>
+      <section class="box">
+        <h2>요약</h2>
+        <p class="hint" id="summary"></p>
+      </section>
+    </div>
+  </section>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const state = { criteria: [], options: [], scores: {} };
+
+  const uid = () => Math.random().toString(36).slice(2, 9);
+
+  function addCriterion(name = '', weight = 20) {
+    state.criteria.push({ id: uid(), name, weight });
+    render();
+  }
+
+  function addOption(name = '') {
+    state.options.push({ id: uid(), name });
+    render();
+  }
+
+  function scoreKey(optionId, criterionId) { return `${optionId}__${criterionId}`; }
+
+  function renderCriteria() {
+    const body = $('criteriaBody');
+    body.innerHTML = '';
+
+    state.criteria.forEach(c => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><input type="text" value="${c.name}" placeholder="예: 비용" /></td>
+        <td><input type="number" min="0" max="100" step="1" value="${c.weight}" /></td>
+        <td><button class="danger" type="button">삭제</button></td>
+      `;
+      const [nameInput, weightInput] = tr.querySelectorAll('input');
+      nameInput.addEventListener('input', () => { c.name = nameInput.value; renderMatrix(); compute(); });
+      weightInput.addEventListener('input', () => { c.weight = Number(weightInput.value || 0); compute(); });
+      tr.querySelector('button').addEventListener('click', () => {
+        state.criteria = state.criteria.filter(x => x.id !== c.id);
+        Object.keys(state.scores).forEach(k => { if (k.endsWith(`__${c.id}`)) delete state.scores[k]; });
+        render();
+      });
+      body.appendChild(tr);
+    });
+  }
+
+  function renderOptions() {
+    const body = $('optionsBody');
+    body.innerHTML = '';
+
+    state.options.forEach(o => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><input type="text" value="${o.name}" placeholder="예: 선택안 A" /></td>
+        <td><button class="danger" type="button">삭제</button></td>
+      `;
+      const input = tr.querySelector('input');
+      input.addEventListener('input', () => { o.name = input.value; compute(); renderMatrix(); });
+      tr.querySelector('button').addEventListener('click', () => {
+        state.options = state.options.filter(x => x.id !== o.id);
+        Object.keys(state.scores).forEach(k => { if (k.startsWith(`${o.id}__`)) delete state.scores[k]; });
+        render();
+      });
+      body.appendChild(tr);
+    });
+  }
+
+  function renderMatrix() {
+    const wrap = $('matrixWrap');
+    if (!state.criteria.length || !state.options.length) {
+      wrap.innerHTML = '<p class="hint" style="padding:12px">기준과 옵션을 각각 1개 이상 추가하면 점수 입력 매트릭스가 표시됩니다.</p>';
+      return;
+    }
+
+    const thead = `<tr><th>옵션 \\ 기준</th>${state.criteria.map(c => `<th>${c.name || '이름 없음'}<br><small>(${c.weight || 0}%)</small></th>`).join('')}<th>가중 합계</th></tr>`;
+
+    const rows = state.options.map(o => {
+      const cells = state.criteria.map(c => {
+        const k = scoreKey(o.id, c.id);
+        const val = Number(state.scores[k] || 0);
+        return `<td><input data-k="${k}" type="number" min="0" max="10" step="0.1" value="${val}" /></td>`;
+      }).join('');
+      return `<tr><th>${o.name || '이름 없음'}</th>${cells}<td data-total="${o.id}">0.00</td></tr>`;
+    }).join('');
+
+    wrap.innerHTML = `<table><thead>${thead}</thead><tbody>${rows}</tbody></table>`;
+
+    wrap.querySelectorAll('input[data-k]').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const k = inp.dataset.k;
+        state.scores[k] = Number(inp.value || 0);
+        compute();
+      });
+    });
+  }
+
+  function compute() {
+    const weightSum = state.criteria.reduce((s, c) => s + Number(c.weight || 0), 0);
+    const normalized = weightSum > 0 ? weightSum : 1;
+
+    const results = state.options.map(o => {
+      const total = state.criteria.reduce((sum, c) => {
+        const v = Number(state.scores[scoreKey(o.id, c.id)] || 0);
+        return sum + v * Number(c.weight || 0);
+      }, 0) / normalized;
+      return { id: o.id, name: o.name || '이름 없음', score: total };
+    }).sort((a, b) => b.score - a.score);
+
+    state.options.forEach(o => {
+      const cell = document.querySelector(`[data-total="${o.id}"]`);
+      if (cell) {
+        const found = results.find(r => r.id === o.id);
+        cell.textContent = found ? found.score.toFixed(2) : '0.00';
+      }
+    });
+
+    const ranking = $('ranking');
+    ranking.innerHTML = results.map((r, i) => `<li><span>${i + 1}. ${r.name}</span><strong>${r.score.toFixed(2)}</strong></li>`).join('') || '<li>아직 결과가 없습니다.</li>';
+
+    const warn = $('weightWarn');
+    if (weightSum === 100) warn.textContent = '가중치 합계가 100%로 적절합니다.';
+    else if (weightSum < 100) warn.textContent = `가중치가 ${100 - weightSum}% 부족합니다.`;
+    else warn.textContent = `가중치가 ${weightSum - 100}% 초과되었습니다.`;
+
+    const top = results[0];
+    $('summary').textContent = top
+      ? `현재 1순위는 "${top.name}" (${top.score.toFixed(2)}점)입니다. 가중치 합계: ${weightSum.toFixed(1)}%.`
+      : '옵션과 기준을 입력하면 요약이 표시됩니다.';
+  }
+
+  function reset() {
+    state.criteria = [];
+    state.options = [];
+    state.scores = {};
+    addCriterion('', 50);
+    addCriterion('', 50);
+    addOption('');
+    addOption('');
+    render();
+  }
+
+  function loadSample() {
+    state.criteria = [];
+    state.options = [];
+    state.scores = {};
+
+    addCriterion('비용 효율', 30);
+    addCriterion('성장 가능성', 35);
+    addCriterion('실행 난이도', 20);
+    addCriterion('팀 선호도', 15);
+
+    addOption('내부 개발');
+    addOption('외주 개발');
+    addOption('노코드 도입');
+
+    const ids = {
+      o: state.options.map(o => o.id),
+      c: state.criteria.map(c => c.id)
+    };
+
+    const sampleScores = [
+      [7, 9, 5, 8],
+      [6, 7, 8, 6],
+      [8, 6, 9, 7]
+    ];
+
+    ids.o.forEach((oid, oi) => {
+      ids.c.forEach((cid, ci) => {
+        state.scores[scoreKey(oid, cid)] = sampleScores[oi][ci];
+      });
+    });
+
+    render();
+  }
+
+  function render() {
+    renderCriteria();
+    renderOptions();
+    renderMatrix();
+    compute();
+  }
+
+  $('addCritBtn').addEventListener('click', () => addCriterion('', 10));
+  $('addOptBtn').addEventListener('click', () => addOption(''));
+  $('sampleBtn').addEventListener('click', loadSample);
+  $('resetBtn').addEventListener('click', reset);
+
+  reset();
+})();
+</script>
+</body>
+</html>

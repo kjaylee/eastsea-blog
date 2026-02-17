@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>섹션 디바이더 생성기 | Shape Divider Generator</title>
+  <meta name="description" content="웨이브, 커브, 지그재그 등 SVG 섹션 디바이더를 생성하고 CSS 코드로 복사하는 디자인 도구" />
+  <style>
+    :root{--bg:#f4f7ff;--card:#fff;--text:#13213b;--muted:#60708a;--line:#dbe3f2;--pri:#2563eb;--pri2:#1d4ed8}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;background:var(--bg);color:var(--text);padding:16px;line-height:1.55}
+    .wrap{max-width:1050px;margin:0 auto}
+    .back{display:inline-block;margin-bottom:10px;text-decoration:none;color:var(--muted)}
+    .panel{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 8px 24px rgba(15,23,42,.06)}
+    h1{font-size:clamp(1.3rem,4.5vw,2rem);margin-bottom:6px}
+    .sub{font-size:.95rem;color:var(--muted);margin-bottom:14px}
+    .grid{display:grid;grid-template-columns:1.1fr 1fr;gap:12px}
+    .box{border:1px solid var(--line);border-radius:12px;padding:12px;background:#fbfdff}
+    .box h2{font-size:1rem;margin-bottom:8px}
+    .controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    .field label{display:block;font-size:.82rem;font-weight:700;color:#33415f;margin-bottom:4px}
+    input,select,textarea{width:100%;padding:9px;border:1px solid var(--line);border-radius:8px;font-size:.92rem;background:#fff}
+    input:focus,select:focus,textarea:focus{outline:none;border-color:var(--pri);box-shadow:0 0 0 3px rgba(37,99,235,.13)}
+    .checks{display:flex;gap:12px;flex-wrap:wrap;margin-top:4px}
+    .checks label{display:flex;gap:6px;align-items:center;font-size:.88rem;color:#3c4e70}
+    .preview{height:220px;border-radius:12px;border:1px solid var(--line);overflow:hidden;background:linear-gradient(180deg,#dbeafe 0%,#eff6ff 55%,#ffffff 55%,#ffffff 100%);display:flex;align-items:flex-start}
+    .preview.bottom{align-items:flex-end}
+    #svgPreview{width:100%;height:auto;display:block}
+    .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+    button{border:none;border-radius:10px;padding:9px 12px;font-weight:700;cursor:pointer}
+    .primary{background:linear-gradient(135deg,var(--pri),var(--pri2));color:#fff}
+    .ghost{background:#ecf2ff;color:#1e3a8a}
+    textarea{min-height:120px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.82rem;resize:vertical}
+    @media (max-width:860px){.grid,.controls{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="/tools/">← 도구 목록으로</a>
+  <section class="panel">
+    <h1>〰️ 섹션 디바이더 생성기</h1>
+    <p class="sub">랜딩 페이지/블로그 섹션 전환에 쓰는 SVG divider를 만들고 코드로 복사하세요.</p>
+
+    <div class="grid">
+      <section class="box">
+        <h2>옵션</h2>
+        <div class="controls">
+          <div class="field">
+            <label for="shapeType">모양</label>
+            <select id="shapeType">
+              <option value="wave">Wave</option>
+              <option value="curve">Curve</option>
+              <option value="triangle">Triangle</option>
+              <option value="zigzag">Zigzag</option>
+              <option value="slope">Slope</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="fillColor">색상</label>
+            <input id="fillColor" type="color" value="#2563eb" />
+          </div>
+          <div class="field">
+            <label for="height">높이(px)</label>
+            <input id="height" type="range" min="60" max="320" step="2" value="160" />
+          </div>
+          <div class="field">
+            <label for="heightNum">높이 수치</label>
+            <input id="heightNum" type="number" min="60" max="320" step="2" value="160" />
+          </div>
+        </div>
+        <div class="checks">
+          <label><input type="checkbox" id="flipX" /> 좌우 반전</label>
+          <label><input type="checkbox" id="flipY" /> 상하 반전</label>
+          <label><input type="checkbox" id="toBottom" /> 하단 배치</label>
+        </div>
+
+        <div class="toolbar">
+          <button class="primary" id="copySvgBtn">SVG 복사</button>
+          <button class="ghost" id="copyCssBtn">CSS 복사</button>
+        </div>
+      </section>
+
+      <section class="box">
+        <h2>미리보기</h2>
+        <div class="preview" id="previewBox"></div>
+      </section>
+    </div>
+
+    <div class="grid" style="margin-top:12px">
+      <section class="box">
+        <h2>SVG 코드</h2>
+        <textarea id="svgCode" readonly></textarea>
+      </section>
+      <section class="box">
+        <h2>CSS 코드</h2>
+        <textarea id="cssCode" readonly></textarea>
+      </section>
+    </div>
+  </section>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const W = 1200;
+
+  const getPath = (type, h) => {
+    const m = Math.round(h / 2);
+    switch (type) {
+      case 'curve':
+        return `M0 ${h} L0 ${m} Q ${W/2} ${-m/2} ${W} ${m} L${W} ${h} Z`;
+      case 'triangle':
+        return `M0 ${h} L${W/2} 0 L${W} ${h} Z`;
+      case 'zigzag': {
+        const step = W / 8;
+        let d = `M0 ${h}`;
+        for (let i = 0; i <= 8; i++) {
+          const x = i * step;
+          const y = i % 2 === 0 ? m * 0.35 : h;
+          d += ` L${x.toFixed(1)} ${y.toFixed(1)}`;
+        }
+        return d + ` L${W} ${h} Z`;
+      }
+      case 'slope':
+        return `M0 ${h} L0 ${h*0.2} L${W} ${h*0.85} L${W} ${h} Z`;
+      case 'wave':
+      default:
+        return `M0 ${m} C 120 ${h} 240 0 360 ${m} C 480 ${h} 600 0 720 ${m} C 840 ${h} 960 0 1080 ${m} C 1140 ${h*0.9} 1170 ${h*0.75} ${W} ${m} L${W} ${h} L0 ${h} Z`;
+    }
+  };
+
+  function render() {
+    const type = $('shapeType').value;
+    const color = $('fillColor').value;
+    const h = Math.max(60, Math.min(320, Number($('heightNum').value || 160)));
+    const flipX = $('flipX').checked;
+    const flipY = $('flipY').checked;
+    const toBottom = $('toBottom').checked;
+
+    $('height').value = h;
+    $('heightNum').value = h;
+
+    const path = getPath(type, h);
+    const transforms = [];
+    if (flipX) transforms.push(`translate(${W} 0) scale(-1 1)`);
+    if (flipY) transforms.push(`translate(0 ${h}) scale(1 -1)`);
+
+    const gOpen = transforms.length ? `<g transform="${transforms.join(' ')}">` : '<g>';
+
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${h}" preserveAspectRatio="none" aria-hidden="true"><desc>Section divider</desc>${gOpen}<path fill="${color}" d="${path}"/></g></svg>`;
+
+    const box = $('previewBox');
+    box.classList.toggle('bottom', toBottom);
+    box.innerHTML = svg;
+
+    const encoded = encodeURIComponent(svg)
+      .replace(/%0A/g, '')
+      .replace(/%20/g, ' ')
+      .replace(/%3D/g, '=')
+      .replace(/%3A/g, ':')
+      .replace(/%2F/g, '/');
+
+    $('svgCode').value = svg;
+    $('cssCode').value = `.section-divider{\n  width:100%;\n  height:${h}px;\n  background-repeat:no-repeat;\n  background-size:100% 100%;\n  background-image:url("data:image/svg+xml,${encoded}");\n}`;
+  }
+
+  async function copyFrom(id) {
+    const text = $(id).value;
+    try {
+      await navigator.clipboard.writeText(text);
+      alert('복사되었습니다.');
+    } catch {
+      alert('클립보드 복사에 실패했습니다. 직접 선택해 복사해 주세요.');
+    }
+  }
+
+  ['shapeType', 'fillColor', 'height', 'heightNum', 'flipX', 'flipY', 'toBottom'].forEach(id => {
+    $(id).addEventListener('input', render);
+    $(id).addEventListener('change', render);
+  });
+
+  $('copySvgBtn').addEventListener('click', () => copyFrom('svgCode'));
+  $('copyCssBtn').addEventListener('click', () => copyFrom('cssCode'));
+
+  render();
+})();
+</script>
+</body>
+</html>

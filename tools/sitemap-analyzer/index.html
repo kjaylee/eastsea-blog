@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>사이트맵 분석기 | Sitemap Analyzer</title>
+  <meta name="description" content="XML 사이트맵을 분석해 URL 수, lastmod 타임라인, changefreq 분포, stale/404/orphan 후보를 점검하고 CSV로 내보냅니다." />
+  <style>
+    :root{--bg:#060c18;--bg2:#0b1326;--card:#101b33;--line:#273c65;--txt:#ecf3ff;--muted:#a8b9dd;--accent:#74abff;--ok:#22c55e;--warn:#f59e0b;--bad:#ef4444}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;color:var(--txt);padding:18px;
+      background:radial-gradient(1000px 700px at 20% -15%,#223660 0,transparent 54%),linear-gradient(145deg,var(--bg),var(--bg2));min-height:100vh}
+    .wrap{max-width:1240px;margin:0 auto}.back{color:var(--muted);text-decoration:none;font-size:.9rem}
+    h1{margin:.45rem 0 .25rem;font-size:clamp(1.35rem,2.7vw,2rem)}.sub{color:var(--muted);margin:0 0 1rem}
+    .grid{display:grid;grid-template-columns:380px 1fr;gap:14px}.card{background:rgba(16,27,51,.88);border:1px solid var(--line);border-radius:16px;box-shadow:0 16px 40px rgba(0,0,0,.33)}
+    .inner{padding:14px}.title{font-size:.93rem;font-weight:800;margin:0 0 .65rem}
+    .field{display:flex;flex-direction:column;gap:6px;margin-bottom:9px} label{font-size:.8rem;color:var(--muted);font-weight:700}
+    input,select,button,textarea{font:inherit;color:var(--txt);background:#0d1730;border:1px solid var(--line);border-radius:10px;padding:10px 11px}
+    textarea{min-height:82px;resize:vertical}
+    input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(116,171,255,.2)}
+    button{cursor:pointer;font-weight:700}.primary{background:linear-gradient(135deg,#2f66ff,#5da8ff);border-color:transparent}
+    .row{display:flex;gap:8px;flex-wrap:wrap}
+    .stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+    .stat{border:1px solid var(--line);border-radius:12px;padding:10px;background:#0c1730}.k{font-size:.73rem;color:var(--muted)}.v{font-size:1.18rem;font-weight:800;margin-top:3px}
+    .v.ok{color:var(--ok)} .v.warn{color:var(--warn)} .v.bad{color:var(--bad)}
+    canvas{width:100%;height:220px;border:1px solid var(--line);border-radius:12px;background:#0b1630}
+    .two{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+    .panel{border:1px solid var(--line);background:#0c1730;border-radius:12px;padding:9px}
+    .panel h3{margin:0 0 .4rem;font-size:.84rem}.list{max-height:210px;overflow:auto;font-size:.8rem;color:#d7e6ff;line-height:1.5}
+    .list li{margin-bottom:4px;word-break:break-all}.list small{color:var(--muted)}
+    .freq{display:flex;flex-wrap:wrap;gap:6px}.chip{border:1px solid var(--line);border-radius:999px;padding:5px 9px;font-size:.75rem;background:#111f3d}
+    .status{font-size:.8rem;color:var(--muted);min-height:1.2em;margin-top:8px}
+    @media (max-width:1020px){.grid{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.two{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="/tools/">← 도구 목록으로</a>
+  <h1>🗺️ 사이트맵 분석기</h1>
+  <p class="sub">sitemap XML 상태 분석 · stale/404/orphan 후보 탐지 · 타임라인/CSV export</p>
+
+  <div class="grid">
+    <section class="card"><div class="inner">
+      <h2 class="title">분석 입력</h2>
+      <div class="field">
+        <label for="sitemapUrl">Sitemap URL</label>
+        <input id="sitemapUrl" value="https://tools.eastsea.xyz/sitemap.xml" />
+      </div>
+      <div class="row" style="margin-bottom:8px">
+        <button id="presetTools">tools.eastsea.xyz</button>
+        <button id="presetGames">games.eastsea.xyz</button>
+        <button id="presetBlog">eastsea.monster</button>
+      </div>
+      <div class="field">
+        <label for="statusLimit">404 점검 최대 URL 수 (속도 최적화)</label>
+        <input id="statusLimit" type="number" min="10" max="300" value="90" />
+      </div>
+      <div class="row">
+        <button class="primary" id="analyzeBtn">분석 시작</button>
+        <button id="exportBtn">CSV 내보내기</button>
+      </div>
+      <p class="status" id="status"></p>
+      <p class="status">※ 교차 출처는 프록시(r.jina/allorigins) fallback을 사용합니다.</p>
+    </div></section>
+
+    <section class="card"><div class="inner">
+      <div class="stats" id="stats"></div>
+      <h2 class="title" style="margin-top:12px">업데이트 타임라인 (lastmod)</h2>
+      <canvas id="timeline" width="900" height="280"></canvas>
+      <div class="freq" id="freqBox" style="margin-top:10px"></div>
+      <div class="two">
+        <div class="panel"><h3>⚠️ Stale URLs (>30일)</h3><ol class="list" id="staleList"></ol></div>
+        <div class="panel"><h3>❌ Missing URLs (404+)</h3><ol class="list" id="missingList"></ol></div>
+      </div>
+      <div class="panel" style="margin-top:10px"><h3>🕳️ Orphan 후보 (홈페이지 링크 미발견)</h3><ol class="list" id="orphanList"></ol></div>
+    </div></section>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const state = { rows: [], timeline: [], stale: [], missing: [], orphans: [], freq: {} };
+
+  function setStatus(msg){ $('status').textContent = msg; }
+  function esc(s){ return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+  function normalizeUrl(raw){
+    let u = (raw || '').trim();
+    if(!u) return '';
+    if(!/^https?:\/\//i.test(u)) u = 'https://' + u;
+    try { return new URL(u).toString(); } catch { return ''; }
+  }
+
+  async function fetchTextWithFallback(url){
+    const candidates = [
+      async () => {
+        const r = await fetch(url);
+        if(!r.ok) throw new Error('HTTP ' + r.status);
+        return await r.text();
+      },
+      async () => {
+        const proxy = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url);
+        const r = await fetch(proxy);
+        if(!r.ok) throw new Error('allorigins ' + r.status);
+        return await r.text();
+      },
+      async () => {
+        const proxy = 'https://r.jina.ai/http://' + url.replace(/^https?:\/\//,'');
+        const r = await fetch(proxy);
+        if(!r.ok) throw new Error('jina ' + r.status);
+        return await r.text();
+      }
+    ];
+    let last;
+    for(const fn of candidates){
+      try {
+        const t = await fn();
+        if(t?.length) return t;
+      } catch (e){ last = e; }
+    }
+    throw last || new Error('fetch failed');
+  }
+
+  function parseSitemapXml(xmlText){
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(xmlText, 'application/xml');
+    if(doc.querySelector('parsererror')) throw new Error('XML 파싱 실패');
+
+    const smNodes = [...doc.querySelectorAll('sitemapindex > sitemap > loc')];
+    if(smNodes.length){
+      return { type:'index', childSitemaps: smNodes.map(n => n.textContent.trim()).filter(Boolean) };
+    }
+
+    const urls = [...doc.querySelectorAll('urlset > url')].map(node => ({
+      loc: node.querySelector('loc')?.textContent?.trim() || '',
+      lastmod: node.querySelector('lastmod')?.textContent?.trim() || '',
+      changefreq: (node.querySelector('changefreq')?.textContent?.trim() || 'unknown').toLowerCase(),
+      priority: node.querySelector('priority')?.textContent?.trim() || ''
+    })).filter(r => r.loc);
+
+    return { type:'urlset', urls };
+  }
+
+  async function collectRows(sitemapUrl){
+    const rootXml = await fetchTextWithFallback(sitemapUrl);
+    const parsed = parseSitemapXml(rootXml);
+
+    if(parsed.type === 'urlset') return parsed.urls;
+
+    const rows = [];
+    const children = parsed.childSitemaps.slice(0, 12);
+    for(let i=0;i<children.length;i++){
+      setStatus(`sitemap index 처리 중 ${i+1}/${children.length}`);
+      try {
+        const xml = await fetchTextWithFallback(children[i]);
+        const sub = parseSitemapXml(xml);
+        if(sub.type === 'urlset') rows.push(...sub.urls);
+      } catch(err){
+        console.warn('sub sitemap error', children[i], err);
+      }
+    }
+    return rows;
+  }
+
+  function summarize(rows){
+    const now = Date.now();
+    const staleMs = 30 * 24 * 3600 * 1000;
+    const stale = [];
+    const freq = {};
+    const timeline = {};
+    let min = null, max = null;
+
+    rows.forEach(r => {
+      const freqKey = r.changefreq || 'unknown';
+      freq[freqKey] = (freq[freqKey] || 0) + 1;
+
+      const d = r.lastmod ? new Date(r.lastmod) : null;
+      if(d && !isNaN(d.getTime())){
+        if(now - d.getTime() > staleMs) stale.push(r);
+        const day = d.toISOString().slice(0,10);
+        timeline[day] = (timeline[day] || 0) + 1;
+        if(!min || d < min) min = d;
+        if(!max || d > max) max = d;
+      }
+    });
+
+    return {
+      stale,
+      freq,
+      timeline: Object.entries(timeline).sort((a,b) => a[0].localeCompare(b[0])),
+      dateRange: {
+        min: min ? min.toISOString().slice(0,10) : '-',
+        max: max ? max.toISOString().slice(0,10) : '-'
+      }
+    };
+  }
+
+  async function checkStatuses(rows, limit){
+    const targets = rows.slice(0, limit);
+    const missing = [];
+    let done = 0;
+    const concurrency = 6;
+
+    async function checkOne(row){
+      try {
+        const proxy = 'https://r.jina.ai/http://' + row.loc.replace(/^https?:\/\//, '');
+        const txt = await fetchTextWithFallback(proxy);
+        const m = txt.match(/Warning:\s*Target URL returned error\s*(\d{3})/i);
+        const code = m ? Number(m[1]) : 200;
+        row.status = code;
+        if(code >= 400) missing.push(row);
+      } catch {
+        row.status = 0;
+        missing.push(row);
+      } finally {
+        done += 1;
+        setStatus(`상태 점검 ${done}/${targets.length}`);
+      }
+    }
+
+    const queue = [...targets];
+    const workers = Array.from({length:Math.min(concurrency, queue.length)}, async () => {
+      while(queue.length) await checkOne(queue.shift());
+    });
+    await Promise.all(workers);
+
+    return missing;
+  }
+
+  async function findOrphans(rows, sitemapUrl){
+    try {
+      const baseOrigin = new URL(sitemapUrl).origin;
+      const homeHtml = await fetchTextWithFallback(baseOrigin + '/');
+      const hrefs = [...homeHtml.matchAll(/href=["']([^"']+)["']/gi)].map(m => m[1]);
+      const linked = new Set();
+
+      hrefs.forEach(href => {
+        try {
+          const abs = new URL(href, baseOrigin).toString();
+          if(abs.startsWith(baseOrigin)) linked.add(abs.replace(/\/$/, ''));
+        } catch {}
+      });
+
+      return rows.filter(r => !linked.has(r.loc.replace(/\/$/, ''))).slice(0, 60);
+    } catch {
+      return [];
+    }
+  }
+
+  function drawTimeline(series){
+    const c = $('timeline');
+    const ctx = c.getContext('2d');
+    ctx.clearRect(0,0,c.width,c.height);
+    ctx.fillStyle = '#0b1630';
+    ctx.fillRect(0,0,c.width,c.height);
+
+    if(!series.length){
+      ctx.fillStyle = '#9fb2dc';
+      ctx.font = '16px sans-serif';
+      ctx.fillText('lastmod 데이터 없음', 26, 42);
+      return;
+    }
+
+    const pad = {l:52,r:18,t:20,b:44};
+    const w = c.width - pad.l - pad.r;
+    const h = c.height - pad.t - pad.b;
+    const maxV = Math.max(...series.map(s => s[1]), 1);
+
+    ctx.strokeStyle = '#22406c';
+    ctx.lineWidth = 1;
+    for(let i=0;i<=4;i++){
+      const y = pad.t + (h * i / 4);
+      ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(c.width-pad.r, y); ctx.stroke();
+      const v = Math.round(maxV * (1 - i/4));
+      ctx.fillStyle = '#8ea6d7';
+      ctx.font = '12px sans-serif';
+      ctx.fillText(String(v), 10, y+4);
+    }
+
+    ctx.strokeStyle = '#6fa8ff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    series.forEach((pt, i) => {
+      const x = pad.l + (w * i / Math.max(series.length - 1, 1));
+      const y = pad.t + h - (pt[1] / maxV) * h;
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    });
+    ctx.stroke();
+
+    ctx.fillStyle = '#bed5ff';
+    ctx.font = '12px sans-serif';
+    const first = series[0][0], last = series[series.length-1][0];
+    ctx.fillText(first, pad.l, c.height-14);
+    const tw = ctx.measureText(last).width;
+    ctx.fillText(last, c.width-pad.r-tw, c.height-14);
+  }
+
+  function render(){
+    const total = state.rows.length;
+    const staleCount = state.stale.length;
+    const missingCount = state.missing.length;
+    const orphanCount = state.orphans.length;
+
+    $('stats').innerHTML = [
+      ['총 URL', total, ''],
+      ['Stale (>30d)', staleCount, staleCount ? 'warn' : 'ok'],
+      ['Missing (404+)', missingCount, missingCount ? 'bad' : 'ok'],
+      ['Orphan 후보', orphanCount, orphanCount ? 'warn' : 'ok']
+    ].map(([k,v,c]) => `<div class="stat"><div class="k">${k}</div><div class="v ${c}">${v}</div></div>`).join('');
+
+    $('freqBox').innerHTML = Object.entries(state.freq).sort((a,b)=>b[1]-a[1]).map(([k,v]) => `<span class="chip">${esc(k)}: ${v}</span>`).join('') || '<span class="chip">changefreq 데이터 없음</span>';
+    $('staleList').innerHTML = state.stale.slice(0,80).map(r => `<li>${esc(r.loc)}<br><small>lastmod: ${esc(r.lastmod||'-')}</small></li>`).join('') || '<li><small>없음</small></li>';
+    $('missingList').innerHTML = state.missing.slice(0,80).map(r => `<li>${esc(r.loc)}<br><small>status: ${r.status || 'error'}</small></li>`).join('') || '<li><small>없음</small></li>';
+    $('orphanList').innerHTML = state.orphans.slice(0,80).map(r => `<li>${esc(r.loc)}</li>`).join('') || '<li><small>없음 / 분석 불가</small></li>';
+    drawTimeline(state.timeline);
+  }
+
+  function exportCsv(){
+    if(!state.rows.length){ alert('먼저 분석을 실행하세요.'); return; }
+    const orphanSet = new Set(state.orphans.map(o => o.loc));
+    const header = ['loc','lastmod','changefreq','priority','status','stale','orphanCandidate'];
+    const rows = state.rows.map(r => [
+      r.loc,
+      r.lastmod || '',
+      r.changefreq || '',
+      r.priority || '',
+      r.status ?? '',
+      state.stale.some(s => s.loc === r.loc) ? 'yes' : 'no',
+      orphanSet.has(r.loc) ? 'yes' : 'no'
+    ]);
+    const csv = [header, ...rows].map(row => row.map(cell => `"${String(cell).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `sitemap-analysis-${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+
+  async function analyze(){
+    const sitemapUrl = normalizeUrl($('sitemapUrl').value);
+    if(!sitemapUrl){ alert('유효한 sitemap URL을 입력하세요.'); return; }
+    const limit = Math.max(10, Math.min(300, Number($('statusLimit').value) || 90));
+
+    try {
+      setStatus('사이트맵 로딩 중...');
+      const rows = await collectRows(sitemapUrl);
+      if(!rows.length) throw new Error('URL 항목이 없습니다.');
+
+      setStatus('기본 통계 계산 중...');
+      const sum = summarize(rows);
+      state.rows = rows;
+      state.stale = sum.stale;
+      state.freq = sum.freq;
+      state.timeline = sum.timeline;
+      render();
+
+      setStatus('404 점검 시작...');
+      state.missing = await checkStatuses(rows, limit);
+      setStatus('Orphan 후보 탐지 중...');
+      state.orphans = await findOrphans(rows, sitemapUrl);
+
+      render();
+      setStatus(`완료: 총 ${rows.length} URLs 분석`);
+    } catch(err){
+      setStatus('실패: ' + err.message);
+      alert(err.message);
+    }
+  }
+
+  function wire(){
+    $('analyzeBtn').addEventListener('click', analyze);
+    $('exportBtn').addEventListener('click', exportCsv);
+    $('presetTools').addEventListener('click', () => $('sitemapUrl').value = 'https://tools.eastsea.xyz/sitemap.xml');
+    $('presetGames').addEventListener('click', () => $('sitemapUrl').value = 'https://games.eastsea.xyz/sitemap.xml');
+    $('presetBlog').addEventListener('click', () => $('sitemapUrl').value = 'https://eastsea.monster/sitemap.xml');
+  }
+
+  wire();
+  render();
+})();
+</script>
+</body>
+</html>

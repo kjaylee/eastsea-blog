@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Password Entropy Checker | EastSea Tools</title>
+  <style>
+    :root {
+      --bg: #f4f7ff;
+      --card: #ffffff;
+      --line: #e6eaf2;
+      --text: #111827;
+      --muted: #6b7280;
+      --accent: #2563eb;
+      --accent-2: #06b6d4;
+      --good: #059669;
+      --warn: #d97706;
+      --bad: #dc2626;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: linear-gradient(165deg, #eef2ff, #f8fbff 48%, #f4f7ff);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .wrap { max-width: 980px; margin: 0 auto; }
+    .back {
+      display: inline-block;
+      text-decoration: none;
+      color: #4b5563;
+      margin-bottom: 12px;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-weight: 600;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 22px;
+      box-shadow: 0 15px 35px rgba(37,99,235,0.10);
+      margin-bottom: 16px;
+    }
+
+    h1 { margin: 0 0 6px; font-size: clamp(1.35rem, 3vw, 2rem); }
+    .sub { margin: 0 0 16px; color: var(--muted); }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 12px;
+    }
+
+    .field label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 0.86rem;
+      color: var(--muted);
+      font-weight: 600;
+    }
+    input, select {
+      width: 100%;
+      padding: 12px 13px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      font-size: 1rem;
+      color: var(--text);
+      background: #fff;
+    }
+
+    .meter {
+      margin-top: 12px;
+      background: #eef2ff;
+      border-radius: 999px;
+      height: 12px;
+      overflow: hidden;
+      border: 1px solid #dbe4ff;
+    }
+    .meter > div {
+      height: 100%;
+      width: 0;
+      background: linear-gradient(90deg, #ef4444, #f59e0b, #22c55e);
+      transition: width .3s ease;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .pill {
+      border: 1px solid var(--line);
+      background: #fbfdff;
+      border-radius: 12px;
+      padding: 10px;
+    }
+    .pill .l { font-size: 0.8rem; color: var(--muted); margin-bottom: 4px; }
+    .pill .v { font-size: 1.03rem; font-weight: 800; }
+
+    .checks {
+      margin-top: 12px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      font-size: 0.9rem;
+    }
+    .check {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 9px 10px;
+      background: #fff;
+    }
+
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    th, td {
+      padding: 11px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+    }
+    th { color: var(--muted); font-size: 0.82rem; }
+
+    .danger { color: var(--bad); }
+    .warn { color: var(--warn); }
+    .good { color: var(--good); }
+
+    @media (max-width: 900px) {
+      .grid { grid-template-columns: 1fr; }
+      .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .checks { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <a class="back" href="../">← Back to tools</a>
+
+    <section class="card">
+      <h1>🔐 Password Entropy Checker</h1>
+      <p class="sub">Estimate entropy (bits), crack difficulty, and practical attack-time scenarios. Everything runs locally in your browser.</p>
+
+      <div class="grid">
+        <div class="field">
+          <label for="pwd">Password</label>
+          <input id="pwd" type="text" autocomplete="off" placeholder="Type or paste a password..." />
+        </div>
+        <div class="field">
+          <label for="rate">Primary Guess Rate</label>
+          <select id="rate">
+            <option value="10">Online throttled (10 guesses/sec)</option>
+            <option value="10000">Online weak protection (10K/sec)</option>
+            <option value="100000000">Offline hash (100M/sec)</option>
+            <option value="10000000000">Offline GPU (10B/sec)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="meter"><div id="meterFill"></div></div>
+
+      <div class="summary">
+        <div class="pill"><div class="l">Entropy</div><div class="v" id="entropy">-</div></div>
+        <div class="pill"><div class="l">Estimated Strength</div><div class="v" id="strength">-</div></div>
+        <div class="pill"><div class="l">Charset Size</div><div class="v" id="charset">-</div></div>
+        <div class="pill"><div class="l">Avg Crack Time</div><div class="v" id="avgTime">-</div></div>
+      </div>
+
+      <div class="checks" id="checks"></div>
+    </section>
+
+    <section class="card">
+      <h2 style="margin:0 0 10px;">Attack Scenario Estimates</h2>
+      <table>
+        <thead>
+          <tr><th>Scenario</th><th>Guess Rate</th><th>Estimated Time (Average)</th></tr>
+        </thead>
+        <tbody id="scenarios"></tbody>
+      </table>
+    </section>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    const scenarioRates = [
+      ['Online throttled', 10],
+      ['Online weak lockout', 10000],
+      ['Offline single GPU', 1e8],
+      ['Offline multi-GPU rig', 1e10],
+      ['Large cracking cluster', 1e12]
+    ];
+
+    function detectCharset(p) {
+      let size = 0;
+      const hasLower = /[a-z]/.test(p);
+      const hasUpper = /[A-Z]/.test(p);
+      const hasDigit = /\d/.test(p);
+      const hasSymbol = /[^A-Za-z0-9\s]/.test(p);
+      const hasSpace = /\s/.test(p);
+      const hasOther = /[^\x00-\x7F]/.test(p);
+
+      if (hasLower) size += 26;
+      if (hasUpper) size += 26;
+      if (hasDigit) size += 10;
+      if (hasSymbol) size += 33;
+      if (hasSpace) size += 1;
+      if (hasOther) size += 100;
+
+      return { size: Math.max(size, p ? 1 : 0), hasLower, hasUpper, hasDigit, hasSymbol, hasSpace, hasOther };
+    }
+
+    function classify(bits) {
+      if (bits < 28) return ['Very Weak', 'danger'];
+      if (bits < 36) return ['Weak', 'danger'];
+      if (bits < 60) return ['Reasonable', 'warn'];
+      if (bits < 80) return ['Strong', 'good'];
+      return ['Very Strong', 'good'];
+    }
+
+    function formatDurationFromLog10(log10Seconds) {
+      if (!isFinite(log10Seconds)) return '∞';
+      if (log10Seconds > 20) return `~10^${log10Seconds.toFixed(1)} sec`;
+      const sec = Math.pow(10, log10Seconds);
+      if (sec < 1) return `${(sec * 1000).toFixed(1)} ms`;
+      if (sec < 60) return `${sec.toFixed(1)} sec`;
+      const min = sec / 60;
+      if (min < 60) return `${min.toFixed(1)} min`;
+      const hr = min / 60;
+      if (hr < 24) return `${hr.toFixed(1)} hrs`;
+      const day = hr / 24;
+      if (day < 365) return `${day.toFixed(1)} days`;
+      const year = day / 365;
+      if (year < 1e6) return `${year.toFixed(1)} years`;
+      return `${year.toExponential(2)} years`;
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/[&<>'"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[c]));
+    }
+
+    function update() {
+      const pwd = $('pwd').value;
+      const len = pwd.length;
+      const info = detectCharset(pwd);
+      const bits = len > 0 && info.size > 1 ? len * Math.log2(info.size) : 0;
+
+      const [label, cls] = classify(bits);
+      $('entropy').textContent = `${bits.toFixed(1)} bits`;
+      $('strength').innerHTML = `<span class="${cls}">${label}</span>`;
+      $('charset').textContent = info.size ? info.size : '-';
+
+      const meterPct = Math.min(100, (bits / 100) * 100);
+      $('meterFill').style.width = `${meterPct}%`;
+
+      const rate = parseFloat($('rate').value);
+      const log10AvgGuesses = bits * Math.LOG10E * Math.log(2) - Math.log10(2);
+      const log10PrimaryTime = len ? (log10AvgGuesses - Math.log10(rate)) : -Infinity;
+      $('avgTime').textContent = len ? formatDurationFromLog10(log10PrimaryTime) : '-';
+
+      const checks = [
+        [len >= 12, 'At least 12 characters'],
+        [len >= 16, 'At least 16 characters (recommended)'],
+        [info.hasLower, 'Contains lowercase letters'],
+        [info.hasUpper, 'Contains uppercase letters'],
+        [info.hasDigit, 'Contains numbers'],
+        [info.hasSymbol, 'Contains symbols']
+      ];
+      $('checks').innerHTML = checks.map(([ok, txt]) =>
+        `<div class="check">${ok ? '✅' : '⬜'} ${escapeHtml(txt)}</div>`
+      ).join('');
+
+      const tbody = $('scenarios');
+      tbody.innerHTML = '';
+      scenarioRates.forEach(([name, r]) => {
+        const tr = document.createElement('tr');
+        const log10Time = len ? (log10AvgGuesses - Math.log10(r)) : -Infinity;
+        tr.innerHTML = `
+          <td>${escapeHtml(name)}</td>
+          <td>${r.toLocaleString()} / sec</td>
+          <td>${len ? formatDurationFromLog10(log10Time) : '-'}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    $('pwd').addEventListener('input', update);
+    $('rate').addEventListener('change', update);
+    update();
+  </script>
+</body>
+</html>

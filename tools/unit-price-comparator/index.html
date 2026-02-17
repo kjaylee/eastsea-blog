@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Unit Price Comparator | EastSea Tools</title>
+  <style>
+    :root {
+      --bg: #f4f7ff;
+      --card: #fff;
+      --line: #e6eaf2;
+      --text: #111827;
+      --muted: #6b7280;
+      --accent: #2563eb;
+      --accent-2: #06b6d4;
+      --good: #059669;
+      --best: #dcfce7;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: linear-gradient(165deg, #edf2ff, #f8fbff 47%, #f4f7ff);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .wrap { max-width: 1080px; margin: 0 auto; }
+    .back {
+      display: inline-block;
+      text-decoration: none;
+      color: #4b5563;
+      margin-bottom: 12px;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-weight: 600;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 22px;
+      box-shadow: 0 15px 35px rgba(37,99,235,0.10);
+      margin-bottom: 16px;
+    }
+
+    h1 { margin: 0 0 8px; font-size: clamp(1.35rem, 3vw, 2rem); }
+    .sub { margin: 0 0 14px; color: var(--muted); }
+
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+    button {
+      border: 0;
+      border-radius: 12px;
+      padding: 10px 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .primary { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; }
+    .ghost { background: #f8fafc; border: 1px solid var(--line); color: var(--text); }
+
+    .table-wrap { border: 1px solid var(--line); border-radius: 14px; overflow: auto; }
+    table { border-collapse: collapse; width: 100%; min-width: 920px; }
+    th, td { border-bottom: 1px solid var(--line); padding: 10px; text-align: left; }
+    th { background: #f8fbff; font-size: 0.82rem; color: var(--muted); }
+
+    input, select {
+      width: 100%;
+      padding: 9px 10px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      font-size: 0.92rem;
+      background: #fff;
+    }
+
+    .num { text-align: right; }
+    .result-box {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .result {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px;
+      background: #fbfdff;
+    }
+    .best { background: var(--best); border-color: #86efac; }
+    .result .name { font-weight: 700; }
+    .result .price { margin-top: 4px; font-size: 1.05rem; }
+    .hint { color: var(--muted); font-size: 0.88rem; margin-top: 10px; }
+
+    @media (max-width: 900px) {
+      .result-box { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <a class="back" href="../">← Back to tools</a>
+
+    <section class="card">
+      <h1>🛒 Unit Price Comparator</h1>
+      <p class="sub">Compare products by normalized unit price (per 100g / 100ml / 1 each). Quickly spot the best deal.</p>
+
+      <div class="actions">
+        <button class="primary" id="addRow">Add Item</button>
+        <button class="ghost" id="calcBtn">Compare Prices</button>
+        <button class="ghost" id="saveBtn">Save List</button>
+        <button class="ghost" id="loadBtn">Load Saved</button>
+        <button class="ghost" id="clearBtn">Clear</button>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:22%">Item</th>
+              <th style="width:18%">Price</th>
+              <th style="width:18%">Quantity</th>
+              <th style="width:16%">Unit</th>
+              <th style="width:16%">Normalized Unit Price</th>
+              <th style="width:10%">Action</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <div class="hint">Tip: Compare similar product types together (weight, volume, or count).</div>
+
+      <div class="result-box" id="resultBox"></div>
+    </section>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const STORAGE_KEY = 'unit-price-comparator-items-v1';
+
+    function newRow(data = {}) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><input class="name" value="${escapeHtml(data.name || '')}" placeholder="e.g. Milk A" /></td>
+        <td><input class="price num" type="number" min="0" step="0.01" value="${data.price ?? ''}" placeholder="0.00" /></td>
+        <td><input class="qty num" type="number" min="0" step="0.01" value="${data.qty ?? ''}" placeholder="0" /></td>
+        <td>
+          <select class="unit">
+            ${['g','kg','ml','l','ea'].map(u => `<option value="${u}" ${data.unit===u?'selected':''}>${u}</option>`).join('')}
+          </select>
+        </td>
+        <td class="normalized" style="font-weight:700;color:#1d4ed8;">-</td>
+        <td><button class="ghost remove">Remove</button></td>
+      `;
+      tr.querySelector('.remove').addEventListener('click', () => {
+        tr.remove();
+        calculate();
+      });
+      ['input','change'].forEach(evt => tr.addEventListener(evt, calculate));
+      return tr;
+    }
+
+    function escapeHtml(str) {
+      return String(str).replace(/[&<>'"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[c]));
+    }
+
+    function normalize(price, qty, unit) {
+      if (!(price > 0) || !(qty > 0)) return null;
+      if (unit === 'g') return { value: (price / qty) * 100, label: 'per 100g', group: 'weight' };
+      if (unit === 'kg') return { value: (price / (qty * 1000)) * 100, label: 'per 100g', group: 'weight' };
+      if (unit === 'ml') return { value: (price / qty) * 100, label: 'per 100ml', group: 'volume' };
+      if (unit === 'l') return { value: (price / (qty * 1000)) * 100, label: 'per 100ml', group: 'volume' };
+      if (unit === 'ea') return { value: price / qty, label: 'per 1ea', group: 'count' };
+      return null;
+    }
+
+    function currency(n) {
+      return Number(n).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
+
+    function calculate() {
+      const rows = Array.from($('rows').querySelectorAll('tr'));
+      const groups = { weight: [], volume: [], count: [] };
+
+      rows.forEach((tr) => {
+        const name = tr.querySelector('.name').value.trim() || 'Untitled';
+        const price = parseFloat(tr.querySelector('.price').value);
+        const qty = parseFloat(tr.querySelector('.qty').value);
+        const unit = tr.querySelector('.unit').value;
+        const n = normalize(price, qty, unit);
+
+        const cell = tr.querySelector('.normalized');
+        if (!n) {
+          cell.textContent = '-';
+          return;
+        }
+
+        cell.textContent = `${currency(n.value)} (${n.label})`;
+        groups[n.group].push({ name, value: n.value, label: n.label });
+      });
+
+      const box = $('resultBox');
+      box.innerHTML = '';
+
+      ['weight', 'volume', 'count'].forEach(group => {
+        if (!groups[group].length) return;
+        groups[group].sort((a,b)=>a.value-b.value);
+        groups[group].forEach((item, idx) => {
+          const div = document.createElement('div');
+          div.className = `result ${idx===0 ? 'best' : ''}`;
+          div.innerHTML = `
+            <div class="name">${escapeHtml(item.name)} ${idx===0 ? '🏆' : ''}</div>
+            <div class="price">${currency(item.value)} ${item.label}</div>
+            <div style="font-size:.82rem;color:var(--muted);margin-top:4px;">${group}</div>
+          `;
+          box.appendChild(div);
+        });
+      });
+    }
+
+    function save() {
+      const rows = Array.from($('rows').querySelectorAll('tr')).map(tr => ({
+        name: tr.querySelector('.name').value,
+        price: tr.querySelector('.price').value,
+        qty: tr.querySelector('.qty').value,
+        unit: tr.querySelector('.unit').value,
+      }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(rows));
+      alert('Saved locally.');
+    }
+
+    function load() {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return alert('No saved list found.');
+      let items = [];
+      try { items = JSON.parse(raw); } catch { return alert('Saved data is corrupted.'); }
+      $('rows').innerHTML = '';
+      if (!items.length) items = [{}, {}, {}];
+      items.forEach(i => $('rows').appendChild(newRow(i)));
+      calculate();
+    }
+
+    function clearAll() {
+      $('rows').innerHTML = '';
+      for (let i = 0; i < 3; i++) $('rows').appendChild(newRow());
+      calculate();
+    }
+
+    $('addRow').addEventListener('click', () => {
+      $('rows').appendChild(newRow());
+    });
+    $('calcBtn').addEventListener('click', calculate);
+    $('saveBtn').addEventListener('click', save);
+    $('loadBtn').addEventListener('click', load);
+    $('clearBtn').addEventListener('click', clearAll);
+
+    clearAll();
+  </script>
+</body>
+</html>

@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>부채 스노우볼 플래너 | EastSea Tools</title>
+<meta name="description" content="여러 부채를 스노우볼 방식으로 상환할 때 예상 기간과 이자 비용을 계산" />
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#f8fafc;--card:#fff;--line:#e2e8f0;--text:#0f172a;--muted:#64748b;--pri:#0891b2}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text)}
+.wrap{max-width:980px;margin:0 auto;padding:18px}
+.back{color:var(--muted);text-decoration:none}
+h1{margin:10px 0;font-size:1.5rem}
+.desc{color:var(--muted);font-size:.92rem;margin-bottom:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+.row{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr auto;gap:8px;align-items:end;margin-bottom:8px}
+label{display:block;font-size:.82rem;color:var(--muted);margin-bottom:4px}
+input{width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;font:inherit}
+button{border:0;background:var(--pri);color:#fff;padding:10px 12px;border-radius:10px;cursor:pointer;font-weight:700}
+button.ghost{background:#ecfeff;color:#0e7490}
+button.danger{background:#fee2e2;color:#b91c1c}
+.list .item{border:1px solid var(--line);border-radius:10px;padding:10px;display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:8px}
+.item .meta{color:var(--muted);font-size:.85rem}
+.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.kpi{padding:12px;border:1px solid var(--line);border-radius:10px;background:#f8fafc}
+.kpi .v{font-size:1.25rem;font-weight:800;margin-top:4px}
+table{width:100%;border-collapse:collapse}
+th,td{padding:10px;border-bottom:1px solid var(--line);text-align:left;font-size:.9rem}
+th{font-size:.82rem;color:var(--muted)}
+@media (max-width:760px){.row{grid-template-columns:1fr 1fr}.row > div:first-child{grid-column:1/-1}.summary{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="/tools/">← 도구 목록</a>
+  <h1>💳 부채 스노우볼 플래너</h1>
+  <p class="desc">잔액이 작은 부채부터 집중 상환하는 스노우볼 전략의 예상 상환 개월 수와 총 이자를 계산합니다.</p>
+
+  <section class="card">
+    <div class="row">
+      <div>
+        <label>부채 이름</label>
+        <input id="name" type="text" placeholder="예: 카드론">
+      </div>
+      <div>
+        <label>잔액(원)</label>
+        <input id="balance" type="number" min="0" step="1000" placeholder="1200000">
+      </div>
+      <div>
+        <label>연이율(%)</label>
+        <input id="apr" type="number" min="0" step="0.1" placeholder="14.9">
+      </div>
+      <div>
+        <label>월 최소상환액(원)</label>
+        <input id="minpay" type="number" min="0" step="1000" placeholder="70000">
+      </div>
+      <button onclick="addDebt()">추가</button>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end">
+      <div>
+        <label>매달 추가 상환 가능액(원)</label>
+        <input id="extra" type="number" min="0" step="1000" value="100000">
+      </div>
+      <button class="ghost" onclick="calculate()">시뮬레이션</button>
+    </div>
+  </section>
+
+  <section class="card list" id="debtList"></section>
+
+  <section class="card">
+    <div class="summary" id="kpis"></div>
+  </section>
+
+  <section class="card">
+    <table>
+      <thead><tr><th>부채</th><th>예상 상환시점</th><th>예상 납부개월</th></tr></thead>
+      <tbody id="schedule"></tbody>
+    </table>
+  </section>
+</div>
+
+<script>
+const KRW=n=>Math.round(n).toLocaleString('ko-KR')+'원';
+let debts=[];
+
+function renderDebts(){
+  const el=document.getElementById('debtList');
+  if(!debts.length){el.innerHTML='<p style="color:#64748b;font-size:.9rem">부채를 추가하세요.</p>';return;}
+  el.innerHTML=debts.map(d=>`<div class="item"><div><strong>${escapeHtml(d.name)}</strong><div class="meta">잔액 ${KRW(d.balance)} · 연 ${d.apr}% · 최소 ${KRW(d.minpay)}</div></div><button class="danger" onclick="removeDebt(${d.id})">삭제</button></div>`).join('');
+}
+
+function addDebt(){
+  const name=document.getElementById('name').value.trim();
+  const balance=parseFloat(document.getElementById('balance').value);
+  const apr=parseFloat(document.getElementById('apr').value);
+  const minpay=parseFloat(document.getElementById('minpay').value);
+  if(!name||!(balance>0)||!(apr>=0)||!(minpay>0)){alert('입력값을 확인하세요.');return;}
+  debts.push({id:Date.now()+Math.random(),name,balance,apr,minpay});
+  ['name','balance','apr','minpay'].forEach(id=>document.getElementById(id).value='');
+  renderDebts();
+}
+
+function removeDebt(id){debts=debts.filter(d=>d.id!==id);renderDebts();}
+
+function calculate(){
+  if(!debts.length){alert('부채를 먼저 추가하세요.');return;}
+  const extra=Math.max(0,parseFloat(document.getElementById('extra').value)||0);
+
+  const state=debts.map(d=>({...d,remaining:d.balance,paidMonth:null}));
+  const initialMin=state.reduce((s,d)=>s+d.minpay,0);
+  const monthlyBudget=initialMin+extra;
+
+  let month=0,totalInterest=0,totalPaid=0;
+  const maxMonths=600;
+
+  while(month<maxMonths && state.some(d=>d.remaining>0.5)){
+    month++;
+
+    state.forEach(d=>{
+      if(d.remaining<=0) return;
+      const interest=d.remaining*(d.apr/100/12);
+      d.remaining+=interest;
+      totalInterest+=interest;
+    });
+
+    let available=monthlyBudget;
+    const active=state.filter(d=>d.remaining>0).sort((a,b)=>a.remaining-b.remaining);
+
+    active.forEach(d=>{
+      if(available<=0)return;
+      const pay=Math.min(d.minpay,d.remaining,available);
+      d.remaining-=pay;
+      available-=pay;
+      totalPaid+=pay;
+      if(d.remaining<=0.5 && d.paidMonth===null)d.paidMonth=month;
+    });
+
+    let guard=0;
+    while(available>0.5 && state.some(d=>d.remaining>0.5) && guard<1000){
+      guard++;
+      const target=state.filter(d=>d.remaining>0.5).sort((a,b)=>a.remaining-b.remaining)[0];
+      if(!target)break;
+      const pay=Math.min(available,target.remaining);
+      target.remaining-=pay;
+      available-=pay;
+      totalPaid+=pay;
+      if(target.remaining<=0.5 && target.paidMonth===null)target.paidMonth=month;
+    }
+
+    if(state.every(d=>d.remaining<=0.5))break;
+  }
+
+  const done=state.every(d=>d.paidMonth!==null);
+  const kpi=document.getElementById('kpis');
+  if(!done){
+    kpi.innerHTML='<div class="kpi"><div>결과</div><div class="v">600개월 초과</div></div><div class="kpi"><div>총 이자</div><div class="v">계산 불가</div></div><div class="kpi"><div>권장</div><div class="v">월 예산 증액 필요</div></div>';
+    document.getElementById('schedule').innerHTML='';
+    return;
+  }
+
+  const now=new Date();
+  const finish=new Date(now.getFullYear(),now.getMonth()+month,1);
+  kpi.innerHTML=`
+    <div class="kpi"><div>완납까지</div><div class="v">${month}개월</div></div>
+    <div class="kpi"><div>예상 총 이자</div><div class="v">${KRW(totalInterest)}</div></div>
+    <div class="kpi"><div>예상 완납</div><div class="v">${finish.getFullYear()}-${String(finish.getMonth()+1).padStart(2,'0')}</div></div>`;
+
+  document.getElementById('schedule').innerHTML=state.sort((a,b)=>a.paidMonth-b.paidMonth).map(d=>{
+    const when=new Date(now.getFullYear(),now.getMonth()+d.paidMonth,1);
+    return `<tr><td>${escapeHtml(d.name)}</td><td>${when.getFullYear()}-${String(when.getMonth()+1).padStart(2,'0')}</td><td>${d.paidMonth}개월</td></tr>`;
+  }).join('');
+}
+
+function escapeHtml(s){return s.replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+
+renderDebts();
+</script>
+</body>
+</html>

@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>아이젠하워 매트릭스 플래너 | EastSea Tools</title>
+<meta name="description" content="중요도/긴급도 기준으로 할 일을 4분면에 정리하는 생산성 플래너">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#f6f7fb;--card:#fff;--text:#111827;--muted:#6b7280;--line:#e5e7eb;--primary:#2563eb;--urgent:#ef4444;--important:#8b5cf6;--ok:#10b981;--warn:#f59e0b}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text)}
+.container{max-width:1100px;margin:0 auto;padding:18px}
+.back{display:inline-block;margin-bottom:12px;color:var(--muted);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin-bottom:10px}
+.desc{color:var(--muted);font-size:.92rem;margin-bottom:14px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:14px}
+.form{display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px}
+input,select,button{font:inherit}
+input,select{padding:10px;border:1px solid var(--line);border-radius:10px;background:#fff}
+button{border:0;background:var(--primary);color:#fff;padding:10px 12px;border-radius:10px;cursor:pointer;font-weight:600}
+button.ghost{background:#eef2ff;color:#3730a3}
+.matrix{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.quad{background:var(--card);border:1px solid var(--line);border-radius:14px;min-height:220px;padding:12px}
+.quad h2{font-size:1rem;margin-bottom:8px}
+.q1 h2{color:var(--urgent)}
+.q2 h2{color:var(--important)}
+.q3 h2{color:var(--warn)}
+.q4 h2{color:var(--ok)}
+.task{border:1px solid var(--line);background:#fff;border-radius:10px;padding:10px;margin-bottom:8px}
+.task p{font-size:.93rem;line-height:1.35;margin-bottom:6px;word-break:break-word}
+.meta{display:flex;gap:6px;align-items:center;justify-content:space-between}
+.meta small{color:var(--muted)}
+.meta .actions{display:flex;gap:6px}
+.task select{padding:6px 8px;font-size:.78rem;border-radius:8px}
+.task .del{background:#fee2e2;color:#b91c1c;padding:6px 8px;font-size:.75rem}
+.stats{display:flex;flex-wrap:wrap;gap:8px}
+.pill{padding:8px 10px;border-radius:999px;background:#f3f4f6;font-size:.82rem}
+.empty{font-size:.85rem;color:var(--muted);padding-top:10px}
+@media (max-width:860px){.form{grid-template-columns:1fr 1fr}.form input{grid-column:1/-1}.form button{grid-column:1/-1}.matrix{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="container">
+  <a class="back" href="/tools/">← 도구 목록</a>
+  <h1>🧭 아이젠하워 매트릭스 플래너</h1>
+  <p class="desc">중요/긴급 기준으로 할 일을 분류해서 오늘의 우선순위를 빠르게 정리하세요.</p>
+
+  <section class="panel">
+    <div class="form">
+      <input id="taskText" type="text" placeholder="할 일 입력 (예: 제안서 초안 작성)">
+      <select id="taskQuadrant">
+        <option value="q1">긴급 + 중요 (즉시 실행)</option>
+        <option value="q2">긴급X + 중요 (계획)</option>
+        <option value="q3">긴급 + 중요X (위임/자동화)</option>
+        <option value="q4">긴급X + 중요X (제거)</option>
+      </select>
+      <input id="taskDue" type="date">
+      <button onclick="addTask()">추가</button>
+    </div>
+  </section>
+
+  <section class="panel" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+    <div class="stats" id="stats"></div>
+    <div style="display:flex;gap:8px">
+      <button class="ghost" onclick="copySummary()">요약 복사</button>
+      <button class="ghost" onclick="clearAll()">전체 삭제</button>
+    </div>
+  </section>
+
+  <section class="matrix">
+    <div class="quad q1"><h2>🔥 Q1. 긴급 + 중요</h2><div id="q1List"></div></div>
+    <div class="quad q2"><h2>🎯 Q2. 긴급X + 중요</h2><div id="q2List"></div></div>
+    <div class="quad q3"><h2>📩 Q3. 긴급 + 중요X</h2><div id="q3List"></div></div>
+    <div class="quad q4"><h2>🧹 Q4. 긴급X + 중요X</h2><div id="q4List"></div></div>
+  </section>
+</div>
+
+<script>
+const KEY='es_eisenhower_tasks_v1';
+let tasks=JSON.parse(localStorage.getItem(KEY)||'[]');
+
+function save(){localStorage.setItem(KEY,JSON.stringify(tasks));}
+function esc(s){return s.replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+
+function addTask(){
+  const text=document.getElementById('taskText').value.trim();
+  const quadrant=document.getElementById('taskQuadrant').value;
+  const due=document.getElementById('taskDue').value;
+  if(!text){alert('할 일을 입력하세요.');return;}
+  tasks.unshift({id:Date.now(),text,quadrant,due,created:new Date().toISOString()});
+  document.getElementById('taskText').value='';
+  save();
+  render();
+}
+
+function moveTask(id,val){
+  const t=tasks.find(v=>v.id===id);
+  if(!t)return;
+  t.quadrant=val;
+  save();render();
+}
+
+function delTask(id){
+  tasks=tasks.filter(t=>t.id!==id);
+  save();render();
+}
+
+function clearAll(){
+  if(!tasks.length)return;
+  if(!confirm('모든 항목을 삭제할까요?'))return;
+  tasks=[];save();render();
+}
+
+function copySummary(){
+  const names={q1:'Q1 긴급+중요',q2:'Q2 중요',q3:'Q3 긴급',q4:'Q4 제거'};
+  const lines=['🧭 아이젠하워 매트릭스'];
+  ['q1','q2','q3','q4'].forEach(k=>{
+    lines.push(`\n[${names[k]}]`);
+    const arr=tasks.filter(t=>t.quadrant===k);
+    if(!arr.length)lines.push('- (없음)');
+    arr.forEach(t=>lines.push(`- ${t.text}${t.due?` (기한 ${t.due})`:''}`));
+  });
+  navigator.clipboard.writeText(lines.join('\n')).then(()=>alert('요약을 복사했습니다.'));
+}
+
+function renderList(q){
+  const list=tasks.filter(t=>t.quadrant===q);
+  const el=document.getElementById(q+'List');
+  if(!list.length){el.innerHTML='<div class="empty">항목이 없습니다.</div>';return;}
+  el.innerHTML=list.map(t=>`<div class="task">
+    <p>${esc(t.text)}</p>
+    <div class="meta">
+      <small>${t.due?`기한 ${t.due}`:'기한 없음'}</small>
+      <div class="actions">
+        <select onchange="moveTask(${t.id},this.value)">
+          <option value="q1" ${t.quadrant==='q1'?'selected':''}>Q1</option>
+          <option value="q2" ${t.quadrant==='q2'?'selected':''}>Q2</option>
+          <option value="q3" ${t.quadrant==='q3'?'selected':''}>Q3</option>
+          <option value="q4" ${t.quadrant==='q4'?'selected':''}>Q4</option>
+        </select>
+        <button class="del" onclick="delTask(${t.id})">삭제</button>
+      </div>
+    </div>
+  </div>`).join('');
+}
+
+function renderStats(){
+  const c={q1:0,q2:0,q3:0,q4:0};
+  tasks.forEach(t=>c[t.quadrant]++);
+  document.getElementById('stats').innerHTML=`
+    <span class="pill">총 ${tasks.length}개</span>
+    <span class="pill">Q1 ${c.q1}</span>
+    <span class="pill">Q2 ${c.q2}</span>
+    <span class="pill">Q3 ${c.q3}</span>
+    <span class="pill">Q4 ${c.q4}</span>`;
+}
+
+function render(){['q1','q2','q3','q4'].forEach(renderList);renderStats();}
+
+render();
+</script>
+</body>
+</html>

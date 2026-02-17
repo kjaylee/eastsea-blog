@@ -27,7 +27,7 @@
 3. **sitemap-analyzer**
    - Fetch sitemap XML (direct + proxy fallback).
    - Parse `<urlset>` entries and derive metrics.
-   - Run limited status checks using `r.jina.ai/http://...` warnings for HTTP error detection.
+   - Run limited status checks using `r.jina.ai/https://...` warnings for HTTP error detection.
    - Fetch homepage links to mark orphan candidates.
    - Draw lastmod timeline on canvas and support CSV export.
 

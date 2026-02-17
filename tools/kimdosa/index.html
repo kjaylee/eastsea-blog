@@ -113,6 +113,7 @@
     .badge{padding:7px 10px;border-radius:999px;background:#13264b;border:1px solid #315a95;font-size:12px;color:#b4d5ff}
 
     .timeline{display:grid;gap:8px}
+    .score-label{font-size:11px;color:#f5ca54;margin:2px 0}
     .titem{background:#121a33;border:1px solid var(--line);border-radius:10px;padding:9px 10px;display:grid;grid-template-columns:72px 54px 1fr;align-items:center;gap:8px}
     .titem.current{border-color:#f5ca54;box-shadow:0 0 0 1px rgba(245,202,84,.35) inset}
     .bar{height:8px;background:#314b8f;border-radius:999px;overflow:hidden}
@@ -990,24 +991,43 @@
     ctx.fillStyle='#101933';
     ctx.fillRect(0,0,w,h);
 
-    const max = 100;
-    const gap = 6;
-    const bw = (w-30 - gap*11)/12;
+    const maxV = Math.max(...arr, 80);
+    const minV = Math.min(...arr, 20);
+    const gap = 5;
+    const bw = (w-28 - gap*11)/12;
+    const chartH = h - 46;
     arr.forEach((v,i)=>{
       const x = 14 + i*(bw+gap);
-      const bh = (v/max)*(h-34);
-      const y = h-20-bh;
+      const ratio = (v - minV + 5) / (maxV - minV + 10);
+      const bh = Math.max(8, ratio * chartH);
+      const y = h - 22 - bh;
       const g = ctx.createLinearGradient(0,y,0,h);
-      g.addColorStop(0,'#f3c35d'); g.addColorStop(1,'#597bd4');
+      if(v >= 70){ g.addColorStop(0,'#f3c35d'); g.addColorStop(1,'#d4a017'); }
+      else if(v >= 50){ g.addColorStop(0,'#7b9cf5'); g.addColorStop(1,'#4a6bc5'); }
+      else { g.addColorStop(0,'#6b7db0'); g.addColorStop(1,'#3d4f7a'); }
       ctx.fillStyle = g;
-      ctx.fillRect(x,y,bw,bh);
+      ctx.beginPath();
+      ctx.roundRect(x, y, bw, bh, 3);
+      ctx.fill();
+      // 점수 라벨
+      ctx.fillStyle = v>=70?'#f5ca54':v>=50?'#9fb2e8':'#7a8aaa';
+      ctx.font = 'bold 9px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(v, x+bw/2, y-3);
+      // 월 라벨
       ctx.fillStyle = '#9fb2e8';
       ctx.font = '10px sans-serif';
-      ctx.fillText(String(i+1), x+2, h-6);
+      ctx.fillText(String(i+1)+'월', x+bw/2, h-6);
     });
+    ctx.textAlign = 'left';
     ctx.fillStyle='#cfdbff';
-    ctx.font='11px sans-serif';
+    ctx.font='bold 11px sans-serif';
     ctx.fillText('월운 트렌드', 8, 12);
+    // 현재 월 마커
+    const cm = new Date().getMonth();
+    const cx = 14 + cm*(bw+gap) + bw/2;
+    ctx.fillStyle='#f5ca54';
+    ctx.fillText('▼', cx-4, 22);
   }
 
   // ===== 공유 =====
@@ -1195,6 +1215,28 @@
 
     $('#daeunStart').textContent = `대운 방향: ${dir===1?'순행':'역행'} · 대운 시작 나이: 약 ${startAge}세`;
 
+    // 십성별 길흉 기본 점수 (비견~정인, 0~9)
+    const TG_BASE = [50,35,78,30,72,80,32,75,55,82];
+    // 지지 관계 보정
+    function branchBonus(dayB, targetB){
+      const diff = mod(targetB - dayB, 12);
+      if(diff===0) return 5; // 같은 지지
+      if([1,11].includes(diff)) return 8; // 육합 근접
+      if(diff===6) return -15; // 충
+      if([3,9].includes(diff)) return -8; // 형 근접
+      if([4,8].includes(diff)) return 6; // 삼합 근접
+      return 0;
+    }
+    function daeunScore(dayStem, dayBranch, stem, branch){
+      const tg = getTenGod(dayStem, stem);
+      let s = TG_BASE[tg] + branchBonus(dayBranch, branch);
+      // 12운성 보정
+      const un = UNSUNG_TABLE[dayStem][branch];
+      if([0,3,4].includes(un)) s += 10; // 장생,건록,제왕
+      else if([6,7,8].includes(un)) s -= 8; // 병,사,묘
+      return Math.max(10, Math.min(95, s));
+    }
+
     let html = '';
     const list = [];
     for(let i=0;i<10;i++){
@@ -1203,11 +1245,14 @@
       const branch = mod(saju.month.branch + step, 12);
       const a0 = startAge + i*10;
       const cur = age>=a0 && age<a0+10;
-      list.push({stem,branch,a0,cur});
+      const score = daeunScore(saju.day.stem, saju.day.branch, stem, branch);
+      list.push({stem,branch,a0,cur,score});
+      const barColor = score>=70?'#f3c35d':score>=50?'#7b9cf5':'#6b7db0';
       html += `<div class="titem ${cur?'current':''}">
         <div class="small">${a0}~${a0+9}세</div>
         <div><b>${STEMS[stem]}${BRANCHES[branch]}</b></div>
-        <div class="bar"><i style="width:${cur?100:70}%"></i></div>
+        <div class="score-label">${score}점</div>
+        <div class="bar"><i style="width:${score}%;background:${barColor}"></i></div>
       </div>`;
     }
     $('#daeunTimeline').innerHTML = html;
@@ -1222,8 +1267,14 @@
       const date = new Date(nowYear,m-1,15);
       const mp = calculateMonthPillar(date,thisYearP.stem);
       const tg = getTenGod(saju.day.stem, mp.stem);
-      let v = 50 + (tg*4) + ((mp.branch - saju.day.branch + 12)%12);
-      if(v>95) v=95;
+      let v = TG_BASE[tg] + branchBonus(saju.day.branch, mp.branch);
+      // 세운 지지와 월지 관계 추가 보정
+      v += branchBonus(thisYearP.branch, mp.branch) * 0.3;
+      // 12운성 보정
+      const un = UNSUNG_TABLE[saju.day.stem][mp.branch];
+      if([0,3,4].includes(un)) v += 8;
+      else if([6,7,8].includes(un)) v -= 6;
+      v = Math.max(15, Math.min(95, Math.round(v)));
       monthScores.push(v);
     }
     drawMonthLuck($('#monthLuckCanvas'), monthScores);

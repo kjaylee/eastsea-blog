@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>cURL to Fetch Converter | EastSea Tools</title>
+  <meta name="description" content="Convert cURL commands into JavaScript fetch() code instantly." />
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: #121933;
+      --panel-2: #1a2345;
+      --text: #e8ecff;
+      --muted: #99a3d6;
+      --accent: #7c9bff;
+      --good: #38d39f;
+      --danger: #ff7f8f;
+      --border: #2b3563;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: radial-gradient(circle at 10% 0%, #1a2552, var(--bg) 40%);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .wrap { max-width: 1100px; margin: 0 auto; }
+    .hero { margin-bottom: 16px; }
+    h1 { margin: 0 0 8px; font-size: clamp(1.4rem, 3vw, 2rem); }
+    .sub { color: var(--muted); margin: 0; }
+    .grid {
+      display: grid;
+      gap: 14px;
+      grid-template-columns: 1fr;
+    }
+    @media (min-width: 900px) {
+      .grid { grid-template-columns: 1fr 1fr; }
+    }
+    .card {
+      background: linear-gradient(180deg, rgba(255,255,255,.03), transparent 20%), var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 14px;
+      box-shadow: 0 8px 30px rgba(0,0,0,.25);
+    }
+    label { display: block; font-weight: 600; margin-bottom: 8px; }
+    textarea, input, select {
+      width: 100%;
+      border: 1px solid var(--border);
+      background: var(--panel-2);
+      color: var(--text);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font: 500 14px/1.5 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+    textarea { min-height: 260px; resize: vertical; }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 12px;
+      align-items: center;
+    }
+    button {
+      border: 0;
+      border-radius: 10px;
+      background: var(--accent);
+      color: white;
+      padding: 10px 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button.secondary { background: #2f3c74; }
+    .check { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
+    .check input { width: auto; }
+    .status {
+      margin-top: 10px;
+      font-size: 13px;
+      min-height: 20px;
+      color: var(--muted);
+    }
+    .status.error { color: var(--danger); }
+    .status.ok { color: var(--good); }
+    .tip {
+      margin-top: 14px;
+      border-left: 3px solid var(--accent);
+      padding-left: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="hero">
+      <h1>cURL → fetch() Converter</h1>
+      <p class="sub">Paste a cURL command and get browser-friendly JavaScript fetch code.</p>
+    </section>
+
+    <section class="grid">
+      <article class="card">
+        <label for="curlInput">cURL Command</label>
+        <textarea id="curlInput" spellcheck="false">curl 'https://api.example.com/v1/users?active=true' \
+  -X POST \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer YOUR_TOKEN' \
+  --data-raw '{"name":"Kim","role":"admin"}'</textarea>
+        <div class="actions">
+          <button id="convertBtn">Convert</button>
+          <button class="secondary" id="sampleBtn">Load Sample</button>
+          <label class="check"><input type="checkbox" id="asyncWrap" checked> Wrap in async function</label>
+        </div>
+        <p class="status" id="status">Ready.</p>
+      </article>
+
+      <article class="card">
+        <label for="fetchOutput">Generated JavaScript</label>
+        <textarea id="fetchOutput" spellcheck="false"></textarea>
+        <div class="actions">
+          <button id="copyBtn">Copy Code</button>
+          <button class="secondary" id="clearBtn">Clear</button>
+        </div>
+        <p class="tip">Supports common flags: <code>-X</code>, <code>-H</code>, <code>--data*</code>, <code>-u</code>, <code>-A</code>, <code>-b</code>, <code>-I</code>.</p>
+      </article>
+    </section>
+  </main>
+
+  <script>
+    const curlInput = document.getElementById('curlInput');
+    const fetchOutput = document.getElementById('fetchOutput');
+    const statusEl = document.getElementById('status');
+    const asyncWrap = document.getElementById('asyncWrap');
+
+    function setStatus(msg, type = '') {
+      statusEl.textContent = msg;
+      statusEl.className = 'status' + (type ? ' ' + type : '');
+    }
+
+    function tokenize(command) {
+      const tokens = [];
+      let current = '';
+      let quote = null;
+      let escaped = false;
+
+      for (let i = 0; i < command.length; i++) {
+        const ch = command[i];
+        if (escaped) { current += ch; escaped = false; continue; }
+        if (ch === '\\') { escaped = true; continue; }
+        if (quote) {
+          if (ch === quote) quote = null;
+          else current += ch;
+          continue;
+        }
+        if (ch === '"' || ch === "'") { quote = ch; continue; }
+        if (/\s/.test(ch)) {
+          if (current) { tokens.push(current); current = ''; }
+          continue;
+        }
+        current += ch;
+      }
+      if (current) tokens.push(current);
+      return tokens;
+    }
+
+    function parseCurl(command) {
+      const tokens = tokenize(command.replace(/\\\n/g, ' '));
+      if (!tokens.length || tokens[0] !== 'curl') {
+        throw new Error('Command must start with "curl".');
+      }
+
+      let method = 'GET';
+      let url = '';
+      const headers = {};
+      let body = null;
+      let isHead = false;
+
+      for (let i = 1; i < tokens.length; i++) {
+        const t = tokens[i];
+        const next = () => {
+          if (i + 1 >= tokens.length) throw new Error(`Missing value after ${t}`);
+          i += 1;
+          return tokens[i];
+        };
+
+        if (t === '-X' || t === '--request') {
+          method = next().toUpperCase();
+        } else if (t === '-H' || t === '--header') {
+          const raw = next();
+          const idx = raw.indexOf(':');
+          if (idx > -1) headers[raw.slice(0, idx).trim()] = raw.slice(idx + 1).trim();
+        } else if (['-d','--data','--data-raw','--data-binary','--data-urlencode'].includes(t)) {
+          body = next();
+          if (method === 'GET') method = 'POST';
+        } else if (t === '-u' || t === '--user') {
+          const [user, pass = ''] = next().split(':');
+          headers['Authorization'] = `Basic ${btoa(`${user}:${pass}`)}`;
+        } else if (t === '-A' || t === '--user-agent') {
+          headers['User-Agent'] = next();
+        } else if (t === '-b' || t === '--cookie') {
+          headers['Cookie'] = next();
+        } else if (t === '-I' || t === '--head') {
+          method = 'HEAD';
+          isHead = true;
+        } else if (t === '--url') {
+          url = next();
+        } else if (!t.startsWith('-') && !url) {
+          url = t;
+        }
+      }
+
+      if (!url) throw new Error('Could not find URL in cURL command.');
+      return { method, url, headers, body, isHead };
+    }
+
+    function escapeTemplate(str) {
+      return str.replace(/`/g, '\\`');
+    }
+
+    function buildFetchCode(parsed, wrap = true) {
+      const { method, url, headers, body, isHead } = parsed;
+      const headerLines = Object.entries(headers).map(([k, v]) => `    '${k}': '${v.replace(/'/g, "\\'")}'`);
+
+      const lines = [];
+      lines.push(`const url = '${url.replace(/'/g, "\\'")}';`);
+      lines.push('const options = {');
+      lines.push(`  method: '${method}',`);
+      if (headerLines.length) {
+        lines.push('  headers: {');
+        lines.push(headerLines.join(',\n'));
+        lines.push('  },');
+      }
+
+      if (body !== null && !isHead) {
+        const isJson = (headers['Content-Type'] || headers['content-type'] || '').includes('application/json');
+        if (isJson) {
+          try {
+            const parsedBody = JSON.parse(body);
+            lines.push(`  body: JSON.stringify(${JSON.stringify(parsedBody, null, 2).split('\n').join('\n  ')}),`);
+          } catch {
+            lines.push(`  body: \`${escapeTemplate(body)}\`,`);
+          }
+        } else {
+          lines.push(`  body: \`${escapeTemplate(body)}\`,`);
+        }
+      }
+
+      lines.push('};\n');
+
+      if (wrap) {
+        lines.unshift('async function callApi() {');
+        lines.push('  const response = await fetch(url, options);');
+        lines.push('  const text = await response.text();');
+        lines.push('  console.log(response.status, text);');
+        lines.push('}\n');
+        lines.push('callApi();');
+        return lines.map((line, idx) => idx > 0 && idx < lines.length - 1 ? '  ' + line : line).join('\n').replace(/^  async function/m, 'async function');
+      }
+
+      lines.push('fetch(url, options)');
+      lines.push('  .then(res => res.text().then(text => ({ status: res.status, text })))');
+      lines.push('  .then(console.log)');
+      lines.push('  .catch(console.error);');
+      return lines.join('\n');
+    }
+
+    function convert() {
+      try {
+        const parsed = parseCurl(curlInput.value.trim());
+        fetchOutput.value = buildFetchCode(parsed, asyncWrap.checked);
+        setStatus('Converted successfully.', 'ok');
+      } catch (err) {
+        setStatus(err.message || 'Failed to convert.', 'error');
+      }
+    }
+
+    document.getElementById('convertBtn').addEventListener('click', convert);
+    document.getElementById('sampleBtn').addEventListener('click', () => {
+      curlInput.value = `curl 'https://jsonplaceholder.typicode.com/posts' -X POST -H 'Content-Type: application/json' --data-raw '{"title":"foo","body":"bar","userId":1}'`;
+      convert();
+    });
+    document.getElementById('clearBtn').addEventListener('click', () => {
+      curlInput.value = '';
+      fetchOutput.value = '';
+      setStatus('Cleared.');
+    });
+    document.getElementById('copyBtn').addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(fetchOutput.value);
+        setStatus('Copied to clipboard.', 'ok');
+      } catch {
+        setStatus('Could not copy. Please copy manually.', 'error');
+      }
+    });
+
+    convert();
+  </script>
+</body>
+</html>

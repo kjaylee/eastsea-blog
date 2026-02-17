@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>JSON Flatten & Unflatten | EastSea Tools</title>
+  <meta name="description" content="Flatten nested JSON into dot notation and unflatten back to nested JSON." />
+  <style>
+    :root {
+      --bg: #0f1220;
+      --panel: #171c30;
+      --panel2: #1f2641;
+      --text: #ecf0ff;
+      --muted: #a6afd2;
+      --accent: #7d8dff;
+      --border: #323c63;
+      --ok: #34d399;
+      --err: #ff7f93;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: var(--text);
+      background: radial-gradient(circle at top right, #2f2f74, var(--bg) 45%);
+      padding: 18px;
+      min-height: 100vh;
+    }
+    .wrap { max-width: 1100px; margin: 0 auto; }
+    h1 { margin: 0; font-size: clamp(1.3rem, 2.8vw, 1.9rem); }
+    .sub { margin: 8px 0 14px; color: var(--muted); }
+    .row {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: 1fr;
+    }
+    @media (min-width: 920px) { .row { grid-template-columns: 1fr 1fr; } }
+    .card {
+      border: 1px solid var(--border);
+      background: var(--panel);
+      border-radius: 14px;
+      padding: 14px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.25);
+    }
+    textarea, input {
+      width: 100%;
+      border: 1px solid var(--border);
+      background: var(--panel2);
+      border-radius: 10px;
+      padding: 10px 12px;
+      color: var(--text);
+      font: 500 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    textarea { min-height: 280px; resize: vertical; }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin: 10px 0 12px;
+    }
+    button {
+      border: 0;
+      border-radius: 10px;
+      padding: 9px 12px;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button.alt { background: #2e3762; }
+    .pill {
+      border: 1px solid var(--border);
+      background: var(--panel2);
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .active { background: #4456af; color: white; border-color: transparent; }
+    .status { margin-top: 6px; min-height: 20px; font-size: 13px; color: var(--muted); }
+    .status.ok { color: var(--ok); }
+    .status.err { color: var(--err); }
+    .small { font-size: 12px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <h1>JSON Flatten / Unflatten</h1>
+    <p class="sub">Transform nested JSON to dot-path keys and rebuild back instantly.</p>
+
+    <section class="card" style="margin-bottom: 12px;">
+      <div class="toolbar">
+        <button id="modeFlatten" class="pill active">Flatten</button>
+        <button id="modeUnflatten" class="pill">Unflatten</button>
+        <label class="small" for="delimiter">Delimiter</label>
+        <input id="delimiter" value="." style="width:100px;" maxlength="3" />
+        <button id="runBtn">Run</button>
+        <button id="swapBtn" class="alt">Swap Input/Output</button>
+        <button id="copyBtn" class="alt">Copy Output</button>
+      </div>
+      <div id="status" class="status">Ready.</div>
+    </section>
+
+    <section class="row">
+      <article class="card">
+        <label for="input">Input JSON</label>
+        <textarea id="input" spellcheck="false">{
+  "user": {
+    "name": "Kim",
+    "roles": ["admin", "editor"],
+    "profile": {
+      "city": "Seoul",
+      "active": true
+    }
+  }
+}</textarea>
+      </article>
+      <article class="card">
+        <label for="output">Output JSON</label>
+        <textarea id="output" spellcheck="false"></textarea>
+      </article>
+    </section>
+  </main>
+
+  <script>
+    const input = document.getElementById('input');
+    const output = document.getElementById('output');
+    const delimiter = document.getElementById('delimiter');
+    const statusEl = document.getElementById('status');
+    const modeFlattenBtn = document.getElementById('modeFlatten');
+    const modeUnflattenBtn = document.getElementById('modeUnflatten');
+
+    let mode = 'flatten';
+
+    const setStatus = (msg, type = '') => {
+      statusEl.textContent = msg;
+      statusEl.className = 'status' + (type ? ' ' + type : '');
+    };
+
+    function flattenObject(obj, sep = '.', prefix = '', out = {}) {
+      if (obj !== Object(obj) || obj === null) {
+        out[prefix] = obj;
+        return out;
+      }
+
+      const isArray = Array.isArray(obj);
+      const keys = isArray ? obj.map((_, i) => i) : Object.keys(obj);
+      if (!keys.length && prefix) out[prefix] = isArray ? [] : {};
+
+      for (const key of keys) {
+        const value = obj[key];
+        const path = prefix ? `${prefix}${sep}${key}` : String(key);
+        if (value !== null && typeof value === 'object' && Object.keys(value).length) {
+          flattenObject(value, sep, path, out);
+        } else if (value !== null && typeof value === 'object' && Array.isArray(value) && value.length === 0) {
+          out[path] = [];
+        } else if (value !== null && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0) {
+          out[path] = {};
+        } else {
+          out[path] = value;
+        }
+      }
+      return out;
+    }
+
+    function isIndex(k) {
+      return /^\d+$/.test(k);
+    }
+
+    function unflattenObject(data, sep = '.') {
+      const result = {};
+      for (const [path, value] of Object.entries(data)) {
+        const parts = path.split(sep).filter(Boolean);
+        if (!parts.length) continue;
+
+        let cur = result;
+        for (let i = 0; i < parts.length; i++) {
+          const part = parts[i];
+          const next = parts[i + 1];
+          const last = i === parts.length - 1;
+
+          if (last) {
+            if (Array.isArray(cur) && isIndex(part)) cur[Number(part)] = value;
+            else cur[part] = value;
+            continue;
+          }
+
+          const shouldBeArray = isIndex(next);
+          if (Array.isArray(cur) && isIndex(part)) {
+            if (cur[Number(part)] == null) cur[Number(part)] = shouldBeArray ? [] : {};
+            cur = cur[Number(part)];
+          } else {
+            if (cur[part] == null) cur[part] = shouldBeArray ? [] : {};
+            cur = cur[part];
+          }
+        }
+      }
+      return result;
+    }
+
+    function run() {
+      try {
+        const sep = delimiter.value || '.';
+        const parsed = JSON.parse(input.value);
+        const transformed = mode === 'flatten'
+          ? flattenObject(parsed, sep)
+          : unflattenObject(parsed, sep);
+
+        output.value = JSON.stringify(transformed, null, 2);
+        setStatus(`${mode === 'flatten' ? 'Flattened' : 'Unflattened'} successfully.`, 'ok');
+      } catch (e) {
+        setStatus('Invalid JSON input: ' + e.message, 'err');
+      }
+    }
+
+    function setMode(next) {
+      mode = next;
+      modeFlattenBtn.classList.toggle('active', mode === 'flatten');
+      modeUnflattenBtn.classList.toggle('active', mode === 'unflatten');
+      run();
+    }
+
+    modeFlattenBtn.addEventListener('click', () => setMode('flatten'));
+    modeUnflattenBtn.addEventListener('click', () => setMode('unflatten'));
+    document.getElementById('runBtn').addEventListener('click', run);
+    document.getElementById('swapBtn').addEventListener('click', () => {
+      [input.value, output.value] = [output.value, input.value];
+      setStatus('Swapped input/output.');
+    });
+    document.getElementById('copyBtn').addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(output.value);
+        setStatus('Output copied.', 'ok');
+      } catch {
+        setStatus('Could not copy output.', 'err');
+      }
+    });
+
+    run();
+  </script>
+</body>
+</html>

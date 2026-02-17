@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HTTP Header Analyzer | EastSea Tools</title>
+  <meta name="description" content="Analyze HTTP response headers for security, caching, and performance best practices." />
+  <style>
+    :root {
+      --bg: #0c101b;
+      --panel: #131a2b;
+      --panel2: #1a243a;
+      --line: #2f3e60;
+      --text: #edf2ff;
+      --muted: #a4b1d5;
+      --accent: #7d98ff;
+      --good: #3dd598;
+      --warn: #ffc857;
+      --bad: #ff7d8f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: radial-gradient(circle at top left, #25386f, var(--bg) 45%);
+      color: var(--text);
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      padding: 18px;
+    }
+    .wrap { max-width: 1100px; margin: 0 auto; }
+    h1 { margin: 0 0 6px; font-size: clamp(1.35rem, 2.8vw, 2rem); }
+    .sub { margin: 0 0 14px; color: var(--muted); }
+    .grid { display: grid; gap: 12px; grid-template-columns: 1fr; }
+    @media (min-width: 960px) { .grid { grid-template-columns: 1fr 1fr; } }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px;
+    }
+    textarea {
+      width: 100%;
+      min-height: 270px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--panel2);
+      color: var(--text);
+      padding: 10px;
+      font: 500 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+      resize: vertical;
+    }
+    button {
+      margin-top: 8px;
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 12px;
+      background: var(--accent);
+      color: white;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .score {
+      font-size: 2rem;
+      font-weight: 800;
+      margin: 0;
+    }
+    .pill {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      margin-left: 8px;
+    }
+    .good { background: rgba(61, 213, 152, .15); color: var(--good); }
+    .warn { background: rgba(255, 200, 87, .15); color: var(--warn); }
+    .bad { background: rgba(255, 125, 143, .15); color: var(--bad); }
+    .list { margin: 10px 0 0; padding-left: 18px; }
+    .list li { margin: 6px 0; color: var(--muted); }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
+    th, td { border-bottom: 1px solid var(--line); padding: 8px 6px; text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-weight: 600; }
+    code { word-break: break-all; }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <h1>HTTP Header Analyzer</h1>
+    <p class="sub">Paste raw response headers and get instant checks for security, caching, and performance.</p>
+
+    <section class="grid">
+      <article class="card">
+        <label for="headers">Raw Headers</label>
+        <textarea id="headers" spellcheck="false">HTTP/2 200
+content-type: text/html; charset=UTF-8
+cache-control: public, max-age=3600
+content-security-policy: default-src 'self'
+x-content-type-options: nosniff
+strict-transport-security: max-age=31536000; includeSubDomains
+referrer-policy: strict-origin-when-cross-origin
+server: nginx
+x-powered-by: Express</textarea>
+        <button id="analyzeBtn">Analyze Headers</button>
+      </article>
+
+      <article class="card">
+        <p class="score">Score: <span id="score">0</span>/100 <span id="grade" class="pill bad">Needs work</span></p>
+        <ul id="notes" class="list"></ul>
+        <table>
+          <thead>
+            <tr><th>Header</th><th>Value</th></tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </article>
+    </section>
+  </main>
+
+  <script>
+    const important = {
+      security: [
+        ['strict-transport-security', 'Add HSTS to force HTTPS.'],
+        ['content-security-policy', 'Add CSP to reduce XSS risk.'],
+        ['x-content-type-options', 'Set X-Content-Type-Options: nosniff.'],
+        ['x-frame-options', 'Add X-Frame-Options or frame-ancestors in CSP.'],
+        ['referrer-policy', 'Define a strict Referrer-Policy.'],
+        ['permissions-policy', 'Limit browser feature access with Permissions-Policy.']
+      ],
+      caching: [
+        ['cache-control', 'Set Cache-Control for predictable caching behavior.'],
+        ['etag', 'Use ETag for revalidation and bandwidth savings.']
+      ]
+    };
+
+    function parseHeaders(raw) {
+      const map = {};
+      raw.split(/\r?\n/).forEach(line => {
+        const trimmed = line.trim();
+        if (!trimmed || /^HTTP\//i.test(trimmed)) return;
+        const idx = trimmed.indexOf(':');
+        if (idx < 1) return;
+        const key = trimmed.slice(0, idx).trim().toLowerCase();
+        const value = trimmed.slice(idx + 1).trim();
+        map[key] = value;
+      });
+      return map;
+    }
+
+    function grade(score) {
+      if (score >= 85) return ['Excellent', 'good'];
+      if (score >= 65) return ['Good', 'warn'];
+      return ['Needs work', 'bad'];
+    }
+
+    function analyze() {
+      const raw = document.getElementById('headers').value;
+      const headers = parseHeaders(raw);
+      const notes = [];
+      let score = 100;
+
+      for (const [key, advice] of important.security) {
+        if (!headers[key]) { score -= 10; notes.push(`⚠️ Missing ${key}: ${advice}`); }
+      }
+      for (const [key, advice] of important.caching) {
+        if (!headers[key]) { score -= 6; notes.push(`ℹ️ Missing ${key}: ${advice}`); }
+      }
+
+      if (!headers['content-encoding']) {
+        score -= 5;
+        notes.push('ℹ️ No content-encoding found. Consider gzip or br compression.');
+      }
+      if (headers['server']) {
+        score -= 3;
+        notes.push('ℹ️ Server header exposes backend details. Consider minimizing info.');
+      }
+      if (headers['x-powered-by']) {
+        score -= 5;
+        notes.push('⚠️ x-powered-by reveals stack information. Remove it in production.');
+      }
+      if (!headers['access-control-allow-origin']) {
+        notes.push('ℹ️ No CORS header detected. This is fine if the endpoint is same-origin only.');
+      }
+      if (score < 0) score = 0;
+
+      const [label, cls] = grade(score);
+      document.getElementById('score').textContent = score;
+      const gradeEl = document.getElementById('grade');
+      gradeEl.textContent = label;
+      gradeEl.className = 'pill ' + cls;
+
+      const notesEl = document.getElementById('notes');
+      notesEl.innerHTML = notes.length ? notes.map(n => `<li>${n}</li>`).join('') : '<li style="color:var(--good)">✅ Looks great. No critical issues detected.</li>';
+
+      const body = document.getElementById('tableBody');
+      body.innerHTML = Object.keys(headers).length
+        ? Object.entries(headers).map(([k,v]) => `<tr><td><code>${k}</code></td><td><code>${v}</code></td></tr>`).join('')
+        : '<tr><td colspan="2" style="color:var(--muted)">No valid headers parsed.</td></tr>';
+    }
+
+    document.getElementById('analyzeBtn').addEventListener('click', analyze);
+    analyze();
+  </script>
+</body>
+</html>

@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Unicode Normalizer | EastSea Tools</title>
+  <meta name="description" content="Normalize Unicode text to NFC/NFD/NFKC/NFKD, strip diacritics, and inspect code points." />
+  <style>
+    :root {
+      --bg: #0d1117;
+      --panel: #141a24;
+      --panel2: #1b2231;
+      --line: #2d374e;
+      --text: #eaf0ff;
+      --muted: #a8b3ce;
+      --accent: #7f90ff;
+      --ok: #34d399;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: linear-gradient(140deg, #1f2440, #0d1117 45%);
+      color: var(--text);
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      padding: 18px;
+    }
+    .wrap { max-width: 1100px; margin: 0 auto; }
+    h1 { margin: 0 0 8px; font-size: clamp(1.35rem, 3vw, 2rem); }
+    .sub { margin: 0 0 14px; color: var(--muted); }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--panel);
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+    .grid { display: grid; gap: 12px; grid-template-columns: 1fr; }
+    @media (min-width: 980px) { .grid { grid-template-columns: 1fr 1fr; } }
+    textarea {
+      width: 100%;
+      min-height: 160px;
+      background: var(--panel2);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      color: var(--text);
+      padding: 10px;
+      font: 500 15px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+      resize: vertical;
+    }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 10px; }
+    button {
+      border: 0;
+      border-radius: 10px;
+      padding: 8px 12px;
+      background: #2f3a65;
+      color: #fff;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button.primary { background: var(--accent); }
+    .stats {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      margin-top: 10px;
+    }
+    .stat {
+      background: var(--panel2);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px;
+    }
+    .k { font-size: 12px; color: var(--muted); }
+    .v { margin-top: 4px; font-size: 16px; font-weight: 700; }
+    table { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 13px; }
+    th, td { border-bottom: 1px solid var(--line); padding: 8px; text-align: left; }
+    th { color: var(--muted); font-weight: 600; }
+    .status { margin-top: 6px; color: var(--ok); min-height: 20px; font-size: 13px; }
+    .muted { color: var(--muted); }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <h1>Unicode Normalizer</h1>
+    <p class="sub">Normalize text safely for search, storage, and comparisons.</p>
+
+    <section class="grid">
+      <article class="card">
+        <label for="input">Input Text</label>
+        <textarea id="input" spellcheck="false">Cafe\u0301 • 한글 한글 • ①①Å</textarea>
+
+        <div class="toolbar">
+          <button data-form="NFC" class="primary">NFC</button>
+          <button data-form="NFD">NFD</button>
+          <button data-form="NFKC">NFKC</button>
+          <button data-form="NFKD">NFKD</button>
+          <button id="stripBtn">Strip Diacritics</button>
+          <button id="copyBtn">Copy Output</button>
+        </div>
+
+        <label for="output">Output</label>
+        <textarea id="output" spellcheck="false"></textarea>
+        <div id="status" class="status">Ready.</div>
+      </article>
+
+      <article class="card">
+        <h3 style="margin-top:0;">Character Inspection</h3>
+        <p class="muted" style="margin-top:0;">Shows each Unicode character and code point.</p>
+
+        <div class="stats">
+          <div class="stat"><div class="k">Characters</div><div id="charCount" class="v">0</div></div>
+          <div class="stat"><div class="k">Code Points</div><div id="pointCount" class="v">0</div></div>
+          <div class="stat"><div class="k">UTF-8 Bytes</div><div id="byteCount" class="v">0</div></div>
+          <div class="stat"><div class="k">Changed?</div><div id="changed" class="v">No</div></div>
+        </div>
+
+        <div style="max-height: 360px; overflow:auto; margin-top: 10px;">
+          <table>
+            <thead>
+              <tr><th>#</th><th>Char</th><th>Code Point</th><th>Hex</th></tr>
+            </thead>
+            <tbody id="codeTable"></tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <script>
+    const input = document.getElementById('input');
+    const output = document.getElementById('output');
+    const statusEl = document.getElementById('status');
+    const codeTable = document.getElementById('codeTable');
+
+    function utf8Bytes(str) {
+      return new TextEncoder().encode(str).length;
+    }
+
+    function asHex(cp) {
+      return 'U+' + cp.toString(16).toUpperCase().padStart(4, '0');
+    }
+
+    function updateInspect() {
+      const original = input.value;
+      const normalized = output.value;
+      const chars = Array.from(normalized);
+
+      document.getElementById('charCount').textContent = normalized.length;
+      document.getElementById('pointCount').textContent = chars.length;
+      document.getElementById('byteCount').textContent = utf8Bytes(normalized);
+      document.getElementById('changed').textContent = original === normalized ? 'No' : 'Yes';
+
+      codeTable.innerHTML = chars.map((ch, idx) => {
+        const cp = ch.codePointAt(0);
+        const printable = ch === ' ' ? '␠' : ch === '\n' ? '↵' : ch;
+        return `<tr><td>${idx + 1}</td><td>${printable}</td><td>${cp}</td><td>${asHex(cp)}</td></tr>`;
+      }).join('');
+    }
+
+    function normalize(form) {
+      output.value = input.value.normalize(form);
+      statusEl.textContent = `Normalized to ${form}.`;
+      updateInspect();
+    }
+
+    document.querySelectorAll('button[data-form]').forEach(btn => {
+      btn.addEventListener('click', () => normalize(btn.dataset.form));
+    });
+
+    document.getElementById('stripBtn').addEventListener('click', () => {
+      output.value = input.value.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      statusEl.textContent = 'Diacritics removed.';
+      updateInspect();
+    });
+
+    document.getElementById('copyBtn').addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(output.value);
+        statusEl.textContent = 'Output copied.';
+      } catch {
+        statusEl.textContent = 'Copy failed. Please copy manually.';
+      }
+    });
+
+    input.addEventListener('input', () => {
+      output.value = input.value;
+      updateInspect();
+    });
+
+    output.value = input.value;
+    updateInspect();
+  </script>
+</body>
+</html>

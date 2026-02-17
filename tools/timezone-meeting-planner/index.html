@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Timezone Meeting Planner</title>
+  <style>
+    :root{
+      --bg:#0a1020;--panel:#121c35;--line:#2e3e67;--text:#ecf1ff;--muted:#a6b2d1;--ok:#34d399;--warn:#fbbf24;
+      color-scheme:dark;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;padding:16px;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:radial-gradient(1000px 720px at 10% -15%,#263c72 0%,transparent 45%),var(--bg);color:var(--text)}
+    .app{max-width:1080px;margin:0 auto;display:grid;gap:12px}
+    h1{margin:0;font-size:clamp(1.3rem,3.8vw,2rem)}
+    .sub{margin:4px 0 0;color:var(--muted)}
+    .card{background:linear-gradient(180deg,#162443,var(--panel));border:1px solid var(--line);border-radius:16px;padding:14px}
+    .grid{display:grid;gap:10px}
+    @media(min-width:900px){.cols{grid-template-columns:1fr 1fr}}
+    .line{display:flex;gap:8px;flex-wrap:wrap}
+    .line>*{flex:1}
+    label{font-size:.9rem;color:var(--muted)}
+    input,select,button{width:100%;border:1px solid #3a4c78;background:#0d1732;color:var(--text);border-radius:10px;padding:10px 12px;font:inherit}
+    button{cursor:pointer;font-weight:700;background:linear-gradient(180deg,#3b6fd3,#2e5ab5)}
+    table{width:100%;border-collapse:collapse;font-size:.95rem}
+    th,td{padding:10px;border-bottom:1px solid #2c3d65;text-align:left}
+    th{color:#b8c7ed;font-weight:600}
+    .muted{color:var(--muted);font-size:.9rem}
+    .timeline{display:grid;grid-template-columns:repeat(24,minmax(20px,1fr));gap:4px}
+    .slot{height:34px;border-radius:8px;border:1px solid #2f4069;background:#101b36;display:flex;align-items:center;justify-content:center;font-size:.68rem;color:#9fb0db}
+    .slot.ok{background:#0f2f28;border-color:#1f7a67;color:#90f5e0}
+    .slot.warn{background:#2f260c;border-color:#7a5f16;color:#ffe3a2}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>Timezone Meeting Planner</h1>
+      <p class="sub">Convert one meeting time across global teams and quickly find overlap-friendly hours.</p>
+    </header>
+
+    <section class="card grid cols">
+      <div class="grid">
+        <label>Base Date & Time
+          <input id="baseDate" type="datetime-local" />
+        </label>
+        <label>Base Timezone
+          <select id="baseTz"></select>
+        </label>
+      </div>
+      <div class="grid">
+        <label>Team Timezone A<select id="tzA"></select></label>
+        <label>Team Timezone B<select id="tzB"></select></label>
+        <label>Team Timezone C<select id="tzC"></select></label>
+      </div>
+      <div class="line" style="grid-column:1/-1">
+        <button id="convertBtn">Convert Time</button>
+      </div>
+      <div id="status" class="muted" style="grid-column:1/-1">Set date/time and timezones.</div>
+    </section>
+
+    <section class="card">
+      <strong>Converted Times</strong>
+      <table>
+        <thead><tr><th>Timezone</th><th>Local Date</th><th>Local Time</th><th>UTC Offset</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </section>
+
+    <section class="card grid">
+      <strong>Best 24-hour Overlap (09:00-18:00 local work window)</strong>
+      <div id="timeline" class="timeline"></div>
+      <div class="muted">Green: all selected zones in work hours · Yellow: partially overlapping</div>
+    </section>
+  </div>
+
+  <script>
+    const TIMEZONES = [
+      'UTC','Asia/Seoul','Asia/Tokyo','Asia/Singapore','Asia/Bangkok','Asia/Dubai',
+      'Europe/London','Europe/Paris','Europe/Berlin','Europe/Helsinki',
+      'America/New_York','America/Chicago','America/Denver','America/Los_Angeles',
+      'America/Sao_Paulo','Africa/Johannesburg','Australia/Sydney','Pacific/Auckland'
+    ];
+
+    const $ = (q)=>document.querySelector(q);
+    const fmtDate = (d,tz)=>new Intl.DateTimeFormat('en-CA',{timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit',weekday:'short'}).format(d);
+    const fmtTime = (d,tz)=>new Intl.DateTimeFormat('en-GB',{timeZone:tz,hour:'2-digit',minute:'2-digit',hour12:false}).format(d);
+
+    function offsetLabel(date, tz){
+      const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: tz, timeZoneName: 'shortOffset', hour: '2-digit', minute:'2-digit'
+      }).formatToParts(date);
+      return parts.find(p => p.type === 'timeZoneName')?.value || 'UTC';
+    }
+
+    function tzOptions(select, selected){
+      select.innerHTML = TIMEZONES.map(t => `<option ${t===selected?'selected':''}>${t}</option>`).join('');
+    }
+
+    function parseAsUTCFromTz(localISO, tz){
+      // Approximate conversion by iterative refinement using Intl parts.
+      const guess = new Date(localISO);
+      const [y,m,d,h,min] = localISO.replace('T','-').split('-').map(Number);
+      if (!y || !m || !d) return null;
+      let utc = Date.UTC(y,m-1,d,h||0,min||0);
+      for(let i=0;i<3;i++){
+        const p = new Intl.DateTimeFormat('en-CA', {timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false})
+          .formatToParts(new Date(utc))
+          .reduce((acc,x)=>(acc[x.type]=x.value,acc),{});
+        const localUtc = Date.UTC(Number(p.year), Number(p.month)-1, Number(p.day), Number(p.hour), Number(p.minute));
+        const desired = Date.UTC(y,m-1,d,h||0,min||0);
+        utc += desired - localUtc;
+      }
+      return new Date(utc || guess.getTime());
+    }
+
+    function withinWorkHours(date, tz){
+      const hour = Number(new Intl.DateTimeFormat('en-GB',{timeZone:tz,hour:'2-digit',hour12:false}).format(date));
+      return hour >= 9 && hour < 18;
+    }
+
+    function renderTimeline(baseUtc, zones){
+      const tl = $('#timeline');
+      tl.innerHTML = '';
+      for(let h=0; h<24; h++){
+        const slotDate = new Date(baseUtc.getTime() + h*3600_000);
+        const okCount = zones.filter(tz => withinWorkHours(slotDate, tz)).length;
+        const div = document.createElement('div');
+        div.className = 'slot ' + (okCount === zones.length ? 'ok' : okCount >= Math.ceil(zones.length/2) ? 'warn' : '');
+        div.title = zones.map(z => `${z}: ${fmtTime(slotDate, z)}`).join('\n');
+        div.textContent = String(h).padStart(2,'0');
+        tl.appendChild(div);
+      }
+    }
+
+    function run(){
+      const baseISO = $('#baseDate').value;
+      const baseTz = $('#baseTz').value;
+      const zones = [baseTz, $('#tzA').value, $('#tzB').value, $('#tzC').value];
+
+      if(!baseISO){ $('#status').textContent = 'Please choose a base date/time.'; return; }
+      const baseUtc = parseAsUTCFromTz(baseISO, baseTz);
+      if(!baseUtc || Number.isNaN(baseUtc.getTime())){ $('#status').textContent = 'Invalid date input.'; return; }
+
+      const tbody = $('#rows');
+      tbody.innerHTML = zones.map(tz => `
+        <tr>
+          <td>${tz}</td>
+          <td>${fmtDate(baseUtc, tz)}</td>
+          <td>${fmtTime(baseUtc, tz)}</td>
+          <td>${offsetLabel(baseUtc, tz)}</td>
+        </tr>
+      `).join('');
+
+      renderTimeline(baseUtc, zones);
+      $('#status').textContent = `Converted from ${baseTz}. Use timeline hover to inspect each hour.`;
+    }
+
+    tzOptions($('#baseTz'), 'Asia/Seoul');
+    tzOptions($('#tzA'), 'America/Los_Angeles');
+    tzOptions($('#tzB'), 'Europe/London');
+    tzOptions($('#tzC'), 'Asia/Singapore');
+
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    $('#baseDate').value = now.toISOString().slice(0,16);
+
+    $('#convertBtn').addEventListener('click', run);
+    ['#baseDate','#baseTz','#tzA','#tzB','#tzC'].forEach(sel => $(sel).addEventListener('change', run));
+    run();
+  </script>
+</body>
+</html>

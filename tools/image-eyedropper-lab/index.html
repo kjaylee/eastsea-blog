@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Image Eyedropper Lab</title>
+  <style>
+    :root{--bg:#0a1020;--panel:#121c34;--line:#2b3d64;--text:#ebf2ff;--muted:#a8b4d4;--accent:#7ba7ff;color-scheme:dark}
+    *{box-sizing:border-box}
+    body{margin:0;padding:16px;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:radial-gradient(950px 700px at 10% -20%,#263f73 0%,transparent 45%),var(--bg);color:var(--text)}
+    .app{max-width:1100px;margin:0 auto;display:grid;gap:12px}
+    h1{margin:0;font-size:clamp(1.3rem,3.8vw,2rem)} .sub{margin:4px 0 0;color:var(--muted)}
+    .card{background:linear-gradient(180deg,#172543,var(--panel));border:1px solid var(--line);border-radius:16px;padding:14px}
+    .grid{display:grid;gap:10px}
+    @media(min-width:940px){.cols{grid-template-columns:1.2fr .8fr}}
+    input,button{width:100%;border:1px solid #3b4f7d;background:#0d1833;color:var(--text);border-radius:10px;padding:10px 12px;font:inherit}
+    button{cursor:pointer;background:linear-gradient(180deg,#3b70d6,#2e5ab6);font-weight:700}
+    .canvas-wrap{position:relative;border:1px dashed #40537f;border-radius:12px;overflow:hidden;background:#0a1328;min-height:260px;display:grid;place-items:center}
+    canvas{max-width:100%;height:auto;display:block;cursor:crosshair}
+    .cross{position:absolute;pointer-events:none;width:28px;height:28px;border:1px solid #fff;border-radius:50%;transform:translate(-50%,-50%);box-shadow:0 0 0 9999px rgba(0,0,0,.08) inset;display:none}
+    .color-box{height:80px;border-radius:12px;border:1px solid #2e4067}
+    .kv{display:grid;grid-template-columns:95px 1fr;gap:8px;align-items:center}
+    .kv code{display:block;padding:8px 10px;background:#0a1328;border:1px solid #30446f;border-radius:8px;word-break:break-all}
+    .palette{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px}
+    .swatch{border:1px solid #2f426d;border-radius:10px;overflow:hidden;background:#0d1630}
+    .swatch .c{height:45px}
+    .swatch button{border:none;border-top:1px solid #2f426d;border-radius:0;background:#101c3b;padding:8px;font-size:.82rem}
+    .muted{color:var(--muted);font-size:.9rem}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>Image Eyedropper Lab</h1>
+      <p class="sub">Upload an image, click any pixel to sample precise HEX/RGB/HSL colors, and build a quick palette.</p>
+    </header>
+
+    <section class="card grid cols">
+      <article class="grid">
+        <label>Upload image
+          <input id="upload" type="file" accept="image/*" />
+        </label>
+        <div class="canvas-wrap">
+          <canvas id="canvas" width="860" height="420"></canvas>
+          <div id="cross" class="cross"></div>
+        </div>
+        <div class="muted">Tip: Click image to pick color. Double-click to add to palette.</div>
+      </article>
+      <article class="grid">
+        <div id="preview" class="color-box"></div>
+        <div class="kv"><span>HEX</span><code id="hex">#000000</code></div>
+        <div class="kv"><span>RGB</span><code id="rgb">rgb(0, 0, 0)</code></div>
+        <div class="kv"><span>HSL</span><code id="hsl">hsl(0, 0%, 0%)</code></div>
+        <button id="copyBtn">Copy HEX</button>
+        <div class="muted" id="status">Load an image to begin.</div>
+      </article>
+    </section>
+
+    <section class="card grid">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+        <strong>Palette Picks</strong>
+        <button id="clearPalette" style="max-width:150px">Clear Palette</button>
+      </div>
+      <div id="palette" class="palette"></div>
+    </section>
+  </div>
+
+  <script>
+    const $ = (q)=>document.querySelector(q);
+    const canvas = $('#canvas');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const cross = $('#cross');
+    let imgLoaded = false;
+    let currentHex = '#000000';
+    let palette = [];
+
+    function drawPlaceholder(){
+      const g = ctx.createLinearGradient(0,0,canvas.width,canvas.height);
+      g.addColorStop(0,'#1a2750'); g.addColorStop(1,'#0f162f');
+      ctx.fillStyle = g; ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.fillStyle = '#94a7d6'; ctx.font = '20px Inter, sans-serif';
+      ctx.fillText('Upload an image to start color picking', 24, 44);
+    }
+
+    function rgbToHex(r,g,b){
+      return '#' + [r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('').toUpperCase();
+    }
+
+    function rgbToHsl(r,g,b){
+      r/=255; g/=255; b/=255;
+      const max=Math.max(r,g,b), min=Math.min(r,g,b);
+      let h,s,l=(max+min)/2;
+      if(max===min){h=s=0;} else {
+        const d=max-min;
+        s=l>0.5 ? d/(2-max-min) : d/(max+min);
+        switch(max){
+          case r: h=(g-b)/d + (g<b?6:0); break;
+          case g: h=(b-r)/d + 2; break;
+          case b: h=(r-g)/d + 4; break;
+        }
+        h/=6;
+      }
+      return [Math.round(h*360), Math.round(s*100), Math.round(l*100)];
+    }
+
+    function setColor(r,g,b){
+      const hex = rgbToHex(r,g,b);
+      const [h,s,l] = rgbToHsl(r,g,b);
+      currentHex = hex;
+      $('#preview').style.background = hex;
+      $('#hex').textContent = hex;
+      $('#rgb').textContent = `rgb(${r}, ${g}, ${b})`;
+      $('#hsl').textContent = `hsl(${h}, ${s}%, ${l}%)`;
+    }
+
+    function pickAt(clientX, clientY){
+      if(!imgLoaded) return;
+      const rect = canvas.getBoundingClientRect();
+      const x = Math.max(0, Math.min(canvas.width - 1, Math.floor((clientX - rect.left) * (canvas.width / rect.width))));
+      const y = Math.max(0, Math.min(canvas.height - 1, Math.floor((clientY - rect.top) * (canvas.height / rect.height))));
+      const px = ctx.getImageData(x,y,1,1).data;
+      setColor(px[0],px[1],px[2]);
+      cross.style.display = 'block';
+      cross.style.left = `${clientX - rect.left}px`;
+      cross.style.top = `${clientY - rect.top}px`;
+    }
+
+    function renderPalette(){
+      const host = $('#palette');
+      host.innerHTML = '';
+      if(!palette.length){ host.innerHTML = '<div class="muted">No colors yet. Double-click the image to add color.</div>'; return; }
+      palette.forEach((hex, i) => {
+        const div = document.createElement('div');
+        div.className = 'swatch';
+        div.innerHTML = `<div class="c" style="background:${hex}"></div><button>${hex}</button>`;
+        div.querySelector('button').addEventListener('click', async () => {
+          await navigator.clipboard.writeText(hex).catch(()=>{});
+          $('#status').textContent = `${hex} copied.`;
+        });
+        host.appendChild(div);
+      });
+    }
+
+    function loadImage(file){
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(canvas.width / img.width, canvas.height / img.height);
+        const w = Math.floor(img.width * scale);
+        const h = Math.floor(img.height * scale);
+        const x = Math.floor((canvas.width - w)/2);
+        const y = Math.floor((canvas.height - h)/2);
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+        ctx.fillStyle = '#0a1328'; ctx.fillRect(0,0,canvas.width,canvas.height);
+        ctx.drawImage(img, x, y, w, h);
+        imgLoaded = true;
+        $('#status').textContent = `Loaded ${file.name}. Click to sample colors.`;
+      };
+      img.src = URL.createObjectURL(file);
+    }
+
+    $('#upload').addEventListener('change', (e)=>{
+      const f = e.target.files?.[0];
+      if(f) loadImage(f);
+    });
+
+    canvas.addEventListener('mousemove', e=>pickAt(e.clientX, e.clientY));
+    canvas.addEventListener('click', e=>pickAt(e.clientX, e.clientY));
+    canvas.addEventListener('dblclick', () => {
+      if(!palette.includes(currentHex)) palette.push(currentHex);
+      renderPalette();
+      $('#status').textContent = `${currentHex} added to palette.`;
+    });
+
+    $('#copyBtn').addEventListener('click', async ()=>{
+      try { await navigator.clipboard.writeText(currentHex); $('#status').textContent = `${currentHex} copied.`; }
+      catch { $('#status').textContent = 'Clipboard permission blocked.'; }
+    });
+
+    $('#clearPalette').addEventListener('click', ()=>{ palette = []; renderPalette(); $('#status').textContent = 'Palette cleared.'; });
+
+    drawPlaceholder();
+    renderPalette();
+  </script>
+</body>
+</html>

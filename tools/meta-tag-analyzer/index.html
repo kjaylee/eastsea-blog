@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Meta Tag Analyzer</title>
+  <style>
+    :root{--bg:#0a1121;--panel:#121d36;--line:#2f4069;--text:#edf2ff;--muted:#a8b3d0;--ok:#34d399;--warn:#fbbf24;--bad:#fb7185;color-scheme:dark}
+    *{box-sizing:border-box}
+    body{margin:0;padding:16px;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:radial-gradient(900px 720px at 12% -15%,#253e73 0%,transparent 46%),var(--bg);color:var(--text)}
+    .app{max-width:1120px;margin:0 auto;display:grid;gap:12px}
+    h1{margin:0;font-size:clamp(1.3rem,3.8vw,2rem)} .sub{margin:4px 0 0;color:var(--muted)}
+    .card{background:linear-gradient(180deg,#172544,var(--panel));border:1px solid var(--line);border-radius:16px;padding:14px}
+    .grid{display:grid;gap:10px}
+    .line{display:flex;gap:8px;flex-wrap:wrap}
+    .line>*{flex:1}
+    textarea,input,button{width:100%;border:1px solid #3a4e7d;background:#0d1732;color:var(--text);border-radius:10px;padding:10px 12px;font:inherit}
+    textarea{min-height:180px;resize:vertical}
+    button{cursor:pointer;font-weight:700;background:linear-gradient(180deg,#3a6fd4,#2e5ab6)}
+    .muted{color:var(--muted);font-size:.9rem}
+    .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+    .pill{border:1px solid #33486f;background:#0e1935;border-radius:10px;padding:10px}
+    .pill strong{display:block;font-size:1.2rem}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:9px;border-bottom:1px solid #2b3f66;text-align:left;vertical-align:top}
+    th{color:#b9c7ea;font-weight:600}
+    .ok{color:#8ef5df}.warn{color:#ffe5a8}.bad{color:#ffb7c4}
+    code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;word-break:break-word}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>Meta Tag Analyzer</h1>
+      <p class="sub">Paste a URL or raw HTML to inspect SEO, Open Graph, and Twitter meta tags in one view.</p>
+    </header>
+
+    <section class="card grid">
+      <div class="line">
+        <input id="url" placeholder="https://example.com" />
+        <button id="fetchBtn" style="max-width:220px">Fetch URL HTML</button>
+      </div>
+      <textarea id="html" placeholder="Or paste full HTML source here..."></textarea>
+      <div class="line">
+        <button id="analyzeBtn">Analyze Meta Tags</button>
+        <button id="sampleBtn">Load Sample</button>
+      </div>
+      <div id="status" class="muted">Ready.</div>
+    </section>
+
+    <section class="card grid">
+      <div class="stats">
+        <div class="pill"><span class="muted">Score</span><strong id="score">0 / 100</strong></div>
+        <div class="pill"><span class="muted">Found Tags</span><strong id="found">0</strong></div>
+        <div class="pill"><span class="muted">Missing Critical</span><strong id="missing">0</strong></div>
+      </div>
+    </section>
+
+    <section class="card grid">
+      <strong>Detailed Report</strong>
+      <table>
+        <thead><tr><th>Item</th><th>Status</th><th>Value</th></tr></thead>
+        <tbody id="report"></tbody>
+      </table>
+    </section>
+  </div>
+
+  <script>
+    const REQUIRED = [
+      { key:'title', label:'<title>', weight:18 },
+      { key:'description', label:'meta[name="description"]', weight:16 },
+      { key:'canonical', label:'link[rel="canonical"]', weight:10 },
+      { key:'viewport', label:'meta[name="viewport"]', weight:8 },
+      { key:'robots', label:'meta[name="robots"]', weight:8 },
+      { key:'og:title', label:'meta[property="og:title"]', weight:10 },
+      { key:'og:description', label:'meta[property="og:description"]', weight:8 },
+      { key:'og:image', label:'meta[property="og:image"]', weight:8 },
+      { key:'twitter:card', label:'meta[name="twitter:card"]', weight:7 },
+      { key:'twitter:title', label:'meta[name="twitter:title"]', weight:7 }
+    ];
+
+    const $ = (q)=>document.querySelector(q);
+
+    function extract(doc, key){
+      if(key==='title') return doc.querySelector('title')?.textContent?.trim() || '';
+      if(key==='canonical') return doc.querySelector('link[rel="canonical"]')?.getAttribute('href') || '';
+      if(key.includes(':')) {
+        return doc.querySelector(`meta[property="${key}"]`)?.getAttribute('content')
+          || doc.querySelector(`meta[name="${key}"]`)?.getAttribute('content')
+          || '';
+      }
+      return doc.querySelector(`meta[name="${key}"]`)?.getAttribute('content') || '';
+    }
+
+    function analyze(html){
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, 'text/html');
+      const report = $('#report');
+      report.innerHTML = '';
+
+      let score = 0;
+      let found = 0;
+      let missing = 0;
+
+      for(const item of REQUIRED){
+        const value = extract(doc, item.key);
+        const ok = Boolean(value && value.trim());
+        if(ok){ score += item.weight; found++; }
+        else missing++;
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><code>${item.label}</code></td>
+          <td class="${ok?'ok':'bad'}">${ok ? 'Found' : 'Missing'}</td>
+          <td>${ok ? `<code>${value.slice(0,180)}</code>` : '<span class="muted">—</span>'}</td>
+        `;
+        report.appendChild(tr);
+      }
+
+      const overDesc = extract(doc, 'description');
+      if(overDesc && (overDesc.length < 50 || overDesc.length > 160)){
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td><code>Description length</code></td><td class="warn">Needs tuning</td><td>${overDesc.length} chars (ideal 50-160)</td>`;
+        report.appendChild(tr);
+      }
+
+      $('#score').textContent = `${Math.min(100, score)} / 100`;
+      $('#found').textContent = String(found);
+      $('#missing').textContent = String(missing);
+      $('#status').textContent = 'Analysis complete.';
+    }
+
+    async function fetchURL(){
+      const url = $('#url').value.trim();
+      if(!url){ $('#status').textContent = 'Enter a URL first.'; return; }
+      $('#status').textContent = 'Fetching URL HTML...';
+      try{
+        const endpoint = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url);
+        const res = await fetch(endpoint);
+        if(!res.ok) throw new Error('HTTP ' + res.status);
+        const html = await res.text();
+        $('#html').value = html.slice(0, 120000);
+        $('#status').textContent = 'Fetched successfully. Now click Analyze.';
+      }catch(err){
+        $('#status').textContent = 'Fetch failed: ' + err.message + '. Paste HTML manually if blocked.';
+      }
+    }
+
+    $('#analyzeBtn').addEventListener('click', ()=>{
+      const html = $('#html').value.trim();
+      if(!html){ $('#status').textContent = 'Paste or fetch HTML first.'; return; }
+      analyze(html);
+    });
+
+    $('#fetchBtn').addEventListener('click', fetchURL);
+
+    $('#sampleBtn').addEventListener('click', ()=>{
+      $('#html').value = `<!doctype html><html><head>
+<title>EastSea Tools - Developer Utilities</title>
+<meta name="description" content="A collection of free, fast browser tools for developers and creators.">
+<link rel="canonical" href="https://tools.eastsea.xyz/">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="index,follow">
+<meta property="og:title" content="EastSea Tools">
+<meta property="og:description" content="Free web-based utility tools.">
+<meta property="og:image" content="https://tools.eastsea.xyz/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="EastSea Tools">
+</head><body></body></html>`;
+      $('#status').textContent = 'Sample loaded.';
+      analyze($('#html').value);
+    });
+  </script>
+</body>
+</html>

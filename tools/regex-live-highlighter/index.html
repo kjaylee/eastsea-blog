@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Regex Live Highlighter</title>
+  <style>
+    :root{
+      --bg:#0b0f1d;--panel:#121a2e;--line:#29324e;--text:#e9eeff;--muted:#9da8ca;
+      --accent:#7aa2ff;--mark:#fef08a;--markText:#2b2300;
+      color-scheme: dark;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:radial-gradient(900px 700px at -20% -10%,#2f3f71 0%,transparent 50%),var(--bg);color:var(--text);padding:16px}
+    .app{max-width:1100px;margin:0 auto;display:grid;gap:12px}
+    h1{margin:0;font-size:clamp(1.3rem,3.8vw,2rem)}
+    .sub{margin:4px 0 0;color:var(--muted)}
+    .card{background:linear-gradient(180deg,#17213b,var(--panel));border:1px solid var(--line);border-radius:16px;padding:14px}
+    .grid{display:grid;gap:10px}
+    @media(min-width:920px){.cols{grid-template-columns:.9fr 1.1fr}}
+    input,textarea,button{width:100%;border:1px solid #344367;background:#0d1630;color:var(--text);border-radius:10px;padding:10px 12px;font:inherit}
+    textarea{min-height:170px;resize:vertical}
+    .line{display:flex;gap:8px;flex-wrap:wrap}
+    .line > *{flex:1}
+    button{cursor:pointer;background:linear-gradient(180deg,#3566ce,#2a54ae);font-weight:700}
+    .flags{display:flex;gap:8px;flex-wrap:wrap}
+    .flag{display:flex;align-items:center;gap:6px;background:#111c38;border:1px solid #355088;border-radius:999px;padding:6px 10px;font-size:.86rem}
+    .flag input{width:auto}
+    .preview{border:1px dashed #41517e;background:#0a1328;border-radius:12px;padding:12px;line-height:1.6;white-space:pre-wrap;word-break:break-word;min-height:170px}
+    mark{background:var(--mark);color:var(--markText);padding:1px 2px;border-radius:4px}
+    .muted{color:var(--muted);font-size:.9rem}
+    .matches{max-height:240px;overflow:auto;border:1px solid #2f3e62;border-radius:10px}
+    .item{padding:8px 10px;border-bottom:1px solid #2a3859}
+    .item:last-child{border-bottom:none}
+    code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+    .error{color:#ff9aa9}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>Regex Live Highlighter</h1>
+      <p class="sub">Test regular expressions with instant in-text highlighting and capture group inspection.</p>
+    </header>
+
+    <section class="card grid">
+      <div class="line">
+        <input id="pattern" placeholder="Pattern e.g. (\\b\\w+@\\w+\\.\\w+\\b)" value="\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b" />
+        <button id="runBtn">Run Regex</button>
+      </div>
+      <div class="flags">
+        <label class="flag"><input type="checkbox" value="g" checked> g (global)</label>
+        <label class="flag"><input type="checkbox" value="i" checked> i (ignore case)</label>
+        <label class="flag"><input type="checkbox" value="m"> m (multiline)</label>
+        <label class="flag"><input type="checkbox" value="s"> s (dotall)</label>
+        <label class="flag"><input type="checkbox" value="u"> u (unicode)</label>
+      </div>
+      <div id="status" class="muted">Ready.</div>
+    </section>
+
+    <section class="grid cols">
+      <article class="card grid">
+        <strong>Input Text</strong>
+        <textarea id="input">Contact us at hello@eastsea.xyz and support@tools.eastsea.xyz.
+Dates: 2026-02-17, 2026-02-20.
+Usernames: kim_jaylee, misskim12.</textarea>
+      </article>
+      <article class="card grid">
+        <strong>Highlighted Output</strong>
+        <div id="preview" class="preview"></div>
+      </article>
+    </section>
+
+    <section class="card grid">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+        <strong>Matches</strong>
+        <span id="count" class="muted">0 matches</span>
+      </div>
+      <div id="matches" class="matches"></div>
+    </section>
+  </div>
+
+  <script>
+    const $ = (q) => document.querySelector(q);
+    const patternEl = $('#pattern');
+    const inputEl = $('#input');
+    const previewEl = $('#preview');
+    const matchesEl = $('#matches');
+    const statusEl = $('#status');
+    const countEl = $('#count');
+
+    const escapeHTML = (s) => s
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
+
+    function selectedFlags() {
+      return [...document.querySelectorAll('.flag input:checked')].map(c => c.value).join('');
+    }
+
+    function run() {
+      const source = patternEl.value;
+      const flags = selectedFlags();
+      const text = inputEl.value;
+      matchesEl.innerHTML = '';
+
+      let regex;
+      try {
+        regex = new RegExp(source, flags);
+      } catch (e) {
+        statusEl.innerHTML = `<span class="error">Invalid regex: ${escapeHTML(e.message)}</span>`;
+        previewEl.textContent = text;
+        countEl.textContent = '0 matches';
+        return;
+      }
+
+      statusEl.textContent = `Using /${source}/${flags}`;
+
+      let matches = [];
+      if (flags.includes('g')) {
+        for (const m of text.matchAll(regex)) {
+          if (m[0] === '') {
+            regex.lastIndex += 1;
+            if (regex.lastIndex > text.length) break;
+          }
+          matches.push(m);
+          if (matches.length > 2000) break;
+        }
+      } else {
+        const m = regex.exec(text);
+        if (m) matches.push(m);
+      }
+
+      if (!matches.length) {
+        previewEl.textContent = text;
+        matchesEl.innerHTML = '<div class="item muted">No matches found.</div>';
+        countEl.textContent = '0 matches';
+        return;
+      }
+
+      const ranges = matches.map(m => [m.index, m.index + m[0].length]);
+      let html = '';
+      let cursor = 0;
+      for (const [s, e] of ranges) {
+        html += escapeHTML(text.slice(cursor, s));
+        html += `<mark>${escapeHTML(text.slice(s, e))}</mark>`;
+        cursor = e;
+      }
+      html += escapeHTML(text.slice(cursor));
+      previewEl.innerHTML = html;
+
+      const frag = document.createDocumentFragment();
+      matches.forEach((m, idx) => {
+        const div = document.createElement('div');
+        div.className = 'item';
+        const groups = m.slice(1).map((g, i) => `g${i+1}: ${g ?? '(null)'}`).join(' | ');
+        div.innerHTML = `<div><strong>#${idx+1}</strong> <code>${escapeHTML(m[0])}</code></div>
+          <div class="muted">index: ${m.index}${groups ? ' · ' + escapeHTML(groups) : ''}</div>`;
+        frag.appendChild(div);
+      });
+      matchesEl.innerHTML = '';
+      matchesEl.appendChild(frag);
+      countEl.textContent = `${matches.length} match${matches.length > 1 ? 'es' : ''}`;
+    }
+
+    $('#runBtn').addEventListener('click', run);
+    inputEl.addEventListener('input', run);
+    patternEl.addEventListener('input', run);
+    document.querySelectorAll('.flag input').forEach(f => f.addEventListener('change', run));
+    run();
+  </script>
+</body>
+</html>

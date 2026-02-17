@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Text Sort & Dedupe - 줄 정렬/중복 제거</title>
+<meta name="description" content="텍스트 줄바꿈 데이터를 정렬하고 중복 제거, 공백 정리, 역순 정렬을 한 번에 처리하는 도구" />
+<style>
+:root{
+  --bg:#f8fafc;--card:#fff;--line:#e2e8f0;--text:#0f172a;--muted:#64748b;
+  --a:#0ea5e9;--b:#8b5cf6;--ok:#16a34a;--warn:#f59e0b;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;background:linear-gradient(180deg,#e0f2fe 0,#f8fafc 35%);color:var(--text)}
+.wrap{max-width:1120px;margin:0 auto;padding:18px 14px 30px}
+.banner{background:linear-gradient(120deg,var(--a),var(--b));color:#fff;padding:20px;border-radius:18px;box-shadow:0 12px 24px rgba(14,165,233,.25)}
+.banner h1{margin:0;font-size:1.35rem}
+.banner p{margin:6px 0 0;opacity:.95;font-size:.93rem}
+.grid{margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px}
+label{display:block;font-size:.82rem;color:var(--muted);margin-bottom:6px;font-weight:700}
+textarea{width:100%;min-height:320px;border:1px solid #cbd5e1;border-radius:10px;padding:10px;font:14px/1.42 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;resize:vertical}
+.controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.check{display:flex;align-items:center;gap:7px;background:#f8fafc;border:1px solid var(--line);padding:8px;border-radius:10px;font-size:.86rem;color:#334155}
+.check input{width:16px;height:16px}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+button{border:none;border-radius:10px;padding:9px 12px;font-weight:700;cursor:pointer;background:#e2e8f0;color:#0f172a}
+button.primary{background:linear-gradient(135deg,var(--a),var(--b));color:#fff}
+button.soft{background:#eff6ff;color:#1d4ed8}
+.stats{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.badge{background:#f8fafc;border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:.78rem;color:#475569}
+#status{min-height:1.2em;font-size:.85rem;color:var(--ok);margin-top:7px}
+small{display:block;color:var(--muted);margin-top:8px;line-height:1.45}
+@media (max-width:900px){.grid{grid-template-columns:1fr}textarea{min-height:220px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section class="banner">
+    <h1>🧹 Text Sort & Dedupe</h1>
+    <p>리스트/로그/태그 데이터를 줄 단위로 정리하세요. 정렬 + 중복제거 + 공백정리 + 역순을 한 번에.</p>
+  </section>
+
+  <div class="grid">
+    <section class="card">
+      <label for="input">입력 텍스트 (줄바꿈 단위)</label>
+      <textarea id="input" spellcheck="false">banana
+Apple
+carrot
+apple
+banana 
+
+  durian
+Eggplant</textarea>
+    </section>
+
+    <section class="card">
+      <div class="controls">
+        <label class="check"><input id="trim" type="checkbox" checked />앞뒤 공백 제거</label>
+        <label class="check"><input id="removeEmpty" type="checkbox" checked />빈 줄 제거</label>
+        <label class="check"><input id="dedupe" type="checkbox" checked />중복 제거</label>
+        <label class="check"><input id="ignoreCase" type="checkbox" checked />대소문자 무시</label>
+        <label class="check"><input id="natural" type="checkbox" checked />자연 정렬 (item2 < item10)</label>
+        <label class="check"><input id="desc" type="checkbox" />역순 정렬 (Z→A)</label>
+      </div>
+
+      <div class="actions">
+        <button class="primary" id="run">정리 실행</button>
+        <button id="swap">입출력 바꾸기</button>
+        <button id="clear">초기화</button>
+        <button class="soft" id="copy">결과 복사</button>
+      </div>
+
+      <label for="output" style="margin-top:10px">결과</label>
+      <textarea id="output" spellcheck="false"></textarea>
+      <div class="stats" id="stats"></div>
+      <div id="status"></div>
+      <small>팁: 이메일 목록 정리, 태그 정돈, 로그 키 중복 제거에 유용합니다.</small>
+    </section>
+  </div>
+</div>
+
+<script>
+const $ = (id)=>document.getElementById(id);
+const stateKey = 'text-sort-dedupe-v1';
+
+function save(){
+  localStorage.setItem(stateKey, JSON.stringify({
+    input: $('input').value,
+    trim: $('trim').checked,
+    removeEmpty: $('removeEmpty').checked,
+    dedupe: $('dedupe').checked,
+    ignoreCase: $('ignoreCase').checked,
+    natural: $('natural').checked,
+    desc: $('desc').checked,
+  }));
+}
+
+function load(){
+  const raw = localStorage.getItem(stateKey);
+  if(!raw) return;
+  try{
+    const d = JSON.parse(raw);
+    $('input').value = d.input ?? $('input').value;
+    ['trim','removeEmpty','dedupe','ignoreCase','natural','desc'].forEach(k => {
+      if(typeof d[k] === 'boolean') $(k).checked = d[k];
+    });
+  }catch(_){ }
+}
+
+function processLines(){
+  const inputRaw = $('input').value;
+  let lines = inputRaw.split(/\r?\n/);
+  const originalCount = lines.length;
+
+  if($('trim').checked) lines = lines.map(v => v.trim());
+  if($('removeEmpty').checked) lines = lines.filter(v => v.length > 0);
+
+  let deduped = 0;
+  if($('dedupe').checked){
+    const seen = new Set();
+    const out = [];
+    for(const l of lines){
+      const k = $('ignoreCase').checked ? l.toLowerCase() : l;
+      if(seen.has(k)){ deduped++; continue; }
+      seen.add(k);
+      out.push(l);
+    }
+    lines = out;
+  }
+
+  const collator = new Intl.Collator('ko-KR', {
+    numeric: $('natural').checked,
+    sensitivity: $('ignoreCase').checked ? 'accent' : 'variant'
+  });
+
+  lines.sort((a,b)=>collator.compare(a,b));
+  if($('desc').checked) lines.reverse();
+
+  $('output').value = lines.join('\n');
+  $('stats').innerHTML = `
+    <span class="badge">입력 줄 ${originalCount}</span>
+    <span class="badge">출력 줄 ${lines.length}</span>
+    <span class="badge">중복 제거 ${deduped}</span>
+  `;
+  $('status').textContent = '정리가 완료되었습니다.';
+  save();
+}
+
+$('run').addEventListener('click', processLines);
+$('swap').addEventListener('click', ()=>{
+  const a = $('input').value;
+  $('input').value = $('output').value;
+  $('output').value = a;
+  $('status').textContent = '입력/출력을 바꿨습니다.';
+  save();
+});
+$('clear').addEventListener('click', ()=>{
+  $('input').value = '';
+  $('output').value = '';
+  $('stats').innerHTML = '';
+  $('status').textContent = '';
+  save();
+});
+$('copy').addEventListener('click', async ()=>{
+  if(!$('output').value.trim()) return;
+  await navigator.clipboard.writeText($('output').value);
+  $('status').textContent = '결과를 클립보드에 복사했습니다.';
+});
+
+['input','change'].forEach(evt=>{
+  ['input','trim','removeEmpty','dedupe','ignoreCase','natural','desc'].forEach(id=>{
+    $(id).addEventListener(evt, ()=>{ save(); if(evt==='change') processLines(); });
+  });
+});
+
+load();
+processLines();
+</script>
+</body>
+</html>

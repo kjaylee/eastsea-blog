@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SVG Wave Generator - 파도 SVG 생성기</title>
+<meta name="description" content="랜딩 페이지 배경용 SVG 파도(wave) 섹션을 실시간 생성하고 코드 복사/다운로드할 수 있는 도구" />
+<style>
+:root{--bg:#eff6ff;--card:#fff;--line:#dbeafe;--txt:#0f172a;--muted:#64748b;--a:#2563eb;--b:#7c3aed}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;background:linear-gradient(180deg,#dbeafe 0,#f8fafc 45%);color:var(--txt)}
+.wrap{max-width:1160px;margin:0 auto;padding:16px}
+.hero{background:linear-gradient(135deg,var(--a),var(--b));color:#fff;border-radius:18px;padding:20px;box-shadow:0 12px 24px rgba(37,99,235,.25)}
+.hero h1{margin:0;font-size:1.38rem}.hero p{margin:6px 0 0;opacity:.95;font-size:.93rem}
+.layout{margin-top:14px;display:grid;grid-template-columns:360px 1fr;gap:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px}
+label{display:block;font-size:.8rem;color:var(--muted);font-weight:700;margin-bottom:5px}
+input,select,textarea{width:100%;padding:9px 10px;border:1px solid #cbd5e1;border-radius:9px;font:inherit}
+textarea{min-height:180px;resize:vertical;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.83rem}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.range{display:grid;grid-template-columns:1fr 72px;gap:8px;align-items:center;margin-bottom:8px}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+button{border:none;border-radius:9px;padding:9px 11px;font-weight:700;cursor:pointer;background:#e2e8f0;color:#0f172a}
+button.primary{background:linear-gradient(135deg,var(--a),var(--b));color:#fff}
+.preview{
+  height:280px;
+  border-radius:14px;
+  border:1px solid var(--line);
+  background:#fff;
+  overflow:hidden;
+  display:flex;
+  align-items:stretch;
+}
+#render{width:100%;height:100%}
+.badges{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.badge{font-size:.76rem;background:#f8fafc;border:1px solid var(--line);padding:4px 8px;border-radius:999px;color:#334155}
+#status{font-size:.84rem;color:#16a34a;min-height:1.2em;margin-top:6px}
+@media (max-width:980px){.layout{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section class="hero">
+    <h1>🌊 SVG Wave Generator</h1>
+    <p>히어로 섹션/푸터용 파도형 배경 SVG를 레이어 기반으로 생성합니다.</p>
+  </section>
+
+  <div class="layout">
+    <section class="card">
+      <div class="grid2">
+        <div><label for="w">폭 (viewBox)</label><input id="w" type="number" min="200" max="3000" value="1200" /></div>
+        <div><label for="h">높이 (viewBox)</label><input id="h" type="number" min="80" max="800" value="280" /></div>
+      </div>
+
+      <div class="range"><label for="layers">레이어 수</label><input id="layers" type="number" min="1" max="5" value="3" /></div>
+      <div class="range"><label for="amp">진폭 (Amplitude)</label><input id="amp" type="number" min="6" max="180" value="34" /></div>
+      <div class="range"><label for="freq">주기 (Frequency)</label><input id="freq" type="number" min="1" max="12" value="3" /></div>
+      <div class="range"><label for="points">포인트 수</label><input id="points" type="number" min="8" max="120" value="48" /></div>
+
+      <label for="bg">배경색</label>
+      <input id="bg" type="color" value="#ffffff" />
+
+      <div class="grid2" style="margin-top:8px">
+        <div><label for="c1">Wave 1</label><input id="c1" type="color" value="#2563eb" /></div>
+        <div><label for="c2">Wave 2</label><input id="c2" type="color" value="#4f46e5" /></div>
+      </div>
+      <div class="grid2" style="margin-top:8px">
+        <div><label for="c3">Wave 3</label><input id="c3" type="color" value="#7c3aed" /></div>
+        <div><label for="flip">방향</label><select id="flip"><option value="bottom">아래에서 위</option><option value="top">위에서 아래</option></select></div>
+      </div>
+
+      <div class="actions">
+        <button class="primary" id="make">생성</button>
+        <button id="copySvg">SVG 복사</button>
+        <button id="copyCss">CSS 복사</button>
+        <button id="download">다운로드</button>
+      </div>
+      <div id="status"></div>
+    </section>
+
+    <section class="card">
+      <label>미리보기</label>
+      <div class="preview"><div id="render"></div></div>
+      <div class="badges" id="meta"></div>
+
+      <label for="svgCode" style="margin-top:10px">SVG 코드</label>
+      <textarea id="svgCode" spellcheck="false"></textarea>
+
+      <label for="cssCode" style="margin-top:8px">CSS background-image 코드</label>
+      <textarea id="cssCode" spellcheck="false"></textarea>
+    </section>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const key = 'svg-wave-generator-v1';
+
+function wavePath(width, height, amp, freq, points, phase, orientation){
+  const base = orientation === 'bottom' ? height * 0.65 : height * 0.35;
+  const step = width / points;
+  const pts = [];
+  for(let i=0;i<=points;i++){
+    const x = i * step;
+    const y = base + Math.sin((i / points) * Math.PI * 2 * freq + phase) * amp;
+    pts.push([x, Math.max(0, Math.min(height, y))]);
+  }
+
+  let d = `M 0 ${orientation==='bottom' ? height : 0} `;
+  d += `L ${pts[0][0].toFixed(2)} ${pts[0][1].toFixed(2)} `;
+  for(let i=1;i<pts.length;i++) d += `L ${pts[i][0].toFixed(2)} ${pts[i][1].toFixed(2)} `;
+  d += `L ${width} ${orientation==='bottom' ? height : 0} Z`;
+  return d;
+}
+
+function build(){
+  const width = Math.max(200, +$('w').value || 1200);
+  const height = Math.max(80, +$('h').value || 280);
+  const layers = Math.min(5, Math.max(1, +$('layers').value || 3));
+  const amp = Math.max(6, +$('amp').value || 34);
+  const freq = Math.max(1, +$('freq').value || 3);
+  const points = Math.max(8, +$('points').value || 48);
+  const colors = [$('c1').value, $('c2').value, $('c3').value, '#0ea5e9', '#38bdf8'];
+  const orientation = $('flip').value;
+
+  let paths = '';
+  for(let i=0;i<layers;i++){
+    const d = wavePath(width, height, amp * (0.65 + i * 0.26), freq + i * 0.5, points, i * 1.35, orientation);
+    const opacity = (0.32 + i * (0.58 / Math.max(1,layers-1))).toFixed(2);
+    paths += `<path d="${d}" fill="${colors[i]}" opacity="${opacity}" />`;
+  }
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" role="img" aria-label="Wave Background"><rect width="100%" height="100%" fill="${$('bg').value}"/>${paths}</svg>`;
+  $('svgCode').value = svg;
+  $('render').innerHTML = svg;
+
+  const encoded = encodeURIComponent(svg).replace(/'/g, '%27').replace(/"/g, '%22');
+  $('cssCode').value = `background-image: url("data:image/svg+xml,${encoded}");\nbackground-size: 100% 100%;\nbackground-repeat: no-repeat;`;
+  $('meta').innerHTML = `<span class="badge">${width}×${height}</span><span class="badge">Layers ${layers}</span><span class="badge">Amp ${amp}</span><span class="badge">Freq ${freq}</span>`;
+  localStorage.setItem(key, JSON.stringify({width,height,layers,amp,freq,points,bg:$('bg').value,c1:$('c1').value,c2:$('c2').value,c3:$('c3').value,flip:orientation}));
+}
+
+function restore(){
+  const raw = localStorage.getItem(key);
+  if(!raw) return;
+  try{
+    const d = JSON.parse(raw);
+    $('w').value=d.width??1200; $('h').value=d.height??280; $('layers').value=d.layers??3;
+    $('amp').value=d.amp??34; $('freq').value=d.freq??3; $('points').value=d.points??48;
+    $('bg').value=d.bg??'#ffffff'; $('c1').value=d.c1??'#2563eb'; $('c2').value=d.c2??'#4f46e5'; $('c3').value=d.c3??'#7c3aed';
+    $('flip').value=d.flip??'bottom';
+  }catch(_){ }
+}
+
+$('make').addEventListener('click', build);
+$('copySvg').addEventListener('click', async()=>{ await navigator.clipboard.writeText($('svgCode').value); $('status').textContent='SVG 코드를 복사했습니다.'; });
+$('copyCss').addEventListener('click', async()=>{ await navigator.clipboard.writeText($('cssCode').value); $('status').textContent='CSS 코드를 복사했습니다.'; });
+$('download').addEventListener('click', ()=>{
+  const blob = new Blob([$('svgCode').value], {type:'image/svg+xml;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'wave.svg';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  $('status').textContent='wave.svg 파일을 다운로드했습니다.';
+});
+
+['w','h','layers','amp','freq','points','bg','c1','c2','c3','flip'].forEach(id=>$(id).addEventListener('input', build));
+restore();
+build();
+</script>
+</body>
+</html>

@@ -6,5 +6,5 @@
 - [x] Validate responsiveness + basic field validation + sane outputs for all 3 tools
 - [x] Update `tools/manifest.json`
 - [x] Update `_data/tools-list.json`
-- [ ] Commit and push in `eastsea-blog` only
-- [ ] Verify production URLs return HTTP 200
+- [x] Commit and push in `eastsea-blog` only
+- [x] Verify production URLs return HTTP 200

@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cohort Retention Revenue Estimator | 코호트 리텐션 매출 추정기</title>
+  <meta name="description" content="코호트 시작 고객수와 리텐션 감소 가정으로 월별 활성 고객, 매출, 누적 총이익, 할인 현재가치를 계산합니다." />
+  <style>
+    :root{--bg:#071521;--card:#11283e;--line:#2f4d6a;--txt:#eaf5ff;--muted:#a8c2dd;--pri:#5cb4ff;--ok:#34d399;--warn:#fbbf24;--err:#fda4af}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;background:radial-gradient(circle at 16% 0%,#265888 0%,#071521 52%);color:var(--txt)}
+    .wrap{max-width:1160px;margin:0 auto;padding:20px 14px 56px}
+    .head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:14px}
+    h1{margin:0;font-size:clamp(1.2rem,2.8vw,1.72rem)}
+    .sub{margin-top:6px;color:var(--muted);font-size:.92rem}
+    .home{color:#deebff;text-decoration:none;border:1px solid var(--line);padding:8px 12px;border-radius:12px;background:#132c46;white-space:nowrap}
+    .grid{display:grid;grid-template-columns:1.03fr .97fr;gap:12px}
+    .card{background:linear-gradient(165deg,#183b5d,#11283e);border:1px solid var(--line);border-radius:14px;padding:13px}
+    h2{margin:0 0 10px;font-size:1rem}
+    .inputs{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+    label{display:block;color:var(--muted);font-size:.8rem;margin-bottom:5px}
+    input,button,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;background:#0b1d30;color:var(--txt);font-size:.92rem}
+    button{cursor:pointer;border:none;background:linear-gradient(135deg,var(--pri),#4d8df1);font-weight:700}
+    .soft{background:#1a3958;border:1px solid var(--line)}
+    .btns{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:10px}
+    textarea{min-height:108px;margin-top:10px;resize:vertical}
+    .error{display:none;margin-top:10px;padding:9px 10px;border-radius:10px;border:1px solid #6f3240;background:rgba(248,113,113,.12);color:var(--err);font-size:.86rem}
+    .error.show{display:block}
+    .kpis{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .kpi{border:1px solid var(--line);background:#0d2137;border-radius:11px;padding:10px}
+    .k{font-size:.76rem;color:var(--muted);margin-bottom:4px}
+    .v{font-size:1.05rem;font-weight:800}
+    .v.sm{font-size:.95rem}
+    .pill{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;margin-top:10px;border-radius:999px;border:1px solid var(--line);background:#18345a;color:#cfe1ff;font-size:.75rem}
+    .table-wrap{margin-top:10px;border:1px solid var(--line);border-radius:10px;overflow:auto;max-height:330px}
+    table{width:100%;border-collapse:collapse;font-size:.82rem}
+    th,td{padding:7px 6px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+    th:first-child,td:first-child{text-align:left}
+    @media (max-width:980px){.grid{grid-template-columns:1fr}.inputs{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <div class="head">
+      <div>
+        <h1>📈 Cohort Retention Revenue Estimator</h1>
+        <div class="sub">코호트 리텐션 곡선(초기 잔존율 + 월별 감소폭)을 바탕으로 월별 매출/이익과 고객가치(CL V)를 추정합니다.</div>
+      </div>
+      <a class="home" href="/">Back to Portal</a>
+    </div>
+
+    <section class="grid">
+      <article class="card">
+        <h2>입력값</h2>
+        <div class="inputs">
+          <div><label for="cohortSize">코호트 시작 고객 수</label><input id="cohortSize" type="number" min="1" step="1" value="1800" /></div>
+          <div><label for="arpu">월 ARPU (USD)</label><input id="arpu" type="number" min="0.01" step="0.01" value="42" /></div>
+          <div><label for="grossMargin">매출총이익률 (%)</label><input id="grossMargin" type="number" min="0" max="100" step="0.1" value="79" /></div>
+          <div><label for="startRetention">월 1→2 잔존율 (%)</label><input id="startRetention" type="number" min="0" max="100" step="0.1" value="88" /></div>
+          <div><label for="decayPp">월별 잔존율 감소폭 (pp)</label><input id="decayPp" type="number" min="0" max="30" step="0.1" value="1.2" /></div>
+          <div><label for="expansion">월 ARPU 순성장률 (%)</label><input id="expansion" type="number" min="-50" max="100" step="0.1" value="0.8" /></div>
+          <div><label for="months">분석 기간 (개월)</label><input id="months" type="number" min="1" max="36" step="1" value="18" /></div>
+          <div><label for="discount">연 할인율 (%)</label><input id="discount" type="number" min="0" max="60" step="0.1" value="10" /></div>
+        </div>
+
+        <div class="btns">
+          <button id="copy" class="soft" type="button">요약 복사</button>
+          <button id="reset" type="button">기본값 복원</button>
+        </div>
+        <div id="error" class="error"></div>
+        <textarea id="summary" readonly></textarea>
+      </article>
+
+      <article class="card">
+        <h2>코호트 수익성 결과</h2>
+        <div class="kpis">
+          <div class="kpi"><div class="k">누적 매출</div><div id="cumRevenue" class="v">-</div></div>
+          <div class="kpi"><div class="k">누적 총이익</div><div id="cumGross" class="v">-</div></div>
+          <div class="kpi"><div class="k">총이익 할인 현재가치 (NPV)</div><div id="npvGross" class="v sm">-</div></div>
+          <div class="kpi"><div class="k">기간 말 활성 고객</div><div id="endActive" class="v sm">-</div></div>
+          <div class="kpi"><div class="k">기간 말 잔존율</div><div id="endRet" class="v sm">-</div></div>
+          <div class="kpi"><div class="k">고객당 누적 총이익 (Gross CLV)</div><div id="grossClv" class="v sm">-</div></div>
+          <div class="kpi"><div class="k">코호트 반감기 (활성 50% 이하)</div><div id="halfLife" class="v sm">-</div></div>
+          <div class="kpi"><div class="k">평균 월 유지율</div><div id="avgRetention" class="v sm">-</div></div>
+        </div>
+        <div id="status" class="pill">계산 대기</div>
+
+        <h2 style="margin-top:12px">월별 코호트 시뮬레이션</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>월</th>
+                <th>월초 활성 고객</th>
+                <th>적용 유지율</th>
+                <th>ARPU</th>
+                <th>월 매출</th>
+                <th>월 총이익</th>
+              </tr>
+            </thead>
+            <tbody id="tbody"></tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const refs = {
+      cohortSize:$('cohortSize'), arpu:$('arpu'), grossMargin:$('grossMargin'), startRetention:$('startRetention'), decayPp:$('decayPp'), expansion:$('expansion'), months:$('months'), discount:$('discount'),
+      cumRevenue:$('cumRevenue'), cumGross:$('cumGross'), npvGross:$('npvGross'), endActive:$('endActive'), endRet:$('endRet'), grossClv:$('grossClv'), halfLife:$('halfLife'), avgRetention:$('avgRetention'),
+      status:$('status'), tbody:$('tbody'), error:$('error'), summary:$('summary'), copy:$('copy'), reset:$('reset')
+    };
+
+    const defaults = { cohortSize:1800, arpu:42, grossMargin:79, startRetention:88, decayPp:1.2, expansion:0.8, months:18, discount:10 };
+    const money = (n)=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:2}).format(n || 0);
+    const num = (n,d=2)=>Number(n).toLocaleString('en-US',{maximumFractionDigits:d});
+
+    function validate(v){
+      if (Object.values(v).some((x)=>!Number.isFinite(x))) return '모든 입력값은 유한한 숫자여야 합니다.';
+      if (!Number.isInteger(v.cohortSize) || v.cohortSize < 1 || v.cohortSize > 10000000) return '코호트 시작 고객 수는 1~10,000,000 정수여야 합니다.';
+      if (v.arpu <= 0 || v.arpu > 100000) return '월 ARPU는 0 초과 100,000 이하 범위여야 합니다.';
+      if (v.grossMargin < 0 || v.grossMargin > 100) return '매출총이익률은 0~100% 범위여야 합니다.';
+      if (v.startRetention < 0 || v.startRetention > 100) return '초기 잔존율은 0~100% 범위여야 합니다.';
+      if (v.decayPp < 0 || v.decayPp > 30) return '월별 잔존율 감소폭은 0~30pp 범위여야 합니다.';
+      if (v.expansion < -50 || v.expansion > 100) return '월 ARPU 순성장률은 -50%~100% 범위여야 합니다.';
+      if (!Number.isInteger(v.months) || v.months < 1 || v.months > 36) return '분석 기간은 1~36개월 정수여야 합니다.';
+      if (v.discount < 0 || v.discount > 60) return '연 할인율은 0~60% 범위여야 합니다.';
+      return '';
+    }
+
+    function compute(v){
+      const gm = v.grossMargin / 100;
+      const expansion = v.expansion / 100;
+      const monthlyDiscount = (v.discount / 100) / 12;
+
+      if (1 + expansion <= 0) throw new Error('ARPU 순성장률이 너무 낮아 음수 ARPU가 됩니다. 값을 조정하세요.');
+
+      let active = v.cohortSize;
+      let cumRevenue = 0;
+      let cumGross = 0;
+      let npvGross = 0;
+      let retentionSum = 0;
+      let halfLife = null;
+      const rows = [];
+
+      for (let m = 1; m <= v.months; m++) {
+        const retentionPct = Math.max(0, v.startRetention - (m - 1) * v.decayPp);
+        const retention = retentionPct / 100;
+        const arpuM = v.arpu * Math.pow(1 + expansion, m - 1);
+
+        const revenue = active * arpuM;
+        const gross = revenue * gm;
+        const discountedGross = gross / Math.pow(1 + monthlyDiscount, m - 1);
+
+        const values = [active, arpuM, revenue, gross, discountedGross, retentionPct];
+        if (values.some((x)=>!Number.isFinite(x) || Math.abs(x) > 1e15)) {
+          throw new Error('계산 결과가 비정상입니다. 입력 범위를 줄여주세요.');
+        }
+
+        cumRevenue += revenue;
+        cumGross += gross;
+        npvGross += discountedGross;
+        retentionSum += retentionPct;
+
+        rows.push({ month:m, active, retentionPct, arpuM, revenue, gross });
+
+        if (halfLife === null && active <= v.cohortSize * 0.5) {
+          halfLife = m;
+        }
+
+        active = active * retention;
+      }
+
+      const endActive = active;
+      const endRet = v.cohortSize === 0 ? 0 : (endActive / v.cohortSize) * 100;
+      const grossClv = cumGross / v.cohortSize;
+      const avgRetention = retentionSum / v.months;
+
+      return { rows, cumRevenue, cumGross, npvGross, endActive, endRet, grossClv, halfLife, avgRetention };
+    }
+
+    function render(){
+      const v = {
+        cohortSize:Number(refs.cohortSize.value), arpu:Number(refs.arpu.value), grossMargin:Number(refs.grossMargin.value), startRetention:Number(refs.startRetention.value),
+        decayPp:Number(refs.decayPp.value), expansion:Number(refs.expansion.value), months:Number(refs.months.value), discount:Number(refs.discount.value)
+      };
+
+      const err = validate(v);
+      refs.error.classList.toggle('show', !!err);
+      refs.error.textContent = err;
+      refs.tbody.innerHTML = '';
+
+      if (err){
+        ['cumRevenue','cumGross','npvGross','endActive','endRet','grossClv','halfLife','avgRetention'].forEach((k)=>refs[k].textContent='-');
+        refs.status.textContent = '입력값 확인 필요';
+        refs.summary.value = '';
+        return;
+      }
+
+      try {
+        const r = compute(v);
+        refs.cumRevenue.textContent = money(r.cumRevenue);
+        refs.cumGross.textContent = money(r.cumGross);
+        refs.npvGross.textContent = money(r.npvGross);
+        refs.endActive.textContent = `${num(r.endActive,0)}명`;
+        refs.endRet.textContent = `${num(r.endRet,2)}%`;
+        refs.grossClv.textContent = money(r.grossClv);
+        refs.halfLife.textContent = r.halfLife === null ? `>${v.months}개월` : `${r.halfLife}개월`;
+        refs.avgRetention.textContent = `${num(r.avgRetention,2)}%`;
+
+        if (r.endRet >= 35) {
+          refs.status.innerHTML = `<span style="color:var(--ok)">●</span> 높은 코호트 잔존력 (${num(r.endRet,1)}%)`; 
+        } else if (r.endRet >= 20) {
+          refs.status.innerHTML = `<span style="color:var(--warn)">●</span> 중간 수준 잔존력 (${num(r.endRet,1)}%), 온보딩/리텐션 실험 권장`;
+        } else {
+          refs.status.innerHTML = `<span style="color:var(--err)">●</span> 낮은 잔존력 (${num(r.endRet,1)}%), 이탈 구간 개선 필요`;
+        }
+
+        refs.tbody.innerHTML = r.rows.map((row)=>`
+          <tr>
+            <td>M${row.month}</td>
+            <td>${num(row.active,0)}</td>
+            <td>${num(row.retentionPct,2)}%</td>
+            <td>${money(row.arpuM)}</td>
+            <td>${money(row.revenue)}</td>
+            <td>${money(row.gross)}</td>
+          </tr>
+        `).join('');
+
+        refs.summary.value = [
+          '[Cohort Retention Revenue Summary]',
+          `Cumulative revenue: ${money(r.cumRevenue)}`,
+          `Cumulative gross profit: ${money(r.cumGross)}`,
+          `Discounted gross profit (NPV): ${money(r.npvGross)}`,
+          `Ending active customers: ${num(r.endActive,0)} (${num(r.endRet,2)}%)`,
+          `Gross CLV per original customer: ${money(r.grossClv)}`,
+          `Half-life: ${r.halfLife === null ? 'Not reached within horizon' : 'Month ' + r.halfLife}`,
+          `Average monthly retention used: ${num(r.avgRetention,2)}%`
+        ].join('\n');
+      } catch (e) {
+        refs.error.classList.add('show');
+        refs.error.textContent = e.message || '계산 중 오류가 발생했습니다.';
+      }
+    }
+
+    refs.copy.addEventListener('click', async()=>{
+      if (!refs.summary.value.trim()) return;
+      try { await navigator.clipboard.writeText(refs.summary.value); alert('요약이 복사되었습니다.'); }
+      catch { alert('클립보드 권한이 없어 수동 복사를 해주세요.'); }
+    });
+
+    refs.reset.addEventListener('click', ()=>{
+      Object.entries(defaults).forEach(([k,v])=>refs[k].value=v);
+      render();
+    });
+
+    ['input','change'].forEach((ev)=>{
+      [refs.cohortSize,refs.arpu,refs.grossMargin,refs.startRetention,refs.decayPp,refs.expansion,refs.months,refs.discount].forEach((el)=>el.addEventListener(ev, render));
+    });
+
+    render();
+  </script>
+</body>
+</html>

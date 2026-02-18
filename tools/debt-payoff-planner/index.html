@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>부채 상환 계획기 | Debt Payoff Planner</title>
+  <meta name="description" content="눈덩이(스노우볼)/눈사태(아발란치) 방식으로 부채 상환 기간, 총 이자, 월별 계획을 계산합니다." />
+  <style>
+    :root{--bg:#0d1426;--card:#131f37;--line:#2a4167;--text:#e7efff;--muted:#9eb2d8;--pri:#7c8cff;--pri2:#22d3ee;--ok:#34d399;--warn:#fbbf24;--bad:#fb7185}
+    *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 12% -10%,#223a67,#0d1426 55%);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Noto Sans KR',sans-serif}
+    .wrap{max-width:1100px;margin:0 auto;padding:18px 14px 44px}.top{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:12px}
+    h1{margin:0;font-size:clamp(1.2rem,2.8vw,1.9rem)}.sub{margin:6px 0 0;color:var(--muted);font-size:.9rem}
+    .back{color:#dbe7ff;text-decoration:none;border:1px solid var(--line);background:#132444;padding:8px 11px;border-radius:10px;font-weight:700;font-size:.86rem}
+    .grid{display:grid;grid-template-columns:1.08fr .92fr;gap:12px}.card{background:linear-gradient(160deg,#1b2d52,#131f37);border:1px solid var(--line);border-radius:16px;padding:14px;box-shadow:0 12px 28px rgba(0,0,0,.35)}
+    h2{margin:0 0 10px;font-size:1rem}.two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    label{display:block;font-size:.8rem;color:var(--muted);margin-bottom:6px;font-weight:700}
+    input,button,select{width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;background:#0f1a32;color:var(--text);font-size:.92rem}
+    button{cursor:pointer;border:0;background:linear-gradient(135deg,var(--pri),var(--pri2));color:#071529;font-weight:800}.ghost{background:#16294b;border:1px solid var(--line);color:#cfe0ff}
+    .btns{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px}
+    .debtRows{display:grid;gap:8px}.debtRow{display:grid;grid-template-columns:1.1fr .9fr .7fr .7fr 44px;gap:8px}
+    .small{font-size:.75rem;color:var(--muted)}
+    .kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.kpi{border:1px solid var(--line);border-radius:12px;padding:10px;background:#0f1931}.k{font-size:.74rem;color:var(--muted)}.v{margin-top:4px;font-size:1.1rem;font-weight:800}
+    .ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}
+    .msg{margin-top:9px;padding:10px;border:1px solid var(--line);border-radius:10px;background:#0f1a31;font-size:.9rem;line-height:1.45}
+    .table{margin-top:12px;border:1px solid var(--line);border-radius:12px;overflow:auto}table{width:100%;border-collapse:collapse;min-width:860px}th,td{padding:8px;border-bottom:1px solid #243d63;font-size:.82rem;text-align:right;white-space:nowrap}th:first-child,td:first-child{text-align:left}th{background:#13274c;color:#bfd0ef;font-size:.76rem}
+    @media(max-width:980px){.grid{grid-template-columns:1fr}.debtRow{grid-template-columns:1fr 1fr}.btns{grid-template-columns:1fr 1fr}}
+  </style>
+</head>
+<body>
+<main class="wrap">
+  <div class="top">
+    <div>
+      <h1>💳 부채 상환 계획기</h1>
+      <p class="sub">눈덩이(스노우볼) vs 눈사태(아발란치) 방식으로 상환 완료 시점과 총 이자를 비교하세요.</p>
+    </div>
+    <a class="back" href="/">Back to Portal</a>
+  </div>
+
+  <section class="grid">
+    <article class="card">
+      <h2>부채 목록</h2>
+      <div id="debtRows" class="debtRows"></div>
+      <button id="addDebtBtn" class="ghost" type="button" style="margin-top:8px">+ 부채 추가</button>
+
+      <h2 style="margin-top:12px">상환 설정</h2>
+      <div class="two">
+        <div>
+          <label for="monthlyBudget">월 상환 예산 (원)</label>
+          <input id="monthlyBudget" type="number" min="0" step="10000" value="1400000">
+        </div>
+        <div>
+          <label for="method">상환 방식</label>
+          <select id="method">
+            <option value="snowball">눈덩이 (잔액 작은 순)</option>
+            <option value="avalanche">눈사태 (금리 높은 순)</option>
+          </select>
+        </div>
+      </div>
+      <div class="btns">
+        <button id="calcBtn" type="button">계획 계산</button>
+        <button id="sampleBtn" class="ghost" type="button">샘플</button>
+        <button id="resetBtn" class="ghost" type="button">초기화</button>
+      </div>
+      <p class="small">월 상환 예산은 각 부채 최소납입금 합보다 커야 합니다.</p>
+    </article>
+
+    <article class="card">
+      <h2>요약 결과</h2>
+      <div class="kpis">
+        <div class="kpi"><div class="k">총 원금</div><div class="v" id="totalPrincipal">-</div></div>
+        <div class="kpi"><div class="k">총 이자</div><div class="v" id="totalInterest">-</div></div>
+        <div class="kpi"><div class="k">상환 완료 기간</div><div class="v" id="payoffMonths">-</div></div>
+        <div class="kpi"><div class="k">완료 예상일</div><div class="v" id="payoffDate">-</div></div>
+        <div class="kpi"><div class="k">총 납입액</div><div class="v" id="totalPaid">-</div></div>
+        <div class="kpi"><div class="k">평균 월 납입액</div><div class="v" id="avgPayment">-</div></div>
+      </div>
+      <div class="msg" id="msg">부채를 입력하고 계획 계산을 눌러주세요.</div>
+    </article>
+  </section>
+
+  <section class="card" style="margin-top:12px">
+    <h2>월별 상환 스케줄 (최대 120개월 표시)</h2>
+    <div class="table">
+      <table>
+        <thead><tr><th>월</th><th>지급액</th><th>이자</th><th>원금상환</th><th>잔액</th><th>우선상환 대상</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<script>
+  const $=(id)=>document.getElementById(id);
+  const won=(n)=>'₩'+Math.round(n||0).toLocaleString('ko-KR');
+
+  let debts=[
+    {name:'신용대출',balance:12800000,apr:8.9,min:320000},
+    {name:'카드론',balance:4600000,apr:14.5,min:170000},
+    {name:'학자금',balance:9200000,apr:2.1,min:110000}
+  ];
+
+  function esc(s){return String(s).replace(/[&<>'"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[m]));}
+
+  function renderDebts(){
+    $('debtRows').innerHTML=debts.map((d,i)=>`<div class="debtRow" data-i="${i}">
+      <input data-k="name" value="${esc(d.name)}" placeholder="부채명">
+      <input data-k="balance" type="number" min="0" step="1000" value="${Math.round(d.balance)}" placeholder="잔액">
+      <input data-k="apr" type="number" min="0" step="0.1" value="${d.apr}" placeholder="APR%">
+      <input data-k="min" type="number" min="0" step="1000" value="${Math.round(d.min)}" placeholder="최소납입">
+      <button data-del="${i}" class="ghost" type="button">✕</button>
+    </div>`).join('');
+  }
+
+  function priorityIndex(list,method){
+    const candidates=list.map((d,idx)=>({d,idx})).filter(x=>x.d.balance>0);
+    if(!candidates.length) return -1;
+    candidates.sort((a,b)=> method==='snowball' ? a.d.balance-b.d.balance : b.d.apr-a.d.apr);
+    return candidates[0].idx;
+  }
+
+  function simulate(){
+    const method=$('method').value;
+    const budget=Number($('monthlyBudget').value);
+    const local=debts.map(d=>({name:d.name,balance:Number(d.balance),apr:Number(d.apr),min:Number(d.min)}));
+
+    const principal=local.reduce((a,b)=>a+b.balance,0);
+    const minTotal=local.reduce((a,b)=>a+b.min,0);
+    if(local.some(d=>d.balance<0||d.apr<0||d.min<0)||budget<=0){
+      return {error:'입력값을 확인해 주세요.'};
+    }
+    if(budget<minTotal){
+      return {error:`월 예산(${won(budget)})이 최소납입 합(${won(minTotal)})보다 작습니다.`};
+    }
+
+    const rows=[];
+    let totalInterest=0,totalPaid=0;
+    let month=0;
+
+    while(local.some(d=>d.balance>0.01) && month<600){
+      month++;
+      // 1) 이자 반영
+      let monthInterest=0;
+      local.forEach(d=>{
+        if(d.balance<=0) return;
+        const interest=d.balance*(d.apr/100/12);
+        d.balance+=interest;
+        monthInterest+=interest;
+      });
+
+      // 2) 최소납입
+      let paidThisMonth=0;
+      local.forEach(d=>{
+        if(d.balance<=0) return;
+        const pay=Math.min(d.balance,d.min);
+        d.balance-=pay;
+        paidThisMonth+=pay;
+      });
+
+      // 3) 추가 예산 우선 상환
+      let extra=Math.max(0,budget-paidThisMonth);
+      let focus='-';
+      while(extra>0.5){
+        const idx=priorityIndex(local,method);
+        if(idx<0) break;
+        focus=local[idx].name;
+        const pay=Math.min(local[idx].balance,extra);
+        local[idx].balance-=pay;
+        paidThisMonth+=pay;
+        extra-=pay;
+      }
+
+      totalInterest+=monthInterest;
+      totalPaid+=paidThisMonth;
+      const remain=local.reduce((a,b)=>a+Math.max(0,b.balance),0);
+      rows.push({month,paid:paidThisMonth,interest:monthInterest,principalPaid:Math.max(0,paidThisMonth-monthInterest),remain,focus});
+    }
+
+    const done=local.every(d=>d.balance<=0.01);
+    return {done,principal,totalInterest,totalPaid,month,rows,method};
+  }
+
+  function renderResult(res){
+    if(res.error){
+      $('msg').textContent=res.error;
+      $('rows').innerHTML='';
+      return;
+    }
+
+    $('totalPrincipal').textContent=won(res.principal);
+    $('totalInterest').textContent=won(res.totalInterest);
+    $('payoffMonths').textContent=res.done?`${res.month}개월`:'계산 실패';
+    $('totalPaid').textContent=won(res.totalPaid);
+    $('avgPayment').textContent=res.month>0?won(res.totalPaid/res.month):'-';
+
+    if(res.done){
+      const d=new Date(); d.setMonth(d.getMonth()+res.month);
+      $('payoffDate').textContent=d.toLocaleDateString('ko-KR');
+      $('msg').innerHTML=`✅ <strong>${res.method==='snowball'?'눈덩이':'눈사태'}</strong> 방식 기준 <strong>${res.month}개월</strong> 후 상환 완료 예상. 총 이자는 <strong>${won(res.totalInterest)}</strong> 입니다.`;
+      $('msg').style.borderColor='#2f6f64';
+    }else{
+      $('payoffDate').textContent='-';
+      $('msg').textContent='600개월 내 상환이 완료되지 않았습니다. 월 예산을 늘려주세요.';
+      $('msg').style.borderColor='#7a4b2a';
+    }
+
+    $('rows').innerHTML=res.rows.slice(0,120).map(r=>`<tr>
+      <td>${r.month}개월</td>
+      <td>${won(r.paid)}</td>
+      <td>${won(r.interest)}</td>
+      <td>${won(r.principalPaid)}</td>
+      <td>${won(r.remain)}</td>
+      <td style="text-align:left">${r.focus}</td>
+    </tr>`).join('');
+  }
+
+  function calc(){renderResult(simulate());}
+
+  $('debtRows').addEventListener('input',e=>{
+    const row=e.target.closest('.debtRow'); if(!row) return;
+    const i=Number(row.dataset.i), k=e.target.dataset.k;
+    if(!debts[i]||!k) return;
+    debts[i][k]=k==='name'?e.target.value:Number(e.target.value);
+    calc();
+  });
+  $('debtRows').addEventListener('click',e=>{
+    const i=Number(e.target.dataset.del);
+    if(!Number.isInteger(i)) return;
+    debts.splice(i,1); if(!debts.length) debts.push({name:'새 부채',balance:0,apr:0,min:0});
+    renderDebts(); calc();
+  });
+
+  $('addDebtBtn').addEventListener('click',()=>{debts.push({name:`부채 ${debts.length+1}`,balance:3000000,apr:9.5,min:90000});renderDebts();calc();});
+  $('calcBtn').addEventListener('click',calc);
+  $('sampleBtn').addEventListener('click',()=>{
+    debts=[
+      {name:'카드론',balance:3800000,apr:16.8,min:140000},
+      {name:'마이너스통장',balance:7200000,apr:7.2,min:180000},
+      {name:'학자금',balance:6400000,apr:2.3,min:95000},
+      {name:'신용대출',balance:12000000,apr:10.5,min:290000}
+    ];
+    $('monthlyBudget').value=1650000;
+    $('method').value='avalanche';
+    renderDebts();calc();
+  });
+  $('resetBtn').addEventListener('click',()=>{
+    debts=[{name:'신용대출',balance:12800000,apr:8.9,min:320000},{name:'카드론',balance:4600000,apr:14.5,min:170000},{name:'학자금',balance:9200000,apr:2.1,min:110000}];
+    $('monthlyBudget').value=1400000;
+    $('method').value='snowball';
+    renderDebts();calc();
+  });
+  ['monthlyBudget','method'].forEach(id=>$(id).addEventListener('input',calc));
+
+  renderDebts();
+  calc();
+</script>
+</body>
+</html>

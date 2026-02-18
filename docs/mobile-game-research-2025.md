@@ -6,6 +6,85 @@
 
 ---
 
+## 2026-02-19 주간 업데이트 (추가 리서치 #2)
+
+### 🏪 앱스토어/플레이스토어 최신 Top 게임 보강 스냅샷 (JP 포함, 2026-02-19 00:22 KST)
+
+#### App Store (iOS, Games)
+
+| 구분 | Top 10 핵심 |
+|------|-------------|
+| **JP Top Free** | HUNTER×HUNTER NEN×SURVIVOR, Order Crazy, ハートピアスローライフ, LINE ポイ活チョッキンズ, Disney Solitaire, Block Blast |
+| **JP Top Grossing** | 드래곤볼Z 도칸배틀, 화이트아웃 서바이벌, 라스트워, 원피스 바운티러시, 몬스터스트라이크, Pokémon TCG Pocket |
+
+#### Google Play (Games)
+
+| 구분 | Top 10 핵심 |
+|------|-------------|
+| **JP Top Free** | Sheep Dash, Block Blast, Doomsday×진격의 거인 콜라보, Block Crush, Tile Explorer, Royal Kingdom |
+| **JP Top Grossing** | 라스트워, Fate/Grand Order, 몬스터스트라이크, 도칸배틀, SD건담 G제네, 붕괴: 스타레일, 블루아카 |
+
+> **변화 포인트(금주 추가):** US/KR의 퍼즐·4X 고착과 달리, **JP는 애니/가챠 IP 매출 지배력**이 매우 강함. 반면 무료차트는 Block Blast류 퍼즐·소트·방치형이 유입되어, **획득(캐주얼)과 결제(하드코어 IP)의 분리**가 더 선명해짐.
+
+### 🆕 신규 출시/소프트런치 관찰 (기존 2/19 섹션과 비중복)
+
+- **Mybots** (BoomBit): iOS 폴란드 소프트런치(로봇 배틀 아레나)
+- **Pool City – 8 Ball** (Level Infinite/Tencent): 호주·캐나다·인도네시아·멕시코·필리핀 등 다국가 소프트런치
+- **Coin Master – Board Adventure** (Moon Active): 캐나다·인도·필리핀·루마니아·스웨덴 소프트런치 (Monopoly Go형 보드 메타 추격)
+- **Aqua Match / Questbound** (Playrix): 매치3·스쿼드배틀 신작 동시 테스트 확장
+- **Hermit Crab Go** (Moonton): 캐나다·홍콩·일본·대만 Android 소프트런치 (로그라이크 어드벤처)
+- **Baseball Hits 26** (Ares Interactive): App Store/Google Play 사전등록 시작, MLB 라이선스 기반 시즌 타이밍 론칭
+- **EA Sports FC Tactical**: 5/7 종료 예정, IAP 중단 + 스토어 제거 수순
+
+### 📉 인디/중소 성공·실패 사례 (추가)
+
+#### 성공 신호
+- **Unico Studio:** 누적 **16억 다운로드** 도달, 하이브리드캐주얼+라이브옵스 체계로 장기 운영 전환. 퍼블리싱 파트너에 누적 **$10M+ 이익 분배** 공개.
+- **Habby:** 누적 유저지출 **$2B 돌파**(AppMagic 추정). Survivor.io(40%)·Archero(22%) 집중 구조로 코어 포트폴리오 효율 입증.
+
+#### 실패/리스크 신호
+- **Capcom AAA 프리미엄 iOS 포트 부진 지속:** Resident Evil 2 모바일 누적 매출이 출시 후 약 **$100K** 수준에 머무름(고가 언락 모델 한계).
+- **Sega/Rovio:** **$200M 손상차손** 반영. UA 경쟁 심화·신작 KPI 부진이 대형 퍼블리셔에도 직접 타격.
+
+### 💰 수익화/UA 전략 변화 (추가)
+
+- **IP-미디어 연동 라이브옵스 효과 재확인:** Fallout TV 시즌2 기간, Fallout Shelter 일매출이 **약 3~5배** 상승(약 $15~25K → $50~80K).
+- **광고·UA 인프라 양극화:** AppLovin 2025 매출 **$5.48B(+70% YoY)**, 순이익 **+111% YoY**. 상위 adtech 의존도가 더 커지는 흐름.
+- **UA 파이낸싱 모델 부상:** Ares는 General Catalyst CVF 기반으로 **월 $2M+ 규모 UA 집행형** 성장 공식을 채택.
+- **규제는 열리지만 결제 자유화는 지역별 편차 확대:** 영국 CMA는 4/1부터 스토어 투명성 강화 커밋 시행 예정이나, EU/미국처럼 결제·배포 개방 강제는 아님.
+
+### 💡 J&J Games 신규 적용 아이디어 (추가)
+
+#### 아이디어 19: 🎌 **Anime Raid Idle (JP/KR 이중시장형)**
+- **컨셉:** 캐주얼 방치 코어 + 애니풍 레이드 연출 + 가챠라이트 수집
+- **왜 지금:** JP 매출차트는 IP/캐릭터 파워가 여전히 절대적, KR은 성장/방치 수요가 강함
+- **수익화:** 저가 스타터팩 + 월정액 + 한정 콜라보 패스
+
+#### 아이디어 20: 📺 **Event Sync Ops Kit**
+- **컨셉:** 외부 이슈(드라마/스포츠/시즌)와 연동되는 7일 라이브옵스 템플릿
+- **왜 지금:** Fallout Shelter 사례처럼 외부 IP/미디어 파동을 즉시 매출 이벤트로 전환 가능
+- **수익화:** 이벤트 패스 + 기간한정 번들 + 복귀 유저 리액티베이션 오퍼
+
+#### 아이디어 21: ⚾ **Roster Club Manager Lite**
+- **컨셉:** 시즌성 스포츠 매니저(짧은 경기 + 클럽 경쟁 + 라인업 수집)
+- **왜 지금:** Baseball Hits 26 같은 라이선스 스포츠 론칭 증가, 시즌 타이밍형 재방문 루프가 강함
+- **수익화:** 시즌카드팩 + 클럽 시즌패스 + 광고 보상 재화
+
+### ✅ 이번 주 실행 제안 (J&J)
+
+1. **JP 대응 실험:** 기존 퍼즐/디펜스 프로토타입에 "캐릭터 수집·콜라보 이벤트" 레이어만 얹은 버전 A/B 테스트
+2. **이벤트 캘린더화:** 분기 단위로 "외부 이슈 연동 가능한 7일 이벤트 템플릿" 4종 선제 제작
+3. **UA 리스크 관리:** 초기 4주간은 고UA 집행 대신 리텐션(D1/D7) 게이트 통과형 소액 집행으로 검증
+4. **가격 전략 이원화:** 고가 프리미엄 단품 대신 `저가 진입 + 라이브옵스 누적 결제` 구조 우선
+
+### 🔗 이번 추가 업데이트 주요 출처
+- Apple iTunes RSS (US/KR/JP, topfree/topgrossing, genre=6014)
+- Google Play Scraper (TOP_FREE/GROSSING, category=GAME, US/KR/JP)
+- MobileGamer.biz: soft launch list / new game digest / data digest / Resident Evil 2 성과 기사
+- PocketGamer.biz: Unico Studio 인터뷰, FirstLook 1.0 기사
+
+---
+
 ## 2026-02-19 주간 업데이트
 
 ### 🏪 앱스토어/플레이스토어 최신 Top 게임 스냅샷 (2026-02-19 00:20 KST 수집)

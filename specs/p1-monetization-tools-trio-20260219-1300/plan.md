@@ -27,7 +27,7 @@
    - `curl`로 신규 3개 도구 + 카탈로그 파일 HTTP 200 확인
 
 6. **Git Release**
-   - `cd /Users/kjaylee/.openclaw/workspace/eastsea-blog`
+   - `cd $WORKSPACE/eastsea-blog`
    - `git add -A`
    - `git commit -m "feat(tools): add 3 monetization calculators"`
    - `git push origin master`

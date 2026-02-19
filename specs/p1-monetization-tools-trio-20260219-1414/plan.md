@@ -28,7 +28,7 @@
    - `curl`로 신규 3 URL + `/tools/` + `/tools/manifest.json` + `/_data/tools-list.json` HTTP 200 확인
 
 6. **Release**
-   - `cd /Users/kjaylee/.openclaw/workspace/eastsea-blog`
+   - `cd $WORKSPACE/eastsea-blog`
    - `git add -A`
    - `git commit -m "feat(tools): add 3 monetization calculators (1414 wave)"`
    - `git push origin master`

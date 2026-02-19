@@ -28,7 +28,7 @@
    - 로컬 서버 검증: `python3 -m http.server` + `curl -I` 200
 
 6. **Release**
-   - `cd /Users/kjaylee/.openclaw/workspace/eastsea-blog`
+   - `cd $WORKSPACE/eastsea-blog`
    - `git add -A`
    - `git commit -m "feat(tools): add 3 monetization calculators (1400 wave)"`
    - `git push origin master`

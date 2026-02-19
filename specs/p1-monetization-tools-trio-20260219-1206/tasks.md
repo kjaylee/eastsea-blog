@@ -25,13 +25,13 @@
   - [x] python3 -m http.server
   - [x] curl 200 확인
 
-- [ ] 6) Git 릴리스
-  - [ ] git add -A
-  - [ ] git commit -m "feat(tools): add 3 monetization calculators"
-  - [ ] git push origin master
+- [x] 6) Git 릴리스
+  - [x] git add -A
+  - [x] git commit -m "feat(tools): add 3 monetization calculators"
+  - [x] git push origin master
 
-- [ ] 7) 라이브 검증
-  - [ ] GitHub Pages 200 확인 (최대 2분)
+- [x] 7) 라이브 검증
+  - [x] GitHub Pages 200 확인 (최대 2분)
 
-- [ ] 8) 체크포인트
-  - [ ] .state/p1-monetization-tools-trio/20260219-1206/step*.json
+- [x] 8) 체크포인트
+  - [x] .state/p1-monetization-tools-trio/20260219-1206/step*.json

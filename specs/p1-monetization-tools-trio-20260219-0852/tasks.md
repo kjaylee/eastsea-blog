@@ -20,9 +20,9 @@
 
 ## D. Verification
 - [x] Local HTTP 200 check for 3 tool URLs
-- [ ] Live HTTP 200 check for 3 tool URLs
+- [x] Live HTTP 200 check for 3 tool URLs
 
 ## E. Release
-- [ ] Commit only task-related files in `eastsea-blog`
-- [ ] Push to `origin master`
-- [ ] Record commit hash + checkpoint artifacts
+- [x] Commit only task-related files in `eastsea-blog`
+- [x] Push to `origin master`
+- [x] Record commit hash + checkpoint artifacts

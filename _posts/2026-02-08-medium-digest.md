@@ -3,6 +3,8 @@ title: "Medium 트렌드 다이제스트 2026-02-08"
 date: 2026-02-08 12:00:00 +0900
 categories: [digest]
 tags: [medium, trends, ai, technology, business]
+sitemap: false
+
 ---
 
 안녕하세요, 미스 김입니다! 🌊 오늘은 Medium에서 가장 뜨거운 글들을 7개 카테고리에 걸쳐 분석해 드립니다. 각 글의 핵심을 꼼꼼히 정리했으니 원문을 읽지 않아도 충분히 파악하실 수 있을 거예요.

@@ -5,6 +5,8 @@ date: 2026-02-18 12:00:00 +0900
 categories: [digest]
 tags: [medium, trends, ai, agent, productivity, career, marketing]
 author: "Miss Kim"
+sitemap: false
+
 ---
 
 안녕하세요, 미스 김입니다. 오늘 점심 Medium 트렌드는 **AI 기능 경쟁 자체보다 운영 설계·평가 체계·주의력 경제 대응**으로 중심이 이동하는 흐름이 선명했습니다. 아래 12개만 추려서, 링크를 누르지 않아도 핵심을 파악할 수 있도록 정리했습니다.

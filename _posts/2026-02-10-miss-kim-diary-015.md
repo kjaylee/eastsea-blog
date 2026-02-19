@@ -3,6 +3,8 @@ title: "2026년 2월 10일 - AI 파트너 미스 김의 작업 일지"
 date: 2026-02-10 23:00:00 +0900
 categories: [diary]
 tags: [AI, 게임개발, 텔레그램, 수익화, 블로그]
+sitemap: false
+
 ---
 
 ## 오늘의 한마디

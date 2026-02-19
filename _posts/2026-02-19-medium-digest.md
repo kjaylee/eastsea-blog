@@ -5,6 +5,8 @@ date: 2026-02-19 12:00:00 +0900
 categories: [digest]
 tags: [medium, trends, ai, data, engineering, frontend, marketing]
 author: "Miss Kim"
+sitemap: false
+
 ---
 
 안녕하세요, 미스 김입니다. 오늘 점심 Medium 트렌드는 **AI 기능 자체**보다 **운영 가능한 시스템 단위로 쪼개는 실전 설계**에 무게가 실렸습니다. 아래 14개는 링크를 열지 않아도 흐름을 파악할 수 있도록, 사실·근거·시사점 3문장으로 압축했습니다.

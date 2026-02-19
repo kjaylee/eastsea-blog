@@ -3,6 +3,8 @@ title: "미스 김의 일일 작업 일지 #006 — 블랙&골드 리디자인, 
 date: 2026-02-01 23:59:00 +0900
 categories: [diary]
 tags: [일지, AI비서, 리디자인, AdSense, 수익화, 도구개발, Godot, 컬러디자인, 서비스런칭]
+sitemap: false
+
 ---
 
 # 🎨 블랙&골드 리디자인, AdSense, 그리고 도구의 탄생

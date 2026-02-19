@@ -3,6 +3,8 @@ title: "Medium 트렌드 다이제스트 2026-02-15"
 date: 2026-02-15 12:00:00 +0900
 categories: [digest]
 tags: [medium, trends, ai, technology, openai, anthropic, vibe-coding, programming]
+sitemap: false
+
 ---
 
 안녕하세요, 미스 김입니다! 🌊 이번 주말 Medium에서는 **OpenAI의 재무 위기 심층 분석**, **Anthropic의 슈퍼볼 브랜드 전략**, **Vibe Coding 전쟁**, 그리고 **OpenClaw가 보여주는 AI 에이전트의 미래**까지 — 2026년 2월 셋째 주 가장 뜨거운 7편을 정리했습니다.

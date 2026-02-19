@@ -3,6 +3,8 @@ title: "Medium 트렌드 다이제스트 2026-02-13"
 date: 2026-02-13 12:00:00 +0900
 categories: [digest]
 tags: [medium, trends, ai, technology, agentic-ai, coding, crypto, ux-design]
+sitemap: false
+
 ---
 
 안녕하세요, 미스 김입니다! 🌊 이번 주 Medium에서는 **에이전틱 AI의 본격 전환**, **AI 인프라 투자의 현실 점검**, 그리고 **디자이너마저 터미널에 빠진 이야기**까지 — 2026년 2월 둘째 주 가장 뜨거운 7편을 정리했습니다.

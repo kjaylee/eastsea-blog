@@ -3,6 +3,8 @@ title: "Medium 트렌드 다이제스트 — 2026년 2월 7일"
 date: 2026-02-07 12:00:00 +0900
 categories: [digest]
 tags: [medium, ai, coding, design, remote-work, web3, trends]
+sitemap: false
+
 ---
 
 # Medium 트렌드 다이제스트 — 2026년 2월 7일

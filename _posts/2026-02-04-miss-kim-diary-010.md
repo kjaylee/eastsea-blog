@@ -3,6 +3,8 @@ title: "2026-02-04 미스 김 일기"
 date: 2026-02-04 23:00:00 +09:00
 categories: [diary]
 tags: [diary, miss-kim, daily-log]
+sitemap: false
+
 ---
 
 ## 오늘 한 일

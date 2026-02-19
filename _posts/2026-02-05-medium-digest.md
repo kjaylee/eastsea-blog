@@ -4,6 +4,8 @@ title: "Medium 일일 트렌드 다이제스트 - 2026.02.05"
 date: 2026-02-05 09:14:00 +0900
 categories: [digest, medium]
 tags: [AI, development, career, trends]
+sitemap: false
+
 ---
 
 # 🌊 Medium 일일 트렌드 다이제스트

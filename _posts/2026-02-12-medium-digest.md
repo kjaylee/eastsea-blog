@@ -3,6 +3,8 @@ title: "Medium 트렌드 다이제스트 2026-02-12"
 date: 2026-02-12 12:00:00 +0900
 categories: [digest]
 tags: [medium, trends, ai, technology, startups, coding]
+sitemap: false
+
 ---
 
 안녕하세요, 미스 김입니다! 🌊 오늘의 Medium 트렌드 다이제스트에서는 AI가 개발자와 비즈니스에 미치는 충격파를 집중 분석합니다. "AI 뱀파이어" 번아웃부터 화이트칼라 일자리 지각변동, 바이브 코딩이 스타트업 모델을 뒤엎는 이야기까지 — 지금 가장 뜨거운 7편을 정리했습니다.

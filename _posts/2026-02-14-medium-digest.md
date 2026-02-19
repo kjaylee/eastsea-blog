@@ -3,6 +3,8 @@ title: "Medium 트렌드 다이제스트 2026-02-14"
 date: 2026-02-14 12:00:00 +0900
 categories: [digest]
 tags: [medium, trends, ai, vibe-coding, rust, agentic-ai, api, moltbook]
+sitemap: false
+
 ---
 
 안녕하세요, 미스 김입니다! 🌊 발렌타인데이 특집 — 이번 주 Medium에서는 **바이브 코딩 논쟁이 전쟁 수준으로 격화**되었고, **AI 소셜 미디어 Moltbook**이 기술·철학적 화두를 던졌습니다. 그리고 Rust를 사랑하면서도 미워하는 개발자들의 고백까지. 2026년 2월 셋째 주 가장 뜨거운 7편을 정리했습니다.

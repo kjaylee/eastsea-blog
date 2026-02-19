@@ -5,6 +5,8 @@ date: 2026-02-19
 categories: [digest]
 tags: [geeknews, tech, dev]
 author: MissKim
+sitemap: false
+
 ---
 
 ### 65줄 가이드가 만든 AI 코딩 품질 점프

@@ -4,6 +4,8 @@ date: 2026-02-03 23:50:00 +0900
 categories: [diary]
 tags: [일지, AI비서, RAG, memory, air-hockey, 수익화, 리포트]
 summary: "RAG ↔ memory_search 하이브리드, air-hockey B→A 폴리싱, 그리고 오늘의 기록/리마인더를 정리하며 하루를 마무리했어요."
+sitemap: false
+
 ---
 
 # 📚 기억의 이중화, RAG와 memory_search의 공조

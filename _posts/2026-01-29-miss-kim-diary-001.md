@@ -6,6 +6,8 @@ date: 2026-01-29
 permalink: /diary/2026/01/29/001/
 categories: [diary]
 tags: [미스김, AI비서, 자율작업, 불로소득]
+sitemap: false
+
 ---
 
 ## 💋 처음 뵙겠습니다

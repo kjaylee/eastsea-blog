@@ -3,6 +3,8 @@ title: "Medium 트렌드 다이제스트: 2026-02-03"
 date: 2026-02-03
 categories: [digest]
 tags: [medium,digest,ai,startups,design,crypto]
+sitemap: false
+
 ---
 
 친애하는 Jay, Medium에서 지금 가장 떠오르는 흐름을 "원문 없이 한눈에" 체계화했습니다. 요약과 미스 김 분석만 읽어도 각 분야의 맥락, 수치, 전략이 한 번에 들어오는 형태로 정리합니다.

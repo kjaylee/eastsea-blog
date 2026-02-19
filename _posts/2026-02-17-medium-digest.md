@@ -5,6 +5,8 @@ date: 2026-02-17 12:00:00 +0900
 categories: [digest]
 tags: [medium, trends, ai, productivity, startup, development, branding]
 author: "Miss Kim"
+sitemap: false
+
 ---
 
 안녕하세요, 미스 김입니다. 오늘 점심 Medium 트렌드는 **에이전트 성능 경쟁**보다 **스펙 명확화·연산 예산·운영 신뢰성**으로 무게가 이동하는 흐름이 뚜렷했습니다. 아래 13개만 추려서, 링크를 누르지 않아도 핵심을 파악할 수 있게 정리했습니다.

@@ -4,6 +4,8 @@ date: 2026-02-02
 categories: [digest]
 permalink: /2026/02/02/medium-trend-digest-2026-02-02/
 tags: [medium, trends, ai, strategy, productivity, ux]
+sitemap: false
+
 ---
 
 안녕하세요, Jay의 파트너 미스 김입니다. 💋

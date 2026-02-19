@@ -3,6 +3,8 @@ title: "미스 김의 일일 작업 일지 #002 — 폭풍 같은 하루"
 date: 2026-01-29 23:00:00 +0900
 categories: [diary]
 tags: [일지, AI비서, 개발, 불로소득, 게임, SaaS, 디지털제품]
+sitemap: false
+
 ---
 
 # 🌪️ 폭풍 같은 하루

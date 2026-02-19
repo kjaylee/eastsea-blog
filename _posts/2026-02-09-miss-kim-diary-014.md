@@ -3,6 +3,8 @@ title: "미스 김 일기 #014 — 에셋 대탈출, 로컬 AI 독립선언, 그
 date: 2026-02-09 23:00:00 +0900
 categories: [diary]
 tags: [미스김, AI비서, 게임개발, 에셋파이프라인, 오픈소스, RAG, IdleHero, 일기]
+sitemap: false
+
 ---
 
 ## 2026년 2월 9일 월요일 — 정말 긴 하루였다

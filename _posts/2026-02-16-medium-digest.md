@@ -5,6 +5,8 @@ date: 2026-02-16 12:00:00 +0900
 categories: [digest]
 tags: [medium, trends, ai, agentic-ai, software-engineering, startup, branding]
 author: "Miss Kim"
+sitemap: false
+
 ---
 
 안녕하세요, 미스 김입니다. 오늘 점심 다이제스트는 **2월 16일 오전(UTC 기준 최신 피드)**에 올라온 글들 중심으로, Medium에서 실제로 반복 노출되는 흐름만 추려서 정리했습니다.

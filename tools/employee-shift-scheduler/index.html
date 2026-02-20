@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>직원 근무표 스케줄러 | Employee Shift Scheduler</title>
+  <meta name="description" content="직원 등록, 주간 시프트 드래그 배정, 근무시간 합산, 중복/초과근무 경고, localStorage 저장을 지원하는 직원 근무표 스케줄러" />
+  <style>
+    :root {
+      --bg: #f4f7ff;
+      --card: #ffffff;
+      --line: #d8e2f5;
+      --text: #1f2937;
+      --muted: #64748b;
+      --primary: #2563eb;
+      --ok: #059669;
+      --warn: #d97706;
+      --bad: #dc2626;
+      --radius: 14px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: linear-gradient(180deg, #edf3ff 0%, #f8fbff 100%);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+    }
+    .wrap {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 18px 12px 40px;
+    }
+    .top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(1.2rem, 2.8vw, 1.8rem);
+    }
+    .sub {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    .top-controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    label { font-size: 0.82rem; color: var(--muted); font-weight: 700; }
+    input, button, select {
+      font: inherit;
+    }
+    input, select {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 8px 9px;
+      background: #fff;
+      color: var(--text);
+    }
+    button {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 9px 11px;
+      cursor: pointer;
+      font-weight: 700;
+      background: #fff;
+      color: #1e293b;
+    }
+    button.primary {
+      border: 0;
+      color: #fff;
+      background: linear-gradient(135deg, #3b82f6, #2563eb);
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 12px;
+    }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--card);
+      padding: 12px;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
+    }
+    .card h2 {
+      margin: 0 0 8px;
+      font-size: 1rem;
+    }
+    .form-grid {
+      display: grid;
+      gap: 8px;
+    }
+    .employee-list {
+      margin-top: 10px;
+      display: grid;
+      gap: 8px;
+      max-height: 340px;
+      overflow: auto;
+      padding-right: 4px;
+    }
+    .employee-item {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 8px;
+      background: #f8fbff;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+    .employee-item.dragging {
+      opacity: 0.5;
+    }
+    .emp-meta {
+      min-width: 0;
+    }
+    .emp-name {
+      font-size: 0.9rem;
+      font-weight: 700;
+      display: block;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      overflow: hidden;
+    }
+    .emp-sub {
+      color: var(--muted);
+      font-size: 0.78rem;
+    }
+    .tiny-btn {
+      border: 0;
+      border-radius: 8px;
+      background: #fee2e2;
+      color: #991b1b;
+      padding: 4px 7px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .drop-trash {
+      margin-top: 10px;
+      border: 2px dashed #f1b7b7;
+      color: #991b1b;
+      border-radius: 10px;
+      padding: 10px;
+      text-align: center;
+      font-size: 0.82rem;
+      background: #fff5f5;
+    }
+    .drop-trash.over { background: #ffe4e6; }
+
+    .table-wrap {
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 860px;
+      background: #fff;
+    }
+    th, td {
+      border-bottom: 1px solid var(--line);
+      border-right: 1px solid var(--line);
+      padding: 8px;
+      vertical-align: top;
+    }
+    th:last-child, td:last-child { border-right: 0; }
+    th {
+      background: #f1f6ff;
+      text-align: center;
+      font-size: 0.8rem;
+      color: #334155;
+      font-weight: 800;
+    }
+    td.shift-label {
+      width: 130px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      background: #f8fbff;
+      color: #1e3a8a;
+    }
+    .slot {
+      min-height: 90px;
+      border: 1px dashed #ced7ef;
+      border-radius: 10px;
+      padding: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      background: #fbfdff;
+    }
+    .slot.over {
+      background: #e8f0ff;
+      border-color: #8ab0ff;
+    }
+    .assign {
+      border: 1px solid #bfd0f4;
+      border-radius: 8px;
+      background: #eaf2ff;
+      color: #1e3a8a;
+      padding: 5px 6px;
+      display: flex;
+      justify-content: space-between;
+      gap: 6px;
+      font-size: 0.8rem;
+      cursor: grab;
+    }
+    .assign.dragging { opacity: 0.5; }
+    .assign strong {
+      display: block;
+      font-size: 0.8rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .assign small { color: #475569; }
+    .remove {
+      border: 0;
+      border-radius: 6px;
+      background: #fecaca;
+      color: #7f1d1d;
+      font-size: 0.7rem;
+      padding: 3px 5px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .empty-slot {
+      color: #94a3b8;
+      font-size: 0.75rem;
+      text-align: center;
+      padding-top: 24px;
+      user-select: none;
+    }
+
+    .bottom {
+      margin-top: 12px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .summary-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+    }
+    .summary-table th,
+    .summary-table td {
+      border-bottom: 1px solid var(--line);
+      padding: 7px;
+      text-align: left;
+    }
+    .summary-table th { color: #475569; font-size: 0.75rem; }
+    .num { text-align: right; }
+    .text-ok { color: var(--ok); font-weight: 700; }
+    .text-warn { color: var(--warn); font-weight: 700; }
+    .text-bad { color: var(--bad); font-weight: 700; }
+    .warning-list {
+      margin: 0;
+      padding-left: 18px;
+      display: grid;
+      gap: 6px;
+    }
+    .warning-list li {
+      font-size: 0.84rem;
+      line-height: 1.35;
+    }
+    .status {
+      margin-top: 8px;
+      min-height: 19px;
+      font-size: 0.82rem;
+      color: #047857;
+    }
+
+    @media (max-width: 1050px) {
+      .layout { grid-template-columns: 1fr; }
+      .bottom { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <header class="top">
+      <div>
+        <h1>🗓️ 직원 근무표 스케줄러</h1>
+        <p class="sub">직원을 등록한 뒤 드래그해서 주간 시프트에 배정하세요. 겹치는 배정 및 초과근무는 자동 경고됩니다.</p>
+      </div>
+      <div class="top-controls">
+        <div>
+          <label for="weekStart">주 시작일</label><br />
+          <input id="weekStart" type="date" />
+        </div>
+        <button id="clearAssignmentsBtn" type="button">배정만 초기화</button>
+        <button id="resetAllBtn" type="button">전체 초기화</button>
+      </div>
+    </header>
+
+    <section class="layout">
+      <aside class="card">
+        <h2>직원 등록</h2>
+        <div class="form-grid">
+          <div>
+            <label for="empName">이름</label>
+            <input id="empName" placeholder="예: 김민수" maxlength="30" />
+          </div>
+          <div>
+            <label for="empRole">직무</label>
+            <input id="empRole" placeholder="예: 바리스타" maxlength="40" />
+          </div>
+          <div>
+            <label for="empMaxHours">주간 최대 근무시간(시간)</label>
+            <input id="empMaxHours" type="number" min="1" max="80" value="40" />
+          </div>
+          <button id="addEmployeeBtn" class="primary" type="button">직원 추가</button>
+        </div>
+
+        <div class="employee-list" id="employeeList"></div>
+
+        <div class="drop-trash" id="trashZone">여기에 배정 카드를 드롭하면 배정 해제됩니다.</div>
+        <div class="status" id="status"></div>
+      </aside>
+
+      <section class="card">
+        <h2>주간 시프트 배정표</h2>
+        <div class="table-wrap">
+          <table>
+            <thead id="scheduleHead"></thead>
+            <tbody id="scheduleBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+
+    <section class="bottom">
+      <article class="card">
+        <h2>직원별 근무시간 합계</h2>
+        <table class="summary-table">
+          <thead>
+            <tr>
+              <th>직원</th>
+              <th>직무</th>
+              <th class="num">총 근무시간</th>
+              <th class="num">최대 허용</th>
+              <th class="num">상태</th>
+            </tr>
+          </thead>
+          <tbody id="summaryBody"></tbody>
+        </table>
+      </article>
+
+      <article class="card">
+        <h2>경고</h2>
+        <ul class="warning-list" id="warningList"></ul>
+      </article>
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      const STORAGE_KEY = 'tool-employee-shift-scheduler-v1';
+      const DAYS = ['월', '화', '수', '목', '금', '토', '일'];
+      const SHIFTS = [
+        { id: 'morning', label: '오전', time: '09:00-15:00', start: 9, end: 15, duration: 6 },
+        { id: 'mid', label: '중간', time: '13:00-19:00', start: 13, end: 19, duration: 6 },
+        { id: 'night', label: '야간', time: '18:00-24:00', start: 18, end: 24, duration: 6 }
+      ];
+
+      const state = loadState();
+
+      function defaultWeekStart() {
+        const now = new Date();
+        const day = now.getDay();
+        const diff = day === 0 ? -6 : 1 - day;
+        now.setDate(now.getDate() + diff);
+        return formatDateInput(now);
+      }
+
+      function formatDateInput(date) {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+      }
+
+      function parseDateInput(value) {
+        const [y, m, d] = String(value).split('-').map(Number);
+        if (!y || !m || !d) return null;
+        return new Date(y, m - 1, d);
+      }
+
+      function loadState() {
+        const base = {
+          weekStart: defaultWeekStart(),
+          employees: [],
+          assignments: {}
+        };
+
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return base;
+          const parsed = JSON.parse(raw);
+          if (typeof parsed.weekStart === 'string') base.weekStart = parsed.weekStart;
+          if (Array.isArray(parsed.employees)) {
+            base.employees = parsed.employees
+              .filter((emp) => emp && typeof emp.name === 'string')
+              .map((emp) => ({
+                id: emp.id || uid(),
+                name: emp.name.trim(),
+                role: typeof emp.role === 'string' ? emp.role.trim() : '',
+                maxHours: Math.max(1, Number(emp.maxHours) || 40)
+              }))
+              .filter((emp) => emp.name);
+          }
+          if (parsed.assignments && typeof parsed.assignments === 'object') {
+            Object.keys(parsed.assignments).forEach((cell) => {
+              const list = parsed.assignments[cell];
+              if (Array.isArray(list)) {
+                base.assignments[cell] = [...new Set(list.map(String))];
+              }
+            });
+          }
+          return base;
+        } catch (error) {
+          return base;
+        }
+      }
+
+      function saveState() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      }
+
+      function uid() {
+        return Math.random().toString(36).slice(2, 10);
+      }
+
+      function escapeHtml(value) {
+        return value
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+
+      function employeeById(id) {
+        return state.employees.find((emp) => emp.id === id);
+      }
+
+      function dayLabel(index) {
+        const base = parseDateInput(state.weekStart);
+        if (!base) return `${DAYS[index]}`;
+        const date = new Date(base);
+        date.setDate(base.getDate() + index);
+        const m = date.getMonth() + 1;
+        const d = date.getDate();
+        return `${DAYS[index]} (${m}/${d})`;
+      }
+
+      function setStatus(text, isError) {
+        const node = document.getElementById('status');
+        node.style.color = isError ? '#b91c1c' : '#047857';
+        node.textContent = text;
+      }
+
+      function addEmployee() {
+        const nameEl = document.getElementById('empName');
+        const roleEl = document.getElementById('empRole');
+        const maxEl = document.getElementById('empMaxHours');
+
+        const name = nameEl.value.trim();
+        const role = roleEl.value.trim();
+        const maxHours = Math.max(1, Number(maxEl.value) || 40);
+
+        if (!name) {
+          setStatus('직원 이름을 입력해 주세요.', true);
+          nameEl.focus();
+          return;
+        }
+
+        state.employees.push({ id: uid(), name, role, maxHours });
+        nameEl.value = '';
+        roleEl.value = '';
+        maxEl.value = '40';
+        refresh('직원이 추가되었습니다.');
+      }
+
+      function removeEmployee(id) {
+        if (!confirm('해당 직원을 삭제할까요? 배정 데이터도 함께 제거됩니다.')) return;
+
+        state.employees = state.employees.filter((emp) => emp.id !== id);
+        Object.keys(state.assignments).forEach((cell) => {
+          state.assignments[cell] = (state.assignments[cell] || []).filter((empId) => empId !== id);
+          if (!state.assignments[cell].length) delete state.assignments[cell];
+        });
+        refresh('직원이 삭제되었습니다.');
+      }
+
+      function addAssignment(cellId, employeeId) {
+        const employee = employeeById(employeeId);
+        if (!employee) return;
+        if (!Array.isArray(state.assignments[cellId])) state.assignments[cellId] = [];
+        if (!state.assignments[cellId].includes(employeeId)) {
+          state.assignments[cellId].push(employeeId);
+        }
+      }
+
+      function removeAssignment(cellId, employeeId) {
+        if (!state.assignments[cellId]) return;
+        state.assignments[cellId] = state.assignments[cellId].filter((id) => id !== employeeId);
+        if (!state.assignments[cellId].length) delete state.assignments[cellId];
+      }
+
+      function renderEmployees() {
+        const list = document.getElementById('employeeList');
+        if (!state.employees.length) {
+          list.innerHTML = '<div class="empty-slot">직원을 먼저 등록하세요.</div>';
+          return;
+        }
+
+        list.innerHTML = state.employees
+          .map((emp) => `
+            <div class="employee-item" draggable="true" data-drag="employee" data-id="${emp.id}">
+              <div class="emp-meta">
+                <span class="emp-name">${escapeHtml(emp.name)}</span>
+                <span class="emp-sub">${escapeHtml(emp.role || '직무 미입력')} · 최대 ${emp.maxHours}h</span>
+              </div>
+              <button class="tiny-btn" type="button" data-action="remove-employee" data-id="${emp.id}">삭제</button>
+            </div>
+          `)
+          .join('');
+      }
+
+      function renderSchedule() {
+        const head = document.getElementById('scheduleHead');
+        const body = document.getElementById('scheduleBody');
+
+        const headCells = DAYS.map((_, i) => `<th>${dayLabel(i)}</th>`).join('');
+        head.innerHTML = `<tr><th style="min-width:130px">시프트</th>${headCells}</tr>`;
+
+        const rows = SHIFTS.map((shift) => {
+          const dayCells = DAYS.map((_, dayIndex) => {
+            const cellId = `${dayIndex}-${shift.id}`;
+            const assigned = (state.assignments[cellId] || [])
+              .map((empId) => employeeById(empId))
+              .filter(Boolean);
+
+            const pills = assigned.length
+              ? assigned
+                  .map((emp) => `
+                    <div class="assign" draggable="true" data-drag="assignment" data-id="${emp.id}" data-cell="${cellId}">
+                      <div>
+                        <strong>${escapeHtml(emp.name)}</strong>
+                        <small>${escapeHtml(emp.role || '직무')}</small>
+                      </div>
+                      <button class="remove" type="button" data-action="remove-assignment" data-cell="${cellId}" data-id="${emp.id}">해제</button>
+                    </div>
+                  `)
+                  .join('')
+              : '<div class="empty-slot">드래그하여 배정</div>';
+
+            return `<td><div class="slot" data-cell="${cellId}">${pills}</div></td>`;
+          }).join('');
+
+          return `
+            <tr>
+              <td class="shift-label">${shift.label}<br /><small>${shift.time}</small></td>
+              ${dayCells}
+            </tr>
+          `;
+        }).join('');
+
+        body.innerHTML = rows;
+      }
+
+      function computeStats() {
+        const stats = {};
+        state.employees.forEach((emp) => {
+          stats[emp.id] = {
+            employee: emp,
+            totalHours: 0,
+            byDay: {}
+          };
+        });
+
+        Object.keys(state.assignments).forEach((cellId) => {
+          const [dayPart, shiftId] = cellId.split('-');
+          const day = Number(dayPart);
+          const shift = SHIFTS.find((item) => item.id === shiftId);
+          if (!shift) return;
+
+          (state.assignments[cellId] || []).forEach((empId) => {
+            if (!stats[empId]) return;
+            stats[empId].totalHours += shift.duration;
+            if (!Array.isArray(stats[empId].byDay[day])) stats[empId].byDay[day] = [];
+            stats[empId].byDay[day].push(shift);
+          });
+        });
+
+        return stats;
+      }
+
+      function overlaps(shifts) {
+        if (!Array.isArray(shifts) || shifts.length < 2) return false;
+        const sorted = [...shifts].sort((a, b) => a.start - b.start);
+        for (let i = 1; i < sorted.length; i += 1) {
+          if (sorted[i].start < sorted[i - 1].end) return true;
+        }
+        return false;
+      }
+
+      function renderSummaryAndWarnings() {
+        const stats = computeStats();
+        const summaryBody = document.getElementById('summaryBody');
+        const warningList = document.getElementById('warningList');
+        const warnings = [];
+
+        if (!state.employees.length) {
+          summaryBody.innerHTML = '<tr><td colspan="5">직원을 추가하면 요약이 표시됩니다.</td></tr>';
+          warningList.innerHTML = '<li>직원을 등록해 주세요.</li>';
+          return;
+        }
+
+        summaryBody.innerHTML = state.employees.map((emp) => {
+          const item = stats[emp.id];
+          const total = item ? item.totalHours : 0;
+          let statusText = '정상';
+          let statusClass = 'text-ok';
+
+          if (total > emp.maxHours) {
+            statusText = '초과';
+            statusClass = total > 52 ? 'text-bad' : 'text-warn';
+            warnings.push(`${emp.name}: 주간 근무시간 ${total}h (허용 ${emp.maxHours}h) 초과`);
+          }
+
+          if (item) {
+            Object.keys(item.byDay).forEach((dayKey) => {
+              const dayShifts = item.byDay[dayKey];
+              if (overlaps(dayShifts)) {
+                warnings.push(`${emp.name}: ${DAYS[Number(dayKey)]}요일 시프트 겹침 배정`);
+              }
+            });
+          }
+
+          return `
+            <tr>
+              <td>${escapeHtml(emp.name)}</td>
+              <td>${escapeHtml(emp.role || '-')}</td>
+              <td class="num">${total}h</td>
+              <td class="num">${emp.maxHours}h</td>
+              <td class="num ${statusClass}">${statusText}</td>
+            </tr>
+          `;
+        }).join('');
+
+        warningList.innerHTML = warnings.length
+          ? warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join('')
+          : '<li class="text-ok">현재 중복/초과근무 경고가 없습니다.</li>';
+      }
+
+      function refresh(statusText) {
+        renderEmployees();
+        renderSchedule();
+        renderSummaryAndWarnings();
+        document.getElementById('weekStart').value = state.weekStart;
+        saveState();
+        if (statusText) setStatus(statusText, false);
+      }
+
+      function onDropToCell(event) {
+        event.preventDefault();
+        const slot = event.currentTarget;
+        slot.classList.remove('over');
+        const payload = event.dataTransfer.getData('text/plain');
+        if (!payload) return;
+
+        let data;
+        try {
+          data = JSON.parse(payload);
+        } catch (error) {
+          return;
+        }
+
+        const targetCell = slot.dataset.cell;
+        if (!targetCell || !data.employeeId) return;
+
+        if (data.fromCell && data.fromCell !== targetCell) {
+          removeAssignment(data.fromCell, data.employeeId);
+        }
+        addAssignment(targetCell, data.employeeId);
+
+        if (data.fromCell === targetCell) {
+          setStatus('같은 칸으로 이동했습니다.', false);
+        } else {
+          setStatus('시프트 배정이 업데이트되었습니다.', false);
+        }
+        refresh();
+      }
+
+      function onDropTrash(event) {
+        event.preventDefault();
+        const zone = event.currentTarget;
+        zone.classList.remove('over');
+        const payload = event.dataTransfer.getData('text/plain');
+        if (!payload) return;
+
+        let data;
+        try {
+          data = JSON.parse(payload);
+        } catch (error) {
+          return;
+        }
+
+        if (data.fromCell && data.employeeId) {
+          removeAssignment(data.fromCell, data.employeeId);
+          refresh('배정이 해제되었습니다.');
+        }
+      }
+
+      document.addEventListener('dragstart', (event) => {
+        const target = event.target.closest('[data-drag]');
+        if (!target) return;
+
+        const kind = target.dataset.drag;
+        if (kind === 'employee') {
+          target.classList.add('dragging');
+          event.dataTransfer.setData('text/plain', JSON.stringify({ employeeId: target.dataset.id, fromCell: null }));
+        }
+        if (kind === 'assignment') {
+          target.classList.add('dragging');
+          event.dataTransfer.setData('text/plain', JSON.stringify({ employeeId: target.dataset.id, fromCell: target.dataset.cell }));
+        }
+      });
+
+      document.addEventListener('dragend', (event) => {
+        const target = event.target.closest('[data-drag]');
+        if (target) target.classList.remove('dragging');
+      });
+
+      document.addEventListener('dragover', (event) => {
+        const slot = event.target.closest('.slot');
+        if (slot) {
+          event.preventDefault();
+          slot.classList.add('over');
+        }
+        const trash = event.target.closest('#trashZone');
+        if (trash) {
+          event.preventDefault();
+          trash.classList.add('over');
+        }
+      });
+
+      document.addEventListener('dragleave', (event) => {
+        const slot = event.target.closest('.slot');
+        if (slot) slot.classList.remove('over');
+        const trash = event.target.closest('#trashZone');
+        if (trash) trash.classList.remove('over');
+      });
+
+      document.addEventListener('drop', (event) => {
+        const slot = event.target.closest('.slot');
+        if (slot) {
+          onDropToCell(event);
+          return;
+        }
+        const trash = event.target.closest('#trashZone');
+        if (trash) onDropTrash(event);
+      });
+
+      document.body.addEventListener('click', (event) => {
+        const button = event.target.closest('button');
+        if (!button) return;
+
+        const action = button.dataset.action;
+        if (action === 'remove-employee') {
+          removeEmployee(button.dataset.id);
+          return;
+        }
+        if (action === 'remove-assignment') {
+          removeAssignment(button.dataset.cell, button.dataset.id);
+          refresh('배정이 해제되었습니다.');
+        }
+      });
+
+      document.getElementById('addEmployeeBtn').addEventListener('click', addEmployee);
+
+      document.getElementById('weekStart').addEventListener('change', (event) => {
+        if (!event.target.value) return;
+        state.weekStart = event.target.value;
+        refresh('주 시작일이 변경되었습니다.');
+      });
+
+      document.getElementById('clearAssignmentsBtn').addEventListener('click', () => {
+        if (!confirm('모든 시프트 배정을 초기화할까요? (직원 목록은 유지됩니다)')) return;
+        state.assignments = {};
+        refresh('시프트 배정이 초기화되었습니다.');
+      });
+
+      document.getElementById('resetAllBtn').addEventListener('click', () => {
+        if (!confirm('직원/배정 데이터를 모두 초기화할까요?')) return;
+        state.weekStart = defaultWeekStart();
+        state.employees = [];
+        state.assignments = {};
+        refresh('전체 데이터가 초기화되었습니다.');
+      });
+
+      refresh('데이터는 브라우저 localStorage에 자동 저장됩니다.');
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>고객 피드백 추적기 | Customer Feedback Tracker</title>
+  <meta name="description" content="고객 피드백 등록/검색/필터, 카테고리별 통계, 만족도 추이 Canvas 차트를 제공하는 고객 피드백 추적기" />
+  <style>
+    :root {
+      --bg: #f4f7ff;
+      --card: #ffffff;
+      --line: #d9e3f5;
+      --text: #1f2937;
+      --muted: #64748b;
+      --primary: #2563eb;
+      --ok: #059669;
+      --warn: #d97706;
+      --bad: #dc2626;
+      --radius: 14px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+      background: linear-gradient(180deg, #ecf2ff 0%, #f8fbff 100%);
+    }
+    .wrap {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 18px 12px 40px;
+    }
+    .top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(1.2rem, 2.8vw, 1.82rem);
+    }
+    .sub {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    button, input, textarea, select { font: inherit; }
+    button {
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: #1e293b;
+      padding: 9px 12px;
+      cursor: pointer;
+      font-weight: 700;
+    }
+    button.primary {
+      border: 0;
+      color: #fff;
+      background: linear-gradient(135deg, #3b82f6, #2563eb);
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 12px;
+    }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--card);
+      padding: 12px;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
+    }
+    .card h2 {
+      margin: 0 0 8px;
+      font-size: 1rem;
+    }
+    label {
+      display: block;
+      margin: 8px 0 5px;
+      color: var(--muted);
+      font-size: 0.8rem;
+      font-weight: 700;
+    }
+    input, textarea, select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 9px;
+      background: #fff;
+      color: var(--text);
+    }
+    textarea { min-height: 90px; resize: vertical; }
+    .two {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .btn-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+    .status {
+      margin-top: 8px;
+      min-height: 18px;
+      font-size: 0.82rem;
+      color: #047857;
+    }
+
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(140px, 1fr));
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .kpi {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #f8fbff;
+      padding: 10px;
+    }
+    .k { font-size: 0.77rem; color: var(--muted); }
+    .v { margin-top: 5px; font-size: 1.16rem; font-weight: 800; }
+
+    .filter-bar {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #f8fbff;
+      padding: 10px;
+      display: grid;
+      grid-template-columns: 1.2fr 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .chart-wrap {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fbfdff;
+      padding: 8px;
+      margin-bottom: 10px;
+    }
+    canvas {
+      width: 100%;
+      height: 230px;
+      display: block;
+      border-radius: 10px;
+      background: #fff;
+      border: 1px solid #e5ecfb;
+    }
+
+    .stats-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+      margin-bottom: 10px;
+    }
+    .stats-table th,
+    .stats-table td {
+      border-bottom: 1px solid var(--line);
+      padding: 7px;
+      text-align: left;
+    }
+    .stats-table th { color: #475569; font-size: 0.76rem; }
+    .num { text-align: right; }
+
+    .feedback-list {
+      display: grid;
+      gap: 8px;
+      max-height: 390px;
+      overflow: auto;
+      padding-right: 4px;
+    }
+    .feedback-item {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px;
+      background: #fff;
+      display: grid;
+      gap: 5px;
+    }
+    .meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .meta strong { font-size: 0.9rem; }
+    .pill {
+      border-radius: 999px;
+      border: 1px solid #c4d4f6;
+      background: #edf3ff;
+      color: #1e3a8a;
+      font-size: 0.74rem;
+      padding: 3px 8px;
+      font-weight: 700;
+    }
+    .rating.good { color: var(--ok); }
+    .rating.mid { color: var(--warn); }
+    .rating.bad { color: var(--bad); }
+    .content {
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.35;
+      font-size: 0.88rem;
+    }
+    .empty {
+      border: 1px dashed var(--line);
+      border-radius: 10px;
+      color: #94a3b8;
+      text-align: center;
+      padding: 14px;
+      font-size: 0.86rem;
+      background: #fbfdff;
+    }
+    .delete-btn {
+      border: 0;
+      border-radius: 8px;
+      background: #fee2e2;
+      color: #991b1b;
+      font-size: 0.74rem;
+      padding: 4px 7px;
+      cursor: pointer;
+    }
+
+    @media (max-width: 1030px) {
+      .layout { grid-template-columns: 1fr; }
+      .filter-bar { grid-template-columns: 1fr; }
+      .kpi-grid { grid-template-columns: 1fr 1fr; }
+      .two { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <header class="top">
+      <div>
+        <h1>🧭 고객 피드백 추적기</h1>
+        <p class="sub">피드백을 등록하고 카테고리 통계/만족도 추이/검색 필터로 VOC를 관리하세요.</p>
+      </div>
+      <div>
+        <button id="resetBtn" type="button">전체 초기화</button>
+      </div>
+    </header>
+
+    <section class="layout">
+      <aside class="card">
+        <h2>피드백 등록</h2>
+        <label for="customerName">고객명</label>
+        <input id="customerName" maxlength="40" placeholder="예: 이지은" />
+
+        <div class="two">
+          <div>
+            <label for="category">카테고리</label>
+            <select id="category">
+              <option value="제품">제품</option>
+              <option value="배송">배송</option>
+              <option value="가격">가격</option>
+              <option value="서비스">서비스</option>
+              <option value="기타">기타</option>
+            </select>
+          </div>
+          <div>
+            <label for="rating">만족도 (1~5)</label>
+            <select id="rating">
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3" selected>3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+            </select>
+          </div>
+        </div>
+
+        <label for="feedbackDate">등록일</label>
+        <input id="feedbackDate" type="date" />
+
+        <label for="content">피드백 내용</label>
+        <textarea id="content" placeholder="고객 의견/불편사항/개선 요청을 입력하세요."></textarea>
+
+        <div class="btn-row">
+          <button id="addBtn" class="primary" type="button">피드백 추가</button>
+          <button id="sampleBtn" type="button">샘플 추가</button>
+        </div>
+        <div class="status" id="status"></div>
+      </aside>
+
+      <section class="card">
+        <h2>분석 대시보드</h2>
+
+        <div class="kpi-grid">
+          <div class="kpi"><div class="k">총 피드백</div><div class="v" id="kpiCount">0</div></div>
+          <div class="kpi"><div class="k">평균 만족도</div><div class="v" id="kpiAvg">0.0</div></div>
+          <div class="kpi"><div class="k">부정 피드백 비율(1~2점)</div><div class="v" id="kpiNegative">0%</div></div>
+        </div>
+
+        <div class="filter-bar">
+          <input id="searchInput" placeholder="고객명/내용 검색" />
+          <select id="filterCategory">
+            <option value="all">전체 카테고리</option>
+            <option value="제품">제품</option>
+            <option value="배송">배송</option>
+            <option value="가격">가격</option>
+            <option value="서비스">서비스</option>
+            <option value="기타">기타</option>
+          </select>
+          <select id="filterRating">
+            <option value="0">최소 만족도 전체</option>
+            <option value="1">1점 이상</option>
+            <option value="2">2점 이상</option>
+            <option value="3">3점 이상</option>
+            <option value="4">4점 이상</option>
+            <option value="5">5점만</option>
+          </select>
+        </div>
+
+        <div class="chart-wrap">
+          <canvas id="trendChart" width="900" height="230"></canvas>
+        </div>
+
+        <table class="stats-table">
+          <thead>
+            <tr>
+              <th>카테고리</th>
+              <th class="num">건수</th>
+              <th class="num">평균 만족도</th>
+            </tr>
+          </thead>
+          <tbody id="categoryStatsBody"></tbody>
+        </table>
+
+        <div class="feedback-list" id="feedbackList"></div>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      const STORAGE_KEY = 'tool-customer-feedback-tracker-v1';
+      const CATEGORY_LIST = ['제품', '배송', '가격', '서비스', '기타'];
+
+      const state = loadState();
+
+      function todayString() {
+        const date = new Date();
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+      }
+
+      function loadState() {
+        const base = { entries: [] };
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return base;
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed.entries)) {
+            base.entries = parsed.entries
+              .filter((entry) => entry && typeof entry.customer === 'string' && typeof entry.content === 'string')
+              .map((entry) => ({
+                id: entry.id || uid(),
+                customer: entry.customer.trim(),
+                category: CATEGORY_LIST.includes(entry.category) ? entry.category : '기타',
+                content: entry.content.trim(),
+                rating: clamp(Number(entry.rating) || 3, 1, 5),
+                date: /^\d{4}-\d{2}-\d{2}$/.test(entry.date || '') ? entry.date : todayString()
+              }))
+              .filter((entry) => entry.customer && entry.content);
+          }
+          return base;
+        } catch (error) {
+          return base;
+        }
+      }
+
+      function saveState() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      }
+
+      function uid() {
+        return Math.random().toString(36).slice(2, 10);
+      }
+
+      function clamp(value, min, max) {
+        return Math.min(max, Math.max(min, value));
+      }
+
+      function escapeHtml(value) {
+        return value
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+
+      function setStatus(text, isError) {
+        const node = document.getElementById('status');
+        node.style.color = isError ? '#b91c1c' : '#047857';
+        node.textContent = text;
+      }
+
+      function addEntry(entry) {
+        state.entries.unshift(entry);
+      }
+
+      function removeEntry(id) {
+        state.entries = state.entries.filter((entry) => entry.id !== id);
+      }
+
+      function getFilteredEntries() {
+        const query = document.getElementById('searchInput').value.trim().toLowerCase();
+        const category = document.getElementById('filterCategory').value;
+        const minRating = Number(document.getElementById('filterRating').value || 0);
+
+        return state.entries.filter((entry) => {
+          const matchQuery = !query || entry.customer.toLowerCase().includes(query) || entry.content.toLowerCase().includes(query);
+          const matchCategory = category === 'all' || entry.category === category;
+          const matchRating = minRating === 0 ? true : (minRating === 5 ? entry.rating === 5 : entry.rating >= minRating);
+          return matchQuery && matchCategory && matchRating;
+        });
+      }
+
+      function renderKpi() {
+        const total = state.entries.length;
+        const avg = total ? state.entries.reduce((sum, entry) => sum + entry.rating, 0) / total : 0;
+        const negative = total ? state.entries.filter((entry) => entry.rating <= 2).length / total : 0;
+
+        document.getElementById('kpiCount').textContent = String(total);
+        document.getElementById('kpiAvg').textContent = avg.toFixed(1);
+        document.getElementById('kpiNegative').textContent = `${(negative * 100).toFixed(1)}%`;
+      }
+
+      function renderCategoryStats(entries) {
+        const body = document.getElementById('categoryStatsBody');
+        const map = CATEGORY_LIST.reduce((acc, category) => {
+          acc[category] = { count: 0, sum: 0 };
+          return acc;
+        }, {});
+
+        entries.forEach((entry) => {
+          map[entry.category].count += 1;
+          map[entry.category].sum += entry.rating;
+        });
+
+        body.innerHTML = CATEGORY_LIST.map((category) => {
+          const item = map[category];
+          const avg = item.count ? (item.sum / item.count).toFixed(2) : '-';
+          return `
+            <tr>
+              <td>${category}</td>
+              <td class="num">${item.count}</td>
+              <td class="num">${avg}</td>
+            </tr>
+          `;
+        }).join('');
+      }
+
+      function ratingClass(rating) {
+        if (rating >= 4) return 'good';
+        if (rating === 3) return 'mid';
+        return 'bad';
+      }
+
+      function renderList(entries) {
+        const list = document.getElementById('feedbackList');
+        if (!entries.length) {
+          list.innerHTML = '<div class="empty">조건에 맞는 피드백이 없습니다.</div>';
+          return;
+        }
+
+        list.innerHTML = entries
+          .map((entry) => `
+            <article class="feedback-item">
+              <div class="meta">
+                <div>
+                  <strong>${escapeHtml(entry.customer)}</strong>
+                  <span class="pill">${entry.category}</span>
+                </div>
+                <div>
+                  <span class="rating ${ratingClass(entry.rating)}">만족도 ${entry.rating}/5</span>
+                  <span style="font-size:0.78rem;color:#64748b;margin-left:6px">${entry.date}</span>
+                  <button class="delete-btn" type="button" data-action="delete" data-id="${entry.id}">삭제</button>
+                </div>
+              </div>
+              <div class="content">${escapeHtml(entry.content)}</div>
+            </article>
+          `)
+          .join('');
+      }
+
+      function drawTrendChart(entries) {
+        const canvas = document.getElementById('trendChart');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        const rect = canvas.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        const width = Math.max(320, Math.floor(rect.width));
+        const height = 230;
+        canvas.width = Math.floor(width * dpr);
+        canvas.height = Math.floor(height * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+        ctx.clearRect(0, 0, width, height);
+
+        const padding = { top: 18, right: 16, bottom: 34, left: 34 };
+        const chartW = width - padding.left - padding.right;
+        const chartH = height - padding.top - padding.bottom;
+
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, height);
+
+        for (let i = 1; i <= 5; i += 1) {
+          const y = padding.top + ((5 - i) / 4) * chartH;
+          ctx.strokeStyle = '#e5ecfb';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(padding.left, y);
+          ctx.lineTo(width - padding.right, y);
+          ctx.stroke();
+
+          ctx.fillStyle = '#64748b';
+          ctx.font = '11px sans-serif';
+          ctx.fillText(String(i), 12, y + 4);
+        }
+
+        const grouped = {};
+        entries.forEach((entry) => {
+          if (!grouped[entry.date]) grouped[entry.date] = { sum: 0, count: 0 };
+          grouped[entry.date].sum += entry.rating;
+          grouped[entry.date].count += 1;
+        });
+
+        const points = Object.keys(grouped)
+          .sort()
+          .map((date) => ({
+            date,
+            value: grouped[date].sum / grouped[date].count
+          }));
+
+        if (!points.length) {
+          ctx.fillStyle = '#94a3b8';
+          ctx.font = '13px sans-serif';
+          ctx.fillText('추이를 그릴 데이터가 없습니다.', padding.left, padding.top + chartH / 2);
+          return;
+        }
+
+        const stepX = points.length === 1 ? chartW / 2 : chartW / (points.length - 1);
+
+        ctx.strokeStyle = '#2563eb';
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        points.forEach((point, index) => {
+          const x = padding.left + (points.length === 1 ? stepX : stepX * index);
+          const y = padding.top + ((5 - point.value) / 4) * chartH;
+          if (index === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+
+        points.forEach((point, index) => {
+          const x = padding.left + (points.length === 1 ? stepX : stepX * index);
+          const y = padding.top + ((5 - point.value) / 4) * chartH;
+          ctx.fillStyle = '#1d4ed8';
+          ctx.beginPath();
+          ctx.arc(x, y, 3.8, 0, Math.PI * 2);
+          ctx.fill();
+
+          if (index === 0 || index === points.length - 1 || points.length <= 6 || index % 2 === 0) {
+            ctx.fillStyle = '#475569';
+            ctx.font = '10px sans-serif';
+            ctx.fillText(point.date.slice(5), x - 16, height - 12);
+          }
+        });
+      }
+
+      function refresh(statusText) {
+        const filtered = getFilteredEntries();
+        renderKpi();
+        renderCategoryStats(filtered);
+        renderList(filtered);
+        drawTrendChart(filtered);
+        saveState();
+        if (statusText) setStatus(statusText, false);
+      }
+
+      function addFromForm() {
+        const customer = document.getElementById('customerName').value.trim();
+        const category = document.getElementById('category').value;
+        const content = document.getElementById('content').value.trim();
+        const rating = clamp(Number(document.getElementById('rating').value || 3), 1, 5);
+        const date = document.getElementById('feedbackDate').value || todayString();
+
+        if (!customer) {
+          setStatus('고객명을 입력해 주세요.', true);
+          return;
+        }
+        if (!content) {
+          setStatus('피드백 내용을 입력해 주세요.', true);
+          return;
+        }
+
+        addEntry({ id: uid(), customer, category, content, rating, date });
+        document.getElementById('customerName').value = '';
+        document.getElementById('content').value = '';
+        document.getElementById('rating').value = '3';
+        document.getElementById('category').value = '제품';
+        document.getElementById('feedbackDate').value = todayString();
+        refresh('피드백이 등록되었습니다.');
+      }
+
+      function addSamples() {
+        const samples = [
+          { customer: '김지훈', category: '제품', content: '앱 실행 속도는 만족하지만 검색 필터가 더 세분화되면 좋겠습니다.', rating: 4, date: '2026-02-14' },
+          { customer: '박서연', category: '배송', content: '예상보다 하루 늦게 도착했습니다. 알림이 있었으면 합니다.', rating: 2, date: '2026-02-15' },
+          { customer: '이민재', category: '서비스', content: '상담 응답이 빠르고 친절했습니다.', rating: 5, date: '2026-02-17' },
+          { customer: '최하은', category: '가격', content: '정기 결제 할인 옵션이 있으면 재구매 의사가 높아질 것 같습니다.', rating: 3, date: '2026-02-19' }
+        ];
+
+        samples.forEach((sample) => addEntry({ id: uid(), ...sample }));
+        refresh('샘플 피드백이 추가되었습니다.');
+      }
+
+      document.getElementById('addBtn').addEventListener('click', addFromForm);
+      document.getElementById('sampleBtn').addEventListener('click', addSamples);
+
+      document.getElementById('resetBtn').addEventListener('click', () => {
+        if (!confirm('모든 피드백 데이터를 삭제할까요?')) return;
+        state.entries = [];
+        refresh('데이터가 초기화되었습니다.');
+      });
+
+      ['searchInput', 'filterCategory', 'filterRating'].forEach((id) => {
+        document.getElementById(id).addEventListener('input', () => refresh());
+        document.getElementById(id).addEventListener('change', () => refresh());
+      });
+
+      document.getElementById('feedbackList').addEventListener('click', (event) => {
+        const button = event.target.closest('button[data-action="delete"]');
+        if (!button) return;
+        removeEntry(button.dataset.id);
+        refresh('피드백이 삭제되었습니다.');
+      });
+
+      window.addEventListener('resize', () => drawTrendChart(getFilteredEntries()));
+
+      document.getElementById('feedbackDate').value = todayString();
+      refresh('데이터는 브라우저 localStorage에 자동 저장됩니다.');
+    })();
+  </script>
+</body>
+</html>

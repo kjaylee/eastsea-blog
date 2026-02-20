@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Invoice Late Fee Calculator | 인보이스 연체료 계산기</title>
+  <meta name="description" content="인보이스 연체일, 연체이율, 고정 연체수수료를 반영해 총 청구액과 시나리오별 연체 비용을 계산합니다." />
+  <style>
+    :root{
+      --bg:#f4f7fb;--card:#ffffff;--line:#d7e0ef;--text:#132036;--muted:#5f6f8a;--pri:#315efb;--soft:#eef3ff;
+      --ok:#0f9d68;--warn:#d97706;--bad:#dc2626;
+    }
+    @media (prefers-color-scheme: dark){
+      :root{--bg:#0b1220;--card:#101a2f;--line:#243553;--text:#e9efff;--muted:#9bb0d3;--pri:#7fa0ff;--soft:#14203a;--ok:#34d399;--warn:#fbbf24;--bad:#f87171}
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;background:var(--bg);color:var(--text)}
+    .wrap{max-width:1100px;margin:0 auto;padding:20px 14px 56px}
+    .top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:14px}
+    h1{margin:0;font-size:clamp(1.25rem,2.6vw,1.75rem)}
+    .sub{margin-top:6px;color:var(--muted);font-size:.94rem;line-height:1.45}
+    .home{padding:9px 12px;border-radius:12px;border:1px solid var(--line);text-decoration:none;color:var(--text);background:var(--card);white-space:nowrap}
+    .grid{display:grid;grid-template-columns:1.05fr .95fr;gap:12px}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px}
+    h2{margin:0 0 10px;font-size:1rem}
+    .inputs{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+    label{display:block;font-size:.81rem;color:var(--muted);margin-bottom:5px}
+    input,button,textarea{width:100%;padding:10px 11px;border-radius:11px;border:1px solid var(--line);background:var(--bg);color:var(--text);font-size:.93rem}
+    button{cursor:pointer;border:none;background:var(--pri);color:#fff;font-weight:700}
+    .ghost{background:var(--soft);color:var(--text);border:1px solid var(--line);font-weight:600}
+    .btns{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:10px}
+    .error{display:none;margin-top:10px;padding:9px 11px;border:1px solid rgba(220,38,38,.5);border-radius:10px;color:var(--bad);font-size:.86rem;background:rgba(220,38,38,.08)}
+    .error.show{display:block}
+    textarea{margin-top:10px;min-height:92px;resize:vertical}
+    .kpis{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .kpi{padding:10px;border:1px solid var(--line);border-radius:12px;background:linear-gradient(180deg,var(--card),var(--soft))}
+    .k{font-size:.78rem;color:var(--muted);margin-bottom:4px}
+    .v{font-weight:800;font-size:1.12rem}
+    .v.sm{font-size:1rem}
+    .chip{display:inline-flex;gap:7px;align-items:center;margin-top:10px;padding:5px 10px;border-radius:999px;border:1px solid var(--line);font-size:.78rem;background:var(--soft)}
+    table{width:100%;border-collapse:collapse;margin-top:10px;font-size:.88rem}
+    th,td{padding:8px 6px;border-bottom:1px solid var(--line);text-align:right}
+    th:first-child,td:first-child{text-align:left}
+    .up{color:var(--ok)}.mid{color:var(--warn)}.down{color:var(--bad)}
+    @media(max-width:920px){.grid{grid-template-columns:1fr}.inputs{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <div class="top">
+      <div>
+        <h1>🧾 인보이스 연체료 계산기</h1>
+        <div class="sub">연체일수와 약정 이율/수수료를 반영해 <strong>연체이자, 추가 수수료, 최종 청구금액</strong>을 즉시 계산합니다.</div>
+      </div>
+      <a class="home" href="/">Back to Portal</a>
+    </div>
+
+    <section class="grid">
+      <article class="card">
+        <h2>입력값</h2>
+        <div class="inputs">
+          <div><label for="amount">원청구 금액 (KRW)</label><input id="amount" type="number" min="0" value="5500000"></div>
+          <div><label for="daysLate">현재 연체일수 (일)</label><input id="daysLate" type="number" min="0" value="26"></div>
+          <div><label for="annualRate">연체이율 (연 %, 단리)</label><input id="annualRate" type="number" min="0" max="100" step="0.1" value="12"></div>
+          <div><label for="grace">유예기간 (일)</label><input id="grace" type="number" min="0" value="3"></div>
+          <div><label for="fixedFee">고정 연체수수료 (KRW)</label><input id="fixedFee" type="number" min="0" value="100000"></div>
+          <div><label for="feeTax">수수료 부가세율 (%)</label><input id="feeTax" type="number" min="0" max="100" step="0.1" value="10"></div>
+        </div>
+        <div class="btns">
+          <button class="ghost" id="copyBtn" type="button">요약 복사</button>
+          <button id="resetBtn" type="button">기본값 복원</button>
+        </div>
+        <div id="error" class="error"></div>
+        <textarea id="summary" readonly></textarea>
+      </article>
+
+      <article class="card">
+        <h2>결과</h2>
+        <div class="kpis">
+          <div class="kpi"><div class="k">이자 산정 연체일</div><div id="billableDays" class="v sm">-</div></div>
+          <div class="kpi"><div class="k">일일 연체이자</div><div id="dailyInterest" class="v sm">-</div></div>
+          <div class="kpi"><div class="k">누적 연체이자</div><div id="lateInterest" class="v">-</div></div>
+          <div class="kpi"><div class="k">연체수수료(부가세 포함)</div><div id="feeWithTax" class="v sm">-</div></div>
+          <div class="kpi"><div class="k">최종 청구금액</div><div id="totalDue" class="v">-</div></div>
+          <div class="kpi"><div class="k">원금 대비 추가부담률</div><div id="burdenRate" class="v sm">-</div></div>
+        </div>
+
+        <div id="status" class="chip">결과 계산 대기</div>
+
+        <h2 style="margin-top:12px">연체일수 시나리오</h2>
+        <table>
+          <thead><tr><th>연체일수</th><th>연체이자</th><th>총 청구금액</th></tr></thead>
+          <tbody id="scenarioBody"></tbody>
+        </table>
+      </article>
+    </section>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const refs = {
+      amount: $('amount'), daysLate: $('daysLate'), annualRate: $('annualRate'), grace: $('grace'), fixedFee: $('fixedFee'), feeTax: $('feeTax'),
+      billableDays: $('billableDays'), dailyInterest: $('dailyInterest'), lateInterest: $('lateInterest'), feeWithTax: $('feeWithTax'), totalDue: $('totalDue'), burdenRate: $('burdenRate'),
+      status: $('status'), summary: $('summary'), error: $('error'), scenarioBody: $('scenarioBody'),
+      copyBtn: $('copyBtn'), resetBtn: $('resetBtn')
+    };
+
+    const defaults = { amount: 5500000, daysLate: 26, annualRate: 12, grace: 3, fixedFee: 100000, feeTax: 10 };
+    const won = (n) => new Intl.NumberFormat('ko-KR', { style:'currency', currency:'KRW', maximumFractionDigits:0 }).format(n || 0);
+    const fmt = (n, d = 1) => Number(n).toLocaleString('ko-KR', { maximumFractionDigits: d });
+
+    function validate(v){
+      if (!Number.isFinite(v.amount) || v.amount < 0) return '원청구 금액은 0 이상이어야 합니다.';
+      if (!Number.isFinite(v.daysLate) || v.daysLate < 0) return '연체일수는 0 이상이어야 합니다.';
+      if (!Number.isFinite(v.annualRate) || v.annualRate < 0 || v.annualRate > 100) return '연체이율은 0~100 범위여야 합니다.';
+      if (!Number.isFinite(v.grace) || v.grace < 0) return '유예기간은 0 이상이어야 합니다.';
+      if (!Number.isFinite(v.fixedFee) || v.fixedFee < 0) return '고정 연체수수료는 0 이상이어야 합니다.';
+      if (!Number.isFinite(v.feeTax) || v.feeTax < 0 || v.feeTax > 100) return '수수료 부가세율은 0~100 범위여야 합니다.';
+      return '';
+    }
+
+    function compute(v, customDays){
+      const daysLate = Number.isFinite(customDays) ? customDays : v.daysLate;
+      const billableDays = Math.max(0, daysLate - v.grace);
+      const dailyInterest = v.amount * (v.annualRate / 100) / 365;
+      const lateInterest = dailyInterest * billableDays;
+      const feeWithTax = v.fixedFee * (1 + v.feeTax / 100);
+      const totalDue = v.amount + lateInterest + feeWithTax;
+      const burdenRate = v.amount === 0 ? 0 : ((totalDue - v.amount) / v.amount) * 100;
+      return { billableDays, dailyInterest, lateInterest, feeWithTax, totalDue, burdenRate };
+    }
+
+    function render(){
+      const v = {
+        amount:Number(refs.amount.value), daysLate:Number(refs.daysLate.value), annualRate:Number(refs.annualRate.value),
+        grace:Number(refs.grace.value), fixedFee:Number(refs.fixedFee.value), feeTax:Number(refs.feeTax.value)
+      };
+      const err = validate(v);
+      refs.error.classList.toggle('show', !!err);
+      refs.error.textContent = err;
+
+      if (err){
+        refs.summary.value = '';
+        refs.status.textContent = '입력값을 확인하세요';
+        refs.scenarioBody.innerHTML = '';
+        ['billableDays','dailyInterest','lateInterest','feeWithTax','totalDue','burdenRate'].forEach((k)=>refs[k].textContent='-');
+        return;
+      }
+
+      const r = compute(v);
+      refs.billableDays.textContent = `${fmt(r.billableDays,0)}일`;
+      refs.dailyInterest.textContent = won(r.dailyInterest);
+      refs.lateInterest.textContent = won(r.lateInterest);
+      refs.feeWithTax.textContent = won(r.feeWithTax);
+      refs.totalDue.textContent = won(r.totalDue);
+      refs.burdenRate.textContent = `${fmt(r.burdenRate,2)}%`;
+
+      refs.status.innerHTML = r.burdenRate < 1.5
+        ? `<span class="up">●</span> 추가부담이 낮은 편입니다`
+        : r.burdenRate < 4
+          ? `<span class="mid">●</span> 연체비용이 누적되고 있습니다`
+          : `<span class="down">●</span> 연체비용 부담이 큽니다 (회수 우선)`;
+
+      const scenarioDays = [7, 14, 30, 60, 90];
+      refs.scenarioBody.innerHTML = scenarioDays.map((d)=>{
+        const s = compute(v, d);
+        return `<tr><td>${d}일</td><td>${won(s.lateInterest)}</td><td>${won(s.totalDue)}</td></tr>`;
+      }).join('');
+
+      refs.summary.value = [
+        '[인보이스 연체료 요약]',
+        `원청구 금액: ${won(v.amount)}`,
+        `현재 연체일수: ${fmt(v.daysLate,0)}일 (유예 ${fmt(v.grace,0)}일)`,
+        `연체이율: 연 ${fmt(v.annualRate,2)}%`,
+        `누적 연체이자: ${won(r.lateInterest)}`,
+        `연체수수료(부가세 포함): ${won(r.feeWithTax)}`,
+        `최종 청구금액: ${won(r.totalDue)}`,
+        `원금 대비 추가부담률: ${fmt(r.burdenRate,2)}%`
+      ].join('\n');
+    }
+
+    refs.copyBtn.addEventListener('click', async () => {
+      if (!refs.summary.value.trim()) return;
+      try { await navigator.clipboard.writeText(refs.summary.value); alert('요약을 복사했습니다.'); }
+      catch { alert('클립보드 권한이 없어 수동 복사가 필요합니다.'); }
+    });
+
+    refs.resetBtn.addEventListener('click', () => {
+      Object.entries(defaults).forEach(([k,v]) => refs[k].value = v);
+      render();
+    });
+
+    ['input','change'].forEach((ev) => {
+      [refs.amount, refs.daysLate, refs.annualRate, refs.grace, refs.fixedFee, refs.feeTax].forEach((el) => el.addEventListener(ev, render));
+    });
+
+    render();
+  </script>
+</body>
+</html>

@@ -1,0 +1,598 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>데일리 스탠드업 기록기 | Daily Standup Logger</title>
+  <meta name="description" content="어제 한 일/오늘 할 일/블로커를 날짜별로 저장하고 검색·필터·주간 요약·Slack/Teams 복사를 지원하는 데일리 스탠드업 기록기" />
+  <style>
+    :root {
+      --bg: #f4f6fb;
+      --panel: #ffffff;
+      --line: #dde3ee;
+      --text: #1f2937;
+      --muted: #667085;
+      --primary: #2563eb;
+      --primary-weak: #dbeafe;
+      --danger: #dc2626;
+      --ok: #16a34a;
+      --radius: 14px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.45;
+    }
+    .wrap {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      display: grid;
+      gap: 16px;
+      grid-template-columns: 1.05fr 0.95fr;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 16px;
+      box-shadow: 0 3px 14px rgba(17, 24, 39, 0.06);
+    }
+    h1 {
+      margin: 0 0 6px;
+      font-size: 1.5rem;
+    }
+    .sub {
+      color: var(--muted);
+      margin: 0;
+      font-size: 0.92rem;
+    }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .row > * { min-width: 0; }
+    label {
+      font-size: 0.86rem;
+      color: var(--muted);
+      margin: 10px 0 4px;
+      display: block;
+      font-weight: 600;
+    }
+    input, textarea, select, button {
+      font: inherit;
+    }
+    input[type="date"], input[type="text"], select, textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 12px;
+      background: #fff;
+    }
+    textarea {
+      min-height: 96px;
+      resize: vertical;
+    }
+    button {
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 13px;
+      cursor: pointer;
+      font-weight: 700;
+    }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-weak { background: var(--primary-weak); color: #1e40af; }
+    .btn-ghost { background: #f3f4f6; color: #374151; }
+    .btn-danger { background: #fee2e2; color: var(--danger); }
+    .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+    .history-list {
+      margin: 10px 0 0;
+      max-height: 470px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fbfcff;
+    }
+    .item {
+      border-bottom: 1px solid var(--line);
+      padding: 12px;
+      cursor: pointer;
+    }
+    .item:last-child { border-bottom: 0; }
+    .item:hover { background: #f0f6ff; }
+    .item.active { background: #e8f0ff; }
+    .item h4 { margin: 0 0 6px; font-size: 0.95rem; }
+    .item p { margin: 3px 0; color: #4b5563; font-size: 0.86rem; }
+    .muted { color: var(--muted); font-size: 0.86rem; }
+    .summary {
+      background: #f9fafb;
+      border: 1px dashed var(--line);
+      border-radius: 10px;
+      padding: 12px;
+      white-space: pre-wrap;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.83rem;
+      margin-top: 10px;
+      min-height: 180px;
+    }
+    .status { margin-top: 8px; font-size: 0.84rem; color: var(--ok); min-height: 20px; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .pill {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: #eff6ff;
+      color: #1d4ed8;
+      font-size: 0.78rem;
+      font-weight: 700;
+    }
+    @media (max-width: 980px) {
+      .wrap { grid-template-columns: 1fr; }
+      .history-list { max-height: 300px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="card">
+      <h1>🗓️ 데일리 스탠드업 기록기</h1>
+      <p class="sub">어제 한 일 · 오늘 할 일 · 블로커를 날짜별로 저장하고, 검색/필터와 주간 요약까지 한 번에.</p>
+
+      <label for="entryDate">기록 날짜</label>
+      <div class="row">
+        <input id="entryDate" type="date" style="max-width:220px" />
+        <span class="pill" id="entryBadge">새 기록</span>
+      </div>
+
+      <label for="yesterday">어제 한 일</label>
+      <textarea id="yesterday" placeholder="예) 결제 API 오류 수정, 운영 배포 완료"></textarea>
+
+      <label for="today">오늘 할 일</label>
+      <textarea id="today" placeholder="예) 배너 A/B 테스트 설정, 회고 문서 정리"></textarea>
+
+      <label for="blockers">블로커 (막히는 점)</label>
+      <textarea id="blockers" placeholder="예) 외부 파트너 응답 대기, QA 장비 접근 권한 없음"></textarea>
+
+      <div class="toolbar">
+        <button class="btn-primary" id="saveBtn">저장</button>
+        <button class="btn-ghost" id="newBtn">새로 작성</button>
+        <button class="btn-danger" id="deleteBtn">해당 날짜 삭제</button>
+      </div>
+      <div class="toolbar">
+        <button class="btn-weak" id="copySlackBtn">Slack 포맷 복사</button>
+        <button class="btn-weak" id="copyTeamsBtn">Teams 포맷 복사</button>
+      </div>
+      <div class="status" id="status"></div>
+    </section>
+
+    <section class="card">
+      <div class="row" style="justify-content:space-between">
+        <h2 style="margin:0;font-size:1.1rem">📚 기록 이력</h2>
+        <span class="muted" id="countInfo"></span>
+      </div>
+
+      <div class="grid2" style="margin-top:8px">
+        <div>
+          <label for="searchInput">검색어</label>
+          <input id="searchInput" type="text" placeholder="내용 검색 (예: 배포, QA, 파트너)" />
+        </div>
+        <div>
+          <label for="rangeFilter">기간 필터</label>
+          <select id="rangeFilter">
+            <option value="all">전체</option>
+            <option value="7">최근 7일</option>
+            <option value="30">최근 30일</option>
+            <option value="90">최근 90일</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="history-list" id="historyList"></div>
+
+      <hr style="border:0;border-top:1px solid var(--line);margin:14px 0" />
+      <div class="row" style="justify-content:space-between">
+        <h3 style="margin:0;font-size:1rem">🧾 주간 요약 (자동 생성)</h3>
+        <button class="btn-ghost" id="regenSummaryBtn">요약 새로고침</button>
+      </div>
+      <div class="summary" id="summaryBox"></div>
+      <div class="toolbar">
+        <button class="btn-weak" id="copySummarySlackBtn">요약 Slack 복사</button>
+        <button class="btn-weak" id="copySummaryTeamsBtn">요약 Teams 복사</button>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    (function () {
+      const LS_KEY = 'daily-standup-logger-v1';
+      const state = {
+        entries: {},
+        selectedDate: '',
+        search: '',
+        range: 'all'
+      };
+
+      const el = {
+        entryDate: document.getElementById('entryDate'),
+        entryBadge: document.getElementById('entryBadge'),
+        yesterday: document.getElementById('yesterday'),
+        today: document.getElementById('today'),
+        blockers: document.getElementById('blockers'),
+        saveBtn: document.getElementById('saveBtn'),
+        newBtn: document.getElementById('newBtn'),
+        deleteBtn: document.getElementById('deleteBtn'),
+        copySlackBtn: document.getElementById('copySlackBtn'),
+        copyTeamsBtn: document.getElementById('copyTeamsBtn'),
+        searchInput: document.getElementById('searchInput'),
+        rangeFilter: document.getElementById('rangeFilter'),
+        historyList: document.getElementById('historyList'),
+        countInfo: document.getElementById('countInfo'),
+        summaryBox: document.getElementById('summaryBox'),
+        regenSummaryBtn: document.getElementById('regenSummaryBtn'),
+        copySummarySlackBtn: document.getElementById('copySummarySlackBtn'),
+        copySummaryTeamsBtn: document.getElementById('copySummaryTeamsBtn'),
+        status: document.getElementById('status')
+      };
+
+      function todayISO() {
+        return new Date().toISOString().slice(0, 10);
+      }
+
+      function saveStorage() {
+        localStorage.setItem(LS_KEY, JSON.stringify(state.entries));
+      }
+
+      function loadStorage() {
+        try {
+          const raw = localStorage.getItem(LS_KEY);
+          if (raw) state.entries = JSON.parse(raw) || {};
+        } catch (e) {
+          state.entries = {};
+        }
+      }
+
+      function flash(msg, isError) {
+        el.status.style.color = isError ? '#b91c1c' : '#15803d';
+        el.status.textContent = msg;
+      }
+
+      function normalizeLines(text) {
+        return text
+          .split(/\n+/)
+          .map(function (s) { return s.trim(); })
+          .filter(Boolean);
+      }
+
+      function setSelectedDate(date) {
+        state.selectedDate = date;
+        el.entryDate.value = date;
+        const data = state.entries[date];
+        el.yesterday.value = data ? data.yesterday : '';
+        el.today.value = data ? data.today : '';
+        el.blockers.value = data ? data.blockers : '';
+        el.entryBadge.textContent = data ? '기존 기록' : '새 기록';
+        renderHistory();
+      }
+
+      function getSortedDates() {
+        return Object.keys(state.entries).sort(function (a, b) {
+          return a < b ? 1 : -1;
+        });
+      }
+
+      function filterDates(dates) {
+        const q = state.search.trim().toLowerCase();
+        const range = state.range;
+        const now = new Date();
+
+        return dates.filter(function (date) {
+          const item = state.entries[date] || {};
+          const corpus = [date, item.yesterday || '', item.today || '', item.blockers || '']
+            .join('\n')
+            .toLowerCase();
+
+          if (q && corpus.indexOf(q) === -1) return false;
+
+          if (range !== 'all') {
+            const d = new Date(date + 'T00:00:00');
+            const diff = (now - d) / 86400000;
+            if (diff > Number(range)) return false;
+          }
+          return true;
+        });
+      }
+
+      function shortText(s) {
+        if (!s) return '—';
+        const one = s.replace(/\s+/g, ' ').trim();
+        return one.length > 68 ? one.slice(0, 68) + '…' : one;
+      }
+
+      function renderHistory() {
+        const allDates = getSortedDates();
+        const filtered = filterDates(allDates);
+        el.countInfo.textContent = '총 ' + allDates.length + '건 / 표시 ' + filtered.length + '건';
+
+        if (!filtered.length) {
+          el.historyList.innerHTML = '<div class="item"><p class="muted">조건에 맞는 기록이 없습니다.</p></div>';
+          return;
+        }
+
+        el.historyList.innerHTML = filtered.map(function (date) {
+          const item = state.entries[date] || {};
+          var cls = 'item' + (date === state.selectedDate ? ' active' : '');
+          return [
+            '<div class="' + cls + '" data-date="' + date + '">',
+            '<h4>' + date + '</h4>',
+            '<p><strong>어제:</strong> ' + escapeHtml(shortText(item.yesterday)) + '</p>',
+            '<p><strong>오늘:</strong> ' + escapeHtml(shortText(item.today)) + '</p>',
+            '<p><strong>블로커:</strong> ' + escapeHtml(shortText(item.blockers)) + '</p>',
+            '</div>'
+          ].join('');
+        }).join('');
+      }
+
+      function escapeHtml(s) {
+        return String(s)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+
+      function toBullets(text, mark) {
+        const lines = normalizeLines(text);
+        if (!lines.length) return mark + ' 없음';
+        return lines.map(function (line) { return mark + ' ' + line; }).join('\n');
+      }
+
+      function buildEntryFormat(mode) {
+        const date = state.selectedDate;
+        const item = {
+          yesterday: el.yesterday.value.trim(),
+          today: el.today.value.trim(),
+          blockers: el.blockers.value.trim()
+        };
+        if (mode === 'slack') {
+          return [
+            '*Daily Standup - ' + date + '*',
+            '*어제 한 일*',
+            toBullets(item.yesterday, '•'),
+            '',
+            '*오늘 할 일*',
+            toBullets(item.today, '•'),
+            '',
+            '*블로커*',
+            toBullets(item.blockers, '•')
+          ].join('\n');
+        }
+        return [
+          '**Daily Standup | ' + date + '**',
+          '**어제 한 일**',
+          toBullets(item.yesterday, '-'),
+          '',
+          '**오늘 할 일**',
+          toBullets(item.today, '-'),
+          '',
+          '**블로커**',
+          toBullets(item.blockers, '-')
+        ].join('\n');
+      }
+
+      function copyText(text, doneMsg) {
+        function done() { flash(doneMsg, false); }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(done).catch(function () {
+            fallbackCopy(text, done);
+          });
+        } else {
+          fallbackCopy(text, done);
+        }
+      }
+
+      function fallbackCopy(text, callback) {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        try {
+          document.execCommand('copy');
+          callback();
+        } catch (e) {
+          flash('클립보드 복사에 실패했습니다.', true);
+        }
+        document.body.removeChild(ta);
+      }
+
+      function collectWeeklyEntries() {
+        const base = new Date(state.selectedDate + 'T00:00:00');
+        const result = [];
+        for (var i = 6; i >= 0; i -= 1) {
+          const d = new Date(base);
+          d.setDate(base.getDate() - i);
+          const iso = d.toISOString().slice(0, 10);
+          if (state.entries[iso]) {
+            result.push({ date: iso, data: state.entries[iso] });
+          }
+        }
+        return result;
+      }
+
+      function topKeywords(textList, limit) {
+        const stop = {
+          그리고: 1, 또는: 1, 완료: 1, 진행: 1, 확인: 1, 작업: 1,
+          예정: 1, 오늘: 1, 어제: 1, 없음: 1, 관련: 1, 위해: 1, 대한: 1,
+          this: 1, that: 1, with: 1, from: 1
+        };
+        const freq = {};
+        textList.forEach(function (line) {
+          line
+            .toLowerCase()
+            .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
+            .split(/\s+/)
+            .forEach(function (w) {
+              if (!w || w.length < 2 || stop[w]) return;
+              freq[w] = (freq[w] || 0) + 1;
+            });
+        });
+        return Object.keys(freq)
+          .sort(function (a, b) { return freq[b] - freq[a]; })
+          .slice(0, limit)
+          .map(function (w) { return w + '(' + freq[w] + ')'; });
+      }
+
+      function generateWeeklySummary() {
+        const week = collectWeeklyEntries();
+        if (!week.length) {
+          el.summaryBox.textContent = '선택 날짜 기준 최근 7일 기록이 없습니다.';
+          return;
+        }
+
+        const start = week[0].date;
+        const end = week[week.length - 1].date;
+        const doneLines = [];
+        const planLines = [];
+        const blockerLines = [];
+
+        week.forEach(function (item) {
+          normalizeLines(item.data.yesterday || '').forEach(function (l) { doneLines.push(l); });
+          normalizeLines(item.data.today || '').forEach(function (l) { planLines.push(l); });
+          normalizeLines(item.data.blockers || '').forEach(function (l) { blockerLines.push(l); });
+        });
+
+        const hot = topKeywords(doneLines.concat(planLines), 6);
+        const blockerHot = topKeywords(blockerLines, 4);
+
+        const lines = [];
+        lines.push('[주간 스탠드업 요약] ' + start + ' ~ ' + end);
+        lines.push('기록 일수: ' + week.length + '일');
+        lines.push('');
+
+        lines.push('1) 이번 주 완료/진척');
+        week.forEach(function (item) {
+          lines.push('- ' + item.date + ': ' + (shortText(item.data.yesterday || '기록 없음')));
+        });
+
+        lines.push('');
+        lines.push('2) 다음 액션/계획');
+        week.forEach(function (item) {
+          lines.push('- ' + item.date + ': ' + (shortText(item.data.today || '기록 없음')));
+        });
+
+        lines.push('');
+        lines.push('3) 블로커 현황');
+        if (blockerLines.length) {
+          lines.push('- 총 블로커 항목: ' + blockerLines.length + '개');
+          lines.push('- 반복 키워드: ' + (blockerHot.length ? blockerHot.join(', ') : '없음'));
+        } else {
+          lines.push('- 보고된 블로커 없음');
+        }
+
+        lines.push('');
+        lines.push('4) 핵심 키워드');
+        lines.push('- ' + (hot.length ? hot.join(', ') : '데이터 부족'));
+
+        el.summaryBox.textContent = lines.join('\n');
+      }
+
+      function saveCurrent() {
+        const date = el.entryDate.value;
+        if (!date) {
+          flash('기록 날짜를 선택하세요.', true);
+          return;
+        }
+        state.entries[date] = {
+          yesterday: el.yesterday.value.trim(),
+          today: el.today.value.trim(),
+          blockers: el.blockers.value.trim(),
+          updatedAt: new Date().toISOString()
+        };
+        saveStorage();
+        setSelectedDate(date);
+        generateWeeklySummary();
+        flash('저장 완료: ' + date, false);
+      }
+
+      function deleteCurrent() {
+        const date = state.selectedDate;
+        if (!state.entries[date]) {
+          flash('삭제할 기록이 없습니다.', true);
+          return;
+        }
+        if (!confirm(date + ' 기록을 삭제할까요?')) return;
+        delete state.entries[date];
+        saveStorage();
+        setSelectedDate(todayISO());
+        generateWeeklySummary();
+        flash('삭제 완료: ' + date, false);
+      }
+
+      function bindEvents() {
+        el.entryDate.addEventListener('change', function () {
+          setSelectedDate(el.entryDate.value || todayISO());
+          generateWeeklySummary();
+        });
+
+        el.saveBtn.addEventListener('click', saveCurrent);
+
+        el.newBtn.addEventListener('click', function () {
+          setSelectedDate(todayISO());
+          el.yesterday.value = '';
+          el.today.value = '';
+          el.blockers.value = '';
+          flash('새 기록 작성 모드', false);
+        });
+
+        el.deleteBtn.addEventListener('click', deleteCurrent);
+
+        el.copySlackBtn.addEventListener('click', function () {
+          copyText(buildEntryFormat('slack'), 'Slack 포맷을 복사했습니다.');
+        });
+
+        el.copyTeamsBtn.addEventListener('click', function () {
+          copyText(buildEntryFormat('teams'), 'Teams 포맷을 복사했습니다.');
+        });
+
+        el.searchInput.addEventListener('input', function () {
+          state.search = el.searchInput.value;
+          renderHistory();
+        });
+
+        el.rangeFilter.addEventListener('change', function () {
+          state.range = el.rangeFilter.value;
+          renderHistory();
+        });
+
+        el.historyList.addEventListener('click', function (e) {
+          const item = e.target.closest('.item[data-date]');
+          if (!item) return;
+          setSelectedDate(item.getAttribute('data-date'));
+          generateWeeklySummary();
+        });
+
+        el.regenSummaryBtn.addEventListener('click', generateWeeklySummary);
+
+        el.copySummarySlackBtn.addEventListener('click', function () {
+          copyText('*주간 스탠드업 요약*\n' + el.summaryBox.textContent, '요약을 Slack 포맷으로 복사했습니다.');
+        });
+
+        el.copySummaryTeamsBtn.addEventListener('click', function () {
+          copyText('**주간 스탠드업 요약**\n' + el.summaryBox.textContent, '요약을 Teams 포맷으로 복사했습니다.');
+        });
+      }
+
+      function init() {
+        loadStorage();
+        setSelectedDate(todayISO());
+        bindEvents();
+        generateWeeklySummary();
+      }
+
+      init();
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>이메일 응답시간 트래커</title>
+  <meta name="description" content="이메일 응답시간 데이터를 입력해 평균, p95, SLA 준수율을 즉시 계산하는 도구" />
+  <style>
+    :root {
+      --bg: #0b1220;
+      --panel: #121b31;
+      --panel-2: #0f172a;
+      --line: #2a3b63;
+      --text: #edf2ff;
+      --muted: #a1b2d8;
+      --primary: #6f90ff;
+      --good: #2fd7a3;
+      --warn: #ffbf63;
+      --bad: #ff7b86;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--text);
+      background: radial-gradient(circle at 15% -15%, #233563 0%, var(--bg) 44%);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+    }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 20px 14px 56px; }
+    .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 14px; }
+    h1 { margin: 0; font-size: clamp(1.12rem, 2.8vw, 1.68rem); }
+    .sub { margin-top: 6px; color: var(--muted); font-size: .9rem; }
+    .home {
+      text-decoration: none; color: #d8e5ff; border: 1px solid var(--line);
+      background: #121b31; border-radius: 12px; padding: 8px 12px; white-space: nowrap; font-size: .86rem;
+    }
+    .grid { display: grid; grid-template-columns: 1.02fr .98fr; gap: 12px; }
+    .card {
+      background: linear-gradient(165deg, var(--panel), var(--panel-2));
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 14px;
+    }
+    .card h2 { margin: 0 0 10px; font-size: 1rem; }
+    .two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    label { display: block; color: var(--muted); font-size: .8rem; margin-bottom: 6px; }
+    input, select, textarea, button {
+      width: 100%; border-radius: 10px; border: 1px solid var(--line);
+      background: #0d1528; color: var(--text); padding: 10px; font-size: .92rem;
+    }
+    textarea { min-height: 260px; resize: vertical; line-height: 1.4; }
+    button {
+      border: none; cursor: pointer; font-weight: 700;
+      background: linear-gradient(135deg, var(--primary), #5472f0);
+      padding: 10px 11px;
+    }
+    .soft { background: #1a2647; border: 1px solid var(--line); font-weight: 600; }
+    .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+
+    .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px;
+      background: #0f1730;
+    }
+    .k { color: var(--muted); font-size: .77rem; margin-bottom: 5px; }
+    .v { font-weight: 800; font-size: 1.06rem; }
+    .v.big { font-size: 1.22rem; }
+    .bar {
+      margin-top: 10px;
+      height: 15px;
+      border-radius: 999px;
+      overflow: hidden;
+      border: 1px solid #325082;
+      background: #192646;
+    }
+    .fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--bad), var(--warn), var(--good)); transition: width .25s ease; }
+    .hint { margin-top: 6px; color: var(--muted); font-size: .78rem; }
+    .bars { margin-top: 12px; display: grid; gap: 8px; }
+    .row {
+      display: grid;
+      grid-template-columns: 120px 1fr 72px;
+      gap: 8px;
+      align-items: center;
+      font-size: .83rem;
+    }
+    .track {
+      height: 10px;
+      border-radius: 999px;
+      border: 1px solid #2f446f;
+      background: #152242;
+      overflow: hidden;
+    }
+    .track > div { height: 100%; width: 0%; background: linear-gradient(90deg, #7da2ff, #5b78f2); }
+    .summary {
+      margin-top: 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #0e1731;
+      padding: 11px;
+      line-height: 1.45;
+      font-size: .9rem;
+    }
+    @media (max-width: 860px) {
+      .grid { grid-template-columns: 1fr; }
+      .two, .stats { grid-template-columns: 1fr; }
+      .row { grid-template-columns: 90px 1fr 56px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <div class="head">
+      <div>
+        <h1>📧 이메일 응답시간 트래커</h1>
+        <div class="sub">응답시간 입력 → 평균 / p95 / SLA 준수율을 실시간으로 확인하세요.</div>
+      </div>
+      <a class="home" href="/">Back to Portal</a>
+    </div>
+
+    <section class="grid">
+      <article class="card">
+        <h2>데이터 입력</h2>
+        <div class="two">
+          <div>
+            <label for="sla">SLA 기준 시간</label>
+            <input id="sla" type="number" min="1" value="4" />
+          </div>
+          <div>
+            <label for="unit">단위</label>
+            <select id="unit">
+              <option value="hour" selected>시간</option>
+              <option value="min">분</option>
+            </select>
+          </div>
+        </div>
+        <div style="margin-top:8px;">
+          <label for="data">응답시간 목록 (숫자만 입력, 쉼표/줄바꿈 구분)</label>
+          <textarea id="data" placeholder="예: 1.2, 2.0, 0.5, 6.3 ..."></textarea>
+        </div>
+        <div class="btns">
+          <button id="sample" type="button">샘플 데이터</button>
+          <button id="clear" type="button" class="soft">초기화</button>
+        </div>
+        <div class="hint">팁: 고객지원 inbox export 후 응답시간 숫자만 붙여넣어도 됩니다.</div>
+      </article>
+
+      <article class="card">
+        <h2>분석 결과</h2>
+        <div class="stats">
+          <div class="pill"><div class="k">총 티켓 수</div><div id="count" class="v">0건</div></div>
+          <div class="pill"><div class="k">SLA 준수율</div><div id="slaRate" class="v big">-</div></div>
+          <div class="pill"><div class="k">평균 응답시간</div><div id="avg" class="v">-</div></div>
+          <div class="pill"><div class="k">중앙값 (P50)</div><div id="median" class="v">-</div></div>
+          <div class="pill"><div class="k">p95 응답시간</div><div id="p95" class="v">-</div></div>
+          <div class="pill"><div class="k">SLA 초과 건수</div><div id="over" class="v">-</div></div>
+        </div>
+
+        <div class="bar"><div id="fill" class="fill"></div></div>
+        <div id="barText" class="hint">SLA 준수율 시각화</div>
+
+        <div class="bars" id="dist"></div>
+        <div id="summary" class="summary">데이터를 입력하면 분석 요약이 표시됩니다.</div>
+      </article>
+    </section>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const refs = {
+      sla: $('sla'), unit: $('unit'), data: $('data'), sample: $('sample'), clear: $('clear'),
+      count: $('count'), slaRate: $('slaRate'), avg: $('avg'), median: $('median'), p95: $('p95'), over: $('over'),
+      fill: $('fill'), barText: $('barText'), dist: $('dist'), summary: $('summary')
+    };
+
+    function parseTimes(raw) {
+      return raw
+        .split(/[\s,]+/)
+        .map((s) => Number(s.trim()))
+        .filter((n) => Number.isFinite(n) && n >= 0);
+    }
+
+    function quantile(sorted, q) {
+      if (!sorted.length) return 0;
+      if (sorted.length === 1) return sorted[0];
+      const pos = (sorted.length - 1) * q;
+      const base = Math.floor(pos);
+      const rest = pos - base;
+      const left = sorted[base];
+      const right = sorted[Math.min(base + 1, sorted.length - 1)];
+      return left + (right - left) * rest;
+    }
+
+    function fmtHours(hours) {
+      if (hours >= 24) return `${hours.toFixed(1)}시간`;
+      if (hours >= 1) return `${hours.toFixed(2)}시간`;
+      return `${(hours * 60).toFixed(1)}분`;
+    }
+
+    function run() {
+      const isHour = refs.unit.value === 'hour';
+      const slaInput = Math.max(0, Number(refs.sla.value) || 0);
+      const slaHours = isHour ? slaInput : slaInput / 60;
+
+      const valuesRaw = parseTimes(refs.data.value);
+      const hours = valuesRaw.map((v) => (isHour ? v : v / 60));
+      const sorted = [...hours].sort((a, b) => a - b);
+
+      if (!sorted.length || slaHours <= 0) {
+        refs.count.textContent = '0건';
+        refs.slaRate.textContent = '-';
+        refs.avg.textContent = '-';
+        refs.median.textContent = '-';
+        refs.p95.textContent = '-';
+        refs.over.textContent = '-';
+        refs.fill.style.width = '0%';
+        refs.barText.textContent = '유효한 SLA/데이터를 입력하세요.';
+        refs.dist.innerHTML = '';
+        refs.summary.textContent = '데이터를 입력하면 분석 요약이 표시됩니다.';
+        return;
+      }
+
+      const count = sorted.length;
+      const sum = sorted.reduce((acc, n) => acc + n, 0);
+      const avg = sum / count;
+      const median = quantile(sorted, 0.5);
+      const p95 = quantile(sorted, 0.95);
+      const hit = sorted.filter((v) => v <= slaHours).length;
+      const over = count - hit;
+      const slaRate = (hit / count) * 100;
+
+      refs.count.textContent = `${count}건`;
+      refs.slaRate.textContent = `${slaRate.toFixed(1)}%`;
+      refs.avg.textContent = fmtHours(avg);
+      refs.median.textContent = fmtHours(median);
+      refs.p95.textContent = fmtHours(p95);
+      refs.over.textContent = `${over}건`;
+
+      refs.fill.style.width = `${Math.max(0, Math.min(100, slaRate)).toFixed(1)}%`;
+      refs.barText.textContent = `SLA(${isHour ? `${slaInput}시간` : `${slaInput}분`}) 내 응답 ${hit}건 / 초과 ${over}건`;
+
+      const bucket1 = sorted.filter((v) => v <= slaHours).length;
+      const bucket2 = sorted.filter((v) => v > slaHours && v <= slaHours * 2).length;
+      const bucket3 = sorted.filter((v) => v > slaHours * 2).length;
+      const buckets = [
+        { label: 'SLA 이내', value: bucket1 },
+        { label: 'SLA~2배', value: bucket2 },
+        { label: '2배 초과', value: bucket3 }
+      ];
+
+      refs.dist.innerHTML = buckets.map((b) => {
+        const pct = count ? (b.value / count) * 100 : 0;
+        return `
+          <div class="row">
+            <div>${b.label}</div>
+            <div class="track"><div style="width:${pct.toFixed(1)}%"></div></div>
+            <div style="text-align:right; color:#cfe0ff;">${pct.toFixed(1)}%</div>
+          </div>`;
+      }).join('');
+
+      const status = slaRate >= 95 ? '매우 우수' : slaRate >= 90 ? '양호' : slaRate >= 80 ? '개선 필요' : '긴급 개선 필요';
+      refs.summary.textContent = `현재 응답 운영 상태는 "${status}"입니다. 평균 ${fmtHours(avg)}, p95 ${fmtHours(p95)}로 확인됩니다. ` +
+        `p95가 SLA보다 크게 높다면 특정 시간대/채널의 병목을 분리해서 인력 또는 자동응답 룰을 조정하세요.`;
+    }
+
+    refs.sample.addEventListener('click', () => {
+      refs.unit.value = 'hour';
+      refs.sla.value = '4';
+      refs.data.value = '0.6, 1.1, 2.4, 3.2, 5.8, 6.1, 0.9, 1.4, 2.0, 3.7, 4.6, 7.2, 1.7, 2.1, 8.5, 0.4, 1.9, 2.9, 3.0, 5.1';
+      run();
+    });
+
+    refs.clear.addEventListener('click', () => {
+      refs.data.value = '';
+      run();
+    });
+
+    [refs.sla, refs.unit, refs.data].forEach((node) => {
+      node.addEventListener('input', run);
+      node.addEventListener('change', run);
+    });
+
+    run();
+  </script>
+</body>
+</html>

@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>정산 계산기 | EastSea Tools</title>
+  <meta name="description" content="참여자별 지출을 입력하면 최소 이체 횟수 기준으로 누가 누구에게 얼마를 보내야 하는지 계산합니다.">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+      background: #f4f6fc;
+      color: #19233a;
+    }
+    .container {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .back-link {
+      text-decoration: none;
+      color: #5f6c86;
+      font-size: 14px;
+      display: inline-block;
+      margin-bottom: 10px;
+    }
+    .top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    h1 { margin: 0; font-size: 28px; }
+    .sub { margin-top: 6px; color: #5f6c86; font-size: 14px; }
+    .btn {
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 14px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .btn-primary { background: #2d6df0; color: #fff; }
+    .btn-ghost { background: #e8efff; color: #2d6df0; }
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 6px 24px rgba(20, 33, 57, 0.08);
+      padding: 18px;
+      margin-bottom: 16px;
+    }
+    .card h2 { margin: 0 0 12px; font-size: 18px; }
+    .row {
+      display: grid;
+      gap: 10px;
+      align-items: end;
+    }
+    .row.member { grid-template-columns: 1fr auto; }
+    .row.expense { grid-template-columns: 1.3fr 1fr 1fr auto; }
+    .field { display: flex; flex-direction: column; gap: 5px; }
+    .field label { font-size: 12px; color: #5f6c86; }
+    .field input,
+    .field select {
+      width: 100%;
+      border: 1px solid #d6def1;
+      border-radius: 10px;
+      padding: 10px;
+      font-size: 14px;
+      background: #fff;
+    }
+    .member-chips {
+      margin-top: 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 7px 11px;
+      background: #f2f6ff;
+      border: 1px solid #e0e9ff;
+      font-size: 13px;
+      font-weight: 600;
+      color: #2f4d90;
+    }
+    .chip button {
+      border: 0;
+      background: transparent;
+      cursor: pointer;
+      color: #6f7b94;
+      padding: 0;
+      font-weight: 700;
+    }
+    .table-wrap { overflow: auto; }
+    table { width: 100%; border-collapse: collapse; min-width: 700px; }
+    th, td {
+      border-bottom: 1px solid #eef2fb;
+      padding: 10px 8px;
+      text-align: left;
+      font-size: 14px;
+    }
+    th { color: #61718b; font-size: 12px; }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .metric {
+      background: #f7f9ff;
+      border: 1px solid #e4ebff;
+      border-radius: 12px;
+      padding: 12px;
+    }
+    .metric .label { font-size: 12px; color: #5f6c86; }
+    .metric .value { font-size: 22px; margin-top: 6px; font-weight: 700; }
+    .settlement-list {
+      display: grid;
+      gap: 8px;
+    }
+    .settlement {
+      background: #f8faff;
+      border: 1px solid #e6edff;
+      border-radius: 10px;
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      font-size: 14px;
+    }
+    .settlement strong { color: #1f3261; }
+    .arrow { color: #2d6df0; font-weight: 700; }
+    .amount { margin-left: auto; font-weight: 800; color: #db2b54; }
+    .positive { color: #0b8a56; font-weight: 700; }
+    .negative { color: #db2b54; font-weight: 700; }
+    .empty {
+      text-align: center;
+      color: #5f6c86;
+      padding: 18px;
+      font-size: 14px;
+    }
+    @media (max-width: 780px) {
+      .row.member,
+      .row.expense { grid-template-columns: 1fr; }
+      .container { padding: 14px; }
+      h1 { font-size: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a class="back-link" href="/">← 도구 목록</a>
+
+    <div class="top">
+      <div>
+        <h1>💸 정산 계산기</h1>
+        <div class="sub">참여자별 지출을 입력하면 최소 이체 횟수 기준으로 정산 경로를 계산합니다.</div>
+      </div>
+      <button id="resetBtn" class="btn btn-ghost">전체 초기화</button>
+    </div>
+
+    <section class="card">
+      <h2>참여자 추가</h2>
+      <form id="memberForm" class="row member">
+        <div class="field">
+          <label for="memberName">이름</label>
+          <input id="memberName" maxlength="20" placeholder="예: 민지" required>
+        </div>
+        <button class="btn btn-primary" type="submit">참여자 추가</button>
+      </form>
+      <div class="member-chips" id="memberChips"></div>
+      <div class="sub" style="margin-top:8px;">최대 12명까지 권장됩니다.</div>
+    </section>
+
+    <section class="card">
+      <h2>지출 입력</h2>
+      <form id="expenseForm" class="row expense">
+        <div class="field">
+          <label for="expenseMemo">항목</label>
+          <input id="expenseMemo" maxlength="40" placeholder="예: 저녁 식사" required>
+        </div>
+        <div class="field">
+          <label for="expensePayer">결제자</label>
+          <select id="expensePayer" required></select>
+        </div>
+        <div class="field">
+          <label for="expenseAmount">금액 (원)</label>
+          <input id="expenseAmount" type="number" min="1" step="100" placeholder="25000" required>
+        </div>
+        <button class="btn btn-primary" type="submit">지출 추가</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>지출 내역</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>항목</th>
+              <th>결제자</th>
+              <th>금액</th>
+              <th>관리</th>
+            </tr>
+          </thead>
+          <tbody id="expenseBody"></tbody>
+        </table>
+      </div>
+      <div class="empty" id="expenseEmpty" hidden>아직 지출 내역이 없습니다.</div>
+    </section>
+
+    <section class="card">
+      <h2>정산 결과</h2>
+      <div class="summary-grid" id="summaryGrid"></div>
+      <div class="table-wrap" style="margin-bottom:10px;">
+        <table>
+          <thead>
+            <tr>
+              <th>참여자</th>
+              <th>실제 지출</th>
+              <th>부담 금액</th>
+              <th>순잔액</th>
+            </tr>
+          </thead>
+          <tbody id="balanceBody"></tbody>
+        </table>
+      </div>
+      <div style="font-size:14px;font-weight:700;margin-bottom:10px;" id="transferCount"></div>
+      <div class="settlement-list" id="settlementList"></div>
+    </section>
+  </div>
+
+  <script>
+    const STORAGE_KEY = 'expense-split-calculator.v1';
+    const MAX_MEMBERS = 12;
+    let state = loadState();
+
+    const memberForm = document.getElementById('memberForm');
+    const expenseForm = document.getElementById('expenseForm');
+    const memberChips = document.getElementById('memberChips');
+    const payerSelect = document.getElementById('expensePayer');
+    const expenseBody = document.getElementById('expenseBody');
+    const expenseEmpty = document.getElementById('expenseEmpty');
+    const summaryGrid = document.getElementById('summaryGrid');
+    const balanceBody = document.getElementById('balanceBody');
+    const transferCount = document.getElementById('transferCount');
+    const settlementList = document.getElementById('settlementList');
+
+    memberForm.addEventListener('submit', addMember);
+    expenseForm.addEventListener('submit', addExpense);
+    document.getElementById('resetBtn').addEventListener('click', resetAll);
+
+    render();
+
+    function loadState() {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+        const members = Array.isArray(parsed.members) ? parsed.members : [];
+        const expenses = Array.isArray(parsed.expenses) ? parsed.expenses : [];
+        return { members, expenses };
+      } catch (_) {
+        return { members: [], expenses: [] };
+      }
+    }
+
+    function saveState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+
+    function addMember(event) {
+      event.preventDefault();
+      const input = document.getElementById('memberName');
+      const name = input.value.trim();
+      if (!name) return;
+      if (state.members.length >= MAX_MEMBERS) {
+        alert('참여자는 최대 12명까지만 추가할 수 있습니다.');
+        return;
+      }
+      if (state.members.some((m) => m.name === name)) {
+        alert('이미 같은 이름의 참여자가 있습니다.');
+        return;
+      }
+      state.members.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name });
+      saveState();
+      input.value = '';
+      render();
+    }
+
+    function removeMember(id) {
+      state.members = state.members.filter((m) => m.id !== id);
+      state.expenses = state.expenses.filter((e) => e.payerId !== id);
+      saveState();
+      render();
+    }
+
+    function addExpense(event) {
+      event.preventDefault();
+      if (!state.members.length) {
+        alert('먼저 참여자를 추가해 주세요.');
+        return;
+      }
+
+      const memo = document.getElementById('expenseMemo').value.trim();
+      const payerId = payerSelect.value;
+      const amount = Number(document.getElementById('expenseAmount').value);
+
+      if (!memo || !payerId || Number.isNaN(amount) || amount <= 0) {
+        alert('항목/결제자/금액을 올바르게 입력해 주세요.');
+        return;
+      }
+
+      state.expenses.push({
+        id: Date.now().toString(36),
+        memo,
+        payerId,
+        amount: round2(amount)
+      });
+
+      saveState();
+      expenseForm.reset();
+      render();
+    }
+
+    function removeExpense(id) {
+      state.expenses = state.expenses.filter((e) => e.id !== id);
+      saveState();
+      render();
+    }
+
+    function resetAll() {
+      if (!state.members.length && !state.expenses.length) return;
+      if (!confirm('참여자와 지출 내역을 모두 삭제할까요?')) return;
+      state = { members: [], expenses: [] };
+      saveState();
+      render();
+    }
+
+    function render() {
+      renderMembers();
+      renderExpenses();
+      renderSettlement();
+    }
+
+    function renderMembers() {
+      memberChips.innerHTML = state.members.map((m) => (
+        '<span class="chip">' + escapeHtml(m.name) +
+        '<button type="button" data-remove-member="' + m.id + '">✕</button></span>'
+      )).join('');
+
+      if (!state.members.length) {
+        payerSelect.innerHTML = '<option value="">참여자를 먼저 추가하세요</option>';
+      } else {
+        payerSelect.innerHTML = state.members.map((m) => (
+          '<option value="' + m.id + '">' + escapeHtml(m.name) + '</option>'
+        )).join('');
+      }
+
+      memberChips.querySelectorAll('[data-remove-member]').forEach((btn) => {
+        btn.addEventListener('click', () => removeMember(btn.dataset.removeMember));
+      });
+    }
+
+    function renderExpenses() {
+      if (!state.expenses.length) {
+        expenseBody.innerHTML = '';
+        expenseEmpty.hidden = false;
+        return;
+      }
+
+      expenseEmpty.hidden = true;
+      expenseBody.innerHTML = state.expenses.map((e) => {
+        const member = state.members.find((m) => m.id === e.payerId);
+        return '<tr>' +
+          '<td>' + escapeHtml(e.memo) + '</td>' +
+          '<td>' + escapeHtml(member ? member.name : '알 수 없음') + '</td>' +
+          '<td>' + money(e.amount) + '</td>' +
+          '<td><button class="btn" data-remove-expense="' + e.id + '" style="padding:6px 10px;background:#fff1f3;color:#da2e55;">삭제</button></td>' +
+        '</tr>';
+      }).join('');
+
+      expenseBody.querySelectorAll('[data-remove-expense]').forEach((btn) => {
+        btn.addEventListener('click', () => removeExpense(btn.dataset.removeExpense));
+      });
+    }
+
+    function renderSettlement() {
+      if (!state.members.length) {
+        summaryGrid.innerHTML = '';
+        balanceBody.innerHTML = '';
+        transferCount.textContent = '';
+        settlementList.innerHTML = '<div class="empty">참여자를 추가하면 정산 결과가 표시됩니다.</div>';
+        return;
+      }
+
+      const memberCount = state.members.length;
+      const paidCents = new Array(memberCount).fill(0);
+
+      state.expenses.forEach((e) => {
+        const idx = state.members.findIndex((m) => m.id === e.payerId);
+        if (idx >= 0) paidCents[idx] += toCents(e.amount);
+      });
+
+      const totalCents = paidCents.reduce((a, b) => a + b, 0);
+      const baseShare = Math.floor(totalCents / memberCount);
+      let remainder = totalCents % memberCount;
+      const expectedCents = new Array(memberCount).fill(baseShare).map((v) => {
+        if (remainder > 0) {
+          remainder -= 1;
+          return v + 1;
+        }
+        return v;
+      });
+
+      const balances = paidCents.map((paid, idx) => paid - expectedCents[idx]);
+
+      const debtors = [];
+      const creditors = [];
+      balances.forEach((bal, idx) => {
+        if (bal < 0) debtors.push({ idx, amount: -bal });
+        if (bal > 0) creditors.push({ idx, amount: bal });
+      });
+
+      const solution = findMinimumTransfers(
+        debtors.map((d) => d.amount),
+        creditors.map((c) => c.amount)
+      );
+
+      const transfers = solution.path.map((step) => ({
+        from: state.members[debtors[step.d].idx].name,
+        to: state.members[creditors[step.c].idx].name,
+        amountCents: step.a
+      }));
+
+      summaryGrid.innerHTML = [
+        metricHtml('총 지출', moneyFromCents(totalCents)),
+        metricHtml('1인 부담', moneyFromCents(baseShare) + ' ~'),
+        metricHtml('참여자 수', memberCount + '명'),
+        metricHtml('지출 건수', state.expenses.length + '건')
+      ].join('');
+
+      balanceBody.innerHTML = state.members.map((m, idx) => {
+        const bal = balances[idx];
+        const balClass = bal >= 0 ? 'positive' : 'negative';
+        const sign = bal > 0 ? '+' : '';
+        return '<tr>' +
+          '<td>' + escapeHtml(m.name) + '</td>' +
+          '<td>' + moneyFromCents(paidCents[idx]) + '</td>' +
+          '<td>' + moneyFromCents(expectedCents[idx]) + '</td>' +
+          '<td class="' + balClass + '">' + sign + moneyFromCents(bal) + '</td>' +
+        '</tr>';
+      }).join('');
+
+      transferCount.textContent = '최소 이체 횟수: ' + transfers.length + '회';
+
+      if (!transfers.length) {
+        settlementList.innerHTML = '<div class="empty">정산이 이미 완료된 상태입니다. 추가 이체가 필요하지 않습니다.</div>';
+      } else {
+        settlementList.innerHTML = transfers.map((t) => (
+          '<div class="settlement">' +
+            '<strong>' + escapeHtml(t.from) + '</strong>' +
+            '<span class="arrow">→</span>' +
+            '<strong>' + escapeHtml(t.to) + '</strong>' +
+            '<span class="amount">' + moneyFromCents(t.amountCents) + '</span>' +
+          '</div>'
+        )).join('');
+      }
+    }
+
+    function findMinimumTransfers(debts, credits) {
+      const memo = new Map();
+
+      function solve(dArr, cArr) {
+        const firstDebtor = dArr.findIndex((v) => v > 0);
+        if (firstDebtor === -1) return { count: 0, path: [] };
+
+        const key = dArr.join(',') + '|' + cArr.join(',');
+        if (memo.has(key)) return memo.get(key);
+
+        let best = { count: Infinity, path: [] };
+        const seenCreditAmounts = new Set();
+
+        for (let c = 0; c < cArr.length; c += 1) {
+          if (cArr[c] <= 0) continue;
+          if (seenCreditAmounts.has(cArr[c])) continue;
+          seenCreditAmounts.add(cArr[c]);
+
+          const transfer = Math.min(dArr[firstDebtor], cArr[c]);
+          const nextDebts = dArr.slice();
+          const nextCredits = cArr.slice();
+          nextDebts[firstDebtor] -= transfer;
+          nextCredits[c] -= transfer;
+
+          const next = solve(nextDebts, nextCredits);
+          const candidateCount = next.count + 1;
+
+          if (candidateCount < best.count) {
+            best = {
+              count: candidateCount,
+              path: [{ d: firstDebtor, c, a: transfer }].concat(next.path)
+            };
+          }
+
+          if (transfer === dArr[firstDebtor] && transfer === cArr[c]) {
+            break;
+          }
+        }
+
+        memo.set(key, best);
+        return best;
+      }
+
+      return solve(debts.slice(), credits.slice());
+    }
+
+    function metricHtml(label, value) {
+      return '<div class="metric"><div class="label">' + label + '</div><div class="value">' + value + '</div></div>';
+    }
+
+    function money(value) {
+      return '₩' + Number(value || 0).toLocaleString('ko-KR', { maximumFractionDigits: 2 });
+    }
+
+    function moneyFromCents(cents) {
+      const sign = cents < 0 ? '-' : '';
+      const abs = Math.abs(cents) / 100;
+      return sign + '₩' + abs.toLocaleString('ko-KR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+    }
+
+    function toCents(value) {
+      return Math.round(Number(value) * 100);
+    }
+
+    function round2(value) {
+      return Math.round(Number(value) * 100) / 100;
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+  </script>
+</body>
+</html>

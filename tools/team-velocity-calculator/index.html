@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>팀 벨로시티 계산기 | EastSea Tools</title>
+  <meta name="description" content="스프린트별 완료 포인트를 기록하고 평균/중앙값/표준편차와 향후 벨로시티를 예측하세요.">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+      background: #f5f7fc;
+      color: #1b2740;
+    }
+    .container {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .back-link {
+      color: #5f6d88;
+      text-decoration: none;
+      font-size: 14px;
+      display: inline-block;
+      margin-bottom: 10px;
+    }
+    .top {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    h1 { margin: 0; font-size: 28px; }
+    .muted { color: #5f6d88; font-size: 14px; margin-top: 6px; }
+    .btn {
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 14px;
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 14px;
+    }
+    .btn-primary { background: #2b68eb; color: #fff; }
+    .btn-ghost { background: #e8efff; color: #2b68eb; }
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 6px 24px rgba(21, 32, 56, 0.08);
+      padding: 18px;
+      margin-bottom: 16px;
+    }
+    .form-row {
+      display: grid;
+      grid-template-columns: 1.6fr 1fr auto;
+      gap: 10px;
+      align-items: end;
+    }
+    .field { display: flex; flex-direction: column; gap: 5px; }
+    .field label { font-size: 12px; color: #5f6d88; }
+    .field input {
+      border: 1px solid #d5ddf0;
+      border-radius: 10px;
+      padding: 10px;
+      font-size: 14px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .metric {
+      background: #f7faff;
+      border: 1px solid #e4ecff;
+      border-radius: 12px;
+      padding: 12px;
+    }
+    .metric .label { font-size: 12px; color: #5f6d88; }
+    .metric .value { font-size: 23px; margin-top: 5px; font-weight: 700; }
+    .chart-wrap {
+      border: 1px solid #e6ecfb;
+      border-radius: 12px;
+      padding: 10px;
+      min-height: 330px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #fbfdff;
+    }
+    canvas { width: 100%; max-width: 100%; height: 300px; }
+    .table-wrap { overflow: auto; }
+    table {
+      width: 100%;
+      min-width: 620px;
+      border-collapse: collapse;
+    }
+    th, td {
+      text-align: left;
+      border-bottom: 1px solid #edf2fd;
+      padding: 10px 8px;
+      font-size: 14px;
+    }
+    th { font-size: 12px; color: #607089; }
+    .pred-list {
+      margin: 10px 0 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 8px;
+    }
+    .pred-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #f6f7ff;
+      border: 1px solid #e7e9ff;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 14px;
+    }
+    .empty {
+      text-align: center;
+      color: #5f6d88;
+      padding: 20px;
+      font-size: 14px;
+    }
+    @media (max-width: 760px) {
+      .form-row { grid-template-columns: 1fr; }
+      h1 { font-size: 24px; }
+      .container { padding: 14px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a class="back-link" href="/">← 도구 목록</a>
+
+    <div class="top">
+      <div>
+        <h1>📈 팀 벨로시티 계산기</h1>
+        <div class="muted">스프린트 완료 포인트를 기반으로 통계를 계산하고 다음 스프린트를 예측합니다.</div>
+      </div>
+      <button class="btn btn-ghost" id="resetBtn">데이터 초기화</button>
+    </div>
+
+    <section class="card">
+      <form id="sprintForm" class="form-row">
+        <div class="field">
+          <label for="sprintName">스프린트 이름</label>
+          <input id="sprintName" placeholder="예: Sprint 12" maxlength="40" required>
+        </div>
+        <div class="field">
+          <label for="points">완료 포인트</label>
+          <input id="points" type="number" min="0" step="0.1" placeholder="예: 34" required>
+        </div>
+        <button class="btn btn-primary" type="submit">추가</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <div class="grid" id="statsGrid"></div>
+      <div class="chart-wrap">
+        <canvas id="velocityChart" width="920" height="300" aria-label="벨로시티 차트"></canvas>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2 style="margin:0 0 12px;font-size:18px;">향후 스프린트 예측</h2>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <label for="forecastCount" style="font-size:13px;color:#5f6d88;">예측 개수</label>
+        <input id="forecastCount" type="number" min="1" max="12" value="3" style="width:80px;border:1px solid #d5ddf0;border-radius:8px;padding:8px;">
+      </div>
+      <ul id="forecastList" class="pred-list"></ul>
+    </section>
+
+    <section class="card">
+      <h2 style="margin:0 0 10px;font-size:18px;">스프린트 기록</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>스프린트</th>
+              <th>완료 포인트</th>
+              <th>관리</th>
+            </tr>
+          </thead>
+          <tbody id="sprintBody"></tbody>
+        </table>
+      </div>
+      <div class="empty" id="emptyState" hidden>아직 등록된 스프린트가 없습니다.</div>
+    </section>
+  </div>
+
+  <script>
+    const STORAGE_KEY = 'team-velocity-calculator.v1';
+    let state = loadState();
+
+    const form = document.getElementById('sprintForm');
+    const sprintBody = document.getElementById('sprintBody');
+    const emptyState = document.getElementById('emptyState');
+    const statsGrid = document.getElementById('statsGrid');
+    const chart = document.getElementById('velocityChart');
+    const ctx = chart.getContext('2d');
+    const forecastCountEl = document.getElementById('forecastCount');
+    const forecastList = document.getElementById('forecastList');
+
+    form.addEventListener('submit', addSprint);
+    document.getElementById('resetBtn').addEventListener('click', resetAll);
+    forecastCountEl.addEventListener('input', () => {
+      state.forecastCount = clamp(Number(forecastCountEl.value) || 3, 1, 12);
+      saveState();
+      render();
+    });
+    window.addEventListener('resize', () => drawChart(state.sprints, getPredictions()));
+
+    render();
+
+    function loadState() {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+        return {
+          sprints: Array.isArray(parsed.sprints) ? parsed.sprints : [],
+          forecastCount: clamp(Number(parsed.forecastCount) || 3, 1, 12)
+        };
+      } catch (_) {
+        return { sprints: [], forecastCount: 3 };
+      }
+    }
+
+    function saveState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+
+    function addSprint(event) {
+      event.preventDefault();
+      const name = document.getElementById('sprintName').value.trim();
+      const points = Number(document.getElementById('points').value);
+      if (!name || Number.isNaN(points) || points < 0) {
+        alert('유효한 스프린트 이름과 포인트를 입력해 주세요.');
+        return;
+      }
+
+      state.sprints.push({
+        id: Date.now().toString(36),
+        name,
+        points: round1(points)
+      });
+
+      saveState();
+      form.reset();
+      render();
+    }
+
+    function removeSprint(id) {
+      state.sprints = state.sprints.filter((row) => row.id !== id);
+      saveState();
+      render();
+    }
+
+    function resetAll() {
+      if (!state.sprints.length) return;
+      if (!confirm('모든 스프린트 기록을 삭제할까요?')) return;
+      state = { sprints: [], forecastCount: 3 };
+      saveState();
+      render();
+    }
+
+    function render() {
+      forecastCountEl.value = state.forecastCount;
+      renderTable();
+      renderStats();
+      renderForecast();
+      drawChart(state.sprints, getPredictions());
+    }
+
+    function renderTable() {
+      if (!state.sprints.length) {
+        sprintBody.innerHTML = '';
+        emptyState.hidden = false;
+        return;
+      }
+
+      emptyState.hidden = true;
+      sprintBody.innerHTML = state.sprints.map((row, idx) => (
+        '<tr>' +
+          '<td>' + (idx + 1) + '</td>' +
+          '<td>' + escapeHtml(row.name) + '</td>' +
+          '<td>' + row.points.toFixed(1) + '</td>' +
+          '<td><button class="btn" data-delete-id="' + row.id + '" style="padding:6px 10px;background:#fff1f3;color:#d7294f;">삭제</button></td>' +
+        '</tr>'
+      )).join('');
+
+      sprintBody.querySelectorAll('[data-delete-id]').forEach((btn) => {
+        btn.addEventListener('click', () => removeSprint(btn.dataset.deleteId));
+      });
+    }
+
+    function renderStats() {
+      const values = state.sprints.map((s) => s.points);
+      const avg = mean(values);
+      const med = median(values);
+      const sd = stddev(values);
+      const next = getPredictions()[0] || 0;
+
+      statsGrid.innerHTML = [
+        statHtml('평균', format1(avg)),
+        statHtml('중앙값', format1(med)),
+        statHtml('표준편차', format1(sd)),
+        statHtml('다음 예측', format1(next))
+      ].join('');
+    }
+
+    function renderForecast() {
+      const predictions = getPredictions();
+      if (!predictions.length) {
+        forecastList.innerHTML = '<li class="empty">예측을 보려면 최소 1개 이상의 스프린트를 입력해 주세요.</li>';
+        return;
+      }
+
+      const avg = mean(state.sprints.map((s) => s.points));
+      const sd = stddev(state.sprints.map((s) => s.points));
+
+      forecastList.innerHTML = predictions.map((value, idx) => {
+        const lower = Math.max(0, value - sd);
+        const upper = value + sd;
+        return '<li class="pred-item">' +
+          '<span>다음 ' + (idx + 1) + '번째 스프린트</span>' +
+          '<strong>' + format1(value) + ' pt <span style="color:#617296;font-size:12px;">(권장범위 ' + format1(lower) + ' ~ ' + format1(upper) + ')</span></strong>' +
+        '</li>';
+      }).join('');
+
+      if (avg === 0) {
+        forecastList.innerHTML += '<li class="empty">모든 포인트가 0이면 예측도 0으로 계산됩니다.</li>';
+      }
+    }
+
+    function getPredictions() {
+      const values = state.sprints.map((s) => s.points);
+      if (!values.length) return [];
+      const count = state.forecastCount;
+      const { slope, intercept } = linearRegression(values);
+      const result = [];
+      const n = values.length;
+
+      for (let i = 1; i <= count; i += 1) {
+        const x = n + i;
+        const trendValue = intercept + slope * x;
+        const stabilized = (trendValue + mean(values)) / 2;
+        result.push(round1(Math.max(0, stabilized)));
+      }
+      return result;
+    }
+
+    function drawChart(actualRows, predictions) {
+      const actual = actualRows.map((s) => s.points);
+      const labels = actualRows.map((s) => s.name).concat(predictions.map((_, i) => '예측 ' + (i + 1)));
+      const values = actual.concat(predictions);
+
+      const width = chart.clientWidth || 920;
+      const height = 300;
+      const ratio = window.devicePixelRatio || 1;
+      chart.width = Math.floor(width * ratio);
+      chart.height = Math.floor(height * ratio);
+      chart.style.height = height + 'px';
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+
+      ctx.clearRect(0, 0, width, height);
+
+      if (!values.length) {
+        ctx.fillStyle = '#607089';
+        ctx.font = '14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('데이터를 입력하면 차트가 표시됩니다.', width / 2, height / 2);
+        return;
+      }
+
+      const max = Math.max(...values, 1);
+      const minY = 20;
+      const chartHeight = height - 70;
+      const chartWidth = width - 70;
+      const originX = 48;
+      const originY = 24 + chartHeight;
+      const slot = chartWidth / values.length;
+      const barWidth = Math.max(14, slot * 0.62);
+      const avg = mean(actual);
+
+      ctx.strokeStyle = '#d8e0f3';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(originX, 20);
+      ctx.lineTo(originX, originY);
+      ctx.lineTo(originX + chartWidth, originY);
+      ctx.stroke();
+
+      for (let i = 0; i <= 4; i += 1) {
+        const y = minY + (chartHeight / 4) * i;
+        ctx.strokeStyle = '#eef2fb';
+        ctx.beginPath();
+        ctx.moveTo(originX, y);
+        ctx.lineTo(originX + chartWidth, y);
+        ctx.stroke();
+
+        const v = max - (max / 4) * i;
+        ctx.fillStyle = '#7888a6';
+        ctx.font = '11px sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText(format1(v), originX - 6, y + 4);
+      }
+
+      values.forEach((v, i) => {
+        const h = (v / max) * chartHeight;
+        const x = originX + slot * i + (slot - barWidth) / 2;
+        const y = originY - h;
+        const isPrediction = i >= actual.length;
+
+        ctx.fillStyle = isPrediction ? 'rgba(149, 116, 255, 0.45)' : 'rgba(43, 104, 235, 0.7)';
+        ctx.fillRect(x, y, barWidth, h);
+
+        if (isPrediction) {
+          ctx.strokeStyle = '#8058ff';
+          ctx.setLineDash([4, 3]);
+          ctx.strokeRect(x, y, barWidth, h);
+          ctx.setLineDash([]);
+        }
+
+        ctx.fillStyle = '#24324f';
+        ctx.font = '11px sans-serif';
+        ctx.textAlign = 'center';
+        const shortLabel = labels[i].length > 9 ? labels[i].slice(0, 9) + '…' : labels[i];
+        ctx.fillText(shortLabel, x + barWidth / 2, originY + 16);
+      });
+
+      if (actual.length) {
+        const avgY = originY - (avg / max) * chartHeight;
+        ctx.strokeStyle = '#e14567';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        ctx.moveTo(originX, avgY);
+        ctx.lineTo(originX + chartWidth, avgY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.fillStyle = '#c53758';
+        ctx.font = '12px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('평균 ' + format1(avg), originX + 8, avgY - 6);
+      }
+    }
+
+    function linearRegression(values) {
+      if (values.length === 1) {
+        return { slope: 0, intercept: values[0] };
+      }
+
+      const n = values.length;
+      let sumX = 0;
+      let sumY = 0;
+      let sumXY = 0;
+      let sumXX = 0;
+
+      for (let i = 0; i < n; i += 1) {
+        const x = i + 1;
+        const y = values[i];
+        sumX += x;
+        sumY += y;
+        sumXY += x * y;
+        sumXX += x * x;
+      }
+
+      const denominator = n * sumXX - sumX * sumX;
+      const slope = denominator === 0 ? 0 : (n * sumXY - sumX * sumY) / denominator;
+      const intercept = (sumY - slope * sumX) / n;
+      return { slope, intercept };
+    }
+
+    function mean(arr) {
+      if (!arr.length) return 0;
+      return arr.reduce((acc, n) => acc + n, 0) / arr.length;
+    }
+
+    function median(arr) {
+      if (!arr.length) return 0;
+      const copy = arr.slice().sort((a, b) => a - b);
+      const mid = Math.floor(copy.length / 2);
+      return copy.length % 2 ? copy[mid] : (copy[mid - 1] + copy[mid]) / 2;
+    }
+
+    function stddev(arr) {
+      if (arr.length < 2) return 0;
+      const avg = mean(arr);
+      const variance = arr.reduce((acc, n) => acc + (n - avg) * (n - avg), 0) / arr.length;
+      return Math.sqrt(variance);
+    }
+
+    function statHtml(label, value) {
+      return '<div class="metric"><div class="label">' + label + '</div><div class="value">' + value + '</div></div>';
+    }
+
+    function format1(value) {
+      return round1(value).toFixed(1);
+    }
+
+    function round1(value) {
+      return Math.round(Number(value) * 10) / 10;
+    }
+
+    function clamp(value, min, max) {
+      return Math.min(max, Math.max(min, value));
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+  </script>
+</body>
+</html>

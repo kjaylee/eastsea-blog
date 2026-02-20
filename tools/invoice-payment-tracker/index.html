@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>송장 결제 추적기 | EastSea Tools</title>
+  <meta name="description" content="거래처별 송장 등록과 결제 상태를 관리하고 미수금/연체금 대시보드를 확인하세요.">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+      background: #f4f6fb;
+      color: #182235;
+    }
+    .container {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .back-link {
+      color: #5b6478;
+      text-decoration: none;
+      font-size: 14px;
+      display: inline-block;
+      margin-bottom: 10px;
+    }
+    .header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 28px;
+    }
+    .sub {
+      margin-top: 6px;
+      color: #5b6478;
+      font-size: 14px;
+    }
+    .btn {
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 14px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    .btn-primary { background: #2f6fed; color: #fff; }
+    .btn-ghost { background: #e9eefb; color: #2f6fed; }
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 6px 24px rgba(22, 34, 56, 0.08);
+      padding: 18px;
+      margin-bottom: 16px;
+    }
+    .dashboard {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 12px;
+    }
+    .metric {
+      background: #f8faff;
+      border: 1px solid #e5ecff;
+      border-radius: 12px;
+      padding: 12px;
+    }
+    .metric .label { font-size: 13px; color: #5b6478; }
+    .metric .value { margin-top: 6px; font-size: 22px; font-weight: 700; }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(120px, 1fr));
+      gap: 10px;
+      align-items: end;
+    }
+    .field { display: flex; flex-direction: column; gap: 5px; }
+    .field label { font-size: 12px; color: #5b6478; }
+    .field input,
+    .field select {
+      width: 100%;
+      border: 1px solid #d6dff1;
+      border-radius: 10px;
+      padding: 9px 10px;
+      font-size: 14px;
+      background: #fff;
+    }
+    .filter-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .chip {
+      border: 1px solid #d6dff1;
+      background: #fff;
+      color: #36435c;
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 13px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .chip.active {
+      background: #2f6fed;
+      color: #fff;
+      border-color: #2f6fed;
+    }
+    .table-wrap { overflow: auto; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 860px;
+    }
+    th, td {
+      padding: 10px 8px;
+      border-bottom: 1px solid #edf1fb;
+      text-align: left;
+      font-size: 14px;
+      vertical-align: middle;
+    }
+    th { font-size: 12px; color: #6c7894; }
+    .status-badge {
+      border-radius: 999px;
+      padding: 4px 8px;
+      font-size: 12px;
+      font-weight: 700;
+      display: inline-block;
+    }
+    .status-pending { background: #eef4ff; color: #2f6fed; }
+    .status-overdue { background: #fff1f2; color: #d92c49; }
+    .status-paid { background: #eaf9f0; color: #0a8754; }
+    .actions {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .muted { color: #5b6478; font-size: 13px; }
+    .empty {
+      text-align: center;
+      padding: 24px;
+      color: #5b6478;
+    }
+    @media (max-width: 980px) {
+      .form-grid { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
+    }
+    @media (max-width: 600px) {
+      h1 { font-size: 24px; }
+      .container { padding: 14px; }
+      .dashboard { grid-template-columns: repeat(2, minmax(130px, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a class="back-link" href="/">← 도구 목록</a>
+
+    <div class="header">
+      <div>
+        <h1>🧾 송장 결제 추적기</h1>
+        <p class="sub">거래처별 송장을 등록하고 미수금/연체금 현황을 한눈에 확인하세요.</p>
+      </div>
+      <button class="btn btn-ghost" id="resetBtn">초기화</button>
+    </div>
+
+    <section class="card">
+      <div class="dashboard" id="dashboard"></div>
+    </section>
+
+    <section class="card">
+      <h2 style="margin:0 0 12px;font-size:18px;">송장 등록</h2>
+      <form id="invoiceForm" class="form-grid">
+        <div class="field">
+          <label for="client">거래처</label>
+          <input id="client" required placeholder="예: 동해무역" maxlength="40">
+        </div>
+        <div class="field">
+          <label for="amount">금액 (원)</label>
+          <input id="amount" type="number" required min="1" step="100" placeholder="1000000">
+        </div>
+        <div class="field">
+          <label for="issueDate">발행일</label>
+          <input id="issueDate" type="date" required>
+        </div>
+        <div class="field">
+          <label for="dueDate">만기일</label>
+          <input id="dueDate" type="date" required>
+        </div>
+        <div class="field">
+          <label for="status">상태</label>
+          <select id="status">
+            <option value="pending">미결제</option>
+            <option value="paid">완료</option>
+            <option value="overdue">연체</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" type="submit">추가</button>
+      </form>
+      <p class="muted" style="margin-top:10px;">※ 상태가 미결제이고 만기일이 지난 송장은 자동으로 연체로 집계됩니다.</p>
+    </section>
+
+    <section class="card">
+      <div class="filter-row" id="filterRow"></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>거래처</th>
+              <th>금액</th>
+              <th>발행일</th>
+              <th>만기일</th>
+              <th>표시 상태</th>
+              <th>상태 변경</th>
+              <th>관리</th>
+            </tr>
+          </thead>
+          <tbody id="invoiceBody"></tbody>
+        </table>
+      </div>
+      <div class="empty" id="emptyState" hidden>등록된 송장이 없습니다.</div>
+    </section>
+  </div>
+
+  <script>
+    const STORAGE_KEY = 'invoice-payment-tracker.v1';
+    const filters = [
+      { value: 'all', label: '전체' },
+      { value: 'pending', label: '미결제' },
+      { value: 'overdue', label: '연체' },
+      { value: 'paid', label: '완료' }
+    ];
+
+    let state = loadState();
+
+    const form = document.getElementById('invoiceForm');
+    const dashboardEl = document.getElementById('dashboard');
+    const filterRow = document.getElementById('filterRow');
+    const invoiceBody = document.getElementById('invoiceBody');
+    const emptyState = document.getElementById('emptyState');
+
+    document.getElementById('issueDate').value = todayString();
+    document.getElementById('dueDate').value = todayString();
+
+    form.addEventListener('submit', addInvoice);
+    document.getElementById('resetBtn').addEventListener('click', resetAll);
+
+    render();
+
+    function loadState() {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+        return {
+          invoices: Array.isArray(parsed.invoices) ? parsed.invoices : [],
+          filter: parsed.filter || 'all'
+        };
+      } catch (_) {
+        return { invoices: [], filter: 'all' };
+      }
+    }
+
+    function saveState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+
+    function addInvoice(event) {
+      event.preventDefault();
+      const client = document.getElementById('client').value.trim();
+      const amount = Number(document.getElementById('amount').value);
+      const issueDate = document.getElementById('issueDate').value;
+      const dueDate = document.getElementById('dueDate').value;
+      const status = document.getElementById('status').value;
+
+      if (!client || !amount || !issueDate || !dueDate) {
+        alert('모든 항목을 입력해 주세요.');
+        return;
+      }
+      if (new Date(issueDate) > new Date(dueDate)) {
+        alert('만기일은 발행일보다 빠를 수 없습니다.');
+        return;
+      }
+
+      state.invoices.unshift({
+        id: Date.now().toString(36),
+        client,
+        amount,
+        issueDate,
+        dueDate,
+        status
+      });
+      saveState();
+      form.reset();
+      document.getElementById('issueDate').value = todayString();
+      document.getElementById('dueDate').value = todayString();
+      document.getElementById('status').value = 'pending';
+      render();
+    }
+
+    function resolveStatus(invoice) {
+      if (invoice.status === 'paid') return 'paid';
+      if (invoice.status === 'overdue') return 'overdue';
+      if (invoice.status === 'pending' && invoice.dueDate < todayString()) return 'overdue';
+      return 'pending';
+    }
+
+    function setFilter(filter) {
+      state.filter = filter;
+      saveState();
+      render();
+    }
+
+    function updateStatus(id, nextStatus) {
+      const item = state.invoices.find((row) => row.id === id);
+      if (!item) return;
+      item.status = nextStatus;
+      saveState();
+      render();
+    }
+
+    function removeInvoice(id) {
+      state.invoices = state.invoices.filter((row) => row.id !== id);
+      saveState();
+      render();
+    }
+
+    function resetAll() {
+      if (!state.invoices.length) return;
+      if (!confirm('모든 송장 데이터를 초기화할까요?')) return;
+      state = { invoices: [], filter: 'all' };
+      saveState();
+      render();
+    }
+
+    function render() {
+      renderDashboard();
+      renderFilters();
+      renderTable();
+    }
+
+    function renderDashboard() {
+      const totals = state.invoices.reduce((acc, invoice) => {
+        const resolved = resolveStatus(invoice);
+        acc.totalCount += 1;
+        acc.totalAmount += invoice.amount;
+        if (resolved !== 'paid') acc.receivable += invoice.amount;
+        if (resolved === 'overdue') acc.overdue += invoice.amount;
+        if (resolved === 'paid') acc.paid += invoice.amount;
+        return acc;
+      }, { totalCount: 0, totalAmount: 0, receivable: 0, overdue: 0, paid: 0 });
+
+      dashboardEl.innerHTML = [
+        metricHtml('총 송장', totals.totalCount.toLocaleString('ko-KR') + '건'),
+        metricHtml('총 청구 금액', money(totals.totalAmount)),
+        metricHtml('총 미수금', money(totals.receivable)),
+        metricHtml('총 연체금', money(totals.overdue)),
+        metricHtml('총 완료금', money(totals.paid))
+      ].join('');
+    }
+
+    function renderFilters() {
+      filterRow.innerHTML = filters.map((f) => {
+        const active = state.filter === f.value ? 'active' : '';
+        return '<button class="chip ' + active + '" data-filter="' + f.value + '">' + f.label + '</button>';
+      }).join('');
+
+      filterRow.querySelectorAll('button').forEach((btn) => {
+        btn.addEventListener('click', () => setFilter(btn.dataset.filter));
+      });
+    }
+
+    function renderTable() {
+      const rows = state.invoices
+        .slice()
+        .sort((a, b) => (a.dueDate > b.dueDate ? 1 : -1))
+        .filter((invoice) => state.filter === 'all' || resolveStatus(invoice) === state.filter);
+
+      if (!rows.length) {
+        invoiceBody.innerHTML = '';
+        emptyState.hidden = false;
+        return;
+      }
+      emptyState.hidden = true;
+
+      invoiceBody.innerHTML = rows.map((invoice) => {
+        const resolved = resolveStatus(invoice);
+        return '<tr>' +
+          '<td>' + escapeHtml(invoice.client) + '</td>' +
+          '<td>' + money(invoice.amount) + '</td>' +
+          '<td>' + formatDate(invoice.issueDate) + '</td>' +
+          '<td>' + formatDate(invoice.dueDate) + '</td>' +
+          '<td>' + statusBadge(resolved) + '</td>' +
+          '<td>' +
+            '<select data-status-id="' + invoice.id + '">' +
+              '<option value="pending"' + selected(invoice.status, 'pending') + '>미결제</option>' +
+              '<option value="paid"' + selected(invoice.status, 'paid') + '>완료</option>' +
+              '<option value="overdue"' + selected(invoice.status, 'overdue') + '>연체</option>' +
+            '</select>' +
+          '</td>' +
+          '<td class="actions"><button class="btn" style="padding:6px 10px;background:#fff1f2;color:#d92c49;" data-delete-id="' + invoice.id + '">삭제</button></td>' +
+        '</tr>';
+      }).join('');
+
+      invoiceBody.querySelectorAll('[data-status-id]').forEach((el) => {
+        el.addEventListener('change', () => updateStatus(el.dataset.statusId, el.value));
+      });
+      invoiceBody.querySelectorAll('[data-delete-id]').forEach((el) => {
+        el.addEventListener('click', () => removeInvoice(el.dataset.deleteId));
+      });
+    }
+
+    function selected(a, b) {
+      return a === b ? ' selected' : '';
+    }
+
+    function metricHtml(label, value) {
+      return '<div class="metric"><div class="label">' + label + '</div><div class="value">' + value + '</div></div>';
+    }
+
+    function statusBadge(status) {
+      const map = {
+        pending: '<span class="status-badge status-pending">미결제</span>',
+        overdue: '<span class="status-badge status-overdue">연체</span>',
+        paid: '<span class="status-badge status-paid">완료</span>'
+      };
+      return map[status] || map.pending;
+    }
+
+    function todayString() {
+      const d = new Date();
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return y + '-' + m + '-' + day;
+    }
+
+    function money(value) {
+      return '₩' + Number(value || 0).toLocaleString('ko-KR');
+    }
+
+    function formatDate(dateString) {
+      if (!dateString) return '-';
+      const d = new Date(dateString + 'T00:00:00');
+      return d.toLocaleDateString('ko-KR');
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+  </script>
+</body>
+</html>

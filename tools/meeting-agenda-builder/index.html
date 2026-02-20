@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>회의 안건 빌더 | Meeting Agenda Builder</title>
+  <meta name="description" content="회의 안건을 추가·편집·정렬하고 총 소요시간을 자동 계산하는 회의 안건 빌더" />
+  <style>
+    :root {
+      --bg: #f3f6fb;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --line: #d6deeb;
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --danger: #dc2626;
+      --soft: #eef4ff;
+      --ok: #0f766e;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+      color: var(--text);
+      background: linear-gradient(180deg, #eef4ff 0%, var(--bg) 260px);
+      line-height: 1.5;
+      padding: 18px;
+    }
+    .wrap { max-width: 1100px; margin: 0 auto; }
+    .back { display: inline-block; margin-bottom: 10px; color: var(--muted); text-decoration: none; }
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 18px;
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+    }
+    h1 { margin: 0 0 6px; font-size: clamp(1.3rem, 4vw, 2rem); }
+    .sub { margin: 0 0 14px; color: var(--muted); }
+    .meta {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .field { display: grid; gap: 5px; }
+    .field label { font-size: 0.83rem; color: var(--muted); font-weight: 600; }
+    input, textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 9px 10px;
+      font-size: 0.95rem;
+      background: #fff;
+      color: var(--text);
+    }
+    textarea { resize: vertical; min-height: 68px; }
+    input:focus, textarea:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
+    }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    button {
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 13px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .primary { color: #fff; background: linear-gradient(135deg, var(--primary), var(--primary-dark)); }
+    .ghost { background: var(--soft); color: #1e3a8a; }
+    .danger { background: #fee2e2; color: #991b1b; }
+    .summary {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      background: #f8fbff;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px 12px;
+      margin-bottom: 12px;
+      color: #1e3a8a;
+      font-weight: 700;
+    }
+    .summary .ok { color: var(--ok); }
+    .agenda-list {
+      display: grid;
+      gap: 10px;
+    }
+    .item {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 10px;
+      background: #fff;
+      display: grid;
+      grid-template-columns: 34px 1fr auto;
+      gap: 10px;
+      align-items: start;
+    }
+    .item.dragging { opacity: 0.45; }
+    .item.drop-over { border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); }
+    .drag-handle {
+      margin-top: 2px;
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border-radius: 8px;
+      background: #eff6ff;
+      color: #1d4ed8;
+      font-weight: 900;
+      cursor: move;
+      user-select: none;
+    }
+    .item-main {
+      display: grid;
+      grid-template-columns: 2fr 1fr 120px;
+      gap: 8px;
+    }
+    .item-main .full { grid-column: 1 / -1; }
+    .index-badge {
+      align-self: center;
+      min-width: 34px;
+      text-align: center;
+      color: var(--muted);
+      font-weight: 700;
+      font-size: 0.85rem;
+    }
+    .hint { margin-top: 8px; font-size: 0.85rem; color: var(--muted); }
+    .copy-status { margin-left: auto; font-size: 0.83rem; color: var(--ok); font-weight: 700; }
+    @media (max-width: 860px) {
+      .meta { grid-template-columns: 1fr 1fr; }
+      .item { grid-template-columns: 30px 1fr; }
+      .index-badge { justify-self: end; }
+      .item-main { grid-template-columns: 1fr 1fr; }
+      .item-main .full, .item-main .name { grid-column: 1 / -1; }
+    }
+    @media (max-width: 560px) {
+      .meta, .item-main { grid-template-columns: 1fr; }
+    }
+    @media print {
+      body { background: #fff; padding: 0; }
+      .back, .toolbar, .hint, .copy-status, .drag-handle, .danger { display: none !important; }
+      .panel { box-shadow: none; border: none; border-radius: 0; padding: 0; }
+      .item { grid-template-columns: 1fr; border-radius: 0; border: none; border-bottom: 1px dashed #cbd5e1; padding: 10px 0; }
+      .item-main { grid-template-columns: 2fr 1fr 110px; }
+      input, textarea { border: none; padding: 2px 0; background: transparent; }
+      .summary { border: 1px solid #cbd5e1; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <a class="back" href="/">← 도구 목록으로</a>
+    <section class="panel">
+      <h1>📋 회의 안건 빌더</h1>
+      <p class="sub">안건을 순서대로 정리하고 담당자/예상시간을 배정해 회의 시간을 빠르게 계획하세요.</p>
+
+      <section class="meta" aria-label="회의 기본 정보">
+        <div class="field">
+          <label for="meetingTitle">회의 제목</label>
+          <input id="meetingTitle" type="text" placeholder="예: 주간 제품 개선 회의" />
+        </div>
+        <div class="field">
+          <label for="meetingDate">회의 일자</label>
+          <input id="meetingDate" type="date" />
+        </div>
+        <div class="field">
+          <label for="meetingStart">시작 시간</label>
+          <input id="meetingStart" type="time" value="10:00" />
+        </div>
+        <div class="field">
+          <label for="meetingPlace">장소/링크</label>
+          <input id="meetingPlace" type="text" placeholder="회의실 A / Meet 링크" />
+        </div>
+      </section>
+
+      <div class="toolbar">
+        <button id="addBtn" class="primary" type="button">안건 추가</button>
+        <button id="sampleBtn" class="ghost" type="button">샘플 채우기</button>
+        <button id="copyBtn" class="ghost" type="button">클립보드 복사</button>
+        <button id="printBtn" class="ghost" type="button">인쇄 레이아웃</button>
+        <button id="resetBtn" class="danger" type="button">전체 초기화</button>
+        <span id="copyStatus" class="copy-status" aria-live="polite"></span>
+      </div>
+
+      <div id="summary" class="summary"></div>
+      <div id="agendaList" class="agenda-list"></div>
+      <p class="hint">💡 드래그 핸들을 잡아 안건 순서를 바꿀 수 있습니다.</p>
+    </section>
+  </div>
+
+  <script>
+    (() => {
+      const $ = (id) => document.getElementById(id);
+      const state = { items: [] };
+
+      function uid() {
+        return Math.random().toString(36).slice(2, 10);
+      }
+
+      function formatMinutes(total) {
+        const mins = Math.max(0, Math.round(total));
+        const h = Math.floor(mins / 60);
+        const m = mins % 60;
+        if (!h) return `${m}분`;
+        if (!m) return `${h}시간`;
+        return `${h}시간 ${m}분`;
+      }
+
+      function parseDate(value) {
+        if (!value) return '';
+        const d = new Date(value + 'T00:00:00');
+        if (Number.isNaN(d.getTime())) return '';
+        return d.toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' });
+      }
+
+      function addItem(data = {}) {
+        state.items.push({
+          id: uid(),
+          title: data.title || '',
+          owner: data.owner || '',
+          minutes: Number(data.minutes || 10),
+          note: data.note || ''
+        });
+        render();
+      }
+
+      function updateSummary() {
+        const total = state.items.reduce((sum, item) => sum + Math.max(0, Number(item.minutes || 0)), 0);
+        const count = state.items.length;
+        const start = $('meetingStart').value;
+        let endText = '';
+
+        if (start && Number.isFinite(total)) {
+          const [hh, mm] = start.split(':').map(Number);
+          if (Number.isInteger(hh) && Number.isInteger(mm)) {
+            const end = new Date(2000, 0, 1, hh, mm + total);
+            endText = ` · 예상 종료 ${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}`;
+          }
+        }
+
+        $('summary').innerHTML = `총 <span class="ok">${count}개</span> 안건 · 예상 소요 <span class="ok">${formatMinutes(total)}</span>${endText}`;
+      }
+
+      function reorderById(dragId, dropId) {
+        if (!dragId || !dropId || dragId === dropId) return;
+        const from = state.items.findIndex((i) => i.id === dragId);
+        const to = state.items.findIndex((i) => i.id === dropId);
+        if (from < 0 || to < 0) return;
+        const [moved] = state.items.splice(from, 1);
+        state.items.splice(to, 0, moved);
+      }
+
+      function render() {
+        const list = $('agendaList');
+        list.innerHTML = '';
+
+        if (!state.items.length) {
+          list.innerHTML = '<div class="item"><div class="item-main full">안건이 없습니다. "안건 추가" 버튼으로 시작하세요.</div></div>';
+          updateSummary();
+          return;
+        }
+
+        state.items.forEach((item, idx) => {
+          const el = document.createElement('article');
+          el.className = 'item';
+          el.draggable = true;
+          el.dataset.id = item.id;
+          el.innerHTML = `
+            <div class="drag-handle" title="드래그해서 순서 변경">☰</div>
+            <div class="item-main">
+              <div class="field name">
+                <label>안건</label>
+                <input type="text" value="${item.title.replace(/"/g, '&quot;')}" placeholder="예: 신규 온보딩 퍼널 리뷰" />
+              </div>
+              <div class="field">
+                <label>담당자</label>
+                <input type="text" value="${item.owner.replace(/"/g, '&quot;')}" placeholder="이름" />
+              </div>
+              <div class="field">
+                <label>예상시간(분)</label>
+                <input type="number" min="1" step="1" value="${Math.max(1, Number(item.minutes || 0))}" />
+              </div>
+              <div class="field full">
+                <label>메모</label>
+                <textarea placeholder="핵심 논의 포인트">${item.note}</textarea>
+              </div>
+            </div>
+            <div>
+              <div class="index-badge">#${idx + 1}</div>
+              <button class="danger" type="button">삭제</button>
+            </div>
+          `;
+
+          const [titleInput, ownerInput, minInput] = el.querySelectorAll('input');
+          const noteInput = el.querySelector('textarea');
+
+          titleInput.addEventListener('input', () => { item.title = titleInput.value; });
+          ownerInput.addEventListener('input', () => { item.owner = ownerInput.value; });
+          minInput.addEventListener('input', () => {
+            item.minutes = Math.max(1, Number(minInput.value || 0));
+            updateSummary();
+          });
+          noteInput.addEventListener('input', () => { item.note = noteInput.value; });
+
+          el.querySelector('button').addEventListener('click', () => {
+            state.items = state.items.filter((x) => x.id !== item.id);
+            render();
+          });
+
+          el.addEventListener('dragstart', (e) => {
+            el.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', item.id);
+          });
+
+          el.addEventListener('dragend', () => {
+            el.classList.remove('dragging');
+            list.querySelectorAll('.drop-over').forEach((n) => n.classList.remove('drop-over'));
+          });
+
+          el.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            if (!el.classList.contains('dragging')) el.classList.add('drop-over');
+          });
+
+          el.addEventListener('dragleave', () => el.classList.remove('drop-over'));
+
+          el.addEventListener('drop', (e) => {
+            e.preventDefault();
+            const dragId = e.dataTransfer.getData('text/plain');
+            el.classList.remove('drop-over');
+            reorderById(dragId, item.id);
+            render();
+          });
+
+          list.appendChild(el);
+        });
+
+        updateSummary();
+      }
+
+      function buildAgendaText() {
+        const title = $('meetingTitle').value.trim() || '회의 안건';
+        const date = parseDate($('meetingDate').value);
+        const start = $('meetingStart').value;
+        const place = $('meetingPlace').value.trim();
+        const total = state.items.reduce((s, x) => s + Math.max(0, Number(x.minutes || 0)), 0);
+
+        const lines = [
+          `[${title}]`,
+          date ? `일자: ${date}` : '',
+          start ? `시작: ${start}` : '',
+          place ? `장소/링크: ${place}` : '',
+          `총 ${state.items.length}개 안건 / 예상 ${formatMinutes(total)}`,
+          ''
+        ].filter(Boolean);
+
+        state.items.forEach((item, idx) => {
+          lines.push(`${idx + 1}. ${item.title || '(제목 없음)'}`);
+          lines.push(`   - 담당자: ${item.owner || '-'}`);
+          lines.push(`   - 예상시간: ${Math.max(1, Number(item.minutes || 0))}분`);
+          if (item.note.trim()) lines.push(`   - 메모: ${item.note.trim()}`);
+        });
+
+        return lines.join('\n');
+      }
+
+      async function copyAgenda() {
+        const text = buildAgendaText();
+        const status = $('copyStatus');
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(text);
+          } else {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            ta.remove();
+          }
+          status.textContent = '복사 완료!';
+        } catch (err) {
+          status.textContent = '복사 실패 (권한 확인 필요)';
+        }
+        setTimeout(() => { status.textContent = ''; }, 2000);
+      }
+
+      function resetAll() {
+        if (!window.confirm('모든 안건을 초기화할까요?')) return;
+        state.items = [];
+        $('meetingTitle').value = '';
+        $('meetingDate').value = '';
+        $('meetingPlace').value = '';
+        $('meetingStart').value = '10:00';
+        render();
+      }
+
+      function loadSample() {
+        state.items = [];
+        $('meetingTitle').value = '주간 제품/마케팅 동기화';
+        $('meetingDate').value = new Date().toISOString().slice(0, 10);
+        $('meetingPlace').value = '회의실 B + Zoom';
+        $('meetingStart').value = '14:00';
+        [
+          { title: '지난주 KPI 리뷰', owner: '지민', minutes: 15, note: '전환율/이탈률 공유' },
+          { title: '신규 캠페인 제안 검토', owner: '현우', minutes: 20, note: '예산 승인 필요' },
+          { title: '다음 스프린트 우선순위 확정', owner: '서연', minutes: 25, note: '의사결정 안건' }
+        ].forEach(addItem);
+      }
+
+      $('addBtn').addEventListener('click', () => addItem());
+      $('sampleBtn').addEventListener('click', loadSample);
+      $('copyBtn').addEventListener('click', copyAgenda);
+      $('printBtn').addEventListener('click', () => window.print());
+      $('resetBtn').addEventListener('click', resetAll);
+      $('meetingStart').addEventListener('input', updateSummary);
+
+      addItem({ title: '진행 상황 공유', owner: '', minutes: 10, note: '' });
+      addItem({ title: '핵심 이슈 논의', owner: '', minutes: 20, note: '' });
+    })();
+  </script>
+</body>
+</html>

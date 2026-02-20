@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>프로젝트 타임라인 간트 | Project Timeline Gantt</title>
+  <meta name="description" content="작업 일정, 진행률, 의존관계를 입력해 캔버스 기반 간트 차트를 그리는 프로젝트 타임라인 도구" />
+  <style>
+    :root {
+      --bg: #f4f7fc;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --line: #d9e2f1;
+      --primary: #2563eb;
+      --primary2: #1d4ed8;
+      --accent: #f59e0b;
+      --danger: #dc2626;
+      --soft: #eef4ff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+      background: linear-gradient(180deg, #edf3ff 0%, var(--bg) 260px);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 16px;
+    }
+    .wrap { max-width: 1200px; margin: 0 auto; }
+    .back { display: inline-block; margin-bottom: 10px; color: var(--muted); text-decoration: none; }
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+    }
+    h1 { margin: 0 0 6px; font-size: clamp(1.3rem, 4vw, 2rem); }
+    .sub { color: var(--muted); margin: 0 0 12px; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+    button {
+      border: 0;
+      border-radius: 10px;
+      padding: 9px 13px;
+      font-weight: 700;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+    .primary { color: #fff; background: linear-gradient(135deg, var(--primary), var(--primary2)); }
+    .ghost { background: var(--soft); color: #1e3a8a; }
+    .danger { background: #fee2e2; color: #991b1b; }
+    .layout { display: grid; grid-template-columns: 420px 1fr; gap: 12px; }
+    .table-wrap {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      overflow: auto;
+      background: #fff;
+      max-height: 560px;
+    }
+    table { width: 100%; border-collapse: collapse; min-width: 400px; }
+    th, td { border-bottom: 1px solid var(--line); padding: 7px; font-size: 0.85rem; text-align: left; vertical-align: middle; }
+    th { position: sticky; top: 0; background: #f5f9ff; z-index: 1; color: #35507a; }
+    tr:last-child td { border-bottom: 0; }
+    input, select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 6px 7px;
+      font-size: 0.83rem;
+      background: #fff;
+    }
+    input:focus, select:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+    }
+    .chart-box {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+      align-content: start;
+    }
+    canvas {
+      width: 100%;
+      height: 560px;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      background: #fff;
+      cursor: grab;
+    }
+    canvas.dragging { cursor: grabbing; }
+    .legend { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 0.82rem; color: var(--muted); }
+    .dot { width: 10px; height: 10px; border-radius: 999px; display: inline-block; margin-right: 5px; vertical-align: -1px; }
+    .status { font-size: 0.85rem; color: #1e3a8a; font-weight: 700; }
+    .hint { font-size: 0.83rem; color: var(--muted); }
+    @media (max-width: 1024px) {
+      .layout { grid-template-columns: 1fr; }
+      canvas { height: 500px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <a class="back" href="/">← 도구 목록으로</a>
+    <section class="panel">
+      <h1>📈 프로젝트 타임라인 간트</h1>
+      <p class="sub">작업 일정/진행률/의존관계를 입력하고 캔버스에서 기간을 드래그로 조정할 수 있습니다.</p>
+
+      <div class="toolbar">
+        <button id="addTaskBtn" class="primary" type="button">작업 추가</button>
+        <button id="sampleBtn" class="ghost" type="button">샘플 데이터</button>
+        <button id="fitBtn" class="ghost" type="button">오늘 기준 맞춤</button>
+        <button id="resetBtn" class="danger" type="button">초기화</button>
+      </div>
+
+      <div class="layout">
+        <section class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:30%">작업명</th>
+                <th style="width:18%">시작</th>
+                <th style="width:18%">종료</th>
+                <th style="width:13%">진행률</th>
+                <th style="width:15%">선행</th>
+                <th style="width:6%">삭제</th>
+              </tr>
+            </thead>
+            <tbody id="taskBody"></tbody>
+          </table>
+        </section>
+
+        <section class="chart-box">
+          <canvas id="ganttCanvas" width="860" height="560" aria-label="간트 차트"></canvas>
+          <div class="legend">
+            <span><i class="dot" style="background:#2563eb"></i>작업 기간</span>
+            <span><i class="dot" style="background:#60a5fa"></i>진행률</span>
+            <span><i class="dot" style="background:#f59e0b"></i>오늘 마커</span>
+            <span><i class="dot" style="background:#64748b"></i>의존관계</span>
+          </div>
+          <p id="status" class="status"></p>
+          <p class="hint">팁: 막대의 좌/우 끝을 드래그하면 시작일/종료일, 막대 중앙을 드래그하면 기간 전체를 이동합니다.</p>
+        </section>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    (() => {
+      const DAY = 24 * 60 * 60 * 1000;
+      const $ = (id) => document.getElementById(id);
+      const state = { tasks: [] };
+      const canvas = $('ganttCanvas');
+      const ctx = canvas.getContext('2d');
+
+      const chart = {
+        labelWidth: 190,
+        rowHeight: 42,
+        headerHeight: 38,
+        padding: 14,
+        minMs: 0,
+        maxMs: 0,
+        dayWidth: 12,
+        bars: []
+      };
+
+      const drag = {
+        active: false,
+        taskId: null,
+        mode: null,
+        startX: 0,
+        startStart: 0,
+        startEnd: 0
+      };
+
+      function uid() {
+        return Math.random().toString(36).slice(2, 10);
+      }
+
+      function toDateMs(v) {
+        const d = new Date(v + 'T00:00:00');
+        return Number.isNaN(d.getTime()) ? NaN : d.getTime();
+      }
+
+      function fromDateMs(ms) {
+        const d = new Date(ms);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+      }
+
+      function clampProgress(v) {
+        return Math.max(0, Math.min(100, Number(v || 0)));
+      }
+
+      function normalizeTaskDates(task) {
+        const s = toDateMs(task.start);
+        const e = toDateMs(task.end);
+        if (Number.isNaN(s) || Number.isNaN(e)) return;
+        if (s <= e) return;
+        const temp = task.start;
+        task.start = task.end;
+        task.end = temp;
+      }
+
+      function addTask(data = {}) {
+        const today = new Date();
+        const start = data.start || fromDateMs(new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime());
+        const end = data.end || fromDateMs(toDateMs(start) + 4 * DAY);
+        state.tasks.push({
+          id: uid(),
+          name: data.name || '',
+          start,
+          end,
+          progress: clampProgress(data.progress ?? 0),
+          dependsOn: data.dependsOn || ''
+        });
+        renderAll();
+      }
+
+      function renderTaskTable() {
+        const body = $('taskBody');
+        body.innerHTML = '';
+
+        if (!state.tasks.length) {
+          body.innerHTML = '<tr><td colspan="6" style="color:#64748b">작업을 추가하면 간트 차트가 표시됩니다.</td></tr>';
+          return;
+        }
+
+        state.tasks.forEach((task) => {
+          const row = document.createElement('tr');
+          const depOptions = ['<option value="">없음</option>']
+            .concat(state.tasks.filter((t) => t.id !== task.id).map((t) => `<option value="${t.id}" ${t.id === task.dependsOn ? 'selected' : ''}>${t.name || '이름 없는 작업'}</option>`))
+            .join('');
+
+          row.innerHTML = `
+            <td><input type="text" value="${task.name.replace(/"/g, '&quot;')}" placeholder="작업 이름" /></td>
+            <td><input type="date" value="${task.start}" /></td>
+            <td><input type="date" value="${task.end}" /></td>
+            <td><input type="number" min="0" max="100" step="1" value="${task.progress}" /></td>
+            <td><select>${depOptions}</select></td>
+            <td><button class="danger" type="button">✕</button></td>
+          `;
+
+          const [nameInput, startInput, endInput, progressInput] = row.querySelectorAll('input');
+          const depSelect = row.querySelector('select');
+          const removeBtn = row.querySelector('button');
+
+          nameInput.addEventListener('input', () => { task.name = nameInput.value; renderChart(); });
+          startInput.addEventListener('change', () => { task.start = startInput.value; normalizeTaskDates(task); renderAll(); });
+          endInput.addEventListener('change', () => { task.end = endInput.value; normalizeTaskDates(task); renderAll(); });
+          progressInput.addEventListener('input', () => { task.progress = clampProgress(progressInput.value); renderChart(); });
+          depSelect.addEventListener('change', () => { task.dependsOn = depSelect.value; renderChart(); });
+
+          removeBtn.addEventListener('click', () => {
+            state.tasks = state.tasks.filter((t) => t.id !== task.id);
+            state.tasks.forEach((t) => { if (t.dependsOn === task.id) t.dependsOn = ''; });
+            renderAll();
+          });
+
+          body.appendChild(row);
+        });
+      }
+
+      function setupCanvasScale() {
+        const dpr = Math.max(1, window.devicePixelRatio || 1);
+        const rect = canvas.getBoundingClientRect();
+        const width = Math.round(rect.width * dpr);
+        const height = Math.round(rect.height * dpr);
+        if (canvas.width !== width || canvas.height !== height) {
+          canvas.width = width;
+          canvas.height = height;
+        }
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+
+      function computeRange() {
+        if (!state.tasks.length) {
+          const now = new Date();
+          chart.minMs = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 3).getTime();
+          chart.maxMs = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7).getTime();
+          return;
+        }
+
+        const starts = state.tasks.map((t) => toDateMs(t.start)).filter((n) => Number.isFinite(n));
+        const ends = state.tasks.map((t) => toDateMs(t.end)).filter((n) => Number.isFinite(n));
+        const min = Math.min(...starts);
+        const max = Math.max(...ends);
+        chart.minMs = min - DAY * 2;
+        chart.maxMs = max + DAY * 2;
+      }
+
+      function xForMs(ms, plotLeft) {
+        return plotLeft + ((ms - chart.minMs) / DAY) * chart.dayWidth;
+      }
+
+      function drawArrow(fromX, fromY, toX, toY) {
+        const midX = fromX + 16;
+        ctx.strokeStyle = '#64748b';
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(fromX, fromY);
+        ctx.lineTo(midX, fromY);
+        ctx.lineTo(midX, toY);
+        ctx.lineTo(toX, toY);
+        ctx.stroke();
+
+        const head = 5;
+        ctx.beginPath();
+        ctx.moveTo(toX, toY);
+        ctx.lineTo(toX - head, toY - head / 1.4);
+        ctx.lineTo(toX - head, toY + head / 1.4);
+        ctx.closePath();
+        ctx.fillStyle = '#64748b';
+        ctx.fill();
+      }
+
+      function renderChart() {
+        setupCanvasScale();
+
+        const w = canvas.clientWidth;
+        const h = canvas.clientHeight;
+        const left = chart.labelWidth;
+        const top = chart.headerHeight;
+        const right = w - chart.padding;
+        const plotWidth = Math.max(120, right - left);
+
+        computeRange();
+        const totalDays = Math.max(1, Math.round((chart.maxMs - chart.minMs) / DAY));
+        chart.dayWidth = plotWidth / totalDays;
+
+        ctx.clearRect(0, 0, w, h);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, w, h);
+
+        ctx.fillStyle = '#f7fbff';
+        ctx.fillRect(left, 0, plotWidth, h);
+
+        chart.bars = [];
+
+        const dayStep = totalDays > 70 ? 7 : totalDays > 35 ? 3 : 1;
+        for (let d = 0; d <= totalDays; d += dayStep) {
+          const x = left + d * chart.dayWidth;
+          const date = new Date(chart.minMs + d * DAY);
+          ctx.strokeStyle = '#e2e8f0';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(x, top);
+          ctx.lineTo(x, h - 4);
+          ctx.stroke();
+
+          ctx.fillStyle = '#64748b';
+          ctx.font = '11px -apple-system, Segoe UI, sans-serif';
+          ctx.fillText(`${date.getMonth() + 1}/${date.getDate()}`, x + 2, 15);
+        }
+
+        const todayMs = new Date(new Date().toDateString()).getTime();
+        if (todayMs >= chart.minMs && todayMs <= chart.maxMs) {
+          const tx = xForMs(todayMs, left);
+          ctx.strokeStyle = '#f59e0b';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(tx, top - 8);
+          ctx.lineTo(tx, h - 6);
+          ctx.stroke();
+          ctx.fillStyle = '#f59e0b';
+          ctx.fillText('오늘', tx + 3, 30);
+        }
+
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.beginPath();
+        ctx.moveTo(left, top - 2);
+        ctx.lineTo(right, top - 2);
+        ctx.stroke();
+
+        state.tasks.forEach((task, idx) => {
+          const s = toDateMs(task.start);
+          const e = toDateMs(task.end);
+          if (!Number.isFinite(s) || !Number.isFinite(e)) return;
+
+          const rowY = top + idx * chart.rowHeight + 8;
+          const barH = 22;
+          const x1 = xForMs(s, left);
+          const x2 = xForMs(e + DAY, left);
+          const width = Math.max(8, x2 - x1);
+
+          ctx.fillStyle = '#0f172a';
+          ctx.font = '12px -apple-system, Segoe UI, sans-serif';
+          ctx.fillText(task.name || `작업 ${idx + 1}`, 10, rowY + 15);
+
+          ctx.fillStyle = '#dbeafe';
+          ctx.fillRect(x1, rowY, width, barH);
+
+          ctx.fillStyle = '#2563eb';
+          ctx.fillRect(x1, rowY, width * (clampProgress(task.progress) / 100), barH);
+
+          ctx.strokeStyle = '#1e40af';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(x1, rowY, width, barH);
+
+          ctx.fillStyle = '#ffffff';
+          ctx.font = '11px -apple-system, Segoe UI, sans-serif';
+          ctx.fillText(`${Math.round(clampProgress(task.progress))}%`, x1 + 6, rowY + 15);
+
+          chart.bars.push({ id: task.id, x: x1, y: rowY, w: width, h: barH });
+        });
+
+        const map = new Map();
+        chart.bars.forEach((b) => map.set(b.id, b));
+        state.tasks.forEach((task) => {
+          if (!task.dependsOn) return;
+          const dep = map.get(task.dependsOn);
+          const me = map.get(task.id);
+          if (!dep || !me) return;
+          drawArrow(dep.x + dep.w, dep.y + dep.h / 2, me.x, me.y + me.h / 2);
+        });
+
+        const total = state.tasks.length;
+        const avg = total ? (state.tasks.reduce((s, t) => s + clampProgress(t.progress), 0) / total).toFixed(1) : '0.0';
+        $('status').textContent = `총 ${total}개 작업 · 평균 진행률 ${avg}%`;
+      }
+
+      function renderAll() {
+        renderTaskTable();
+        renderChart();
+      }
+
+      function findBar(x, y) {
+        for (const bar of chart.bars) {
+          if (x >= bar.x && x <= bar.x + bar.w && y >= bar.y && y <= bar.y + bar.h) {
+            const leftEdge = Math.abs(x - bar.x) < 7;
+            const rightEdge = Math.abs(x - (bar.x + bar.w)) < 7;
+            const mode = leftEdge ? 'resize-start' : rightEdge ? 'resize-end' : 'move';
+            return { bar, mode };
+          }
+        }
+        return null;
+      }
+
+      function pointerToCanvas(e) {
+        const rect = canvas.getBoundingClientRect();
+        return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      }
+
+      canvas.addEventListener('mousedown', (e) => {
+        const p = pointerToCanvas(e);
+        const hit = findBar(p.x, p.y);
+        if (!hit) return;
+
+        const task = state.tasks.find((t) => t.id === hit.bar.id);
+        if (!task) return;
+
+        drag.active = true;
+        drag.taskId = task.id;
+        drag.mode = hit.mode;
+        drag.startX = p.x;
+        drag.startStart = toDateMs(task.start);
+        drag.startEnd = toDateMs(task.end);
+        canvas.classList.add('dragging');
+      });
+
+      window.addEventListener('mousemove', (e) => {
+        if (!drag.active) return;
+        const task = state.tasks.find((t) => t.id === drag.taskId);
+        if (!task) return;
+
+        const p = pointerToCanvas(e);
+        const dxDays = Math.round((p.x - drag.startX) / chart.dayWidth);
+
+        let nextStart = drag.startStart;
+        let nextEnd = drag.startEnd;
+
+        if (drag.mode === 'move') {
+          nextStart += dxDays * DAY;
+          nextEnd += dxDays * DAY;
+        } else if (drag.mode === 'resize-start') {
+          nextStart += dxDays * DAY;
+          if (nextStart > nextEnd) nextStart = nextEnd;
+        } else if (drag.mode === 'resize-end') {
+          nextEnd += dxDays * DAY;
+          if (nextEnd < nextStart) nextEnd = nextStart;
+        }
+
+        task.start = fromDateMs(nextStart);
+        task.end = fromDateMs(nextEnd);
+        renderAll();
+      });
+
+      window.addEventListener('mouseup', () => {
+        if (!drag.active) return;
+        drag.active = false;
+        drag.taskId = null;
+        canvas.classList.remove('dragging');
+      });
+
+      function loadSample() {
+        const today = new Date();
+        const d = (offset) => fromDateMs(new Date(today.getFullYear(), today.getMonth(), today.getDate() + offset).getTime());
+
+        state.tasks = [
+          { id: uid(), name: '요구사항 정리', start: d(-2), end: d(2), progress: 100, dependsOn: '' },
+          { id: uid(), name: 'UI 설계', start: d(1), end: d(6), progress: 70, dependsOn: '' },
+          { id: uid(), name: '프론트엔드 구현', start: d(6), end: d(13), progress: 35, dependsOn: '' },
+          { id: uid(), name: 'QA 및 배포', start: d(13), end: d(17), progress: 10, dependsOn: '' }
+        ];
+        state.tasks[1].dependsOn = state.tasks[0].id;
+        state.tasks[2].dependsOn = state.tasks[1].id;
+        state.tasks[3].dependsOn = state.tasks[2].id;
+        renderAll();
+      }
+
+      $('addTaskBtn').addEventListener('click', () => addTask({ name: '새 작업' }));
+      $('sampleBtn').addEventListener('click', loadSample);
+      $('fitBtn').addEventListener('click', renderChart);
+      $('resetBtn').addEventListener('click', () => {
+        if (!window.confirm('모든 작업을 삭제할까요?')) return;
+        state.tasks = [];
+        renderAll();
+      });
+      window.addEventListener('resize', renderChart);
+
+      loadSample();
+    })();
+  </script>
+</body>
+</html>

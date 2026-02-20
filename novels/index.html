@@ -48,7 +48,7 @@
 
         .novels-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
             gap: 28px;
             margin-bottom: 40px;
         }
@@ -68,44 +68,73 @@
         }
 
         .novel-header {
-            padding: 28px 24px 20px;
+            padding: 0;
             color: white;
             position: relative;
+            display: flex;
+            min-height: 180px;
+            overflow: hidden;
         }
-        .novel-header h2 {
-            font-size: 1.5em;
+        .novel-cover {
+            width: 120px;
+            min-height: 180px;
+            object-fit: cover;
+            flex-shrink: 0;
+        }
+        .novel-cover-fallback {
+            width: 120px;
+            min-height: 180px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3em;
+            opacity: 0.4;
+        }
+        .novel-header-info {
+            padding: 20px 18px 16px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            flex: 1;
+            min-width: 0;
+        }
+        .novel-header-info h2 {
+            font-size: 1.35em;
             margin-bottom: 6px;
             line-height: 1.3;
+            word-break: keep-all;
         }
-        .novel-header .author {
+        .novel-header-info .author {
             opacity: 0.85;
-            font-size: 0.88em;
+            font-size: 0.85em;
         }
         .novel-header .badge {
             position: absolute;
-            top: 14px;
-            right: 16px;
+            top: 12px;
+            right: 14px;
             background: rgba(255,255,255,0.25);
             padding: 4px 12px;
             border-radius: 12px;
-            font-size: 0.78em;
+            font-size: 0.75em;
             font-weight: 600;
+            backdrop-filter: blur(4px);
         }
         .genre-tags {
             display: flex;
-            gap: 6px;
-            margin-top: 12px;
+            gap: 5px;
+            margin-top: 10px;
             flex-wrap: wrap;
         }
         .genre-tag {
             background: rgba(255,255,255,0.2);
-            padding: 3px 10px;
-            border-radius: 12px;
-            font-size: 0.78em;
+            padding: 2px 9px;
+            border-radius: 10px;
+            font-size: 0.73em;
         }
 
         .novel-body {
-            padding: 20px 24px 24px;
+            padding: 18px 22px 22px;
             flex: 1;
             display: flex;
             flex-direction: column;
@@ -113,7 +142,7 @@
 
         .episodes { flex: 1; }
         .episodes h3 {
-            font-size: 0.88em;
+            font-size: 0.85em;
             color: #999;
             margin-bottom: 10px;
             font-weight: 600;
@@ -125,7 +154,6 @@
             background: #f7f8fa;
             border-radius: 8px;
             display: flex;
-            justify-content: space-between;
             align-items: center;
             cursor: pointer;
             transition: background 0.15s, transform 0.15s;
@@ -139,21 +167,22 @@
         .ep-num {
             font-weight: 600;
             color: #333;
-            font-size: 0.92em;
+            font-size: 0.9em;
             white-space: nowrap;
             margin-right: 8px;
+            min-width: 44px;
         }
         .ep-title {
             flex: 1;
             color: #555;
-            font-size: 0.88em;
+            font-size: 0.86em;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
         }
         .ep-date {
             color: #aaa;
-            font-size: 0.82em;
+            font-size: 0.8em;
             white-space: nowrap;
             margin-left: 10px;
         }
@@ -191,6 +220,8 @@
         @media (max-width: 768px) {
             header h1 { font-size: 2em; }
             .novels-grid { grid-template-columns: 1fr; }
+            .novel-cover, .novel-cover-fallback { width: 100px; min-height: 150px; }
+            .novel-header { min-height: 150px; }
         }
     </style>
 </head>
@@ -228,11 +259,33 @@
         'linear-gradient(135deg, #5ee7df 0%, #b490ca 100%)',
     ];
 
-    function cleanTitle(title) {
-        return title
+    const GENRE_KO = {
+        'hunter': '헌터', 'regression': '회귀', 'system': '시스템',
+        'mystery': '미스터리', 'guild': '길드', 'academy': '아카데미',
+        'munchkin': '먼치킨', 'mentor': '멘토', 'comedy': '코미디',
+        'constellation': '성좌', 'romance': '로맨스',
+    };
+
+    function translateGenre(g) {
+        return GENRE_KO[g.toLowerCase()] || g;
+    }
+
+    /* Extract a meaningful episode title.
+       If the raw title is just "[웹소설] NovelTitle - N화", return '' (generic).
+       Otherwise return the actual episode-specific title. */
+    function extractEpTitle(rawTitle, novelTitle) {
+        if (!rawTitle) return '';
+        let cleaned = rawTitle.trim()
             .replace(/^\[웹소설\]\s*/, '')
-            .replace(/\s*-\s*\d+화$/, '')
+            .replace(/\s*-\s*\d+\s*화\s*$/, '')
             .trim();
+        if (!cleaned) return '';
+        /* If the cleaned result is just the novel title (or a substring), it's generic */
+        const norm = s => s.replace(/\s+/g, '').toLowerCase();
+        if (norm(novelTitle).includes(norm(cleaned)) || norm(cleaned).includes(norm(novelTitle))) {
+            return '';
+        }
+        return cleaned;
     }
 
     async function loadNovels() {
@@ -241,10 +294,8 @@
             const data = await resp.json();
             const novels = data.novels || [];
 
-            // Sort: most recent first
             novels.sort((a, b) => (b.latestDate || '').localeCompare(a.latestDate || ''));
 
-            // Stats
             const totalEps = novels.reduce((s, n) => s + (n.totalEpisodes || 0), 0);
             const authors = new Set(novels.map(n => (n.author || '').replace(/\s*\(Author-\d+\)/, '')));
             document.getElementById('stats').innerHTML = `
@@ -253,7 +304,6 @@
                 <span class="stat">✍️ ${authors.size}명 작가</span>
             `;
 
-            // Render
             const grid = document.getElementById('novels-grid');
             if (novels.length === 0) {
                 grid.innerHTML = '<div class="loading">연재 중인 소설이 없습니다.</div>';
@@ -262,30 +312,36 @@
 
             grid.innerHTML = novels.map((novel, i) => {
                 const grad = GRADIENTS[i % GRADIENTS.length];
+                const novelTitle = novel.title || novel.slug.replace(/([a-z])([A-Z])/g, '$1 $2');
                 const authorClean = (novel.author || '알 수 없음').replace(/\s*\(Author-\d+\)/, '');
                 const genres = (novel.genre || []).map(g =>
-                    `<span class="genre-tag">${g}</span>`
+                    `<span class="genre-tag">${translateGenre(g)}</span>`
                 ).join('');
                 const status = novel.status === '완결' ? '완결' :
                     `${novel.totalEpisodes || 0}화 연재중`;
+                const coverUrl = `covers/${encodeURIComponent(novel.slug)}.png`;
 
-                // Latest 3 episodes (descending)
                 const eps = (novel.episodes || []).slice().reverse().slice(0, 3);
                 const epItems = eps.map(ep => {
-                    const title = cleanTitle(ep.title || '');
+                    const epTitle = extractEpTitle(ep.title, novelTitle);
                     return `<a class="episode-item" href="view.html?series=${encodeURIComponent(novel.slug)}&episode=${ep.num}">
                         <span class="ep-num">제${parseInt(ep.num)}화</span>
-                        ${title ? `<span class="ep-title">${title}</span>` : ''}
+                        ${epTitle ? `<span class="ep-title">${epTitle}</span>` : ''}
                         <span class="ep-date">${ep.date || ''}</span>
                     </a>`;
                 }).join('');
 
                 return `<div class="novel-card">
                     <div class="novel-header" style="background:${grad}">
+                        <img class="novel-cover" src="${coverUrl}"
+                             alt="${novelTitle}"
+                             onerror="this.outerHTML='<div class=\\'novel-cover-fallback\\'>📖</div>'" />
+                        <div class="novel-header-info">
+                            <h2>${novelTitle}</h2>
+                            <p class="author">✍️ ${authorClean}</p>
+                            <div class="genre-tags">${genres}</div>
+                        </div>
                         <span class="badge">${status}</span>
-                        <h2>${novel.title || novel.slug}</h2>
-                        <p class="author">작가: ${authorClean}</p>
-                        <div class="genre-tags">${genres}</div>
                     </div>
                     <div class="novel-body">
                         <div class="episodes">

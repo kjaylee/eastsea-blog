@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sprite Sheet Animator | 스프라이트 시트 애니메이터</title>
-  <meta name="description" content="스프라이트 시트를 업로드하고 프레임을 자동 감지해 GIF/APNG 애니메이션으로 내보내세요." />
+  <meta name="description" content="스프라이트 시트를 업로드하고 프레임을 자동 감지해 GIF/APNG 애니메이션으로 내보내거나, Godot 에셋/역변환 스프라이트 시트를 생성하세요." />
   <style>
     :root{
       --bg:#f3f6ff;--card:#ffffff;--text:#13213d;--muted:#5c6e92;--line:#d8e1f3;
@@ -45,14 +45,14 @@
       border-radius:20px;
       padding:18px 18px 16px;
       box-shadow:var(--shadow);
-      margin-bottom:14px;
+      margin-bottom:12px;
     }
     .hero-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap}
     h1{margin:0;font-size:clamp(1.24rem,2.6vw,1.9rem)}
     .desc{margin-top:7px;opacity:.92;font-size:.95rem}
     .hero-actions{display:flex;gap:8px;flex-wrap:wrap}
 
-    .btn,.ghost,input,select,label.upload-btn{
+    .btn,.ghost,input,select,textarea,label.upload-btn{
       border-radius:12px;border:1px solid var(--line);font-size:.92rem;
     }
     .btn,.ghost,label.upload-btn{
@@ -68,10 +68,37 @@
     .btn:disabled{opacity:.45;cursor:not-allowed}
     .ghost{background:rgba(255,255,255,.12);color:#fff;border-color:rgba(255,255,255,.35)}
 
-    .layout{display:grid;grid-template-columns:350px 1fr;gap:12px}
     .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:13px;box-shadow:var(--shadow)}
     .card h2{margin:0 0 10px;font-size:1rem}
     .muted{color:var(--muted);font-size:.84rem}
+
+    .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+    .tab-btn{
+      border:1px solid var(--line);
+      background:var(--chip);
+      color:var(--text);
+      border-radius:999px;
+      padding:8px 13px;
+      cursor:pointer;
+      font-weight:600;
+      transition:.2s ease;
+    }
+    .tab-btn.active{
+      background:linear-gradient(135deg,var(--primary),var(--primary2));
+      color:#fff;
+      border-color:transparent;
+      box-shadow:0 6px 16px rgba(59,91,253,.25);
+    }
+
+    .tab-panel{
+      opacity:0;
+      transform:translateY(8px);
+      transition:opacity .28s ease, transform .28s ease;
+      display:none;
+    }
+    .tab-panel.active{display:block;opacity:1;transform:translateY(0)}
+
+    .layout{display:grid;grid-template-columns:350px 1fr;gap:12px}
 
     .dropzone{
       border:2px dashed var(--line);
@@ -88,14 +115,17 @@
     input[type="file"]{display:none}
 
     .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
     .field label{display:block;font-size:.8rem;color:var(--muted);margin-bottom:4px}
-    input,select{
+    input,select,textarea{
       width:100%;padding:9px 10px;
       background:var(--bg);
       color:var(--text);
     }
+    textarea{min-height:78px;resize:vertical}
     input[type="color"]{padding:2px;height:40px}
     input[type="range"]{padding:0}
+    input[type="checkbox"]{width:auto}
 
     .mini-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
     .mini-actions .btn{font-size:.84rem;padding:8px}
@@ -130,7 +160,7 @@
       background-position:0 0,0 9px,9px -9px,-9px 0;
       opacity:.45;
     }
-    #previewCanvas{
+    #previewCanvas,#reversePreviewCanvas,#reverseSheetCanvas{
       max-width:100%;
       max-height:60vh;
       border-radius:8px;
@@ -164,6 +194,7 @@
       gap:8px;
       overflow:auto;
       padding-bottom:6px;
+      min-height:82px;
     }
     .thumb-btn{
       border:1px solid var(--line);
@@ -180,6 +211,29 @@
 
     .status{margin-top:10px;padding:8px 10px;border-radius:10px;background:var(--chip);border:1px solid var(--line);font-size:.83rem;color:var(--muted)}
 
+    .panel-grid{display:grid;grid-template-columns:380px 1fr;gap:12px}
+    .anim-list{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+    .anim-row{
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:8px;
+      background:var(--chip);
+      display:grid;
+      grid-template-columns:1.2fr repeat(3,1fr) auto auto;
+      gap:6px;
+      align-items:end;
+    }
+    .anim-row .field{margin:0}
+    .anim-row .btn{padding:8px 10px;font-size:.8rem}
+
+    .reverse-layout{display:grid;grid-template-columns:340px 1fr;gap:12px}
+    .reverse-preview-wrap{display:grid;grid-template-columns:1fr;gap:10px}
+
+    @media (max-width:1100px){
+      .panel-grid,.reverse-layout{grid-template-columns:1fr}
+      .anim-row{grid-template-columns:repeat(2,1fr)}
+    }
+
     @media (max-width:980px){
       .layout{grid-template-columns:1fr}
       .preview-wrap{min-height:230px}
@@ -192,7 +246,7 @@
       <div class="hero-top">
         <div>
           <h1>🎞️ 스프라이트 시트 애니메이터</h1>
-          <div class="desc">스프라이트 시트 업로드 → 프레임 자동 감지/수동 조정 → 실시간 미리보기 → GIF/APNG 내보내기</div>
+          <div class="desc">스프라이트 시트 애니메이션 미리보기/GIF·APNG 내보내기 + Godot Export + GIF/APNG 역방향 스프라이트 시트 생성</div>
         </div>
         <div class="hero-actions">
           <button id="themeToggle" class="ghost" type="button">🌙 다크모드</button>
@@ -201,95 +255,206 @@
       </div>
     </header>
 
-    <section class="layout">
-      <aside class="card">
-        <h2>1) 스프라이트 시트 업로드</h2>
-        <div id="dropzone" class="dropzone" aria-label="이미지 드롭 영역">
-          <div class="drop-title">이미지를 드래그 &amp; 드롭</div>
-          <div class="muted">PNG/WebP/GIF/JPG 지원</div>
-          <div class="upload-row" style="margin-top:8px">
-            <label class="upload-btn btn" for="fileInput">📁 파일 선택</label>
-            <button id="sampleBtn" class="btn" type="button" style="background:var(--soft);color:var(--text);border-color:var(--line)">샘플 테스트</button>
+    <nav class="tabs" aria-label="도구 탭">
+      <button class="tab-btn active" data-tab="tab-preview" type="button">1) 애니메이션 미리보기</button>
+      <button class="tab-btn" data-tab="tab-godot" type="button">2) Godot Export</button>
+      <button class="tab-btn" data-tab="tab-reverse" type="button">3) GIF/APNG → 스프라이트 시트</button>
+    </nav>
+
+    <section id="tab-preview" class="tab-panel active" aria-label="애니메이션 미리보기 탭">
+      <section class="layout">
+        <aside class="card">
+          <h2>1) 스프라이트 시트 업로드</h2>
+          <div id="dropzone" class="dropzone" aria-label="이미지 드롭 영역">
+            <div class="drop-title">이미지를 드래그 &amp; 드롭</div>
+            <div class="muted">PNG/WebP/GIF/JPG 지원</div>
+            <div class="upload-row" style="margin-top:8px">
+              <label class="upload-btn btn" for="fileInput">📁 파일 선택</label>
+              <button id="sampleBtn" class="btn" type="button" style="background:var(--soft);color:var(--text);border-color:var(--line)">샘플 테스트</button>
+            </div>
+            <input id="fileInput" type="file" accept="image/*" />
           </div>
-          <input id="fileInput" type="file" accept="image/*" />
-        </div>
 
-        <div class="status" id="sheetInfo">시트를 업로드하면 자동 감지를 시작합니다.</div>
+          <div class="status" id="sheetInfo">시트를 업로드하면 자동 감지를 시작합니다.</div>
 
-        <h2 style="margin-top:12px">2) 프레임 설정</h2>
-        <div class="grid2">
-          <div class="field"><label for="frameW">프레임 너비(px)</label><input id="frameW" type="number" min="1" value="64" /></div>
-          <div class="field"><label for="frameH">프레임 높이(px)</label><input id="frameH" type="number" min="1" value="64" /></div>
-          <div class="field"><label for="cols">열(Columns)</label><input id="cols" type="number" min="1" value="1" /></div>
-          <div class="field"><label for="rows">행(Rows)</label><input id="rows" type="number" min="1" value="1" /></div>
-        </div>
-        <div class="mini-actions">
-          <button id="autoDetectBtn" type="button" class="btn full">🧠 자동 감지</button>
-          <button id="fromCellBtn" type="button" class="btn" style="background:var(--soft);color:var(--text);border-color:var(--line)">크기→행열 계산</button>
-          <button id="fromGridBtn" type="button" class="btn" style="background:var(--soft);color:var(--text);border-color:var(--line)">행열→크기 계산</button>
-        </div>
-        <div class="status" id="frameInfo">총 프레임: 1</div>
-
-        <h2 style="margin-top:12px">3) 재생 &amp; 배경</h2>
-        <div class="field">
-          <label for="fps">FPS (1~60)</label>
-          <div class="fps-wrap">
-            <input id="fps" type="range" min="1" max="60" step="1" value="12" />
-            <span id="fpsValue" class="fps-value">12 fps</span>
+          <h2 style="margin-top:12px">2) 프레임 설정</h2>
+          <div class="grid2">
+            <div class="field"><label for="frameW">프레임 너비(px)</label><input id="frameW" type="number" min="1" value="64" /></div>
+            <div class="field"><label for="frameH">프레임 높이(px)</label><input id="frameH" type="number" min="1" value="64" /></div>
+            <div class="field"><label for="cols">열(Columns)</label><input id="cols" type="number" min="1" value="1" /></div>
+            <div class="field"><label for="rows">행(Rows)</label><input id="rows" type="number" min="1" value="1" /></div>
           </div>
-        </div>
+          <div class="mini-actions">
+            <button id="autoDetectBtn" type="button" class="btn full">🧠 자동 감지</button>
+            <button id="fromCellBtn" type="button" class="btn" style="background:var(--soft);color:var(--text);border-color:var(--line)">크기→행열 계산</button>
+            <button id="fromGridBtn" type="button" class="btn" style="background:var(--soft);color:var(--text);border-color:var(--line)">행열→크기 계산</button>
+          </div>
+          <div class="status" id="frameInfo">총 프레임: 1</div>
 
-        <div class="mode-row" role="radiogroup" aria-label="재생 모드">
-          <label><input type="radio" name="playMode" value="loop" checked /> 루프</label>
-          <label><input type="radio" name="playMode" value="pingpong" /> 핑퐁</label>
-          <label><input type="radio" name="playMode" value="once" /> 단일재생</label>
-        </div>
-
-        <div class="grid2" style="margin-top:10px">
+          <h2 style="margin-top:12px">3) 재생 &amp; 배경</h2>
           <div class="field">
-            <label for="bgMode">배경</label>
-            <select id="bgMode">
-              <option value="transparent">투명</option>
-              <option value="white">흰색</option>
-              <option value="black">검정</option>
-              <option value="custom">커스텀</option>
-            </select>
+            <label for="fps">FPS (1~60)</label>
+            <div class="fps-wrap">
+              <input id="fps" type="range" min="1" max="60" step="1" value="12" />
+              <span id="fpsValue" class="fps-value">12 fps</span>
+            </div>
           </div>
+
+          <div class="mode-row" role="radiogroup" aria-label="재생 모드">
+            <label><input type="radio" name="playMode" value="loop" checked /> 루프</label>
+            <label><input type="radio" name="playMode" value="pingpong" /> 핑퐁</label>
+            <label><input type="radio" name="playMode" value="once" /> 단일재생</label>
+          </div>
+
+          <div class="grid2" style="margin-top:10px">
+            <div class="field">
+              <label for="bgMode">배경</label>
+              <select id="bgMode">
+                <option value="transparent">투명</option>
+                <option value="white">흰색</option>
+                <option value="black">검정</option>
+                <option value="custom">커스텀</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="bgColor">커스텀 색상</label>
+              <input id="bgColor" type="color" value="#1d4ed8" disabled />
+            </div>
+          </div>
+
+          <div class="controls" style="margin-top:12px">
+            <button id="exportGifBtn" class="btn" type="button" disabled>GIF 내보내기</button>
+            <button id="exportApngBtn" class="btn" type="button" disabled style="background:var(--soft);color:var(--text);border-color:var(--line)">APNG 내보내기</button>
+          </div>
+          <div class="status" id="exportStatus">내보내기 준비 대기</div>
+        </aside>
+
+        <section class="card">
+          <div class="preview-head">
+            <h2 style="margin:0">실시간 미리보기</h2>
+            <div id="frameBadge" class="chip">프레임 1 / 1</div>
+          </div>
+
+          <div class="preview-wrap" id="previewWrap">
+            <div class="checker"></div>
+            <canvas id="previewCanvas" width="256" height="256" aria-label="애니메이션 미리보기"></canvas>
+            <div id="emptyNote" class="empty-note">이미지를 올리면 애니메이션이 재생됩니다.</div>
+          </div>
+
+          <div class="controls">
+            <button id="prevBtn" class="btn ghost" type="button">⏮ 이전 프레임</button>
+            <button id="playPauseBtn" class="btn" type="button" disabled>▶ 재생</button>
+            <button id="nextBtn" class="btn ghost" type="button">⏭ 다음 프레임</button>
+            <button id="restartBtn" class="btn ghost" type="button">🔁 처음으로</button>
+          </div>
+
+          <h2 style="margin-top:14px">프레임 순서 썸네일</h2>
+          <div id="thumbStrip" class="thumb-strip" aria-label="프레임 썸네일 스트립"></div>
+          <div class="muted">썸네일을 탭/클릭하면 해당 프레임으로 이동합니다.</div>
+        </section>
+      </section>
+    </section>
+
+    <section id="tab-godot" class="tab-panel" aria-label="Godot Export 탭">
+      <section class="panel-grid">
+        <aside class="card">
+          <h2>Godot 4.x Export 설정</h2>
+          <div class="status" id="godotSheetInfo">먼저 탭 1에서 스프라이트 시트를 업로드하세요.</div>
+
+          <div class="field" style="margin-top:10px">
+            <label for="godotResPath">res:// 경로 (기본: res://)</label>
+            <input id="godotResPath" type="text" value="res://" placeholder="res://characters/player/" />
+          </div>
+
+          <h2 style="margin-top:12px">애니메이션 범위 빠른 입력</h2>
           <div class="field">
-            <label for="bgColor">커스텀 색상</label>
-            <input id="bgColor" type="color" value="#1d4ed8" disabled />
+            <label for="animRangesInput">예시: idle=0-3, walk=4-11, attack=12-17</label>
+            <textarea id="animRangesInput" placeholder="idle=0-3, walk=4-11"></textarea>
           </div>
-        </div>
+          <div class="controls" style="margin-top:6px">
+            <button id="parseRangesBtn" class="btn" type="button" style="background:var(--soft);color:var(--text);border-color:var(--line)">범위 적용</button>
+          </div>
 
-        <div class="controls" style="margin-top:12px">
-          <button id="exportGifBtn" class="btn" type="button" disabled>GIF 내보내기</button>
-          <button id="exportApngBtn" class="btn" type="button" disabled style="background:var(--soft);color:var(--text);border-color:var(--line)">APNG 내보내기</button>
-        </div>
-        <div class="status" id="exportStatus">내보내기 준비 대기</div>
-      </aside>
+          <h2 style="margin-top:12px">애니메이션 목록</h2>
+          <div class="controls" style="margin-top:0">
+            <button id="addAnimBtn" class="btn" type="button">+ 애니메이션 추가</button>
+          </div>
+          <div id="godotAnimList" class="anim-list" aria-label="Godot 애니메이션 목록"></div>
 
-      <section class="card">
-        <div class="preview-head">
-          <h2 style="margin:0">실시간 미리보기</h2>
-          <div id="frameBadge" class="chip">프레임 1 / 1</div>
-        </div>
+          <div class="controls" style="margin-top:12px">
+            <button id="exportGodotBtn" class="btn" type="button" disabled>📦 Godot ZIP 내보내기</button>
+          </div>
+          <div id="godotStatus" class="status">내보내기 준비 대기</div>
+        </aside>
 
-        <div class="preview-wrap" id="previewWrap">
-          <div class="checker"></div>
-          <canvas id="previewCanvas" width="256" height="256" aria-label="애니메이션 미리보기"></canvas>
-          <div id="emptyNote" class="empty-note">이미지를 올리면 애니메이션이 재생됩니다.</div>
-        </div>
+        <section class="card">
+          <h2>생성 파일 구성</h2>
+          <div class="muted">ZIP에 다음 파일이 포함됩니다.</div>
+          <ul class="muted" style="margin-top:8px">
+            <li><code>spritesheet.png</code> (원본 시트 PNG)</li>
+            <li><code>animations.tres</code> (SpriteFrames / AtlasTexture 기반)</li>
+            <li><code>animated_sprite.tscn</code> (AnimatedSprite2D 노드)</li>
+          </ul>
+          <div class="status" style="margin-top:10px">탭 1에서 업로드한 시트를 공유 사용합니다. 프레임 격자/총 프레임 설정도 그대로 반영됩니다.</div>
+        </section>
+      </section>
+    </section>
 
-        <div class="controls">
-          <button id="prevBtn" class="btn ghost" type="button">⏮ 이전 프레임</button>
-          <button id="playPauseBtn" class="btn" type="button" disabled>▶ 재생</button>
-          <button id="nextBtn" class="btn ghost" type="button">⏭ 다음 프레임</button>
-          <button id="restartBtn" class="btn ghost" type="button">🔁 처음으로</button>
-        </div>
+    <section id="tab-reverse" class="tab-panel" aria-label="역방향 변환 탭">
+      <section class="reverse-layout">
+        <aside class="card">
+          <h2>1) GIF/APNG 업로드</h2>
+          <div id="reverseDropzone" class="dropzone" aria-label="역변환 파일 드롭 영역">
+            <div class="drop-title">GIF 또는 APNG를 드래그 &amp; 드롭</div>
+            <div class="muted">gifuct-js + UPNG로 프레임 분해</div>
+            <div class="upload-row" style="margin-top:8px">
+              <label class="upload-btn btn" for="reverseFileInput">📁 파일 선택</label>
+            </div>
+            <input id="reverseFileInput" type="file" accept="image/gif,image/png,.gif,.apng,.png" />
+          </div>
+          <div id="reverseInfo" class="status">애니메이션 파일을 업로드하면 프레임을 자동 분해합니다.</div>
 
-        <h2 style="margin-top:14px">프레임 순서 썸네일</h2>
-        <div id="thumbStrip" class="thumb-strip" aria-label="프레임 썸네일 스트립"></div>
-        <div class="muted">썸네일을 탭/클릭하면 해당 프레임으로 이동합니다.</div>
+          <h2 style="margin-top:12px">2) 그리드 설정</h2>
+          <div class="grid2">
+            <div class="field"><label for="reverseCols">열(Columns)</label><input id="reverseCols" type="number" min="1" value="1" /></div>
+            <div class="field"><label for="reverseRows">행(Rows)</label><input id="reverseRows" type="number" min="1" value="1" /></div>
+          </div>
+          <div class="controls" style="margin-top:8px">
+            <button id="reverseAutoGridBtn" class="btn" type="button" style="background:var(--soft);color:var(--text);border-color:var(--line)" disabled>🧠 자동 추천 그리드</button>
+          </div>
+          <div id="reverseSheetInfo" class="status">프레임 수를 기반으로 스프라이트 시트 크기를 계산합니다.</div>
+
+          <h2 style="margin-top:12px">3) 내보내기</h2>
+          <div class="controls" style="margin-top:4px">
+            <button id="reverseBuildBtn" class="btn" type="button" disabled>시트 미리 생성</button>
+            <button id="downloadSheetBtn" class="btn" type="button" disabled style="background:var(--soft);color:var(--text);border-color:var(--line)">PNG 다운로드</button>
+            <button id="downloadFramesZipBtn" class="btn" type="button" disabled style="background:var(--soft);color:var(--text);border-color:var(--line)">프레임 ZIP 다운로드</button>
+          </div>
+          <div id="reverseStatus" class="status">변환 준비 대기</div>
+        </aside>
+
+        <section class="card reverse-preview-wrap">
+          <div>
+            <h2>프레임 썸네일</h2>
+            <div id="reverseThumbStrip" class="thumb-strip" aria-label="역변환 프레임 썸네일"></div>
+          </div>
+          <div>
+            <h2 style="margin-bottom:8px">선택 프레임 미리보기</h2>
+            <div class="preview-wrap" style="min-height:180px">
+              <div class="checker"></div>
+              <canvas id="reversePreviewCanvas" width="256" height="256" aria-label="역변환 프레임 미리보기"></canvas>
+              <div id="reverseEmptyNote" class="empty-note">프레임을 선택하면 미리보기가 표시됩니다.</div>
+            </div>
+          </div>
+          <div>
+            <h2 style="margin-bottom:8px">생성된 스프라이트 시트</h2>
+            <div class="preview-wrap" style="min-height:220px">
+              <div class="checker"></div>
+              <canvas id="reverseSheetCanvas" width="256" height="256" aria-label="생성된 스프라이트 시트"></canvas>
+              <div id="reverseSheetEmptyNote" class="empty-note">"시트 미리 생성" 버튼으로 결과를 확인하세요.</div>
+            </div>
+          </div>
+        </section>
       </section>
     </section>
   </main>
@@ -297,10 +462,16 @@
   <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/upng-js@2.1.0/UPNG.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gifuct-js@2.1.2/dist/gifuct-js.min.js"></script>
   <script>
     const $ = (id) => document.getElementById(id);
     const refs = {
       themeToggle: $('themeToggle'),
+      tabButtons: Array.from(document.querySelectorAll('.tab-btn')),
+      tabPanels: Array.from(document.querySelectorAll('.tab-panel')),
+
+      // Tab 1
       dropzone: $('dropzone'), fileInput: $('fileInput'), sampleBtn: $('sampleBtn'),
       sheetInfo: $('sheetInfo'), frameInfo: $('frameInfo'), exportStatus: $('exportStatus'),
       frameW: $('frameW'), frameH: $('frameH'), cols: $('cols'), rows: $('rows'),
@@ -309,14 +480,45 @@
       bgMode: $('bgMode'), bgColor: $('bgColor'),
       playPauseBtn: $('playPauseBtn'), prevBtn: $('prevBtn'), nextBtn: $('nextBtn'), restartBtn: $('restartBtn'),
       exportGifBtn: $('exportGifBtn'), exportApngBtn: $('exportApngBtn'),
-      previewCanvas: $('previewCanvas'), previewWrap: $('previewWrap'), emptyNote: $('emptyNote'),
-      frameBadge: $('frameBadge'), thumbStrip: $('thumbStrip')
+      previewCanvas: $('previewCanvas'), emptyNote: $('emptyNote'),
+      frameBadge: $('frameBadge'), thumbStrip: $('thumbStrip'),
+
+      // Tab 2
+      godotSheetInfo: $('godotSheetInfo'),
+      godotResPath: $('godotResPath'),
+      animRangesInput: $('animRangesInput'),
+      parseRangesBtn: $('parseRangesBtn'),
+      addAnimBtn: $('addAnimBtn'),
+      godotAnimList: $('godotAnimList'),
+      exportGodotBtn: $('exportGodotBtn'),
+      godotStatus: $('godotStatus'),
+
+      // Tab 3
+      reverseDropzone: $('reverseDropzone'),
+      reverseFileInput: $('reverseFileInput'),
+      reverseInfo: $('reverseInfo'),
+      reverseCols: $('reverseCols'),
+      reverseRows: $('reverseRows'),
+      reverseAutoGridBtn: $('reverseAutoGridBtn'),
+      reverseBuildBtn: $('reverseBuildBtn'),
+      downloadSheetBtn: $('downloadSheetBtn'),
+      downloadFramesZipBtn: $('downloadFramesZipBtn'),
+      reverseSheetInfo: $('reverseSheetInfo'),
+      reverseStatus: $('reverseStatus'),
+      reverseThumbStrip: $('reverseThumbStrip'),
+      reversePreviewCanvas: $('reversePreviewCanvas'),
+      reverseSheetCanvas: $('reverseSheetCanvas'),
+      reverseEmptyNote: $('reverseEmptyNote'),
+      reverseSheetEmptyNote: $('reverseSheetEmptyNote')
     };
 
     const state = {
+      activeTab: 'tab-preview',
       image: null,
+      sourceFile: null,
       imageName: 'sprite-sheet',
       objectUrl: '',
+      sheetPngBlob: null,
       frameW: 64,
       frameH: 64,
       cols: 1,
@@ -331,10 +533,24 @@
       direction: 1,
       lastTs: 0,
       accumulator: 0,
-      thumbButtons: []
+      thumbButtons: [],
+
+      reverse: {
+        fileName: 'animation',
+        frames: [],
+        thumbButtons: [],
+        selectedIndex: 0,
+        cols: 1,
+        rows: 1,
+        cellW: 1,
+        cellH: 1,
+        sheetCanvas: null
+      }
     };
 
     const previewCtx = refs.previewCanvas.getContext('2d', { alpha: true });
+    const reversePreviewCtx = refs.reversePreviewCanvas.getContext('2d', { alpha: true });
+    const reverseSheetCtx = refs.reverseSheetCanvas.getContext('2d', { alpha: true });
 
     function initTheme(){
       const saved = localStorage.getItem('sprite-theme');
@@ -359,8 +575,17 @@
       refs.themeToggle.textContent = current === 'dark' ? '☀️ 라이트모드' : '🌙 다크모드';
     }
 
+    function switchTab(tabId){
+      state.activeTab = tabId;
+      refs.tabButtons.forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === tabId));
+      refs.tabPanels.forEach((panel) => panel.classList.toggle('active', panel.id === tabId));
+    }
+
     function setSheetInfo(msg){ refs.sheetInfo.textContent = msg; }
     function setExportStatus(msg){ refs.exportStatus.textContent = msg; }
+    function setGodotStatus(msg){ refs.godotStatus.textContent = msg; }
+    function setReverseStatus(msg){ refs.reverseStatus.textContent = msg; }
+    function setReverseInfo(msg){ refs.reverseInfo.textContent = msg; }
 
     function toInt(value, fallback = 1){
       const n = Number(value);
@@ -407,6 +632,7 @@
       state.currentFrame = Math.min(state.currentFrame, state.totalFrames - 1);
       refs.frameInfo.textContent = `총 프레임: ${state.totalFrames} (시트 ${w}×${h}px)`;
       refs.frameBadge.textContent = `프레임 ${state.currentFrame + 1} / ${state.totalFrames}`;
+      updateGodotSheetInfo();
     }
 
     function getFrameRect(frameIndex){
@@ -675,6 +901,7 @@
       refs.frameInfo.textContent = `총 프레임: ${state.totalFrames} · ${reason}`;
       renderThumbnails();
       renderPreview();
+      ensureGodotAnimationDefaults();
     }
 
     function applyAutoDetect(){
@@ -714,6 +941,7 @@
       refs.prevBtn.disabled = !ready;
       refs.nextBtn.disabled = !ready;
       refs.restartBtn.disabled = !ready;
+      refs.exportGodotBtn.disabled = !ready;
     }
 
     function clearThumbs(){
@@ -801,6 +1029,31 @@
       });
     }
 
+    function canvasToBlob(canvas, type = 'image/png'){
+      return new Promise((resolve, reject) => {
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            reject(new Error('Blob 생성 실패'));
+            return;
+          }
+          resolve(blob);
+        }, type);
+      });
+    }
+
+    async function getSheetPngBlob(){
+      if (!state.image) throw new Error('시트 이미지가 없습니다.');
+      if (state.sheetPngBlob) return state.sheetPngBlob;
+
+      const canvas = document.createElement('canvas');
+      canvas.width = state.image.width;
+      canvas.height = state.image.height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(state.image, 0, 0);
+      state.sheetPngBlob = await canvasToBlob(canvas, 'image/png');
+      return state.sheetPngBlob;
+    }
+
     async function loadFile(file){
       if (!file || !file.type.startsWith('image/')) {
         setSheetInfo('이미지 파일만 업로드할 수 있습니다.');
@@ -810,7 +1063,9 @@
       if (state.objectUrl) URL.revokeObjectURL(state.objectUrl);
       const url = URL.createObjectURL(file);
       state.objectUrl = url;
+      state.sourceFile = file;
       state.imageName = (file.name || 'sprite-sheet').replace(/\.[^.]+$/, '');
+      state.sheetPngBlob = null;
 
       const img = new Image();
       img.src = url;
@@ -831,7 +1086,9 @@
       updateButtonsEnabled();
 
       applyAutoDetect();
+      ensureGodotAnimationDefaults();
       setExportStatus('내보내기 준비 완료');
+      setGodotStatus('Godot 내보내기 준비 완료');
     }
 
     function makeSampleSheet(){
@@ -987,6 +1244,555 @@
       }
     }
 
+    function normalizeResPath(input){
+      let path = (input || 'res://').trim();
+      if (!path) path = 'res://';
+      if (!path.startsWith('res://')) path = `res://${path.replace(/^\/+/, '')}`;
+      if (!path.endsWith('/')) path += '/';
+      return path;
+    }
+
+    function sanitizeAnimName(name, fallback = 'anim'){
+      const clean = (name || '').trim().replace(/\s+/g, '_').replace(/[^0-9A-Za-z_가-힣-]/g, '_');
+      return clean || fallback;
+    }
+
+    function getGodotRows(){
+      return Array.from(refs.godotAnimList.querySelectorAll('.anim-row'));
+    }
+
+    function addGodotAnimationRow(data = {}){
+      const idx = getGodotRows().length + 1;
+      const row = document.createElement('div');
+      row.className = 'anim-row';
+      row.innerHTML = `
+        <div class="field">
+          <label>이름</label>
+          <input class="anim-name" type="text" value="${data.name || `anim_${idx}`}" />
+        </div>
+        <div class="field">
+          <label>시작</label>
+          <input class="anim-start" type="number" min="0" value="${Number.isFinite(data.start) ? data.start : 0}" />
+        </div>
+        <div class="field">
+          <label>끝</label>
+          <input class="anim-end" type="number" min="0" value="${Number.isFinite(data.end) ? data.end : Math.max(0, state.totalFrames - 1)}" />
+        </div>
+        <div class="field">
+          <label>FPS</label>
+          <input class="anim-fps" type="number" min="1" max="120" value="${Number.isFinite(data.fps) ? data.fps : state.fps}" />
+        </div>
+        <label class="field" style="display:flex;gap:6px;align-items:center;padding-bottom:9px"><input class="anim-loop" type="checkbox" ${data.loop === false ? '' : 'checked'} /> 루프</label>
+        <button class="btn anim-del" type="button" style="background:#d946ef;color:#fff;border-color:transparent">삭제</button>
+      `;
+
+      row.querySelector('.anim-del').addEventListener('click', () => {
+        row.remove();
+        if (!getGodotRows().length) addGodotAnimationRow({ name: 'idle', start: 0, end: Math.max(0, state.totalFrames - 1), fps: state.fps, loop: true });
+      });
+
+      row.querySelectorAll('input').forEach((input) => {
+        input.addEventListener('change', () => clampGodotRowsToSheet());
+      });
+
+      refs.godotAnimList.appendChild(row);
+      clampGodotRowsToSheet();
+    }
+
+    function clampGodotRowsToSheet(){
+      if (!state.image) return;
+      const max = Math.max(0, state.totalFrames - 1);
+      getGodotRows().forEach((row) => {
+        const startInput = row.querySelector('.anim-start');
+        const endInput = row.querySelector('.anim-end');
+        startInput.max = String(max);
+        endInput.max = String(max);
+
+        let start = Math.min(max, Math.max(0, Math.floor(Number(startInput.value) || 0)));
+        let end = Math.min(max, Math.max(0, Math.floor(Number(endInput.value) || 0)));
+        startInput.value = String(start);
+        endInput.value = String(end);
+      });
+    }
+
+    function ensureGodotAnimationDefaults(){
+      updateGodotSheetInfo();
+      if (!state.image) return;
+      if (!getGodotRows().length) {
+        addGodotAnimationRow({ name: 'idle', start: 0, end: Math.max(0, state.totalFrames - 1), fps: state.fps, loop: true });
+      }
+      clampGodotRowsToSheet();
+    }
+
+    function updateGodotSheetInfo(){
+      if (!state.image) {
+        refs.godotSheetInfo.textContent = '먼저 탭 1에서 스프라이트 시트를 업로드하세요.';
+        return;
+      }
+      refs.godotSheetInfo.textContent = `공유 시트: ${state.image.width}×${state.image.height}px · 프레임 ${state.frameW}×${state.frameH}px · ${state.cols}열×${state.rows}행 (총 ${state.totalFrames}프레임)`;
+    }
+
+    function parseRangeInputToRows(){
+      const text = refs.animRangesInput.value.trim();
+      if (!text) {
+        setGodotStatus('범위 입력값이 비어 있습니다.');
+        return;
+      }
+
+      const items = text.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean);
+      const parsed = [];
+      for (const item of items) {
+        const m = item.match(/^([^=\s]+)\s*=\s*(\d+)\s*-\s*(\d+)$/);
+        if (!m) continue;
+        parsed.push({
+          name: sanitizeAnimName(m[1], `anim_${parsed.length + 1}`),
+          start: Number(m[2]),
+          end: Number(m[3]),
+          fps: state.fps,
+          loop: true
+        });
+      }
+
+      if (!parsed.length) {
+        setGodotStatus('파싱 실패: "이름=시작-끝" 형식으로 입력해주세요.');
+        return;
+      }
+
+      refs.godotAnimList.innerHTML = '';
+      parsed.forEach((anim) => addGodotAnimationRow(anim));
+      clampGodotRowsToSheet();
+      setGodotStatus(`${parsed.length}개 애니메이션 범위를 적용했습니다.`);
+    }
+
+    function collectGodotAnimations(){
+      if (!state.image) throw new Error('스프라이트 시트를 먼저 업로드하세요.');
+
+      const max = Math.max(0, state.totalFrames - 1);
+      const rows = getGodotRows();
+      if (!rows.length) throw new Error('애니메이션을 최소 1개 이상 추가하세요.');
+
+      const animations = rows.map((row, idx) => {
+        const name = sanitizeAnimName(row.querySelector('.anim-name').value, `anim_${idx + 1}`);
+        const start = Math.min(max, Math.max(0, Math.floor(Number(row.querySelector('.anim-start').value) || 0)));
+        const end = Math.min(max, Math.max(0, Math.floor(Number(row.querySelector('.anim-end').value) || 0)));
+        const fps = Math.min(120, Math.max(1, Math.floor(Number(row.querySelector('.anim-fps').value) || state.fps)));
+        const loop = !!row.querySelector('.anim-loop').checked;
+        return { name, start, end, fps, loop };
+      });
+
+      return animations;
+    }
+
+    function frameSequence(start, end){
+      const seq = [];
+      if (start <= end) {
+        for (let i = start; i <= end; i++) seq.push(i);
+      } else {
+        for (let i = start; i >= end; i--) seq.push(i);
+      }
+      return seq;
+    }
+
+    function buildGodotResources(animations, resPath){
+      const root = normalizeResPath(resPath);
+      const pngPath = `${root}spritesheet.png`;
+      const tresPath = `${root}animations.tres`;
+
+      const usedFrames = new Set();
+      animations.forEach((anim) => frameSequence(anim.start, anim.end).forEach((idx) => usedFrames.add(idx)));
+      if (!usedFrames.size) usedFrames.add(0);
+
+      const sortedFrames = Array.from(usedFrames).sort((a, b) => a - b);
+      const atlasMap = new Map();
+      const subBlocks = [];
+
+      sortedFrames.forEach((idx, i) => {
+        const id = `AtlasTexture_${String(i + 1).padStart(5, '0')}`;
+        atlasMap.set(idx, id);
+        const rect = getFrameRect(idx);
+        subBlocks.push(`[sub_resource type="AtlasTexture" id="${id}"]\natlas = ExtResource("1")\nregion = Rect2(${rect.sx}, ${rect.sy}, ${rect.sw}, ${rect.sh})`);
+      });
+
+      const animBlocks = animations.map((anim) => {
+        const seq = frameSequence(anim.start, anim.end);
+        const framesData = seq.map((idx) => `{"duration": 1.0, "texture": SubResource("${atlasMap.get(idx)}")}`);
+        return `  {"frames": [${framesData.join(', ')}], "loop": ${anim.loop ? 'true' : 'false'}, "name": &"${anim.name}", "speed": ${Number(anim.fps).toFixed(1)}}`;
+      });
+
+      const tres = `[gd_resource type="SpriteFrames" format=3]\n\n[ext_resource type="Texture2D" path="${pngPath}" id="1"]\n\n${subBlocks.join('\n\n')}\n\n[resource]\nanimations = [\n${animBlocks.join(',\n')}\n]\n`;
+
+      const defaultAnim = animations[0]?.name || 'idle';
+      const tscn = `[gd_scene format=3]\n\n[ext_resource type="SpriteFrames" path="${tresPath}" id="1"]\n\n[node name="AnimatedSprite2D" type="AnimatedSprite2D"]\nsprite_frames = ExtResource("1")\nanimation = &"${defaultAnim}"\n`;
+
+      return { tres, tscn, root };
+    }
+
+    function zipFolderFromResPath(root){
+      return root.replace(/^res:\/\//, '').replace(/^\/+/, '');
+    }
+
+    async function exportGodotZip(){
+      if (!state.image) {
+        setGodotStatus('스프라이트 시트를 먼저 업로드하세요.');
+        return;
+      }
+      if (typeof JSZip === 'undefined') {
+        setGodotStatus('JSZip 로딩 실패: 새로고침 후 다시 시도하세요.');
+        return;
+      }
+
+      refs.exportGodotBtn.disabled = true;
+      try {
+        setGodotStatus('애니메이션 정의 확인 중...');
+        const animations = collectGodotAnimations();
+        const { tres, tscn, root } = buildGodotResources(animations, refs.godotResPath.value);
+        const pngBlob = await getSheetPngBlob();
+
+        setGodotStatus('ZIP 생성 중...');
+        const zip = new JSZip();
+        const folder = zipFolderFromResPath(root);
+        const prefix = folder ? (folder.endsWith('/') ? folder : `${folder}/`) : '';
+
+        zip.file(`${prefix}spritesheet.png`, pngBlob);
+        zip.file(`${prefix}animations.tres`, tres);
+        zip.file(`${prefix}animated_sprite.tscn`, tscn);
+
+        const blob = await zip.generateAsync({ type: 'blob' }, (meta) => {
+          setGodotStatus(`ZIP 생성 중... ${Math.round(meta.percent)}%`);
+        });
+        downloadBlob(blob, `${state.imageName}-godot-assets.zip`);
+        setGodotStatus('Godot ZIP 내보내기 완료 ✅');
+      } catch (err) {
+        setGodotStatus(`내보내기 실패: ${err.message}`);
+      } finally {
+        refs.exportGodotBtn.disabled = !state.image;
+      }
+    }
+
+    function clearReverseThumbs(){
+      refs.reverseThumbStrip.innerHTML = '';
+      state.reverse.thumbButtons = [];
+    }
+
+    function computeReverseFrameMetrics(){
+      if (!state.reverse.frames.length) {
+        state.reverse.cellW = 1;
+        state.reverse.cellH = 1;
+        return;
+      }
+      state.reverse.cellW = Math.max(...state.reverse.frames.map((f) => f.canvas.width));
+      state.reverse.cellH = Math.max(...state.reverse.frames.map((f) => f.canvas.height));
+    }
+
+    function suggestReverseGrid(){
+      const count = Math.max(1, state.reverse.frames.length);
+      const cols = Math.ceil(Math.sqrt(count));
+      const rows = Math.ceil(count / cols);
+      state.reverse.cols = cols;
+      state.reverse.rows = rows;
+      refs.reverseCols.value = String(cols);
+      refs.reverseRows.value = String(rows);
+      updateReverseSheetInfo();
+    }
+
+    function updateReverseSheetInfo(){
+      const count = state.reverse.frames.length;
+      if (!count) {
+        refs.reverseSheetInfo.textContent = '프레임 수를 기반으로 스프라이트 시트 크기를 계산합니다.';
+        return;
+      }
+
+      state.reverse.cols = toInt(refs.reverseCols.value, state.reverse.cols);
+      state.reverse.rows = toInt(refs.reverseRows.value, state.reverse.rows);
+      refs.reverseCols.value = String(state.reverse.cols);
+      refs.reverseRows.value = String(state.reverse.rows);
+
+      const capacity = state.reverse.cols * state.reverse.rows;
+      const rowsNeeded = Math.ceil(count / state.reverse.cols);
+      const realRows = capacity < count ? rowsNeeded : state.reverse.rows;
+      const sheetW = state.reverse.cellW * state.reverse.cols;
+      const sheetH = state.reverse.cellH * realRows;
+
+      refs.reverseSheetInfo.textContent = `프레임 ${count}개 · 셀 ${state.reverse.cellW}×${state.reverse.cellH}px · 그리드 ${state.reverse.cols}×${realRows} · 결과 ${sheetW}×${sheetH}px`;
+    }
+
+    function renderReversePreview(){
+      const frames = state.reverse.frames;
+      refs.reverseEmptyNote.style.display = frames.length ? 'none' : 'block';
+      if (!frames.length) {
+        reversePreviewCtx.clearRect(0, 0, refs.reversePreviewCanvas.width, refs.reversePreviewCanvas.height);
+        return;
+      }
+
+      const frame = frames[Math.max(0, Math.min(state.reverse.selectedIndex, frames.length - 1))];
+      refs.reversePreviewCanvas.width = frame.canvas.width;
+      refs.reversePreviewCanvas.height = frame.canvas.height;
+      reversePreviewCtx.clearRect(0, 0, frame.canvas.width, frame.canvas.height);
+      reversePreviewCtx.drawImage(frame.canvas, 0, 0);
+
+      state.reverse.thumbButtons.forEach((btn, idx) => btn.classList.toggle('active', idx === state.reverse.selectedIndex));
+    }
+
+    function renderReverseThumbs(){
+      clearReverseThumbs();
+      const frames = state.reverse.frames;
+      if (!frames.length) return;
+
+      frames.forEach((item, idx) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'thumb-btn';
+
+        const thumb = document.createElement('canvas');
+        thumb.width = 64;
+        thumb.height = 64;
+        thumb.className = 'thumb-canvas';
+        const ctx = thumb.getContext('2d');
+
+        const scale = Math.min(58 / item.canvas.width, 58 / item.canvas.height);
+        const dw = Math.max(1, Math.floor(item.canvas.width * scale));
+        const dh = Math.max(1, Math.floor(item.canvas.height * scale));
+        const dx = Math.floor((64 - dw) / 2);
+        const dy = Math.floor((64 - dh) / 2);
+        ctx.imageSmoothingEnabled = false;
+        ctx.clearRect(0, 0, 64, 64);
+        ctx.drawImage(item.canvas, 0, 0, item.canvas.width, item.canvas.height, dx, dy, dw, dh);
+
+        const num = document.createElement('span');
+        num.className = 'thumb-num';
+        num.textContent = String(idx + 1);
+
+        btn.appendChild(thumb);
+        btn.appendChild(num);
+        btn.addEventListener('click', () => {
+          state.reverse.selectedIndex = idx;
+          renderReversePreview();
+        });
+
+        refs.reverseThumbStrip.appendChild(btn);
+        state.reverse.thumbButtons.push(btn);
+      });
+
+      renderReversePreview();
+    }
+
+    function cloneCanvas(src){
+      const c = document.createElement('canvas');
+      c.width = src.width;
+      c.height = src.height;
+      c.getContext('2d').drawImage(src, 0, 0);
+      return c;
+    }
+
+    function decodeGifFrames(arrayBuffer){
+      const lib = window.gifuctjs || window;
+      const parseGIF = lib.parseGIF;
+      const decompressFrames = lib.decompressFrames;
+      if (typeof parseGIF !== 'function' || typeof decompressFrames !== 'function') {
+        throw new Error('gifuct-js를 사용할 수 없습니다.');
+      }
+
+      const gif = parseGIF(arrayBuffer);
+      const frames = decompressFrames(gif, true);
+      const width = gif?.lsd?.width || frames[0]?.dims?.width || 1;
+      const height = gif?.lsd?.height || frames[0]?.dims?.height || 1;
+
+      const compose = document.createElement('canvas');
+      compose.width = width;
+      compose.height = height;
+      const ctx = compose.getContext('2d');
+      ctx.clearRect(0, 0, width, height);
+
+      const out = [];
+      frames.forEach((frame) => {
+        const before = ctx.getImageData(0, 0, width, height);
+        const patch = frame.patch instanceof Uint8ClampedArray ? frame.patch : new Uint8ClampedArray(frame.patch);
+        const imgData = new ImageData(patch, frame.dims.width, frame.dims.height);
+        ctx.putImageData(imgData, frame.dims.left, frame.dims.top);
+
+        out.push({
+          canvas: cloneCanvas(compose),
+          delay: Math.max(20, (Number(frame.delay) || 10) * 10)
+        });
+
+        if (frame.disposalType === 2) {
+          ctx.clearRect(frame.dims.left, frame.dims.top, frame.dims.width, frame.dims.height);
+        } else if (frame.disposalType === 3) {
+          ctx.putImageData(before, 0, 0);
+        }
+      });
+
+      return out;
+    }
+
+    function decodePngOrApngFrames(arrayBuffer){
+      if (typeof UPNG === 'undefined') throw new Error('UPNG 라이브러리를 불러오지 못했습니다.');
+      const img = UPNG.decode(arrayBuffer);
+      const rgbaFrames = UPNG.toRGBA8(img);
+      const out = [];
+      for (let i = 0; i < rgbaFrames.length; i++) {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        const rgba = new Uint8ClampedArray(rgbaFrames[i]);
+        const imageData = new ImageData(rgba, img.width, img.height);
+        ctx.putImageData(imageData, 0, 0);
+
+        const delay = Math.max(20, Number(img.frames?.[i]?.delay) || 100);
+        out.push({ canvas, delay });
+      }
+      return out;
+    }
+
+    async function loadReverseFile(file){
+      if (!file) return;
+      const ext = (file.name.split('.').pop() || '').toLowerCase();
+      const isGif = file.type === 'image/gif' || ext === 'gif';
+      const isPng = file.type === 'image/png' || ext === 'png' || ext === 'apng';
+      if (!isGif && !isPng) {
+        setReverseInfo('GIF 또는 APNG(PNG) 파일만 지원합니다.');
+        return;
+      }
+
+      try {
+        setReverseStatus('프레임 분해 중...');
+        const buffer = await file.arrayBuffer();
+        const frames = isGif ? decodeGifFrames(buffer) : decodePngOrApngFrames(buffer);
+        if (!frames.length) throw new Error('프레임을 추출하지 못했습니다.');
+
+        state.reverse.fileName = file.name.replace(/\.[^.]+$/, '') || 'animation';
+        state.reverse.frames = frames;
+        state.reverse.selectedIndex = 0;
+        state.reverse.sheetCanvas = null;
+
+        computeReverseFrameMetrics();
+        suggestReverseGrid();
+        renderReverseThumbs();
+        renderReverseSheetCanvas(null);
+        updateReverseButtons();
+
+        setReverseInfo(`로드 완료: ${file.name} · ${frames.length}프레임`);
+        setReverseStatus('프레임 분해 완료 ✅');
+      } catch (err) {
+        state.reverse.frames = [];
+        clearReverseThumbs();
+        renderReversePreview();
+        renderReverseSheetCanvas(null);
+        updateReverseButtons();
+        setReverseStatus(`분해 실패: ${err.message}`);
+      }
+    }
+
+    function buildReverseSheetCanvas(){
+      const frames = state.reverse.frames;
+      if (!frames.length) throw new Error('프레임 데이터가 없습니다.');
+
+      state.reverse.cols = toInt(refs.reverseCols.value, state.reverse.cols);
+      state.reverse.rows = toInt(refs.reverseRows.value, state.reverse.rows);
+
+      const cols = state.reverse.cols;
+      const requiredRows = Math.ceil(frames.length / cols);
+      const rows = Math.max(state.reverse.rows, requiredRows);
+      refs.reverseRows.value = String(rows);
+      state.reverse.rows = rows;
+
+      const cellW = state.reverse.cellW;
+      const cellH = state.reverse.cellH;
+      const canvas = document.createElement('canvas');
+      canvas.width = cols * cellW;
+      canvas.height = rows * cellH;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      frames.forEach((frame, idx) => {
+        const col = idx % cols;
+        const row = Math.floor(idx / cols);
+        const dx = col * cellW + Math.floor((cellW - frame.canvas.width) / 2);
+        const dy = row * cellH + Math.floor((cellH - frame.canvas.height) / 2);
+        ctx.drawImage(frame.canvas, dx, dy);
+      });
+
+      updateReverseSheetInfo();
+      return canvas;
+    }
+
+    function renderReverseSheetCanvas(canvas){
+      refs.reverseSheetEmptyNote.style.display = canvas ? 'none' : 'block';
+      if (!canvas) {
+        reverseSheetCtx.clearRect(0, 0, refs.reverseSheetCanvas.width, refs.reverseSheetCanvas.height);
+        return;
+      }
+      refs.reverseSheetCanvas.width = canvas.width;
+      refs.reverseSheetCanvas.height = canvas.height;
+      reverseSheetCtx.clearRect(0, 0, canvas.width, canvas.height);
+      reverseSheetCtx.drawImage(canvas, 0, 0);
+    }
+
+    function updateReverseButtons(){
+      const ready = state.reverse.frames.length > 0;
+      refs.reverseAutoGridBtn.disabled = !ready;
+      refs.reverseBuildBtn.disabled = !ready;
+      refs.downloadSheetBtn.disabled = !ready;
+      refs.downloadFramesZipBtn.disabled = !ready;
+    }
+
+    async function buildReverseSheetPreview(){
+      try {
+        const canvas = buildReverseSheetCanvas();
+        state.reverse.sheetCanvas = canvas;
+        renderReverseSheetCanvas(canvas);
+        setReverseStatus('스프라이트 시트 미리 생성 완료 ✅');
+      } catch (err) {
+        setReverseStatus(`시트 생성 실패: ${err.message}`);
+      }
+    }
+
+    async function downloadReverseSheet(){
+      try {
+        const canvas = state.reverse.sheetCanvas || buildReverseSheetCanvas();
+        state.reverse.sheetCanvas = canvas;
+        renderReverseSheetCanvas(canvas);
+        const blob = await canvasToBlob(canvas, 'image/png');
+        downloadBlob(blob, `${state.reverse.fileName}-spritesheet.png`);
+        setReverseStatus('스프라이트 시트 PNG 다운로드 완료 ✅');
+      } catch (err) {
+        setReverseStatus(`PNG 다운로드 실패: ${err.message}`);
+      }
+    }
+
+    async function downloadReverseFramesZip(){
+      if (typeof JSZip === 'undefined') {
+        setReverseStatus('JSZip 로딩 실패: 새로고침 후 재시도하세요.');
+        return;
+      }
+      if (!state.reverse.frames.length) {
+        setReverseStatus('먼저 파일을 업로드해주세요.');
+        return;
+      }
+
+      try {
+        setReverseStatus('개별 프레임 ZIP 생성 중...');
+        const zip = new JSZip();
+        for (let i = 0; i < state.reverse.frames.length; i++) {
+          const frameCanvas = state.reverse.frames[i].canvas;
+          const blob = await canvasToBlob(frameCanvas, 'image/png');
+          const num = String(i + 1).padStart(3, '0');
+          zip.file(`frames/frame_${num}.png`, blob);
+          if ((i + 1) % 10 === 0 || i === state.reverse.frames.length - 1) {
+            setReverseStatus(`개별 프레임 ZIP 생성 중... ${i + 1}/${state.reverse.frames.length}`);
+          }
+        }
+        const zipBlob = await zip.generateAsync({ type: 'blob' }, (meta) => {
+          setReverseStatus(`ZIP 압축 중... ${Math.round(meta.percent)}%`);
+        });
+        downloadBlob(zipBlob, `${state.reverse.fileName}-frames.zip`);
+        setReverseStatus('개별 프레임 ZIP 다운로드 완료 ✅');
+      } catch (err) {
+        setReverseStatus(`프레임 ZIP 실패: ${err.message}`);
+      }
+    }
+
     function bindUploadEvents(){
       refs.fileInput.addEventListener('change', (e) => {
         const file = e.target.files && e.target.files[0];
@@ -1018,8 +1824,69 @@
       });
     }
 
+    function bindGodotEvents(){
+      refs.addAnimBtn.addEventListener('click', () => {
+        addGodotAnimationRow({
+          name: `anim_${getGodotRows().length + 1}`,
+          start: 0,
+          end: Math.max(0, state.totalFrames - 1),
+          fps: state.fps,
+          loop: true
+        });
+      });
+      refs.parseRangesBtn.addEventListener('click', parseRangeInputToRows);
+      refs.exportGodotBtn.addEventListener('click', exportGodotZip);
+      refs.godotResPath.addEventListener('change', () => {
+        refs.godotResPath.value = normalizeResPath(refs.godotResPath.value);
+      });
+    }
+
+    function bindReverseEvents(){
+      refs.reverseFileInput.addEventListener('change', (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (file) loadReverseFile(file);
+      });
+
+      ['dragenter', 'dragover'].forEach((ev) => {
+        refs.reverseDropzone.addEventListener(ev, (e) => {
+          e.preventDefault();
+          refs.reverseDropzone.classList.add('dragover');
+        });
+      });
+
+      ['dragleave', 'drop'].forEach((ev) => {
+        refs.reverseDropzone.addEventListener(ev, (e) => {
+          e.preventDefault();
+          refs.reverseDropzone.classList.remove('dragover');
+        });
+      });
+
+      refs.reverseDropzone.addEventListener('drop', (e) => {
+        const file = e.dataTransfer?.files?.[0];
+        if (file) loadReverseFile(file);
+      });
+
+      refs.reverseAutoGridBtn.addEventListener('click', () => {
+        suggestReverseGrid();
+        setReverseStatus('자동 추천 그리드를 적용했습니다.');
+      });
+
+      [refs.reverseCols, refs.reverseRows].forEach((el) => {
+        el.addEventListener('input', updateReverseSheetInfo);
+        el.addEventListener('change', updateReverseSheetInfo);
+      });
+
+      refs.reverseBuildBtn.addEventListener('click', buildReverseSheetPreview);
+      refs.downloadSheetBtn.addEventListener('click', downloadReverseSheet);
+      refs.downloadFramesZipBtn.addEventListener('click', downloadReverseFramesZip);
+    }
+
     function bindControlEvents(){
       refs.themeToggle.addEventListener('click', toggleTheme);
+
+      refs.tabButtons.forEach((btn) => {
+        btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+      });
 
       [refs.frameW, refs.frameH, refs.cols, refs.rows].forEach((el) => {
         ['input', 'change'].forEach((ev) => {
@@ -1075,7 +1942,12 @@
       writeInputs();
       bindUploadEvents();
       bindControlEvents();
+      bindGodotEvents();
+      bindReverseEvents();
       updateButtonsEnabled();
+      updateGodotSheetInfo();
+      updateReverseButtons();
+      renderReverseSheetCanvas(null);
       requestAnimationFrame(rafLoop);
     }
 

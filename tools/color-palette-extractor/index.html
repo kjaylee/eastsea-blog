@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>색상 팔레트 추출기 | EastSea Tools</title>
+  <meta name="description" content="이미지에서 주요 색상 5~8개를 추출하고 HEX/RGB/HSL 값을 복사하세요." />
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --card: #ffffff;
+      --line: #dbe3ef;
+      --text: #0f172a;
+      --sub: #475569;
+      --brand: #2563eb;
+      --brand-dark: #1e40af;
+      --radius: 14px;
+      --shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+    }
+    .wrap {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 18px 14px 44px;
+    }
+    h1 {
+      margin: 6px 0 4px;
+      font-size: clamp(1.35rem, 4vw, 2rem);
+    }
+    .lead {
+      margin: 0 0 16px;
+      color: var(--sub);
+      font-size: 0.95rem;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 0.95fr 1.05fr;
+      gap: 14px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 14px;
+    }
+    .drop {
+      border: 2px dashed #93c5fd;
+      background: #eff6ff;
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+      color: #1e3a8a;
+      transition: 0.2s ease;
+    }
+    .drop.dragover {
+      border-color: #1d4ed8;
+      background: #dbeafe;
+    }
+    .preview-wrap {
+      margin-top: 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      overflow: hidden;
+      background: #fff;
+      min-height: 190px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .preview-wrap img {
+      max-width: 100%;
+      display: block;
+      object-fit: contain;
+      max-height: 360px;
+    }
+    .row {
+      margin-top: 12px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: end;
+    }
+    label {
+      display: block;
+      font-size: 0.88rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    input[type="range"] { width: 100%; }
+    .chip {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 0.85rem;
+      color: #1e40af;
+      background: #eff6ff;
+      min-width: 52px;
+      text-align: center;
+      font-weight: 700;
+    }
+    button {
+      font: inherit;
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 13px;
+      cursor: pointer;
+      font-weight: 700;
+    }
+    .btn-primary {
+      background: var(--brand);
+      color: #fff;
+    }
+    .btn-primary:hover { background: var(--brand-dark); }
+    .btn-ghost {
+      background: #eef2ff;
+      border: 1px solid #c7d2fe;
+      color: #1e3a8a;
+    }
+    .actions { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+    .result-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .palette {
+      margin-top: 10px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+      gap: 10px;
+    }
+    .swatch {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+      overflow: hidden;
+    }
+    .swatch-color {
+      height: 78px;
+      border-bottom: 1px solid var(--line);
+      position: relative;
+    }
+    .ratio {
+      position: absolute;
+      right: 8px;
+      bottom: 8px;
+      font-size: 0.74rem;
+      padding: 3px 7px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.88);
+      color: #0f172a;
+      font-weight: 700;
+    }
+    .swatch-body {
+      padding: 9px;
+      font-size: 0.82rem;
+    }
+    .line { color: var(--sub); margin-bottom: 3px; word-break: break-all; }
+    .line strong { color: #0f172a; }
+    .mini-actions {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 7px;
+    }
+    .mini-actions button {
+      padding: 6px 8px;
+      font-size: 0.77rem;
+      border: 1px solid #cbd5e1;
+      background: #f8fafc;
+      color: #1e293b;
+    }
+    .status {
+      margin-top: 8px;
+      color: var(--sub);
+      font-size: 0.88rem;
+      min-height: 1.2em;
+    }
+    canvas { display: none; }
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <h1>색상 팔레트 추출기</h1>
+    <p class="lead">이미지를 올리면 주요 색상 5~8개를 추출합니다. HEX / RGB / HSL 값을 즉시 복사할 수 있습니다.</p>
+
+    <section class="layout">
+      <article class="card">
+        <div class="drop" id="dropZone">
+          <p style="margin:0 0 6px;font-weight:700;">이미지 파일을 드래그하거나 선택하세요</p>
+          <p style="margin:0 0 10px;font-size:0.85rem;">JPG / PNG / WEBP 지원</p>
+          <input id="fileInput" type="file" accept="image/*" />
+        </div>
+
+        <div class="preview-wrap" id="previewWrap">
+          <span style="color:#64748b;font-size:0.9rem;">이미지를 업로드하면 미리보기가 표시됩니다.</span>
+        </div>
+
+        <div class="row">
+          <div>
+            <label for="countRange">추출 개수</label>
+            <input id="countRange" type="range" min="5" max="8" value="6" />
+          </div>
+          <span class="chip" id="countChip">6개</span>
+        </div>
+
+        <div class="actions">
+          <button class="btn-primary" id="extractBtn" disabled>팔레트 추출</button>
+          <button class="btn-ghost" id="resetBtn">초기화</button>
+        </div>
+        <p class="status" id="status">이미지를 먼저 업로드해주세요.</p>
+      </article>
+
+      <article class="card">
+        <div class="result-head">
+          <strong>추출 결과</strong>
+          <div class="actions" style="margin:0;">
+            <button class="btn-ghost" id="copyHexBtn" disabled>HEX 전체 복사</button>
+            <button class="btn-ghost" id="copyCssBtn" disabled>CSS 변수 복사</button>
+          </div>
+        </div>
+        <div id="palette" class="palette"></div>
+      </article>
+    </section>
+
+    <canvas id="workCanvas"></canvas>
+  </main>
+
+  <script>
+    const fileInput = document.getElementById('fileInput');
+    const dropZone = document.getElementById('dropZone');
+    const previewWrap = document.getElementById('previewWrap');
+    const countRange = document.getElementById('countRange');
+    const countChip = document.getElementById('countChip');
+    const extractBtn = document.getElementById('extractBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const statusEl = document.getElementById('status');
+    const paletteEl = document.getElementById('palette');
+    const copyHexBtn = document.getElementById('copyHexBtn');
+    const copyCssBtn = document.getElementById('copyCssBtn');
+    const canvas = document.getElementById('workCanvas');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+    let currentImage = null;
+    let currentPalette = [];
+
+    function setStatus(msg, isError = false) {
+      statusEl.textContent = msg;
+      statusEl.style.color = isError ? '#b91c1c' : '#475569';
+    }
+
+    function clamp(v, min, max) {
+      return Math.max(min, Math.min(max, v));
+    }
+
+    function rgbToHex(r, g, b) {
+      return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('').toUpperCase();
+    }
+
+    function rgbToHsl(r, g, b) {
+      r /= 255; g /= 255; b /= 255;
+      const max = Math.max(r, g, b), min = Math.min(r, g, b);
+      let h = 0, s = 0;
+      const l = (max + min) / 2;
+      const d = max - min;
+
+      if (d !== 0) {
+        s = d / (1 - Math.abs(2 * l - 1));
+        switch (max) {
+          case r: h = 60 * (((g - b) / d) % 6); break;
+          case g: h = 60 * ((b - r) / d + 2); break;
+          case b: h = 60 * ((r - g) / d + 4); break;
+        }
+      }
+      if (h < 0) h += 360;
+      return [Math.round(h), Math.round(s * 100), Math.round(l * 100)];
+    }
+
+    function colorDistance(a, b) {
+      const dr = a[0] - b[0];
+      const dg = a[1] - b[1];
+      const db = a[2] - b[2];
+      return dr * dr + dg * dg + db * db;
+    }
+
+    function kmeansPalette(pixels, k, iterations = 12) {
+      if (pixels.length <= k) return pixels.map((p, idx) => ({ rgb: p, count: 1, index: idx }));
+
+      const centroids = [];
+      centroids.push(pixels[Math.floor(Math.random() * pixels.length)].slice());
+      while (centroids.length < k) {
+        let farthest = null;
+        let maxDist = -1;
+        for (const p of pixels) {
+          let minD = Infinity;
+          for (const c of centroids) {
+            const d = colorDistance(p, c);
+            if (d < minD) minD = d;
+          }
+          if (minD > maxDist) {
+            maxDist = minD;
+            farthest = p;
+          }
+        }
+        centroids.push(farthest.slice());
+      }
+
+      let assignment = new Array(pixels.length).fill(0);
+
+      for (let iter = 0; iter < iterations; iter++) {
+        const sums = Array.from({ length: k }, () => [0, 0, 0, 0]);
+
+        for (let i = 0; i < pixels.length; i++) {
+          const p = pixels[i];
+          let best = 0;
+          let bestDist = Infinity;
+          for (let j = 0; j < k; j++) {
+            const d = colorDistance(p, centroids[j]);
+            if (d < bestDist) {
+              bestDist = d;
+              best = j;
+            }
+          }
+          assignment[i] = best;
+          sums[best][0] += p[0];
+          sums[best][1] += p[1];
+          sums[best][2] += p[2];
+          sums[best][3] += 1;
+        }
+
+        for (let j = 0; j < k; j++) {
+          if (sums[j][3] === 0) continue;
+          centroids[j][0] = Math.round(sums[j][0] / sums[j][3]);
+          centroids[j][1] = Math.round(sums[j][1] / sums[j][3]);
+          centroids[j][2] = Math.round(sums[j][2] / sums[j][3]);
+        }
+      }
+
+      const counts = Array.from({ length: k }, () => 0);
+      assignment.forEach(i => counts[i]++);
+
+      return centroids
+        .map((rgb, idx) => ({ rgb, count: counts[idx], index: idx }))
+        .filter(c => c.count > 0)
+        .sort((a, b) => b.count - a.count);
+    }
+
+    function renderPalette(palette, total) {
+      paletteEl.innerHTML = '';
+      if (!palette.length) return;
+
+      currentPalette = palette.map(item => {
+        const [r, g, b] = item.rgb;
+        const hex = rgbToHex(r, g, b);
+        const [h, s, l] = rgbToHsl(r, g, b);
+        const ratio = ((item.count / total) * 100).toFixed(1);
+        return { hex, rgb: `rgb(${r}, ${g}, ${b})`, hsl: `hsl(${h}, ${s}%, ${l}%)`, ratio };
+      });
+
+      currentPalette.forEach((p, idx) => {
+        const card = document.createElement('div');
+        card.className = 'swatch';
+
+        const top = document.createElement('div');
+        top.className = 'swatch-color';
+        top.style.background = p.hex;
+
+        const ratio = document.createElement('span');
+        ratio.className = 'ratio';
+        ratio.textContent = `${p.ratio}%`;
+        top.appendChild(ratio);
+
+        const body = document.createElement('div');
+        body.className = 'swatch-body';
+        body.innerHTML = `
+          <div class="line"><strong>${idx + 1}번</strong></div>
+          <div class="line">HEX: <strong>${p.hex}</strong></div>
+          <div class="line">RGB: ${p.rgb}</div>
+          <div class="line">HSL: ${p.hsl}</div>
+        `;
+
+        const actions = document.createElement('div');
+        actions.className = 'mini-actions';
+
+        ['hex', 'rgb', 'hsl'].forEach(kind => {
+          const b = document.createElement('button');
+          b.textContent = `${kind.toUpperCase()} 복사`;
+          b.addEventListener('click', () => copyText(p[kind]));
+          actions.appendChild(b);
+        });
+
+        body.appendChild(actions);
+        card.append(top, body);
+        paletteEl.appendChild(card);
+      });
+
+      copyHexBtn.disabled = false;
+      copyCssBtn.disabled = false;
+    }
+
+    async function copyText(text) {
+      try {
+        await navigator.clipboard.writeText(text);
+        setStatus('클립보드에 복사했습니다.');
+      } catch {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+        setStatus('클립보드에 복사했습니다.');
+      }
+    }
+
+    function buildSamplePixels(image, target = 9000) {
+      const maxSide = 320;
+      const ratio = Math.min(maxSide / image.width, maxSide / image.height, 1);
+      const w = Math.max(24, Math.round(image.width * ratio));
+      const h = Math.max(24, Math.round(image.height * ratio));
+      canvas.width = w;
+      canvas.height = h;
+      ctx.clearRect(0, 0, w, h);
+      ctx.drawImage(image, 0, 0, w, h);
+
+      const data = ctx.getImageData(0, 0, w, h).data;
+      const step = Math.max(1, Math.floor((w * h) / target));
+      const pixels = [];
+
+      for (let i = 0; i < w * h; i += step) {
+        const p = i * 4;
+        const a = data[p + 3];
+        if (a < 130) continue;
+
+        const r = data[p];
+        const g = data[p + 1];
+        const b = data[p + 2];
+
+        // 너무 밝거나 어두운 색만 과도하게 몰리는 현상 완화
+        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+        if (brightness < 6 || brightness > 249) continue;
+
+        pixels.push([r, g, b]);
+      }
+      return pixels;
+    }
+
+    function setPreviewImage(src) {
+      previewWrap.innerHTML = '';
+      const img = new Image();
+      img.onload = () => {
+        currentImage = img;
+        extractBtn.disabled = false;
+        setStatus('이미지가 준비되었습니다. 팔레트를 추출해보세요.');
+      };
+      img.src = src;
+      previewWrap.appendChild(img);
+    }
+
+    function loadFile(file) {
+      if (!file || !file.type.startsWith('image/')) {
+        setStatus('이미지 파일만 업로드할 수 있습니다.', true);
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = e => setPreviewImage(e.target.result);
+      reader.readAsDataURL(file);
+    }
+
+    async function extractPalette() {
+      if (!currentImage) {
+        setStatus('먼저 이미지를 업로드해주세요.', true);
+        return;
+      }
+      try {
+        const k = Number(countRange.value);
+        setStatus('색상 분석 중...');
+        const pixels = buildSamplePixels(currentImage);
+        if (pixels.length < k) {
+          setStatus('유효한 픽셀이 부족합니다. 다른 이미지를 시도해주세요.', true);
+          return;
+        }
+
+        const clusters = kmeansPalette(pixels, k, 14);
+        renderPalette(clusters.slice(0, k), pixels.length);
+        setStatus(`주요 색상 ${Math.min(k, clusters.length)}개를 추출했습니다.`);
+      } catch (err) {
+        console.error(err);
+        setStatus('팔레트 추출 중 오류가 발생했습니다.', true);
+      }
+    }
+
+    function resetAll() {
+      fileInput.value = '';
+      currentImage = null;
+      currentPalette = [];
+      previewWrap.innerHTML = '<span style="color:#64748b;font-size:0.9rem;">이미지를 업로드하면 미리보기가 표시됩니다.</span>';
+      paletteEl.innerHTML = '';
+      extractBtn.disabled = true;
+      copyHexBtn.disabled = true;
+      copyCssBtn.disabled = true;
+      setStatus('초기화되었습니다.');
+    }
+
+    countRange.addEventListener('input', () => {
+      countChip.textContent = `${countRange.value}개`;
+    });
+
+    fileInput.addEventListener('change', e => loadFile(e.target.files[0]));
+    extractBtn.addEventListener('click', extractPalette);
+    resetBtn.addEventListener('click', resetAll);
+
+    copyHexBtn.addEventListener('click', () => {
+      const text = currentPalette.map(c => c.hex).join(', ');
+      copyText(text);
+    });
+
+    copyCssBtn.addEventListener('click', () => {
+      const css = currentPalette.map((c, i) => `--color-${i + 1}: ${c.hex};`).join('\n');
+      copyText(css);
+    });
+
+    ['dragenter', 'dragover'].forEach(ev => dropZone.addEventListener(ev, e => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropZone.classList.add('dragover');
+    }));
+
+    ['dragleave', 'drop'].forEach(ev => dropZone.addEventListener(ev, e => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropZone.classList.remove('dragover');
+    }));
+
+    dropZone.addEventListener('drop', e => {
+      const file = e.dataTransfer.files && e.dataTransfer.files[0];
+      loadFile(file);
+    });
+  </script>
+</body>
+</html>

@@ -57,7 +57,7 @@
   function getEpisodePath(slug, epNum) {
     const ep = normEp(epNum);
     const encoded = encodeURIComponent(slug);
-    return `data/${encoded}/${encoded}-${ep}.md`;
+    return `_data/${encoded}-${ep}.md`;
   }
 
   function splitFrontMatter(raw) {

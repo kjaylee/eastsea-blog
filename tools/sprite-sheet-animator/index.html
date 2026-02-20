@@ -673,39 +673,106 @@
       const imgData = ctx.getImageData(0, 0, off.width, off.height);
       const w = off.width;
       const h = off.height;
+      const data = imgData.data;
 
-      const { col, row } = getOccupancyByAlpha(imgData.data, w, h);
-      const colSeg = trueSegments(col);
-      const rowSeg = trueSegments(row);
+      /* --- Method A: Uniform-line separator detection (opaque + transparent) --- */
+      function isUniformRow(y, tol) {
+        const i0 = y * w * 4;
+        const r0 = data[i0], g0 = data[i0+1], b0 = data[i0+2], a0 = data[i0+3];
+        const step = Math.max(1, Math.floor(w / 120));
+        for (let x = step; x < w; x += step) {
+          const i = (y * w + x) * 4;
+          if (Math.abs(data[i]-r0) > tol || Math.abs(data[i+1]-g0) > tol ||
+              Math.abs(data[i+2]-b0) > tol || Math.abs(data[i+3]-a0) > tol) return false;
+        }
+        return true;
+      }
+      function isUniformCol(x, tol) {
+        const i0 = x * 4;
+        const r0 = data[i0], g0 = data[i0+1], b0 = data[i0+2], a0 = data[i0+3];
+        const step = Math.max(1, Math.floor(h / 120));
+        for (let y = step; y < h; y += step) {
+          const i = (y * w + x) * 4;
+          if (Math.abs(data[i]-r0) > tol || Math.abs(data[i+1]-g0) > tol ||
+              Math.abs(data[i+2]-b0) > tol || Math.abs(data[i+3]-a0) > tol) return false;
+        }
+        return true;
+      }
+      function findSeparatorSegments(maxLen, isUniformFn) {
+        const tol = 12;
+        const marks = [];
+        for (let i = 0; i < maxLen; i++) marks.push(isUniformFn(i, tol));
+        const segments = [];
+        let segStart = -1;
+        for (let i = 0; i < maxLen; i++) {
+          if (!marks[i] && segStart < 0) segStart = i;
+          if ((marks[i] || i === maxLen - 1) && segStart >= 0) {
+            const segEnd = marks[i] ? i - 1 : i;
+            segments.push({ start: segStart, end: segEnd, len: segEnd - segStart + 1 });
+            segStart = -1;
+          }
+        }
+        if (segments.length >= 2) {
+          const lens = segments.map(s => s.len).sort((a, b) => a - b);
+          const median = lens[Math.floor(lens.length / 2)];
+          const consistent = lens.filter(l => Math.abs(l - median) <= Math.max(2, median * 0.15)).length;
+          if (consistent >= segments.length * 0.7 && median >= 4) {
+            return { size: median, count: segments.length };
+          }
+        }
+        return null;
+      }
+      const hSep = findSeparatorSegments(h, isUniformRow);
+      const vSep = findSeparatorSegments(w, isUniformCol);
+      if (hSep && vSep && hSep.size >= 4 && vSep.size >= 4) {
+        return { frameW: vSep.size, frameH: hSep.size, cols: vSep.count, rows: hSep.count, reason: '격자 구분선 기반' };
+      }
 
-      let guess = null;
+      /* --- Method B: Alpha-based segments (transparent sheets) --- */
+      const { col: colOcc, row: rowOcc } = getOccupancyByAlpha(data, w, h);
+      const colSeg = trueSegments(colOcc);
+      const rowSeg = trueSegments(rowOcc);
       if (colSeg.length >= 2 && rowSeg.length >= 2) {
-        const avgW = Math.round(colSeg.reduce((s, a) => s + a.len, 0) / colSeg.length);
-        const avgH = Math.round(rowSeg.reduce((s, a) => s + a.len, 0) / rowSeg.length);
-        if (avgW > 0 && avgH > 0 && w % avgW === 0 && h % avgH === 0) {
-          guess = { frameW: avgW, frameH: avgH, cols: w / avgW, rows: h / avgH, reason: '투명 경계 기반' };
+        const widths = colSeg.map(s => s.len).sort((a, b) => a - b);
+        const heights = rowSeg.map(s => s.len).sort((a, b) => a - b);
+        const medW = widths[Math.floor(widths.length / 2)];
+        const medH = heights[Math.floor(heights.length / 2)];
+        if (medW >= 4 && medH >= 4) {
+          return { frameW: medW, frameH: medH, cols: colSeg.length, rows: rowSeg.length, reason: '투명 경계 기반' };
         }
       }
 
+      /* --- Method C: One-axis separator + square heuristic --- */
+      if (hSep && hSep.size >= 4 && w % hSep.size === 0) {
+        return { frameW: hSep.size, frameH: hSep.size, cols: w / hSep.size, rows: hSep.count, reason: '행 구분선+정사각형 추정' };
+      }
+      if (vSep && vSep.size >= 4 && h % vSep.size === 0) {
+        return { frameW: vSep.size, frameH: vSep.size, cols: vSep.count, rows: h / vSep.size, reason: '열 구분선+정사각형 추정' };
+      }
+
+      /* --- Method D: Improved divisor scoring --- */
       const wDiv = divisors(w).filter((n) => n >= 4);
       const hDiv = divisors(h).filter((n) => n >= 4);
       let best = null;
+      const commonSizes = new Set([8,16,24,32,48,64,80,96,128,160,192,256,320,512]);
 
       for (const fw of wDiv) {
         const cols = w / fw;
-        if (!Number.isInteger(cols) || cols > 220) continue;
+        if (!Number.isInteger(cols) || cols > 200) continue;
         for (const fh of hDiv) {
           const rows = h / fh;
-          if (!Number.isInteger(rows) || rows > 220) continue;
+          if (!Number.isInteger(rows) || rows > 200) continue;
           const total = cols * rows;
           if (total > 1500) continue;
 
-          const ratioPenalty = Math.abs(Math.log(fw / fh)) * 0.82;
-          const countPenalty = Math.abs(Math.log2(total) - 4) * 0.18;
-          const tinyPenalty = fw < 8 || fh < 8 ? 0.75 : 0;
-          const singlePenalty = total === 1 ? 1.4 : 0;
-          const borderBonus = boundaryTransparency(imgData, w, h, fw, fh) * 1.45;
-          const score = ratioPenalty + countPenalty + tinyPenalty + singlePenalty - borderBonus;
+          const ratioPenalty = Math.abs(Math.log(fw / fh)) * 0.7;
+          const countPenalty = total >= 2 ? Math.abs(Math.log2(total) - 4) * 0.15 : 0;
+          const tinyPenalty = (fw < 16 || fh < 16) ? 0.8 : 0;
+          const singlePenalty = total === 1 ? 2.5 : 0;
+          const commonBonus = (commonSizes.has(fw) ? -0.3 : 0) + (commonSizes.has(fh) ? -0.3 : 0);
+          const squareBonus = fw === fh ? -0.45 : 0;
+          const borderBonus = boundaryTransparency(imgData, w, h, fw, fh) * 1.3;
+          const score = ratioPenalty + countPenalty + tinyPenalty + singlePenalty + commonBonus + squareBonus - borderBonus;
 
           if (!best || score < best.score) {
             best = { score, frameW: fw, frameH: fh, cols, rows, reason: '격자 점수 기반' };
@@ -713,13 +780,7 @@
         }
       }
 
-      if (guess && best) {
-        const gTotal = guess.cols * guess.rows;
-        const bTotal = best.cols * best.rows;
-        const close = Math.abs(gTotal - bTotal) <= Math.max(4, Math.floor(bTotal * 0.35));
-        return close ? guess : best;
-      }
-      return guess || best || { frameW: w, frameH: h, cols: 1, rows: 1, reason: '기본값' };
+      return best || { frameW: w, frameH: h, cols: 1, rows: 1, reason: '기본값' };
     }
 
     function applyGridFromInputs(reason = '수동 설정') {
@@ -1618,14 +1679,54 @@
         loadSheetFile(file);
       });
 
-      [refs.frameW, refs.frameH, refs.cols, refs.rows].forEach((el) => {
-        ['input', 'change'].forEach((ev) => {
-          el.addEventListener(ev, () => {
-            if (!state.image) return;
-            applyGridFromInputs('수동 조정');
-          });
-        });
-      });
+      /* Manual input: frameW/H → auto-calc cols/rows; cols/rows → auto-calc frameW/H */
+      let _manualGuard = false;
+      function handleFrameSizeInput() {
+        if (_manualGuard || !state.image) return;
+        _manualGuard = true;
+        state.frameW = toInt(refs.frameW.value, state.frameW);
+        state.frameH = toInt(refs.frameH.value, state.frameH);
+        state.frameW = Math.min(Math.max(1, state.frameW), state.image.width);
+        state.frameH = Math.min(Math.max(1, state.frameH), state.image.height);
+        state.cols = Math.max(1, Math.floor(state.image.width / state.frameW));
+        state.rows = Math.max(1, Math.floor(state.image.height / state.frameH));
+        clampSheetToImage();
+        writeSheetInputs();
+        state.direction = 1;
+        refs.frameInfo.textContent = `총 프레임: ${state.totalFrames} · 수동 조정 (크기→행열)`;
+        renderThumbnails(); renderPreview();
+        syncGodotInputsFromFrame();
+        setStatus(refs.godotAnimStatus, `현재 총 ${state.totalFrames}프레임 사용 가능`, 'ok');
+        refs.exportGodotZipBtn.disabled = state.animDefs.length === 0;
+        _manualGuard = false;
+      }
+      function handleGridCountInput() {
+        if (_manualGuard || !state.image) return;
+        _manualGuard = true;
+        state.cols = toInt(refs.cols.value, state.cols);
+        state.rows = toInt(refs.rows.value, state.rows);
+        state.cols = Math.max(1, Math.min(state.cols, state.image.width));
+        state.rows = Math.max(1, Math.min(state.rows, state.image.height));
+        state.frameW = Math.max(1, Math.floor(state.image.width / state.cols));
+        state.frameH = Math.max(1, Math.floor(state.image.height / state.rows));
+        clampSheetToImage();
+        writeSheetInputs();
+        state.direction = 1;
+        refs.frameInfo.textContent = `총 프레임: ${state.totalFrames} · 수동 조정 (행열→크기)`;
+        renderThumbnails(); renderPreview();
+        syncGodotInputsFromFrame();
+        setStatus(refs.godotAnimStatus, `현재 총 ${state.totalFrames}프레임 사용 가능`, 'ok');
+        refs.exportGodotZipBtn.disabled = state.animDefs.length === 0;
+        _manualGuard = false;
+      }
+      refs.frameW.addEventListener('input', handleFrameSizeInput);
+      refs.frameH.addEventListener('input', handleFrameSizeInput);
+      refs.frameW.addEventListener('change', handleFrameSizeInput);
+      refs.frameH.addEventListener('change', handleFrameSizeInput);
+      refs.cols.addEventListener('input', handleGridCountInput);
+      refs.rows.addEventListener('input', handleGridCountInput);
+      refs.cols.addEventListener('change', handleGridCountInput);
+      refs.rows.addEventListener('change', handleGridCountInput);
 
       refs.autoDetectBtn.addEventListener('click', applyAutoDetect);
       refs.fromCellBtn.addEventListener('click', calcGridFromCell);

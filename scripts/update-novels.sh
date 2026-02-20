@@ -608,4 +608,12 @@ if [ "${AUTO_COMMIT:-true}" = "true" ]; then
     git commit -m "Auto-update: Novel index, series, and manifest [$(date +%Y-%m-%d)]" || echo "✓ No changes to commit"
 fi
 
+# Sync to MiniPC (novels.eastsea.xyz serving directory)
+echo "📡 Syncing to MiniPC (novels.eastsea.xyz)..."
+if rsync -azq --delete "$NOVELS_DIR/" spritz@100.80.169.94:/var/www/novels/ 2>/dev/null; then
+    echo "✅ MiniPC sync complete"
+else
+    echo "⚠️ MiniPC sync failed (will retry next run)"
+fi
+
 echo "🎉 Novel publishing system updated successfully!"

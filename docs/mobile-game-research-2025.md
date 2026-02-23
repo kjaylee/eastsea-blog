@@ -1,8 +1,97 @@
 # 📱 모바일 게임 시장 리서치 2024-2026
 
-> **작성일:** 2026-01-30 | **최종 업데이트:** 2026-02-19
+> **작성일:** 2026-01-30 | **최종 업데이트:** 2026-02-23
 > **목적:** J&J Games 기획 서브에이전트 참고용 시장 분석 문서
 > **데이터 출처:** AppMagic, Sensor Tower, PocketGamer.biz, MobileGamer.biz, Statista, BusinessOfApps
+
+---
+
+## 2026-02-23 주간 업데이트 (추가 리서치 #3)
+
+### 🏪 앱스토어/플레이스토어 최신 Top 게임 스냅샷 (US/KR/JP, 2026-02-23 10:05 KST)
+
+#### App Store (iOS, Games)
+
+| 구분 | Top 10 핵심 |
+|------|-------------|
+| **US Top Free** | Block Blast, Vita Mahjong, Disney Solitaire, Roblox, Imposter Game - Party Edition, Arrows – Puzzle Escape |
+| **US Top Grossing** | MONOPOLY GO!, Royal Match, Candy Crush, Last War, Gossip Harbor, Township, Royal Kingdom |
+| **KR Top Free** | 블록 블라스트, Order Crazy, 스투 랜덤 디펜스(S2RD), 두근두근타운, 킹샷, 3D운전교실 |
+| **KR Top Grossing** | 메이플 키우기, FC Online M, 화이트아웃 서바이벌, FC 모바일, 운빨존많겜, 로얄 매치, 라스트 워 |
+| **JP Top Free** | HUNTER×HUNTER NEN×SURVIVOR, Order Crazy, Block Blast, Disney Solitaire, ハートピアスローライフ |
+| **JP Top Grossing** | 퍼즐앤드래곤, 도칸배틀, 화이트아웃, 냥코대전쟁, 라스트워, 몬스터스트라이크, HUNTER×HUNTER NEN×SURVIVOR |
+
+#### Google Play (Games)
+
+| 구분 | Top 10 핵심 |
+|------|-------------|
+| **US Top Free** | Block Blast, Disney Solitaire, Vita Mahjong, Roblox, Warframe, Arrow Out, Subway Surfers |
+| **US Top Grossing** | MONOPOLY GO!, Last War, Whiteout, Royal Match, Kingshot, Candy Crush, Coin Master |
+| **KR Top Free** | Block Blast, S2RD, 역대급 영지 설계사, Kingshot, 꿈틀 수비대, Arrowscapes |
+| **KR Top Grossing** | Whiteout, 메이플 키우기, Last War, Roblox, Kingshot, FC 모바일, 리니지M |
+| **JP Top Free** | HUNTER×HUNTER NEN×SURVIVOR, [777Real]まどマギ2, Block Blast, Click Wood, Doomsday×진격의 거인 |
+| **JP Top Grossing** | Last War, 도칸배틀, Whiteout, 몬스터스트라이크, Fate/Grand Order, 퍼즐앤드래곤 |
+
+> **변화 포인트(2/19 대비):**
+> 1) **Warframe이 US Google Play 무료 Top 5**에 진입하며 하드코어 코어장르도 무료차트 상단 진입 가능성 확인.
+> 2) **JP iOS 매출은 퍼즐앤드래곤 1위 재등극 + HUNTER×HUNTER 매출 Top10 진입**으로, IP/장수 라이브서비스 결합의 견고함 재확인.
+> 3) KR은 무료차트에서 로컬 TD/방치형이 유지되고, 매출은 `방치·4X·스포츠` 혼합 구도가 유지됨.
+
+### 🆕 신규 출시/서비스 종료 신호 (기존 섹션 비중복)
+
+- **CookieRun: OvenSmash** (Devsisters): 3/26 출시 예정, 사전등록 진행. 실시간 배틀 액션으로 쿠키런 IP 확장.
+- **The Seven Deadly Sins: Origin** (Netmarble): 3/23 iOS·Android 출시 예정(PS5/Steam 론칭 직후). 멀티플랫폼 동시 파이프라인 강화.
+- **Warframe (Android Global)**: 캐나다 소프트런치 이후 글로벌 확장 + 크로스플레이/크로스세이브 제공.
+- **Marvel Mystic Mayhem** (NetEase): 4/1 신규 콘텐츠 업데이트 종료 공지, 서버 종료 절차 진입.
+- **Seven Knights 2** (Netmarble): 4/15 서비스 종료 확정. 1/14 IAP 중단 후 현금상품 제거.
+
+### 📉 인디/중소 성공·실패 사례 (신규)
+
+#### 성공 신호
+- **Loom Games (Pixel Flow)**: Scopely가 다년 성과연동 조건으로 **과반 지분 인수(기업가치 $1B+)**.
+  - 2025 출시작 Pixel Flow는 **누적 1,000만+ 플레이어, 수백만 DAU**를 확보한 뒤 M&A로 연결.
+  - 시사점: `신규 퍼즐 코어 + 하이브리드 수익화(광고+IAP) + 빠른 지표 검증`이 초고속 밸류 상승으로 이어짐.
+
+#### 실패/리스크 신호
+- **서비스 수명 단축 가속:** Seven Knights 2처럼 종료 3개월 전 IAP를 선차단하는 패턴이 확산.
+- **대형 IP도 조기 종료 리스크:** Marvel Mystic Mayhem이 콘텐츠 종료를 먼저 공지하며 사실상 소프트 랜딩 폐쇄 수순.
+
+### 💰 수익화/UA·운영 전략 변화 (신규)
+
+- **"공정성 리빌드"가 리텐션 투자 포인트로 부상:** Pokémon Go는 PvP 코어를 재설계해 네트워크·기기 성능보다 의사결정(턴 전략) 영향도를 강화.
+- **CRM/커뮤니티 스택 고도화:** FirstLook 1.0이 App Store/Google Play 연동 기반으로 플레이테스트~라이브옵스~커뮤니티 감성분석까지 통합 제공(100+ 스튜디오 사용).
+- **자본시장 냉각 지속:** 2025년 게임 콘텐츠 매출은 성장했지만 민간 투자금은 추가 하락(연간 -55% 흐름). **현금효율형 개발/운영**이 사실상 표준이 되는 중.
+- **UA/애드테크 변동성 확대:** Liftoff IPO 철회 사례처럼, UA 인프라 기업도 자금조달 환경 리스크가 커짐.
+
+### 💡 J&J Games 신규 적용 아이디어 (추가)
+
+#### 아이디어 22: ⚖️ **Fair Duel Engine (턴-결정형 PvP 코어)**
+- **컨셉:** 입력속도·핑 편차 영향을 줄이고 `턴 종료 정산` 중심으로 결과를 고정하는 PvP 룰셋
+- **왜 지금:** Pokémon Go식 공정성 리빌드가 상위 라이브서비스 운영의 핵심 테마로 부상
+- **수익화:** 경쟁시즌 패스 + 공정랭크 배지 + e스포츠형 이벤트 티켓
+
+#### 아이디어 23: 🧠 **Player Loop CRM Lite**
+- **컨셉:** 게임 외부(디스코드/텔레그램)와 인게임 이벤트를 묶는 세그먼트 메시징·복귀 자동화 레이어
+- **왜 지금:** FirstLook류 "플레이어 관계 인프라"가 중소 스튜디오에서도 빠르게 채택 중
+- **수익화:** 복귀 전용 번들, 이벤트 개인화 오퍼, 길드 단위 미션 패스
+
+#### 아이디어 24: 🛬 **Sunset-safe LiveOps 설계**
+- **컨셉:** KPI 미달 시 `신규과금→보상전환→종료`로 넘어가는 표준 운영 템플릿 내장
+- **왜 지금:** 종료 국면에서의 유저 신뢰/리뷰 방어가 차기작 성과에 직접 영향
+- **수익화:** 종료형 게임에는 직접매출보다 커뮤니티/계정자산을 차기작으로 이관해 LTV 회수
+
+### ✅ 이번 주 실행 제안 (J&J)
+
+1. **2주 내 실험:** 기존 PvP 프로토타입에 `턴 종료 동시정산` 옵션을 붙여 지연환경 A/B 테스트
+2. **출시 파이프라인 점검:** 신작은 `모바일 단독` 대신 `모바일+PC(스팀)` 동시 일정 가능성부터 역산
+3. **운영 정책 선제화:** 서비스 종료/축소 가능성까지 포함한 운영 정책(과금 중단 시점, 보상전환 룰) 템플릿 문서화
+4. **CRM MVP 도입:** 디스코드/텔레그램 길드 기준으로 세그먼트 리마인드(복귀 3일/7일) 자동화부터 적용
+
+### 🔗 이번 추가 업데이트 주요 출처
+- Apple iTunes RSS (US/KR/JP, topfree/topgrossing, genre=6014)
+- Google Play Scraper (google-play-scraper npm list: TOP_FREE/GROSSING, category=GAME, US/KR/JP)
+- PocketGamer.biz: New release roundup (2026-02-20), Seven Knights 2 shutdown (2026-02-20), Loom Games M&A (2026-02-19), Pokémon Go PvP revamp (2026-02-18), FirstLook 1.0 (2026-02-18), Matthew Ball 2026 리포트 요약 (2026-02-17)
+- MobileGamer.biz: New game digest (2026-02-20), Data digest (2026-02-18)
 
 ---
 

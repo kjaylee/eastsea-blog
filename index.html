@@ -236,10 +236,17 @@ header {
   color: var(--accent-green);
 }
 
-.post-category.journal {
+.post-category.journal,
+.post-category.diary {
   background: rgba(236, 72, 153, 0.08);
   border-color: rgba(236, 72, 153, 0.2);
   color: var(--accent-pink);
+}
+
+.post-category.market {
+  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(245, 158, 11, 0.22);
+  color: #d97706;
 }
 
 .post-category.digest {
@@ -283,8 +290,28 @@ header {
 .post-excerpt {
   color: var(--text-secondary);
   line-height: 1.6;
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
   font-size: 0.9375rem;
+}
+
+.post-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+}
+
+.post-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  line-height: 1.2;
+  color: var(--text-secondary);
+  background: rgba(139, 92, 246, 0.08);
+  border: 1px solid rgba(139, 92, 246, 0.18);
+  white-space: nowrap;
 }
 
 .post-link {
@@ -432,43 +459,136 @@ footer {
 <script>
 const API_BASE = 'https://blog-api.k-jaylee.workers.dev';
 
+const CATEGORY_LABELS = {
+  briefing: '브리핑',
+  market: '마켓',
+  digest: '다이제스트',
+  research: '리서치',
+  diary: '일기',
+  report: '리포트',
+  polish: '폴리싱',
+  upgrade: '업그레이드',
+  other: '기타'
+};
+
+const CATEGORY_ALIASES = {
+  journal: 'diary',
+  markets: 'market'
+};
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>'"]/g, char => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[char]));
+}
+
+function normalizeCategory(value) {
+  if (!value) return 'other';
+  const normalized = String(value).toLowerCase().trim();
+  const aliased = CATEGORY_ALIASES[normalized] || normalized;
+  return CATEGORY_LABELS[aliased] ? aliased : 'other';
+}
+
 function detectCategory(post) {
   if (Array.isArray(post.categories) && post.categories.length > 0) {
-    return String(post.categories[0]).toLowerCase();
+    return normalizeCategory(post.categories[0]);
   }
 
   if (post.category) {
-    return String(post.category).toLowerCase();
+    return normalizeCategory(post.category);
   }
 
   const slug = String(post.slug || '').toLowerCase();
   if (slug.includes('briefing')) return 'briefing';
+  if (slug.includes('market')) return 'market';
   if (slug.includes('digest')) return 'digest';
   if (slug.includes('report')) return 'report';
-  if (slug.includes('diary') || slug.includes('journal')) return 'journal';
+  if (slug.includes('diary') || slug.includes('journal')) return 'diary';
   if (slug.includes('polish')) return 'polish';
   if (slug.includes('upgrade')) return 'upgrade';
   if (slug.includes('research')) return 'research';
   return 'other';
 }
 
+function formatPostDate(rawDate) {
+  const source = String(rawDate || '').trim();
+  if (!source) return '';
+
+  const match = source.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})/);
+  if (match) {
+    return `${match[1]} · ${match[2]}`;
+  }
+
+  const parsed = new Date(source.replace(' ', 'T').replace(/([+-]\d{2})(\d{2})$/, '$1:$2'));
+  if (Number.isNaN(parsed.getTime())) {
+    return source;
+  }
+
+  return new Intl.DateTimeFormat('ko-KR', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  }).format(parsed);
+}
+
+function stripMarkdown(markdown) {
+  return String(markdown || '')
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/^>\s?/gm, '')
+    .replace(/^\s*[-*+]\s+/gm, '')
+    .replace(/^\s*\d+\.\s+/gm, '')
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/__(.*?)__/g, '$1')
+    .replace(/\*(.*?)\*/g, '$1')
+    .replace(/_(.*?)_/g, '$1')
+    .replace(/~~(.*?)~~/g, '$1')
+    .replace(/\r?\n+/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+function clampText(text, maxLength = 170) {
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength).replace(/\s+\S*$/, '').trim()}…`;
+}
+
+function extractTags(post) {
+  if (Array.isArray(post.tags)) {
+    return post.tags;
+  }
+
+  if (typeof post.tags === 'string') {
+    return post.tags.split(',');
+  }
+
+  return [];
+}
+
 // Load posts from Cloudflare Worker API
 async function renderPosts(filter = 'all') {
   const container = document.getElementById('posts-container');
+  const normalizedFilter = filter === 'all' ? 'all' : normalizeCategory(filter);
 
   try {
     const params = new URLSearchParams({ page: '1', limit: '50' });
-    if (filter !== 'all') {
-      params.set('category', filter);
-    }
-
     const response = await fetch(`${API_BASE}/api/posts?${params.toString()}`);
     if (!response.ok) throw new Error('Failed to load posts from API');
 
     const { posts: apiPosts = [] } = await response.json();
     const posts = apiPosts
       .map(post => ({ ...post, category: detectCategory(post) }))
-      .filter(post => filter === 'all' || post.category === filter)
+      .filter(post => normalizedFilter === 'all' || post.category === normalizedFilter)
       .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
     if (posts.length === 0) {
@@ -477,19 +597,29 @@ async function renderPosts(filter = 'all') {
     }
 
     const postsHTML = posts.map(post => {
-      const postDate = post.date || '';
-      const postExcerpt = post.excerpt || '';
-      const postSlug = encodeURIComponent(post.slug);
+      const postDate = escapeHtml(formatPostDate(post.date));
+      const postExcerpt = escapeHtml(clampText(stripMarkdown(post.excerpt), 170));
+      const postTitle = escapeHtml(post.title || '제목 없음');
+      const postSlug = encodeURIComponent(String(post.slug || ''));
       const category = post.category || 'other';
+      const categoryLabel = escapeHtml(CATEGORY_LABELS[category] || category);
+      const tags = extractTags(post)
+        .map(tag => String(tag || '').replace(/^#/, '').trim())
+        .filter(Boolean)
+        .slice(0, 6);
+      const tagsHTML = tags.length > 0
+        ? `<div class="post-tags">${tags.map(tag => `<span class="post-tag">#${escapeHtml(tag)}</span>`).join('')}</div>`
+        : '';
 
       return `
         <article class="post-card" onclick="window.location.href='view.html?post=${postSlug}'">
           <div class="post-meta">
             <span class="post-date">${postDate}</span>
-            <span class="post-category ${category}">${category}</span>
+            <span class="post-category ${category}">${categoryLabel}</span>
           </div>
-          <h2 class="post-title">${post.title}</h2>
+          <h2 class="post-title">${postTitle}</h2>
           <p class="post-excerpt">${postExcerpt}</p>
+          ${tagsHTML}
           <a href="view.html?post=${postSlug}" class="post-link">전체 보기</a>
         </article>
       `;

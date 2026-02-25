@@ -148,4 +148,7 @@ git add posts.json
 git commit -m "chore: Update posts.json ($(date +%Y-%m-%d))" || echo "No changes to commit"
 git push origin master
 
+# Sync _posts to posts for CF Pages (underscore dirs not served)
+rsync -a --delete _posts/ posts/
+
 echo "✅ Done! Posts updated: $(cat posts.json | grep -c filename)"

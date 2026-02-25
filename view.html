@@ -958,41 +958,71 @@ function createMetaSection(frontMatter) {
   return metaHtml;
 }
 
-async function loadSidebar(currentFile, category) {
+const API_BASE = 'https://blog-api.k-jaylee.workers.dev';
+
+function detectCategory(post) {
+  const rawCategory = Array.isArray(post.categories) ? post.categories[0] : post.category;
+  const categoryText = String(rawCategory || '').toLowerCase();
+
+  if (categoryText.includes('briefing')) return 'briefing';
+  if (categoryText.includes('digest')) return 'digest';
+  if (categoryText.includes('report')) return 'report';
+  if (categoryText.includes('diary') || categoryText.includes('journal')) return 'journal';
+  if (categoryText.includes('polish')) return 'polish';
+  if (categoryText.includes('upgrade')) return 'upgrade';
+  if (categoryText.includes('research')) return 'research';
+
+  const slug = String(post.slug || '').toLowerCase();
+  if (slug.includes('briefing')) return 'briefing';
+  if (slug.includes('digest')) return 'digest';
+  if (slug.includes('report')) return 'report';
+  if (slug.includes('diary') || slug.includes('journal')) return 'journal';
+  if (slug.includes('polish')) return 'polish';
+  if (slug.includes('upgrade')) return 'upgrade';
+  if (slug.includes('research')) return 'research';
+
+  return 'other';
+}
+
+async function loadSidebar(currentSlug, category) {
   try {
-    const response = await fetch('posts.json');
-    if (!response.ok) throw new Error('Failed to load posts.json');
-    
-    const allPosts = await response.json();
-    const sameCategoryPosts = allPosts
-      .filter(post => post.category === category)
-      .sort((a, b) => new Date(b.date) - new Date(a.date)); // 최신순
-    
+    const params = new URLSearchParams({ limit: '50', page: '1' });
+    if (category && category !== 'all') {
+      params.set('category', category);
+    }
+
+    const response = await fetch(`${API_BASE}/api/posts?${params.toString()}`);
+    if (!response.ok) throw new Error('Failed to load sidebar posts from API');
+
+    const { posts = [] } = await response.json();
+    const sameCategoryPosts = posts.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+
     if (sameCategoryPosts.length === 0) {
-      document.getElementById('sidebar').innerHTML = 
+      document.getElementById('sidebar').innerHTML =
         '<div class="sidebar-title">관련 포스트 없음</div>';
       return;
     }
-    
+
     let sidebarHtml = `<div class="sidebar-title">${category.toUpperCase()}</div>`;
     sidebarHtml += '<ul class="sidebar-list">';
-    
+
     sameCategoryPosts.forEach(post => {
-      const isActive = post.filename === currentFile ? 'active' : '';
+      const isActive = post.slug === currentSlug ? 'active' : '';
+      const slug = encodeURIComponent(post.slug);
       sidebarHtml += `
         <li class="sidebar-item">
-          <a href="view.html?post=${post.filename}" class="sidebar-link ${isActive}">
+          <a href="view.html?post=${slug}" class="sidebar-link ${isActive}">
             ${post.title}
-            <span class="sidebar-date">${post.date}</span>
+            <span class="sidebar-date">${post.date || ''}</span>
           </a>
         </li>
       `;
     });
-    
+
     sidebarHtml += '</ul>';
     document.getElementById('sidebar').innerHTML = sidebarHtml;
   } catch (error) {
-    document.getElementById('sidebar').innerHTML = 
+    document.getElementById('sidebar').innerHTML =
       '<div class="sidebar-title">로딩 실패</div>';
     console.error('Error loading sidebar:', error);
   }
@@ -1002,19 +1032,19 @@ function generateTOC() {
   const content = document.getElementById('content');
   const headings = content.querySelectorAll('article h1, article h2, article h3');
   const tocList = document.getElementById('toc-list');
-  
+
   if (headings.length === 0) {
     document.getElementById('toc').style.display = 'none';
     return;
   }
-  
+
   const tocItems = Array.from(headings).map((heading, index) => {
     const id = `heading-${index}`;
     heading.id = id;
-    
+
     const level = heading.tagName.toLowerCase();
     const levelClass = level === 'h3' ? 'level-3' : '';
-    
+
     return `
       <li class="toc-item">
         <a href="#${id}" class="toc-link ${levelClass}">
@@ -1023,9 +1053,9 @@ function generateTOC() {
       </li>
     `;
   }).join('');
-  
+
   tocList.innerHTML = tocItems;
-  
+
   // Active link on scroll
   const observer = new IntersectionObserver(
     (entries) => {
@@ -1040,93 +1070,60 @@ function generateTOC() {
     },
     { rootMargin: '-80px 0px -80% 0px' }
   );
-  
+
   headings.forEach((heading) => observer.observe(heading));
 }
 
 async function loadPost() {
   const params = new URLSearchParams(window.location.search);
-  let postFile = params.get('post');
-  
-  if (!postFile) {
-    document.getElementById('content').innerHTML = 
+  let slug = params.get('post');
+
+  if (!slug) {
+    document.getElementById('content').innerHTML =
       '<div class="error">❌ 포스트를 찾을 수 없습니다.</div>';
     return;
   }
-  
-  // Auto-append .md if missing
-  if (!postFile.endsWith('.md')) {
-    postFile += '.md';
-  }
-  
+
   try {
-    // Try posts/ first, fallback to _posts/ if CF Pages deployment is stale
-    let response = await fetch(`posts/${postFile}`);
-    
-    // CF Pages returns index.html (text/html) as SPA fallback for missing files
-    const ct = response.headers.get('content-type') || '';
-    if (!response.ok || (ct.includes('text/html') && !postFile.endsWith('.html'))) {
-      // Fallback: try _posts/ path
-      const fallback = await fetch(`_posts/${postFile}`);
-      const fct = fallback.headers.get('content-type') || '';
-      if (fallback.ok && !fct.includes('text/html')) {
-        response = fallback;
-      } else {
-        throw new Error('포스트가 아직 배포되지 않았습니다. 잠시 후 다시 시도해주세요.');
+    slug = decodeURIComponent(slug);
+    if (slug.endsWith('.md')) {
+      slug = slug.slice(0, -3);
+    }
+
+    const response = await fetch(`${API_BASE}/api/posts/${encodeURIComponent(slug)}`);
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error('포스트를 찾을 수 없습니다.');
       }
+      throw new Error('포스트 API 응답 오류');
     }
-    
-    const markdown = await response.text();
-    
-    // Extra safety: if we somehow got HTML instead of markdown, reject it
-    if (markdown.trimStart().startsWith('<!DOCTYPE') || markdown.trimStart().startsWith('<html')) {
-      throw new Error('포스트가 아직 배포되지 않았습니다. 페이지를 새로고침해주세요.');
-    }
-    
-    const { frontMatter, content } = parseFrontMatter(markdown);
-    
+
+    const post = await response.json();
+
+    const frontMatter = {
+      title: post.title,
+      date: post.date,
+      categories: post.categories,
+      tags: post.tags,
+      author: post.author,
+    };
+
     // Create meta section
     const metaHtml = createMetaSection(frontMatter);
-    
+
     // Parse markdown content
-    const contentHtml = marked.parse(content);
-    
+    const contentHtml = marked.parse(post.content || '');
+
     // Combine and display
     document.getElementById('content').innerHTML = metaHtml + contentHtml;
-    
+
     // Set page title
-    const pageTitle = frontMatter.title || '포스트';
+    const pageTitle = post.title || '포스트';
     document.title = pageTitle + ' - eastsea';
-    
-    // Load sidebar with same category posts
-    // Use same detection logic as update-posts.sh
-    let category = 'other';
-    
-    // Check front matter first
-    const cats = (Array.isArray(frontMatter.categories) 
-      ? frontMatter.categories[0] 
-      : frontMatter.categories || '').toLowerCase();
-    
-    if (cats.includes('briefing')) category = 'briefing';
-    else if (cats.includes('digest')) category = 'digest';
-    else if (cats.includes('report')) category = 'report';
-    else if (cats.includes('diary') || cats.includes('journal')) category = 'journal';
-    else if (cats.includes('research')) category = 'research';
-    
-    // If not found in front matter, check filename
-    if (category === 'other') {
-      const filename = postFile.toLowerCase();
-      if (filename.includes('briefing')) category = 'briefing';
-      else if (filename.includes('digest')) category = 'digest';
-      else if (filename.includes('report')) category = 'report';
-      else if (filename.includes('diary')) category = 'journal';
-      else if (filename.includes('polish')) category = 'polish';
-      else if (filename.includes('upgrade')) category = 'upgrade';
-      else if (filename.includes('research')) category = 'research';
-    }
-    
-    await loadSidebar(postFile, category);
-    
+
+    const category = detectCategory(post);
+    await loadSidebar(post.slug, category);
+
     // Sync to mobile sidebar
     setTimeout(() => {
       const desktopSidebar = document.getElementById('sidebar');
@@ -1135,14 +1132,14 @@ async function loadPost() {
         mobileSidebarContent.innerHTML = desktopSidebar.innerHTML;
       }
     }, 100);
-    
+
     // Generate TOC
     setTimeout(generateTOC, 100);
-    
+
     // Smooth scroll to top
     window.scrollTo({ top: 0, behavior: 'smooth' });
   } catch (error) {
-    document.getElementById('content').innerHTML = 
+    document.getElementById('content').innerHTML =
       '<div class="error">❌ 포스트를 불러올 수 없습니다: ' + error.message + '</div>';
   }
 }

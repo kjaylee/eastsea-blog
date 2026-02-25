@@ -430,36 +430,71 @@ footer {
 </footer>
 
 <script>
-// Load posts from posts.json
+const API_BASE = 'https://blog-api.k-jaylee.workers.dev';
+
+function detectCategory(post) {
+  if (Array.isArray(post.categories) && post.categories.length > 0) {
+    return String(post.categories[0]).toLowerCase();
+  }
+
+  if (post.category) {
+    return String(post.category).toLowerCase();
+  }
+
+  const slug = String(post.slug || '').toLowerCase();
+  if (slug.includes('briefing')) return 'briefing';
+  if (slug.includes('digest')) return 'digest';
+  if (slug.includes('report')) return 'report';
+  if (slug.includes('diary') || slug.includes('journal')) return 'journal';
+  if (slug.includes('polish')) return 'polish';
+  if (slug.includes('upgrade')) return 'upgrade';
+  if (slug.includes('research')) return 'research';
+  return 'other';
+}
+
+// Load posts from Cloudflare Worker API
 async function renderPosts(filter = 'all') {
   const container = document.getElementById('posts-container');
-  
+
   try {
-    const response = await fetch('posts.json');
-    if (!response.ok) throw new Error('Failed to load posts.json');
-    
-    const allPosts = await response.json();
-    const posts = allPosts
+    const params = new URLSearchParams({ page: '1', limit: '50' });
+    if (filter !== 'all') {
+      params.set('category', filter);
+    }
+
+    const response = await fetch(`${API_BASE}/api/posts?${params.toString()}`);
+    if (!response.ok) throw new Error('Failed to load posts from API');
+
+    const { posts: apiPosts = [] } = await response.json();
+    const posts = apiPosts
+      .map(post => ({ ...post, category: detectCategory(post) }))
       .filter(post => filter === 'all' || post.category === filter)
       .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-    
+
     if (posts.length === 0) {
       container.innerHTML = '<div class="empty-state">이 카테고리에 포스트가 없습니다.</div>';
       return;
     }
-    
-    const postsHTML = posts.map(post => `
-      <article class="post-card" onclick="window.location.href='view.html?post=${post.filename}'">
-        <div class="post-meta">
-          <span class="post-date">${post.date.length > 10 ? post.date : post.date}</span>
-          <span class="post-category ${post.category}">${post.category}</span>
-        </div>
-        <h2 class="post-title">${post.title}</h2>
-        <p class="post-excerpt">${post.excerpt}</p>
-        <a href="view.html?post=${post.filename}" class="post-link">전체 보기</a>
-      </article>
-    `).join('');
-    
+
+    const postsHTML = posts.map(post => {
+      const postDate = post.date || '';
+      const postExcerpt = post.excerpt || '';
+      const postSlug = encodeURIComponent(post.slug);
+      const category = post.category || 'other';
+
+      return `
+        <article class="post-card" onclick="window.location.href='view.html?post=${postSlug}'">
+          <div class="post-meta">
+            <span class="post-date">${postDate}</span>
+            <span class="post-category ${category}">${category}</span>
+          </div>
+          <h2 class="post-title">${post.title}</h2>
+          <p class="post-excerpt">${postExcerpt}</p>
+          <a href="view.html?post=${postSlug}" class="post-link">전체 보기</a>
+        </article>
+      `;
+    }).join('');
+
     container.innerHTML = `<div class="posts-grid">${postsHTML}</div>`;
   } catch (error) {
     container.innerHTML = '<div class="empty-state">포스트를 불러올 수 없습니다. 잠시 후 다시 시도해주세요.</div>';

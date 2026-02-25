@@ -3,29 +3,27 @@
  * GA4 + Microsoft Clarity
  * 
  * To activate:
- *   1. Replace GA_ID with your GA4 Measurement ID (G-XXXXXXXXXX)
+ *   1. Replace GA_ID with your GA4 Measurement ID (G-TVJ4W0GQNG)
  *   2. Replace CLARITY_ID with your Clarity Project ID
  */
 (function () {
   'use strict';
 
   // ── GA4 ──────────────────────────────────────────────
-  var GA_ID = 'G-XXXXXXXXXX';
-  if (GA_ID !== 'G-XXXXXXXXXX') {
-    var gs = document.createElement('script');
-    gs.async = true;
-    gs.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA_ID;
-    document.head.appendChild(gs);
+  var GA_ID = 'G-TVJ4W0GQNG';
+  var gs = document.createElement('script');
+  gs.async = true;
+  gs.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA_ID;
+  document.head.appendChild(gs);
 
-    window.dataLayer = window.dataLayer || [];
-    function gtag() { dataLayer.push(arguments); }
-    window.gtag = gtag;
-    gtag('js', new Date());
-    gtag('config', GA_ID, {
-      page_title: document.title,
-      page_location: window.location.href
-    });
-  }
+  window.dataLayer = window.dataLayer || [];
+  function gtag() { dataLayer.push(arguments); }
+  window.gtag = gtag;
+  gtag('js', new Date());
+  gtag('config', GA_ID, {
+    page_title: document.title,
+    page_location: window.location.href
+  });
 
   // ── Microsoft Clarity ────────────────────────────────
   var CLARITY_ID = 'vmms1upl1l';

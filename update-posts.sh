@@ -24,7 +24,7 @@ const posts = files.map(filename => {
   if (!match) return null;
   
   const [, year, month, day, rest] = match;
-  const date = `${year}-${month}-${day}`;
+  const dateFromFilename = `${year}-${month}-${day}`;
   
   // Read content
   const content = fs.readFileSync(path.join(postsDir, filename), 'utf8');
@@ -60,6 +60,17 @@ const posts = files.map(filename => {
     }
   }
   
+  // Extract full datetime from front matter date field
+  let date = dateFromFilename;
+  if (frontMatter.date) {
+    const raw = frontMatter.date.trim();
+    // front matter date: "2026-02-25 06:00:00 +0900" or "2026-02-25"
+    const dtMatch = raw.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})/);
+    if (dtMatch) {
+      date = `${dtMatch[1]} ${dtMatch[2]}`;
+    }
+  }
+
   // Detect category with more granularity
   let category = 'other'; // default
   

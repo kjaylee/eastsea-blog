@@ -564,10 +564,17 @@ hr {
   color: var(--accent-green);
 }
 
-.tag.journal {
+.tag.journal,
+.tag.diary {
   background: rgba(236, 72, 153, 0.08);
   border-color: rgba(236, 72, 153, 0.2);
   color: var(--accent-pink);
+}
+
+.tag.market {
+  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(245, 158, 11, 0.22);
+  color: #d97706;
 }
 
 .tag.digest {
@@ -885,110 +892,157 @@ function parseFrontMatter(markdown) {
   return { frontMatter, content };
 }
 
+const API_BASE = 'https://blog-api.k-jaylee.workers.dev';
+
+const CATEGORY_LABELS = {
+  briefing: '브리핑',
+  digest: '다이제스트',
+  market: '마켓',
+  research: '리서치',
+  diary: '일기',
+  other: '기타'
+};
+
+const CATEGORY_ALIASES = {
+  journal: 'diary',
+  report: 'market',
+  markets: 'market',
+  polish: 'other',
+  upgrade: 'other'
+};
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>'"]/g, char => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[char]));
+}
+
+function normalizeCategory(value) {
+  if (!value) return 'other';
+  const normalized = String(value).toLowerCase().trim().replace(/^#/, '');
+  const aliased = CATEGORY_ALIASES[normalized] || normalized;
+  return CATEGORY_LABELS[aliased] ? aliased : 'other';
+}
+
+function getCategoryLabel(category) {
+  const normalized = normalizeCategory(category);
+  return CATEGORY_LABELS[normalized] || '기타';
+}
+
 function formatDate(dateString) {
-  if (!dateString) return '';
-  
-  try {
-    // Handle various date formats
-    let dateStr = String(dateString).trim();
-    
-    // Extract YYYY-MM-DD from strings like "2026-02-05 18:00:00 +0900"
-    const match = dateStr.match(/(\d{4})-(\d{2})-(\d{2})/);
-    if (match) {
-      dateStr = `${match[1]}-${match[2]}-${match[3]}`;
-    }
-    
-    const date = new Date(dateStr);
-    
-    // Check if date is valid
-    if (isNaN(date.getTime())) {
-      // Try parsing as ISO date
-      const isoMatch = dateString.match(/(\d{4})-(\d{2})-(\d{2})/);
-      if (isoMatch) {
-        return `${isoMatch[1]}년 ${isoMatch[2]}월 ${isoMatch[3]}일`;
-      }
-      return dateString; // Return original string if invalid
-    }
-    
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
-    const weekday = weekdays[date.getDay()];
-    
-    return `${year}년 ${month}월 ${day}일 ${weekday}요일`;
-  } catch {
-    return dateString || '';
+  const source = String(dateString || '').trim();
+  if (!source) return '';
+
+  const match = source.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})/);
+  if (match) {
+    const [year, month, day] = match[1].split('-');
+    return `${year}년 ${month}월 ${day}일 · ${match[2]}`;
   }
+
+  const isoDate = source.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (isoDate) {
+    return `${isoDate[1]}년 ${isoDate[2]}월 ${isoDate[3]}일`;
+  }
+
+  return source;
+}
+
+function formatSidebarDate(dateString) {
+  const source = String(dateString || '').trim();
+  const match = source.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})/);
+  if (match) return `${match[1]} · ${match[2]}`;
+  const dateOnly = source.match(/(\d{4}-\d{2}-\d{2})/);
+  if (dateOnly) return dateOnly[1];
+  return source;
 }
 
 function createMetaSection(frontMatter) {
-  const title = frontMatter.title || '제목 없음';
-  const date = frontMatter.date ? formatDate(frontMatter.date) : '';
-  const categories = Array.isArray(frontMatter.categories) ? frontMatter.categories : 
+  const title = escapeHtml(frontMatter.title || '제목 없음');
+  const date = frontMatter.date ? escapeHtml(formatDate(frontMatter.date)) : '';
+  const categories = Array.isArray(frontMatter.categories) ? frontMatter.categories :
                      frontMatter.categories ? [frontMatter.categories] : [];
-  const tags = Array.isArray(frontMatter.tags) ? frontMatter.tags : 
-               frontMatter.tags ? [frontMatter.tags] : [];
-  
+  const tagsRaw = Array.isArray(frontMatter.tags) ? frontMatter.tags :
+                  frontMatter.tags ? [frontMatter.tags] : [];
+  const tags = tagsRaw
+    .flatMap(tag => typeof tag === 'string' && tag.includes(',') ? tag.split(',') : [tag])
+    .map(tag => String(tag || '').replace(/^#/, '').trim())
+    .filter(Boolean)
+    .slice(0, 8);
+
   let metaHtml = '<div class="post-meta">';
   metaHtml += `<h1 class="post-title">${title}</h1>`;
-  
+
   if (date) {
     metaHtml += `<div class="post-date">${date}</div>`;
   }
-  
+
   if (categories.length > 0 || tags.length > 0) {
     metaHtml += '<div class="post-tags">';
-    
+
     categories.forEach(cat => {
-      const categoryClass = cat.toLowerCase().replace(/[^a-z]/g, '');
-      metaHtml += `<span class="tag category ${categoryClass}">${cat}</span>`;
+      const normalizedCategory = normalizeCategory(cat);
+      const categoryClass = normalizedCategory.replace(/[^a-z0-9_-]/g, '');
+      const categoryLabel = escapeHtml(getCategoryLabel(normalizedCategory));
+      metaHtml += `<span class="tag category ${categoryClass}">${categoryLabel}</span>`;
     });
-    
+
     tags.forEach(tag => {
-      const tagClass = tag.toLowerCase().replace(/[^a-z]/g, '');
-      metaHtml += `<span class="tag ${tagClass}">${tag}</span>`;
+      const tagClass = tag.toLowerCase().replace(/[^a-z0-9_-]/g, '');
+      metaHtml += `<span class="tag ${tagClass}">#${escapeHtml(tag)}</span>`;
     });
-    
+
     metaHtml += '</div>';
   }
-  
+
   metaHtml += '</div>';
-  
+
   return metaHtml;
 }
 
-const API_BASE = 'https://blog-api.k-jaylee.workers.dev';
-
 function detectCategory(post) {
-  const rawCategory = Array.isArray(post.categories) ? post.categories[0] : post.category;
-  const categoryText = String(rawCategory || '').toLowerCase();
+  const categoryCandidates = [];
 
-  if (categoryText.includes('briefing')) return 'briefing';
-  if (categoryText.includes('digest')) return 'digest';
-  if (categoryText.includes('report')) return 'report';
-  if (categoryText.includes('diary') || categoryText.includes('journal')) return 'journal';
-  if (categoryText.includes('polish')) return 'polish';
-  if (categoryText.includes('upgrade')) return 'upgrade';
-  if (categoryText.includes('research')) return 'research';
+  if (Array.isArray(post.categories)) {
+    categoryCandidates.push(...post.categories);
+  }
+
+  if (post.category) {
+    categoryCandidates.push(post.category);
+  }
+
+  if (Array.isArray(post.tags)) {
+    categoryCandidates.push(...post.tags);
+  } else if (typeof post.tags === 'string') {
+    categoryCandidates.push(...post.tags.split(','));
+  }
+
+  for (const candidate of categoryCandidates) {
+    const normalized = normalizeCategory(candidate);
+    if (normalized !== 'other') {
+      return normalized;
+    }
+  }
 
   const slug = String(post.slug || '').toLowerCase();
   if (slug.includes('briefing')) return 'briefing';
   if (slug.includes('digest')) return 'digest';
-  if (slug.includes('report')) return 'report';
-  if (slug.includes('diary') || slug.includes('journal')) return 'journal';
-  if (slug.includes('polish')) return 'polish';
-  if (slug.includes('upgrade')) return 'upgrade';
+  if (slug.includes('market') || slug.includes('report')) return 'market';
   if (slug.includes('research')) return 'research';
+  if (slug.includes('diary') || slug.includes('journal')) return 'diary';
 
   return 'other';
 }
 
 async function loadSidebar(currentSlug, category) {
   try {
+    const normalizedCategory = normalizeCategory(category);
     const params = new URLSearchParams({ limit: '50', page: '1' });
-    if (category && category !== 'all') {
-      params.set('category', category);
+    if (normalizedCategory && normalizedCategory !== 'all') {
+      params.set('category', normalizedCategory);
     }
 
     const response = await fetch(`${API_BASE}/api/posts?${params.toString()}`);
@@ -1003,17 +1057,20 @@ async function loadSidebar(currentSlug, category) {
       return;
     }
 
-    let sidebarHtml = `<div class="sidebar-title">${category.toUpperCase()}</div>`;
+    const sidebarTitle = escapeHtml(getCategoryLabel(normalizedCategory) || String(normalizedCategory).toUpperCase());
+    let sidebarHtml = `<div class="sidebar-title">${sidebarTitle}</div>`;
     sidebarHtml += '<ul class="sidebar-list">';
 
     sameCategoryPosts.forEach(post => {
       const isActive = post.slug === currentSlug ? 'active' : '';
-      const slug = encodeURIComponent(post.slug);
+      const slug = encodeURIComponent(String(post.slug || ''));
+      const title = escapeHtml(post.title || '제목 없음');
+      const sidebarDate = escapeHtml(formatSidebarDate(post.date));
       sidebarHtml += `
         <li class="sidebar-item">
           <a href="view.html?post=${slug}" class="sidebar-link ${isActive}">
-            ${post.title}
-            <span class="sidebar-date">${post.date || ''}</span>
+            ${title}
+            <span class="sidebar-date">${sidebarDate}</span>
           </a>
         </li>
       `;
@@ -1030,7 +1087,7 @@ async function loadSidebar(currentSlug, category) {
 
 function generateTOC() {
   const content = document.getElementById('content');
-  const headings = content.querySelectorAll('article h1, article h2, article h3');
+  const headings = content.querySelectorAll('h1, h2, h3');
   const tocList = document.getElementById('toc-list');
 
   if (headings.length === 0) {

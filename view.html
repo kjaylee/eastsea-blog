@@ -1060,10 +1060,29 @@ async function loadPost() {
   }
   
   try {
-    const response = await fetch(`posts/${postFile}`);
-    if (!response.ok) throw new Error('Failed to load post');
+    // Try posts/ first, fallback to _posts/ if CF Pages deployment is stale
+    let response = await fetch(`posts/${postFile}`);
+    
+    // CF Pages returns index.html (text/html) as SPA fallback for missing files
+    const ct = response.headers.get('content-type') || '';
+    if (!response.ok || (ct.includes('text/html') && !postFile.endsWith('.html'))) {
+      // Fallback: try _posts/ path
+      const fallback = await fetch(`_posts/${postFile}`);
+      const fct = fallback.headers.get('content-type') || '';
+      if (fallback.ok && !fct.includes('text/html')) {
+        response = fallback;
+      } else {
+        throw new Error('포스트가 아직 배포되지 않았습니다. 잠시 후 다시 시도해주세요.');
+      }
+    }
     
     const markdown = await response.text();
+    
+    // Extra safety: if we somehow got HTML instead of markdown, reject it
+    if (markdown.trimStart().startsWith('<!DOCTYPE') || markdown.trimStart().startsWith('<html')) {
+      throw new Error('포스트가 아직 배포되지 않았습니다. 페이지를 새로고침해주세요.');
+    }
+    
     const { frontMatter, content } = parseFrontMatter(markdown);
     
     // Create meta section

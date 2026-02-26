@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Word Scramble</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:system-ui,-apple-system,sans-serif;background:#0d0d1a;color:#e8e8f0;min-height:100vh;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.screen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;transition:opacity .3s,transform .3s}
+.screen.hidden{opacity:0;pointer-events:none;transform:scale(.97)}
+
+/* Start Screen */
+#start-screen h1{font-size:clamp(2.2rem,8vw,3.5rem);font-weight:900;letter-spacing:-1px;background:linear-gradient(135deg,#a78bfa,#60a5fa,#34d399);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;text-align:center;margin-bottom:.3em}
+#start-screen .tagline{color:#8888aa;font-size:1rem;margin-bottom:2.5rem;text-align:center}
+.best-badge{background:#1a1a2e;border:1px solid #2a2a4a;border-radius:12px;padding:10px 24px;margin-bottom:2rem;font-size:.9rem;color:#8888aa}
+.best-badge span{color:#a78bfa;font-weight:700;font-size:1.1rem}
+.btn{border:none;border-radius:14px;font-size:1.05rem;font-weight:700;cursor:pointer;padding:14px 36px;transition:transform .15s,box-shadow .15s;letter-spacing:.5px}
+.btn:active{transform:scale(.95)}
+.btn-primary{background:linear-gradient(135deg,#7c3aed,#2563eb);color:#fff;box-shadow:0 4px 20px rgba(124,58,237,.4)}
+.btn-primary:hover{box-shadow:0 6px 28px rgba(124,58,237,.6)}
+.btn-secondary{background:#1e1e35;color:#a0a0c0;border:1px solid #2a2a4a;margin-top:10px}
+.btn-danger{background:#1e1e35;color:#f87171;border:1px solid #3a1a1a}
+.btn-small{padding:10px 20px;font-size:.9rem;border-radius:10px}
+.how-to{color:#6666aa;font-size:.82rem;margin-top:1.5rem;text-align:center;line-height:1.6;max-width:340px}
+
+/* Game Screen */
+#game-screen{padding:16px}
+.game-header{width:100%;max-width:500px;display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+.timer-wrap{display:flex;align-items:center;gap:8px}
+.timer{font-size:2rem;font-weight:900;color:#34d399;transition:color .3s;font-variant-numeric:tabular-nums;min-width:60px}
+.timer.warn{color:#fb923c;animation:pulse .5s ease-in-out infinite alternate}
+.timer.danger{color:#f87171;animation:pulse .3s ease-in-out infinite alternate}
+@keyframes pulse{from{transform:scale(1)}to{transform:scale(1.08)}}
+.score-wrap{text-align:right}
+.score-label{font-size:.7rem;color:#6666aa;text-transform:uppercase;letter-spacing:1px}
+.score-val{font-size:1.6rem;font-weight:900;color:#a78bfa}
+.level-badge{background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:3px 10px;font-size:.75rem;color:#60a5fa;text-align:center;margin-bottom:12px}
+
+.scramble-area{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;min-height:72px;align-items:center;margin-bottom:8px;max-width:500px;width:100%}
+.answer-area{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;min-height:72px;align-items:center;margin-bottom:20px;max-width:500px;width:100%;border:2px dashed #2a2a4a;border-radius:16px;padding:10px;position:relative;transition:border-color .3s}
+.answer-area.correct-flash{border-color:#34d399;animation:flashGreen .5s ease-out}
+.answer-area.wrong-flash{border-color:#f87171;animation:shake .4s ease-out}
+@keyframes flashGreen{0%{background:rgba(52,211,153,.15)}100%{background:transparent}}
+@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-8px)}40%{transform:translateX(8px)}60%{transform:translateX(-5px)}80%{transform:translateX(5px)}}
+
+.tile{width:52px;height:52px;border-radius:12px;font-size:1.35rem;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;user-select:none;transition:transform .15s,box-shadow .15s,opacity .2s;text-transform:uppercase;border:none;position:relative}
+.tile.source{background:linear-gradient(135deg,#1e1e40,#2a2a50);color:#c4c4e8;border:2px solid #3a3a5a;box-shadow:0 4px 12px rgba(0,0,0,.3)}
+.tile.source:hover{transform:translateY(-3px) scale(1.05);box-shadow:0 8px 20px rgba(0,0,0,.4);border-color:#6060a0}
+.tile.source:active{transform:scale(.93)}
+.tile.placed{background:linear-gradient(135deg,#2d1b6e,#1e3a6e);color:#e8e8ff;border:2px solid #5a5aaa;box-shadow:0 4px 12px rgba(100,100,200,.2)}
+.tile.placed:hover{transform:translateY(-2px);border-color:#8888cc}
+.tile.hint-tile{border-color:#a78bfa!important;color:#a78bfa!important;background:linear-gradient(135deg,#2d1a5e,#1a2d5e)!important}
+.tile.empty-slot{background:rgba(42,42,74,.3);border:2px dashed #3a3a5a;cursor:default;color:transparent}
+.tile.pop-in{animation:popIn .2s cubic-bezier(.34,1.56,.64,1)}
+@keyframes popIn{0%{transform:scale(0)}100%{transform:scale(1)}}
+.tile.fly-back{animation:flyBack .25s ease-in forwards}
+@keyframes flyBack{to{transform:scale(0);opacity:0}}
+
+.answer-hint{position:absolute;bottom:-22px;left:50%;transform:translateX(-50%);font-size:.72rem;color:#6666aa;white-space:nowrap}
+
+.action-row{display:flex;gap:10px;width:100%;max-width:500px;margin-bottom:12px}
+.btn-hint{flex:1;background:#1a1a2e;color:#a78bfa;border:1px solid #3a2a6a;padding:11px;border-radius:12px;font-size:.9rem;font-weight:700;cursor:pointer;transition:all .15s}
+.btn-hint:hover{background:#2a1a4e;border-color:#6a4aaa}
+.btn-hint:active{transform:scale(.95)}
+.btn-hint:disabled{opacity:.35;cursor:default}
+.btn-skip{flex:1;background:#1a1a2e;color:#f87171;border:1px solid #4a1a2a;padding:11px;border-radius:12px;font-size:.9rem;font-weight:700;cursor:pointer;transition:all .15s}
+.btn-skip:hover{background:#2e1a1a;border-color:#8a3a4a}
+.btn-skip:active{transform:scale(.95)}
+.feedback{font-size:.85rem;color:#60a5fa;min-height:1.2em;text-align:center;transition:opacity .3s}
+
+/* Game Over */
+#over-screen h2{font-size:2rem;font-weight:900;margin-bottom:.2em;color:#a78bfa;text-align:center}
+#over-screen .final-score{font-size:3.5rem;font-weight:900;color:#34d399;text-align:center;margin:.2em 0}
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;max-width:380px;margin:1.2rem 0}
+.stat-box{background:#1a1a2e;border:1px solid #2a2a4a;border-radius:12px;padding:12px;text-align:center}
+.stat-box .sval{font-size:1.5rem;font-weight:900;color:#60a5fa}
+.stat-box .slbl{font-size:.72rem;color:#6666aa;text-transform:uppercase;letter-spacing:1px;margin-top:3px}
+.new-best{color:#fbbf24;font-size:.9rem;font-weight:700;margin-bottom:.5rem;text-align:center}
+.over-buttons{display:flex;flex-direction:column;align-items:center;gap:10px;width:100%;max-width:280px}
+
+@media(max-width:400px){
+  .tile{width:44px;height:44px;font-size:1.15rem;border-radius:10px}
+  .timer{font-size:1.7rem}
+  .score-val{font-size:1.35rem}
+}
+</style>
+</head>
+<body>
+
+<!-- START -->
+<div id="start-screen" class="screen">
+  <h1>Word<br>Scramble</h1>
+  <p class="tagline">Unscramble the letters before time runs out!</p>
+  <div class="best-badge">Best Score: <span id="best-disp">0</span></div>
+  <button class="btn btn-primary" onclick="startGame()">▶ Play</button>
+  <p class="how-to">Tap letters to build the word · Hint costs 10 pts · Skip costs 1s<br>+3s per correct · Score × difficulty multiplier</p>
+</div>
+
+<!-- GAME -->
+<div id="game-screen" class="screen hidden">
+  <div class="game-header">
+    <div class="timer-wrap">
+      <div>
+        <div class="score-label">TIME</div>
+        <div class="timer" id="timer-disp">60</div>
+      </div>
+    </div>
+    <div class="score-wrap">
+      <div class="score-label">SCORE</div>
+      <div class="score-val" id="score-disp">0</div>
+    </div>
+  </div>
+  <div class="level-badge" id="level-badge">Level 1 · 4-letter words</div>
+  <div class="scramble-area" id="scramble-area"></div>
+  <div class="answer-area" id="answer-area">
+    <span class="answer-hint">tap letters above to fill here</span>
+  </div>
+  <div class="action-row">
+    <button class="btn-hint" id="hint-btn" onclick="useHint()">💡 Hint (<span id="hints-left">2</span>)</button>
+    <button class="btn-skip" onclick="skipWord()">⏩ Skip (−1s)</button>
+  </div>
+  <div class="feedback" id="feedback"></div>
+</div>
+
+<!-- GAME OVER -->
+<div id="over-screen" class="screen hidden">
+  <h2>Game Over</h2>
+  <div class="final-score" id="final-score">0</div>
+  <div class="new-best" id="new-best-msg" style="display:none">🏆 New Best Score!</div>
+  <div class="stats-grid">
+    <div class="stat-box"><div class="sval" id="stat-words">0</div><div class="slbl">Words Solved</div></div>
+    <div class="stat-box"><div class="sval" id="stat-acc">0%</div><div class="slbl">Accuracy</div></div>
+    <div class="stat-box"><div class="sval" id="stat-longest">—</div><div class="slbl">Longest Word</div></div>
+    <div class="stat-box"><div class="sval" id="stat-streak">0</div><div class="slbl">Best Streak</div></div>
+  </div>
+  <div class="over-buttons">
+    <button class="btn btn-primary" onclick="startGame()">▶ Play Again</button>
+    <button class="btn btn-secondary btn-small" onclick="showStart()">Main Menu</button>
+  </div>
+</div>
+
+<script>
+const WORDS={
+  4:['time','year','walk','talk','play','game','book','city','door','fire',
+     'fish','food','girl','gold','good','hand','head','help','high','hill',
+     'home','hope','hour','idea','iron','jump','keep','kind','king','land',
+     'last','left','life','like','line','list','live','look','love','mark',
+     'mind','moon','move','name','need','news','next','note','once','open',
+     'path','plan','pool','post','pull','push','read','real','rest','rice',
+     'rich','ride','ring','rise','road','rock','role','room','rule','rush',
+     'safe','salt','sand','seed','ship','shop','show','sign','silk','sing',
+     'sink','size','skip','slow','snow','soil','sold','sole','some','song',
+     'soul','spot','star','stay','stem','step','stop','such','suit','sure'],
+  5:['about','above','after','again','alone','along','angry','apple','arrow',
+     'beach','black','blade','blame','blast','blaze','blend','bless','blind',
+     'block','blood','bloom','board','bonus','boost','brain','brave','bread',
+     'break','breed','brick','brief','bring','broad','brown','build','burst',
+     'carry','catch','cause','chain','chair','charm','cheap','check','chest',
+     'chief','child','claim','class','clean','clear','climb','clock','close',
+     'cloud','coast','color','could','count','court','cover','craft','crash',
+     'crazy','cream','crime','cross','crowd','crown','crush','curve','daily',
+     'dance','death','delay','delta','dense','depth','devil','dirty','disco',
+     'dream','dress','drift','drink','drive','drone','drown','early','earth',
+     'eight','elect','elite','empty','enemy','enter','equal','error','event',
+     'every','exact','exist','extra','faith','false','fancy','feast','fence',
+     'fever','field','fifth','fifty','fight','final','first','fixed','flame',
+     'flash','flesh','float','floor','fluid','focus','force','forge','forth',
+     'found','frame','frank','fraud','fresh','front','frost','fruit','fully'],
+  6:['absent','accept','access','action','active','advice','afford','afraid',
+     'agency','almost','always','animal','answer','anyone','around','attack',
+     'autumn','battle','beauty','before','behind','belong','better','bridge',
+     'bright','broken','budget','button','camera','castle','caught','center',
+     'change','charge','choose','circle','client','coffee','create','damage',
+     'danger','defend','define','degree','detail','dinner','direct','divide',
+     'domain','double','driven','effect','empire','enable','energy','engine',
+     'escape','extend','factor','fallen','family','father','figure','filter',
+     'finger','finish','flight','follow','forest','forget','formal','format',
+     'frozen','future','garden','gather','gentle','global','golden','ground',
+     'growth','happen','higher','impact','income','indeed','inside','intent',
+     'island','itself','jungle','junior','kernel','launch','leader','length',
+     'listen','little','loaded','locate','master','matter','mirror','mobile',
+     'modern','moment','mother','motion','muscle','myself','nature','nearly',
+     'normal','notice','number','object','option','origin','output','palace'],
+  7:['ability','account','achieve','address','already','another','anxiety',
+     'applied','arrange','arrival','article','athlete','attract','awesome',
+     'balance','because','bedroom','believe','beneath','between','bicycle',
+     'blanket','blossom','brother','cabinet','captain','careful','catalog',
+     'certain','chapter','charity','circuit','classic','climate','collect',
+     'comfort','complex','concept','conduct','confirm','connect','content',
+     'control','country','culture','current','customs','defense','deliver',
+     'digital','display','distant','diverse','dynamic','economy','element',
+     'emotion','example','explore','express','failure','fashion','feature',
+     'fertile','fiction','finally','fingers','foreign','freedom','forever',
+     'forward','generic','genuine','harmony','healthy','history','hundred',
+     'improve','include','initial','justice','kingdom','knowing','machine',
+     'million','minimum','morning','network','nowhere','nothing','obvious',
+     'package','passion','pattern','perfect','perform','picture','planet'],
+  8:['absolute','abstract','academic','accident','accurate','activity','actually',
+     'addition','adequate','admitted','advanced','affected','alphabet','although',
+     'analysis','announce','anything','anywhere','baseball','bathroom','birthday',
+     'building','business','calendar','campaign','capacity','captured','category',
+     'ceremony','champion','children','collapse','combined','complete','computer',
+     'consider','continue','contract','contrast','convince','creating','creative',
+     'critical','customer','darkness','daughter','decision','describe','discover',
+     'distance','district','dominate','download','dramatic','everyone','evidence',
+     'exchange','exercise','expected','explicit','external','flexible','football',
+     'fraction','fragment','function','generate','grateful','greatest','guidance',
+     'happened','identify','increase','industry','innocent','instance','integral',
+     'interest','invented','keyboard','learning','lifetime','location','magazine',
+     'marathon','material','medicine','midnight','military','mountain','multiply']
+};
+
+const ALL_WORDS=[];
+for(const k in WORDS) WORDS[k].forEach(w=>ALL_WORDS.push(w));
+
+// Audio
+const AC=new(window.AudioContext||window.webkitAudioContext)();
+function playSound(type){
+  try{
+    const resume=AC.state==='suspended'?AC.resume():Promise.resolve();
+    resume.then(()=>{
+      if(type==='correct'){
+        [[523,0],[659,.1],[784,.2],[1047,.32]].forEach(([f,t])=>{
+          const o=AC.createOscillator(),g=AC.createGain();
+          o.connect(g);g.connect(AC.destination);
+          o.frequency.value=f;o.type='sine';
+          g.gain.setValueAtTime(.18,AC.currentTime+t);
+          g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+t+.35);
+          o.start(AC.currentTime+t);o.stop(AC.currentTime+t+.36);
+        });
+      }else if(type==='wrong'){
+        const o=AC.createOscillator(),g=AC.createGain();
+        o.connect(g);g.connect(AC.destination);
+        o.type='sawtooth';o.frequency.setValueAtTime(180,AC.currentTime);
+        o.frequency.linearRampToValueAtTime(80,AC.currentTime+.2);
+        g.gain.setValueAtTime(.15,AC.currentTime);
+        g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+.22);
+        o.start();o.stop(AC.currentTime+.23);
+      }else if(type==='hint'){
+        const o=AC.createOscillator(),g=AC.createGain();
+        o.connect(g);g.connect(AC.destination);
+        o.type='sine';o.frequency.value=880;
+        g.gain.setValueAtTime(.12,AC.currentTime);
+        g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+.25);
+        o.start();o.stop(AC.currentTime+.26);
+      }else if(type==='gameover'){
+        [[400,0],[320,.15],[240,.3],[160,.45]].forEach(([f,t])=>{
+          const o=AC.createOscillator(),g=AC.createGain();
+          o.connect(g);g.connect(AC.destination);
+          o.type='triangle';o.frequency.value=f;
+          g.gain.setValueAtTime(.15,AC.currentTime+t);
+          g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+t+.35);
+          o.start(AC.currentTime+t);o.stop(AC.currentTime+t+.36);
+        });
+      }
+    });
+  }catch(e){}
+}
+
+// State
+let score=0,timeLeft=0,currentWord='',scrambled=[],placed=[],hintsUsed=0;
+let wordsSolved=0,wordsAttempted=0,longestWord='',bestStreak=0,streak=0;
+let timerInterval=null,wordStartTime=0,gameActive=false;
+
+function getBestScore(){return parseInt(localStorage.getItem('wsbs')||'0')}
+function saveBestScore(s){localStorage.setItem('wsbs',s)}
+
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.add('hidden'));
+  document.getElementById(id).classList.remove('hidden');
+}
+function showStart(){
+  document.getElementById('best-disp').textContent=getBestScore();
+  showScreen('start-screen');
+}
+function getDifficulty(){
+  if(score<30)return 4;
+  if(score<80)return 5;
+  if(score<150)return 6;
+  if(score<250)return 7;
+  return 8;
+}
+function getLevelLabel(){
+  const d=getDifficulty();
+  const lvls={4:'Level 1 · 4-letter words',5:'Level 2 · 5-letter words',6:'Level 3 · 6-letter words',7:'Level 4 · 7-letter words',8:'Level 5 · 8-letter words'};
+  return lvls[d];
+}
+
+function scrambleWord(word){
+  const arr=word.split('');
+  for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]];}
+  if(arr.join('')===word&&word.length>1) return scrambleWord(word);
+  return arr;
+}
+
+function pickWord(){
+  const diff=getDifficulty();
+  const pool=WORDS[diff];
+  return pool[Math.floor(Math.random()*pool.length)];
+}
+
+function loadWord(){
+  currentWord=pickWord();
+  scrambled=scrambleWord(currentWord);
+  placed=new Array(currentWord.length).fill(null);
+  hintsUsed=0;
+  wordStartTime=Date.now();
+  document.getElementById('hints-left').textContent=2;
+  document.getElementById('hint-btn').disabled=false;
+  document.getElementById('level-badge').textContent=getLevelLabel();
+  clearFeedback();
+  renderTiles();
+}
+
+function renderTiles(){
+  const sa=document.getElementById('scramble-area');
+  const aa=document.getElementById('answer-area');
+  sa.innerHTML='';
+  aa.innerHTML='';
+  // Remove hint label if answer has tiles
+  const hasHint=placed.every(p=>p===null);
+  if(hasHint){
+    const h=document.createElement('span');
+    h.className='answer-hint';h.textContent='tap letters above to fill here';
+    aa.appendChild(h);
+  }
+  // Scramble tiles (unplaced)
+  scrambled.forEach((ch,i)=>{
+    if(ch===null)return;
+    const t=document.createElement('button');
+    t.className='tile source pop-in';
+    t.textContent=ch;
+    t.setAttribute('data-idx',i);
+    t.onclick=()=>placeTile(i);
+    sa.appendChild(t);
+  });
+  // Answer slots
+  placed.forEach((ch,i)=>{
+    const t=document.createElement('button');
+    if(ch===null){
+      t.className='tile empty-slot';
+      t.textContent='_';
+    }else{
+      t.className='tile placed pop-in'+(ch._hint?' hint-tile':'');
+      t.textContent=ch.letter;
+      t.setAttribute('data-slot',i);
+      t.onclick=()=>removeTile(i);
+    }
+    aa.appendChild(t);
+  });
+}
+
+function placeTile(srcIdx){
+  const nextEmpty=placed.indexOf(null);
+  if(nextEmpty===-1)return;
+  placed[nextEmpty]={letter:scrambled[srcIdx],srcIdx,_hint:false};
+  scrambled[srcIdx]=null;
+  renderTiles();
+  // Auto-check when full
+  if(placed.every(p=>p!==null)) checkAnswer();
+}
+
+function removeTile(slotIdx){
+  const item=placed[slotIdx];
+  if(!item)return;
+  scrambled[item.srcIdx]=item.letter;
+  placed[slotIdx]=null;
+  renderTiles();
+}
+
+function checkAnswer(){
+  const answer=placed.map(p=>p.letter).join('');
+  if(answer===currentWord){
+    // Correct!
+    const elapsed=(Date.now()-wordStartTime)/1000;
+    let pts=currentWord.length*10;
+    if(elapsed<5)pts+=20;else if(elapsed<10)pts+=10;else if(elapsed<15)pts+=5;
+    pts=Math.max(pts,currentWord.length*5);
+    score+=pts;
+    timeLeft=Math.min(timeLeft+3,99);
+    wordsSolved++;wordsAttempted++;
+    streak++;if(streak>bestStreak)bestStreak=streak;
+    if(currentWord.length>longestWord.length)longestWord=currentWord;
+    document.getElementById('score-disp').textContent=score;
+    document.getElementById('timer-disp').textContent=timeLeft;
+    showFeedback(`+${pts} pts 🎉`,true);
+    flashAnswer('correct-flash');
+    playSound('correct');
+    setTimeout(()=>loadWord(),800);
+  }else{
+    // Wrong
+    playSound('wrong');
+    flashAnswer('wrong-flash');
+    showFeedback('Not quite... try again!',false);
+    // Return all tiles
+    placed.forEach((item,i)=>{
+      if(item)scrambled[item.srcIdx]=item.letter;
+    });
+    placed=new Array(currentWord.length).fill(null);
+    setTimeout(()=>renderTiles(),300);
+  }
+}
+
+function flashAnswer(cls){
+  const aa=document.getElementById('answer-area');
+  aa.classList.add(cls);
+  setTimeout(()=>aa.classList.remove(cls),600);
+}
+
+function useHint(){
+  if(hintsUsed>=2||!gameActive)return;
+  // Find first empty slot
+  const emptyIdx=placed.indexOf(null);
+  if(emptyIdx===-1)return;
+  // The correct letter for this position
+  const correctLetter=currentWord[emptyIdx];
+  // Find it in scrambled
+  const srcIdx=scrambled.findIndex(ch=>ch===correctLetter);
+  if(srcIdx===-1)return;
+  placed[emptyIdx]={letter:correctLetter,srcIdx,_hint:true};
+  scrambled[srcIdx]=null;
+  hintsUsed++;
+  score=Math.max(0,score-10);
+  document.getElementById('score-disp').textContent=score;
+  document.getElementById('hints-left').textContent=2-hintsUsed;
+  if(hintsUsed>=2)document.getElementById('hint-btn').disabled=true;
+  playSound('hint');
+  showFeedback('Hint used! −10 pts',false);
+  renderTiles();
+  if(placed.every(p=>p!==null)) checkAnswer();
+}
+
+function skipWord(){
+  if(!gameActive)return;
+  timeLeft=Math.max(0,timeLeft-1);
+  wordsAttempted++;streak=0;
+  document.getElementById('timer-disp').textContent=timeLeft;
+  showFeedback('Skipped −1s',false);
+  if(timeLeft<=0){endGame();return;}
+  loadWord();
+}
+
+function showFeedback(msg,good){
+  const f=document.getElementById('feedback');
+  f.textContent=msg;f.style.color=good?'#34d399':'#fb923c';f.style.opacity='1';
+}
+function clearFeedback(){
+  const f=document.getElementById('feedback');f.textContent='';f.style.opacity='0';
+}
+
+function updateTimer(){
+  if(!gameActive)return;
+  timeLeft--;
+  const el=document.getElementById('timer-disp');
+  el.textContent=timeLeft;
+  el.className='timer'+(timeLeft<=10?' danger':timeLeft<=20?' warn':'');
+  if(timeLeft<=0)endGame();
+}
+
+function startGame(){
+  score=0;timeLeft=60;wordsSolved=0;wordsAttempted=0;longestWord='';bestStreak=0;streak=0;
+  gameActive=true;
+  document.getElementById('score-disp').textContent='0';
+  document.getElementById('timer-disp').textContent='60';
+  document.getElementById('timer-disp').className='timer';
+  showScreen('game-screen');
+  loadWord();
+  if(timerInterval)clearInterval(timerInterval);
+  timerInterval=setInterval(updateTimer,1000);
+}
+
+function endGame(){
+  gameActive=false;
+  clearInterval(timerInterval);
+  playSound('gameover');
+  const best=getBestScore();
+  if(score>best)saveBestScore(score);
+  document.getElementById('final-score').textContent=score;
+  document.getElementById('new-best-msg').style.display=score>best?'block':'none';
+  document.getElementById('stat-words').textContent=wordsSolved;
+  const acc=wordsAttempted>0?Math.round((wordsSolved/wordsAttempted)*100):0;
+  document.getElementById('stat-acc').textContent=acc+'%';
+  document.getElementById('stat-longest').textContent=longestWord||'—';
+  document.getElementById('stat-streak').textContent=bestStreak;
+  showScreen('over-screen');
+}
+
+// Init
+showStart();
+// Unlock audio on first interaction
+document.addEventListener('click',()=>{if(AC.state==='suspended')AC.resume();},{once:true});
+</script>
+</body>
+</html>

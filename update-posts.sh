@@ -152,3 +152,17 @@ git push origin master
 rsync -a --delete _posts/ posts/
 
 echo "✅ Done! Posts updated: $(cat posts.json | grep -c filename)"
+
+# --- D1 자동 동기화 (누락 포스트 감지 → INSERT) ---
+echo "🔄 Syncing posts to D1..."
+bash "$BLOG_DIR/scripts/sync-d1.sh" || echo "⚠️ D1 sync failed (non-fatal)"
+
+# --- 인사이트 자동 추출 (리서치 포스트에서 아이디어/액션 아이템 수집) ---
+EXTRACT_SCRIPT="/Users/kjaylee/.openclaw/workspace/scripts/extract-insights.sh"
+if [ -x "$EXTRACT_SCRIPT" ]; then
+    echo "🧠 Extracting insights from recent posts..."
+    for post in _posts/*indie-game* _posts/*ai-briefing* _posts/*research-digest* _posts/*evening-tech* _posts/*geeknews* _posts/*medium-digest*; do
+        [ -f "$post" ] && bash "$EXTRACT_SCRIPT" "$post" 2>/dev/null
+    done
+    echo "✅ Insight extraction complete"
+fi

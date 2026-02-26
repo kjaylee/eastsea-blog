@@ -211,17 +211,52 @@ export default {
       const postPathMatch = path.match(/^\/api\/posts\/([^/]+)$/);
       if (request.method === 'GET' && postPathMatch) {
         const slug = decodeURIComponent(postPathMatch[1]);
-        const row = await env.DB.prepare(
+        let row = await env.DB.prepare(
           `SELECT slug, title, date, content, categories, tags, author, created_at, updated_at
            FROM posts
            WHERE slug = ?`
         ).bind(slug).first();
 
+        // Fuzzy fallback: date-prefix + progressive keyword narrowing
+        if (!row) {
+          const dateMatch = slug.match(/^(\d{4}-\d{2}-\d{2})-(.+)$/);
+          if (dateMatch) {
+            const [, datePrefix, rest] = dateMatch;
+            const keywords = rest.split('-').filter(w => w.length >= 3);
+            if (keywords.length > 0) {
+              // Strategy: try all keywords → first+last → each keyword alone
+              const attempts = [
+                keywords,
+                keywords.length > 2 ? [keywords[0], keywords[keywords.length - 1]] : null,
+                ...keywords.map(k => [k]),
+              ].filter(Boolean);
+
+              for (const kwSet of attempts) {
+                let sql = `SELECT slug, title, date, content, categories, tags, author, created_at, updated_at
+                           FROM posts WHERE slug LIKE ?`;
+                const binds = [`${datePrefix}-%`];
+                for (const kw of kwSet) {
+                  sql += ` AND slug LIKE ?`;
+                  binds.push(`%${kw}%`);
+                }
+                sql += ` LIMIT 1`;
+                row = await env.DB.prepare(sql).bind(...binds).first();
+                if (row) break;
+              }
+            }
+          }
+        }
+
         if (!row) {
           return jsonResponse({ error: 'Post not found' }, 404);
         }
 
-        return jsonResponse(toPostDetail(row));
+        const detail = toPostDetail(row);
+        // If resolved via fuzzy match, include canonical slug for client-side URL correction
+        if (row.slug !== slug) {
+          detail.canonical_slug = row.slug;
+        }
+        return jsonResponse(detail);
       }
 
       if (request.method === 'POST' && path === '/api/posts') {

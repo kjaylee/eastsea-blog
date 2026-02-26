@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Neon Dungeon — 네온 던전</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a1a;
+    color: #e0e0ff;
+    font-family: 'Courier New', monospace;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    min-height: 100vh;
+    overflow: hidden;
+    touch-action: none;
+    user-select: none;
+  }
+  #header {
+    width: 100%;
+    max-width: 480px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 10px;
+    background: rgba(0,0,0,0.6);
+    border-bottom: 1px solid #2a0a4a;
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+  #header .stat { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+  #header .lbl { color: #888; font-size: 10px; }
+  #header .val { font-weight: bold; text-shadow: 0 0 8px currentColor; }
+  .hp-val { color: #ff4488; }
+  .atk-val { color: #ff8844; }
+  .def-val { color: #44aaff; }
+  .floor-val { color: #aa44ff; }
+  .score-val { color: #44ffaa; }
+  #game-wrap {
+    position: relative;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    max-width: 480px;
+  }
+  canvas {
+    display: block;
+    image-rendering: pixelated;
+    touch-action: none;
+  }
+  #log {
+    width: 100%;
+    max-width: 480px;
+    height: 36px;
+    overflow: hidden;
+    padding: 4px 10px;
+    font-size: 11px;
+    color: #aaccff;
+    background: rgba(0,0,0,0.5);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  #dpad {
+    width: 100%;
+    max-width: 480px;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows: 1fr 1fr 1fr;
+    gap: 4px;
+    padding: 8px;
+    flex-shrink: 0;
+    height: 150px;
+  }
+  .dpad-btn {
+    background: rgba(100,0,180,0.25);
+    border: 1px solid rgba(150,50,255,0.4);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    color: rgba(200,150,255,0.8);
+    cursor: pointer;
+    transition: background 0.1s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .dpad-btn:active, .dpad-btn.pressed {
+    background: rgba(150,50,255,0.4);
+  }
+  .dpad-empty { visibility: hidden; }
+  #overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.85);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    z-index: 10;
+  }
+  #overlay h1 {
+    font-size: 28px;
+    color: #cc44ff;
+    text-shadow: 0 0 20px #cc44ff, 0 0 40px #cc44ff;
+    letter-spacing: 3px;
+  }
+  #overlay h2 {
+    font-size: 18px;
+    color: #ff4488;
+    text-shadow: 0 0 12px #ff4488;
+  }
+  #overlay .sub { font-size: 13px; color: #888; text-align: center; padding: 0 20px; }
+  #overlay .score-display {
+    font-size: 22px; color: #44ffaa;
+    text-shadow: 0 0 12px #44ffaa;
+  }
+  #overlay .best-display { font-size: 14px; color: #888; }
+  .start-btn {
+    padding: 12px 40px;
+    background: linear-gradient(135deg, #6600cc, #cc0066);
+    border: none;
+    border-radius: 25px;
+    color: white;
+    font-size: 16px;
+    font-family: inherit;
+    cursor: pointer;
+    font-weight: bold;
+    letter-spacing: 2px;
+    box-shadow: 0 0 20px rgba(200,0,200,0.5);
+    transition: transform 0.1s;
+  }
+  .start-btn:active { transform: scale(0.97); }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; padding: 0 20px; }
+  .legend-item { font-size: 11px; color: #888; }
+  .legend-item span { font-weight: bold; }
+</style>
+</head>
+<body>
+<div id="header">
+  <div class="stat"><div class="lbl">HP</div><div class="val hp-val" id="hpVal">20/20</div></div>
+  <div class="stat"><div class="lbl">ATK</div><div class="val atk-val" id="atkVal">5</div></div>
+  <div class="stat"><div class="lbl">DEF</div><div class="val def-val" id="defVal">0</div></div>
+  <div class="stat"><div class="lbl">FLOOR</div><div class="val floor-val" id="floorVal">1</div></div>
+  <div class="stat"><div class="lbl">SCORE</div><div class="val score-val" id="scoreVal">0</div></div>
+</div>
+<div id="game-wrap">
+  <canvas id="c"></canvas>
+  <div id="overlay">
+    <h1>⚔ NEON DUNGEON</h1>
+    <div class="sub">네온 던전에서 살아남아라! 5개의 층을 탐험하고 악마 왕을 처치하라.</div>
+    <div class="legend">
+      <div class="legend-item"><span style="color:#44ffaa">@</span> You</div>
+      <div class="legend-item"><span style="color:#ff6644">S</span> Slime</div>
+      <div class="legend-item"><span style="color:#ffaa44">K</span> Skeleton</div>
+      <div class="legend-item"><span style="color:#ff44aa">D</span> Demon</div>
+      <div class="legend-item"><span style="color:#ff4444">B</span> BOSS</div>
+      <div class="legend-item"><span style="color:#ff8844">!</span> Potion</div>
+      <div class="legend-item"><span style="color:#ffdd44">/</span> Sword</div>
+      <div class="legend-item"><span style="color:#44aaff">]</span> Shield</div>
+      <div class="legend-item"><span style="color:#ffdd00">$</span> Gold</div>
+      <div class="legend-item"><span style="color:#aaaaff">></span> Stairs</div>
+    </div>
+    <div class="best-display" id="bestDisplay"></div>
+    <button class="start-btn" id="startBtn">▶ START</button>
+  </div>
+</div>
+<div id="log">탐험을 시작하라...</div>
+<div id="dpad">
+  <div class="dpad-empty"></div>
+  <div class="dpad-btn" id="btnUp">▲</div>
+  <div class="dpad-empty"></div>
+  <div class="dpad-btn" id="btnLeft">◀</div>
+  <div class="dpad-btn" id="btnDown">▼</div>
+  <div class="dpad-btn" id="btnRight">▶</div>
+  <div class="dpad-empty"></div>
+  <div class="dpad-empty"></div>
+  <div class="dpad-empty"></div>
+</div>
+
+<script>
+// ============================================================
+// NEON DUNGEON — Roguelike RPG
+// ============================================================
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const overlay = document.getElementById('overlay');
+const startBtn = document.getElementById('startBtn');
+const logEl = document.getElementById('log');
+
+// Responsive sizing
+function resize() {
+  const wrap = document.getElementById('game-wrap');
+  const w = Math.min(wrap.clientWidth, 480);
+  const h = wrap.clientHeight;
+  const size = Math.min(w, h, 420);
+  canvas.width = size;
+  canvas.height = size;
+  if (gameState) draw();
+}
+window.addEventListener('resize', resize);
+
+// Audio
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let audioCtx;
+function initAudio() { if (!audioCtx) audioCtx = new AudioCtx(); }
+
+function playTone(freq, type, duration, vol = 0.3, decayMult = 1) {
+  if (!audioCtx) return;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.connect(gain); gain.connect(audioCtx.destination);
+  osc.type = type; osc.frequency.value = freq;
+  gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration * decayMult);
+  osc.start(); osc.stop(audioCtx.currentTime + duration);
+}
+function sfxStep() { playTone(200, 'sine', 0.05, 0.08); }
+function sfxHit() {
+  playTone(150, 'sawtooth', 0.1, 0.2);
+  playTone(100, 'square', 0.15, 0.15);
+}
+function sfxKill() {
+  playTone(300, 'sawtooth', 0.08, 0.25);
+  setTimeout(() => playTone(400, 'sawtooth', 0.08, 0.2), 60);
+  setTimeout(() => playTone(500, 'triangle', 0.12, 0.3), 120);
+}
+function sfxItem() {
+  playTone(600, 'sine', 0.1, 0.2);
+  setTimeout(() => playTone(800, 'sine', 0.1, 0.2), 80);
+  setTimeout(() => playTone(1000, 'sine', 0.12, 0.25), 160);
+}
+function sfxDie() {
+  playTone(200, 'sawtooth', 0.3, 0.4);
+  setTimeout(() => playTone(150, 'sawtooth', 0.3, 0.5), 150);
+  setTimeout(() => playTone(100, 'square', 0.4, 0.5), 300);
+}
+function sfxStairs() {
+  [400,500,600,800].forEach((f,i) => setTimeout(() => playTone(f, 'sine', 0.15, 0.3), i*80));
+}
+
+// === GAME CONSTANTS ===
+const COLS = 20, ROWS = 20;
+const TILE = {
+  WALL: 0, FLOOR: 1, STAIRS: 2, DOOR: 3
+};
+
+// Color palette
+const C = {
+  wall:    '#1a0a2e',
+  wallBright: '#2a1050',
+  floor:   '#0d0d22',
+  floorBright: '#131328',
+  stairs:  '#4444ff',
+  player:  '#44ffaa',
+  slime:   '#66ff44',
+  skeleton:'#ffaa44',
+  demon:   '#ff44aa',
+  boss:    '#ff2244',
+  potion:  '#ff8844',
+  sword:   '#ffdd44',
+  shield:  '#44aaff',
+  gold:    '#ffdd00',
+  fog:     'rgba(0,0,0,0.75)',
+  fogDeep: 'rgba(0,0,0,0.95)',
+};
+
+// === GAME STATE ===
+let gameState = null;
+let animParticles = [];
+
+function newGame() {
+  gameState = {
+    floor: 1,
+    score: 0,
+    player: {
+      x: 0, y: 0,
+      hp: 20, maxHp: 20,
+      atk: 5, def: 0,
+      alive: true
+    },
+    map: null,
+    monsters: [],
+    items: [],
+    visible: null,
+    explored: null,
+    turn: 0,
+    messages: [],
+    animQueue: [],
+    shakeFrames: 0
+  };
+  generateFloor();
+  updateHUD();
+}
+
+function generateFloor() {
+  const g = gameState;
+  g.map = Array.from({length: ROWS}, () => new Array(COLS).fill(TILE.WALL));
+  g.visible = Array.from({length: ROWS}, () => new Uint8Array(COLS));
+  g.explored = Array.from({length: ROWS}, () => new Uint8Array(COLS));
+  g.monsters = [];
+  g.items = [];
+
+  // Room-based dungeon generation
+  const rooms = [];
+  const attempts = 60;
+  for (let a = 0; a < attempts; a++) {
+    const rw = 4 + Math.floor(Math.random() * 5);
+    const rh = 4 + Math.floor(Math.random() * 4);
+    const rx = 1 + Math.floor(Math.random() * (COLS - rw - 2));
+    const ry = 1 + Math.floor(Math.random() * (ROWS - rh - 2));
+    const room = {x: rx, y: ry, w: rw, h: rh};
+    if (!rooms.some(r => rectsOverlap(r, room, 1))) {
+      rooms.push(room);
+      for (let y = ry; y < ry + rh; y++)
+        for (let x = rx; x < rx + rw; x++)
+          g.map[y][x] = TILE.FLOOR;
+    }
+  }
+
+  // Connect rooms with corridors
+  for (let i = 1; i < rooms.length; i++) {
+    const a = rooms[i-1], b = rooms[i];
+    const ax = Math.floor(a.x + a.w/2), ay = Math.floor(a.y + a.h/2);
+    const bx = Math.floor(b.x + b.w/2), by = Math.floor(b.y + b.h/2);
+    // L-shaped corridor
+    const mid = Math.random() < 0.5;
+    if (mid) {
+      for (let x = Math.min(ax,bx); x <= Math.max(ax,bx); x++) g.map[ay][x] = TILE.FLOOR;
+      for (let y = Math.min(ay,by); y <= Math.max(ay,by); y++) g.map[y][bx] = TILE.FLOOR;
+    } else {
+      for (let y = Math.min(ay,by); y <= Math.max(ay,by); y++) g.map[y][ax] = TILE.FLOOR;
+      for (let x = Math.min(ax,bx); x <= Math.max(ax,bx); x++) g.map[by][x] = TILE.FLOOR;
+    }
+  }
+
+  // Place player in first room
+  if (rooms.length > 0) {
+    const r = rooms[0];
+    g.player.x = Math.floor(r.x + r.w/2);
+    g.player.y = Math.floor(r.y + r.h/2);
+  }
+
+  // Place stairs in last room
+  if (rooms.length > 1) {
+    const r = rooms[rooms.length - 1];
+    const sx = Math.floor(r.x + r.w/2), sy = Math.floor(r.y + r.h/2);
+    g.map[sy][sx] = TILE.STAIRS;
+  }
+
+  // Place monsters
+  const floorMult = g.floor;
+  const monsterCount = 4 + floorMult * 2;
+  for (let i = 0; i < monsterCount; i++) {
+    const pos = randomFloorPos(rooms.slice(1));
+    if (!pos) continue;
+    const roll = Math.random();
+    let type;
+    if (g.floor >= 5 && i === 0) {
+      type = 'boss';
+    } else if (roll < 0.5 || g.floor === 1) {
+      type = 'slime';
+    } else if (roll < 0.8 || g.floor <= 2) {
+      type = 'skeleton';
+    } else {
+      type = 'demon';
+    }
+    const m = monsterDef(type, g.floor);
+    m.x = pos.x; m.y = pos.y;
+    g.monsters.push(m);
+  }
+
+  // Place items
+  const itemCount = 3 + g.floor;
+  for (let i = 0; i < itemCount; i++) {
+    const pos = randomFloorPos(rooms);
+    if (!pos) continue;
+    const roll = Math.random();
+    let type;
+    if (roll < 0.35) type = 'potion';
+    else if (roll < 0.55) type = 'sword';
+    else if (roll < 0.7) type = 'shield';
+    else type = 'gold';
+    g.items.push({ x: pos.x, y: pos.y, type });
+  }
+
+  computeFOV();
+}
+
+function rectsOverlap(a, b, pad = 0) {
+  return !(a.x + a.w + pad <= b.x || b.x + b.w + pad <= a.x ||
+           a.y + a.h + pad <= b.y || b.y + b.h + pad <= a.y);
+}
+
+function randomFloorPos(rooms) {
+  const g = gameState;
+  const floorTiles = [];
+  for (let y = 1; y < ROWS-1; y++)
+    for (let x = 1; x < COLS-1; x++)
+      if (g.map[y][x] === TILE.FLOOR &&
+          !(x === g.player.x && y === g.player.y) &&
+          !g.monsters.some(m => m.x === x && m.y === y) &&
+          !g.items.some(it => it.x === x && it.y === y))
+        floorTiles.push({x, y});
+  if (!floorTiles.length) return null;
+  return floorTiles[Math.floor(Math.random() * floorTiles.length)];
+}
+
+function monsterDef(type, floor) {
+  const defs = {
+    slime:    { type: 'slime',    sym: 'S', name: '슬라임', color: C.slime,    hp: 8+floor*2,  maxHp: 8+floor*2,  atk: 2+floor,   xp: 10 },
+    skeleton: { type: 'skeleton', sym: 'K', name: '스켈레톤', color: C.skeleton, hp: 15+floor*3, maxHp: 15+floor*3, atk: 4+floor*2, xp: 25 },
+    demon:    { type: 'demon',    sym: 'D', name: '악마',   color: C.demon,    hp: 25+floor*4, maxHp: 25+floor*4, atk: 6+floor*3, xp: 50 },
+    boss:     { type: 'boss',     sym: 'B', name: '마왕',   color: C.boss,     hp: 80+floor*10, maxHp: 80+floor*10, atk: 12+floor*4, xp: 500 },
+  };
+  return Object.assign({alive: true}, defs[type]);
+}
+
+// Field of View — simple radius + line-of-sight
+function computeFOV() {
+  const g = gameState;
+  const radius = 6;
+  const px = g.player.x, py = g.player.y;
+
+  // Clear visible
+  for (let y = 0; y < ROWS; y++) g.visible[y].fill(0);
+
+  // Cast rays
+  const steps = 360;
+  for (let i = 0; i < steps; i++) {
+    const angle = (i / steps) * Math.PI * 2;
+    let rx = px + 0.5, ry = py + 0.5;
+    const dx = Math.cos(angle) * 0.5, dy = Math.sin(angle) * 0.5;
+    for (let d = 0; d < radius * 2; d++) {
+      const tx = Math.floor(rx), ty = Math.floor(ry);
+      if (tx < 0 || tx >= COLS || ty < 0 || ty >= ROWS) break;
+      g.visible[ty][tx] = 1;
+      g.explored[ty][tx] = 1;
+      if (g.map[ty][tx] === TILE.WALL) break;
+      rx += dx; ry += dy;
+    }
+  }
+}
+
+// === PLAYER ACTIONS ===
+function tryMove(dx, dy) {
+  const g = gameState;
+  if (!g.player.alive) return;
+  initAudio();
+
+  const nx = g.player.x + dx;
+  const ny = g.player.y + dy;
+  if (nx < 0 || nx >= COLS || ny < 0 || ny >= ROWS) return;
+  if (g.map[ny][nx] === TILE.WALL) return;
+
+  // Check monster
+  const mon = g.monsters.find(m => m.x === nx && m.y === ny && m.alive);
+  if (mon) {
+    attackMonster(mon);
+    doMonsterTurn();
+    return;
+  }
+
+  // Move
+  g.player.x = nx; g.player.y = ny;
+  sfxStep();
+
+  // Check item
+  const itemIdx = g.items.findIndex(it => it.x === nx && it.y === ny);
+  if (itemIdx >= 0) {
+    pickupItem(g.items.splice(itemIdx, 1)[0]);
+  }
+
+  // Check stairs
+  if (g.map[ny][nx] === TILE.STAIRS) {
+    sfxStairs();
+    if (g.floor >= 5) {
+      // Victory!
+      g.score += 1000;
+      endGame(true);
+      return;
+    }
+    g.floor++;
+    addLog(`🔽 ${g.floor}층으로 내려갔다!`);
+    generateFloor();
+    updateHUD();
+    draw();
+    return;
+  }
+
+  computeFOV();
+  doMonsterTurn();
+}
+
+function attackMonster(mon) {
+  const g = gameState;
+  const dmg = Math.max(1, g.player.atk + Math.floor(Math.random() * 4) - 1);
+  mon.hp -= dmg;
+  sfxHit();
+  addLog(`⚔ ${mon.name}에게 ${dmg} 데미지!`);
+  spawnHitParticles(mon.x, mon.y, mon.color);
+
+  if (mon.hp <= 0) {
+    mon.alive = false;
+    g.score += mon.xp;
+    sfxKill();
+    addLog(`💀 ${mon.name} 처치! +${mon.xp}점`);
+    if (mon.type === 'boss') {
+      addLog(`🏆 마왕을 물리쳤다! 전설적인 승리!`);
+      g.score += 2000;
+      endGame(true);
+      return;
+    }
+  }
+  computeFOV();
+  updateHUD();
+}
+
+function doMonsterTurn() {
+  const g = gameState;
+  g.monsters.forEach(mon => {
+    if (!mon.alive) return;
+    if (!g.visible[mon.y]?.[mon.x]) return; // only active if visible
+
+    const dx = g.player.x - mon.x;
+    const dy = g.player.y - mon.y;
+    const dist = Math.abs(dx) + Math.abs(dy);
+
+    if (dist === 1) {
+      // Attack player
+      const dmg = Math.max(0, mon.atk - g.player.def + Math.floor(Math.random()*3) - 1);
+      g.player.hp -= dmg;
+      g.shakeFrames = 8;
+      sfxHit();
+      addLog(`💥 ${mon.name}이(가) ${dmg} 데미지!`);
+      if (g.player.hp <= 0) { g.player.alive = false; endGame(false); return; }
+    } else {
+      // Move toward player
+      const moves = [];
+      if (Math.abs(dx) >= Math.abs(dy)) {
+        moves.push([Math.sign(dx), 0], [0, Math.sign(dy)]);
+      } else {
+        moves.push([0, Math.sign(dy)], [Math.sign(dx), 0]);
+      }
+      for (const [mx, my] of moves) {
+        const nx = mon.x + mx, ny = mon.y + my;
+        if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS &&
+            g.map[ny][nx] !== TILE.WALL &&
+            !g.monsters.some(m2 => m2 !== mon && m2.alive && m2.x === nx && m2.y === ny) &&
+            !(nx === g.player.x && ny === g.player.y)) {
+          mon.x = nx; mon.y = ny;
+          break;
+        }
+      }
+    }
+  });
+  computeFOV();
+  updateHUD();
+  draw();
+}
+
+function pickupItem(item) {
+  const g = gameState;
+  sfxItem();
+  switch (item.type) {
+    case 'potion':
+      const heal = 10 + Math.floor(Math.random() * 10);
+      g.player.hp = Math.min(g.player.maxHp, g.player.hp + heal);
+      addLog(`🧪 물약 획득! HP +${heal}`); break;
+    case 'sword':
+      g.player.atk += 2;
+      addLog(`⚔ 검 발견! ATK +2`); break;
+    case 'shield':
+      g.player.def += 1;
+      addLog(`🛡 방패 발견! DEF +1`); break;
+    case 'gold':
+      const gold = 5 + Math.floor(Math.random() * 20) * g.floor;
+      g.score += gold;
+      addLog(`💰 금화 +${gold}점`); break;
+  }
+  updateHUD();
+}
+
+function spawnHitParticles(gx, gy, color) {
+  const t = canvas.width / COLS;
+  const cx = gx * t + t/2, cy = gy * t + t/2;
+  for (let i = 0; i < 6; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    animParticles.push({
+      x: cx, y: cy,
+      vx: Math.cos(angle) * (2 + Math.random() * 3),
+      vy: Math.sin(angle) * (2 + Math.random() * 3),
+      life: 1, decay: 0.06 + Math.random() * 0.04,
+      color, size: 2 + Math.random() * 3
+    });
+  }
+}
+
+function addLog(msg) {
+  logEl.textContent = msg;
+  gameState.messages.unshift(msg);
+  if (gameState.messages.length > 20) gameState.messages.pop();
+}
+
+function updateHUD() {
+  const g = gameState;
+  if (!g) return;
+  document.getElementById('hpVal').textContent = `${g.player.hp}/${g.player.maxHp}`;
+  document.getElementById('atkVal').textContent = g.player.atk;
+  document.getElementById('defVal').textContent = g.player.def;
+  document.getElementById('floorVal').textContent = `${g.floor}/5`;
+  document.getElementById('scoreVal').textContent = g.score;
+}
+
+// === RENDERING ===
+function draw() {
+  if (!gameState) return;
+  const g = gameState;
+  const W = canvas.width, H = canvas.height;
+  const tW = W / COLS, tH = H / ROWS;
+
+  ctx.save();
+  if (g.shakeFrames > 0) {
+    ctx.translate(
+      (Math.random() - 0.5) * 4 * (g.shakeFrames / 8),
+      (Math.random() - 0.5) * 4 * (g.shakeFrames / 8)
+    );
+    g.shakeFrames--;
+  }
+
+  ctx.fillStyle = '#050510';
+  ctx.fillRect(0, 0, W, H);
+
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      const px = x * tW, py = y * tH;
+      const vis = g.visible[y][x];
+      const exp = g.explored[y][x];
+      const tile = g.map[y][x];
+
+      if (!exp) continue;
+
+      // Draw tile
+      let tileColor;
+      switch(tile) {
+        case TILE.WALL:   tileColor = vis ? C.wallBright : C.wall; break;
+        case TILE.FLOOR:  tileColor = vis ? C.floorBright : C.floor; break;
+        case TILE.STAIRS: tileColor = C.floor; break;
+        default:          tileColor = C.floor;
+      }
+      ctx.fillStyle = tileColor;
+      ctx.fillRect(px, py, tW, tH);
+
+      if (!vis) {
+        ctx.fillStyle = C.fog;
+        ctx.fillRect(px, py, tW, tH);
+        continue;
+      }
+
+      // Draw tile details
+      if (tile === TILE.WALL) {
+        ctx.strokeStyle = 'rgba(80,30,150,0.3)';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(px+0.5, py+0.5, tW-1, tH-1);
+      } else if (tile === TILE.STAIRS) {
+        drawGlyph('>', x, y, tW, tH, C.stairs, true);
+      }
+    }
+  }
+
+  // Draw items
+  g.items.forEach(it => {
+    if (!g.visible[it.y]?.[it.x]) return;
+    const glyphs = { potion: '!', sword: '/', shield: ']', gold: '$' };
+    const colors = { potion: C.potion, sword: C.sword, shield: C.shield, gold: C.gold };
+    drawGlyph(glyphs[it.type], it.x, it.y, tW, tH, colors[it.type], true);
+  });
+
+  // Draw monsters
+  g.monsters.forEach(mon => {
+    if (!mon.alive) return;
+    if (!g.visible[mon.y]?.[mon.x]) return;
+    drawGlyph(mon.sym, mon.x, mon.y, tW, tH, mon.color, true);
+    // HP bar
+    const px = mon.x * tW, py = mon.y * tH;
+    const ratio = mon.hp / mon.maxHp;
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(px, py + tH - 3, tW, 3);
+    ctx.fillStyle = ratio > 0.5 ? '#44ff44' : ratio > 0.25 ? '#ffaa00' : '#ff4444';
+    ctx.fillRect(px, py + tH - 3, tW * ratio, 3);
+  });
+
+  // Draw player
+  if (g.player.alive) {
+    drawGlyph('@', g.player.x, g.player.y, tW, tH, C.player, true);
+  }
+
+  // Draw particles
+  animParticles = animParticles.filter(p => p.life > 0);
+  animParticles.forEach(p => {
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    ctx.fill();
+    p.x += p.vx; p.y += p.vy;
+    p.vx *= 0.85; p.vy *= 0.85;
+    p.life -= p.decay;
+  });
+  ctx.globalAlpha = 1;
+
+  ctx.restore();
+}
+
+function drawGlyph(sym, gx, gy, tW, tH, color, glow) {
+  const px = gx * tW + tW/2, py = gy * tH + tH/2;
+  const fs = Math.max(8, Math.min(tW * 0.75, 18));
+  ctx.font = `bold ${fs}px monospace`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  if (glow) {
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 8;
+  }
+  ctx.fillStyle = color;
+  ctx.fillText(sym, px, py);
+  ctx.shadowBlur = 0;
+}
+
+// Render loop for particles
+let lastRaf = 0;
+function loop(ts) {
+  if (animParticles.length > 0) {
+    draw();
+  }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// === GAME OVER / VICTORY ===
+function endGame(won) {
+  const g = gameState;
+  const best = parseInt(localStorage.getItem('neon-dungeon-best') || '0');
+  if (g.score > best) localStorage.setItem('neon-dungeon-best', g.score);
+  const newBest = Math.max(g.score, best);
+
+  overlay.style.display = 'flex';
+  overlay.innerHTML = `
+    <h1>${won ? '🏆 VICTORY!' : '💀 GAME OVER'}</h1>
+    <h2>${won ? '마왕을 물리쳤다!' : '용사가 쓰러졌다...'}</h2>
+    <div class="score-display">점수: ${g.score.toLocaleString()}</div>
+    <div class="best-display">최고 기록: ${newBest.toLocaleString()}</div>
+    <button class="start-btn" id="startBtn">▶ 다시 시작</button>
+  `;
+  draw();
+  document.getElementById('startBtn').addEventListener('click', startGame);
+}
+
+function startGame() {
+  initAudio();
+  overlay.style.display = 'none';
+  newGame();
+  draw();
+  addLog('탐험을 시작하라! 계단(>)을 찾아 깊이 내려가라.');
+}
+
+// === INPUT ===
+document.addEventListener('keydown', e => {
+  const map = {
+    'ArrowUp': [0,-1], 'ArrowDown': [0,1], 'ArrowLeft': [-1,0], 'ArrowRight': [1,0],
+    'w': [0,-1], 's': [0,1], 'a': [-1,0], 'd': [1,0],
+    'W': [0,-1], 'S': [0,1], 'A': [-1,0], 'D': [1,0],
+  };
+  if (map[e.key]) {
+    e.preventDefault();
+    if (gameState && gameState.player.alive) tryMove(...map[e.key]);
+  }
+});
+
+// D-pad buttons
+[['btnUp',[0,-1]],['btnDown',[0,1]],['btnLeft',[-1,0]],['btnRight',[1,0]]].forEach(([id, dir]) => {
+  const btn = document.getElementById(id);
+  btn.addEventListener('touchstart', e => {
+    e.preventDefault();
+    btn.classList.add('pressed');
+    if (gameState && gameState.player.alive) tryMove(...dir);
+  }, {passive: false});
+  btn.addEventListener('touchend', e => {
+    e.preventDefault();
+    btn.classList.remove('pressed');
+  }, {passive: false});
+  btn.addEventListener('click', () => {
+    if (gameState && gameState.player.alive) tryMove(...dir);
+  });
+});
+
+// Touch swipe on canvas
+let touchStart = null;
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  touchStart = {x: e.touches[0].clientX, y: e.touches[0].clientY};
+}, {passive: false});
+canvas.addEventListener('touchend', e => {
+  e.preventDefault();
+  if (!touchStart) return;
+  const dx = e.changedTouches[0].clientX - touchStart.x;
+  const dy = e.changedTouches[0].clientY - touchStart.y;
+  touchStart = null;
+  if (Math.abs(dx) < 15 && Math.abs(dy) < 15) return;
+  if (Math.abs(dx) > Math.abs(dy)) tryMove(dx > 0 ? 1 : -1, 0);
+  else tryMove(0, dy > 0 ? 1 : -1);
+}, {passive: false});
+
+// Init
+const savedBest = localStorage.getItem('neon-dungeon-best');
+if (savedBest) document.getElementById('bestDisplay').textContent = `최고 기록: ${parseInt(savedBest).toLocaleString()}`;
+startBtn.addEventListener('click', startGame);
+resize();
+</script>
+</body>
+</html>

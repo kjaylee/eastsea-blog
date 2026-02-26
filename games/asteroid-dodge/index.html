@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Asteroid Dodge</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#000;display:flex;justify-content:center;align-items:center;height:100vh;overflow:hidden;font-family:'Courier New',monospace;touch-action:none}
+canvas{display:block;image-rendering:pixelated}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const C=document.getElementById('c');
+const ctx=C.getContext('2d');
+let W,H,scale=1;
+
+// ── Resize ──────────────────────────────────────────────
+function resize(){
+  const vw=window.innerWidth,vh=window.innerHeight;
+  const base=Math.min(vw,vh,480);
+  W=Math.min(vw,480);H=Math.min(vh,800);
+  C.width=W;C.height=H;
+  C.style.width=W+'px';C.style.height=H+'px';
+}
+resize();window.addEventListener('resize',()=>{resize();if(state==='play')initStars();});
+
+// ── Audio ────────────────────────────────────────────────
+let actx=null;
+function getACtx(){if(!actx)actx=new(window.AudioContext||window.webkitAudioContext)();return actx;}
+function playTone(freq,type,dur,vol=0.3,fadeIn=0){
+  try{
+    const a=getACtx();
+    const o=a.createOscillator(),g=a.createGain();
+    o.connect(g);g.connect(a.destination);
+    o.type=type;o.frequency.setValueAtTime(freq,a.currentTime);
+    g.gain.setValueAtTime(0,a.currentTime);
+    g.gain.linearRampToValueAtTime(vol,a.currentTime+Math.max(fadeIn,0.01));
+    g.gain.exponentialRampToValueAtTime(0.0001,a.currentTime+dur);
+    o.start(a.currentTime);o.stop(a.currentTime+dur+0.05);
+  }catch(e){}
+}
+function playExplosion(){
+  try{
+    const a=getACtx();
+    const buf=a.createBuffer(1,a.sampleRate*0.6,a.sampleRate);
+    const d=buf.getChannelData(0);
+    for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,1.5);
+    const s=a.createBufferSource(),g=a.createGain();
+    s.buffer=buf;s.connect(g);g.connect(a.destination);
+    g.gain.setValueAtTime(0.6,a.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001,a.currentTime+0.6);
+    s.start();
+  }catch(e){}
+}
+function playPickup(){playTone(880,'sine',0.1,0.4);setTimeout(()=>playTone(1100,'sine',0.1,0.4),80);setTimeout(()=>playTone(1320,'sine',0.15,0.4),160);}
+function playMilestone(){playTone(660,'square',0.05,0.2);setTimeout(()=>playTone(880,'square',0.05,0.2),60);setTimeout(()=>playTone(1100,'square',0.1,0.3),120);}
+let humNode=null,humGain=null;
+function startHum(){
+  try{
+    if(humNode)return;
+    const a=getACtx();
+    humNode=a.createOscillator();humGain=a.createGain();
+    humNode.connect(humGain);humGain.connect(a.destination);
+    humNode.type='sawtooth';humNode.frequency.value=55;
+    humGain.gain.setValueAtTime(0,a.currentTime);
+    humGain.gain.linearRampToValueAtTime(0.04,a.currentTime+0.5);
+    humNode.start();
+  }catch(e){}
+}
+function stopHum(){
+  try{if(humNode){humGain.gain.exponentialRampToValueAtTime(0.0001,getACtx().currentTime+0.3);setTimeout(()=>{try{humNode.stop();}catch(e){}humNode=null;humGain=null;},400);}}catch(e){}
+}
+
+// ── Stars ────────────────────────────────────────────────
+let stars1=[],stars2=[];
+function initStars(){
+  stars1=[];stars2=[];
+  for(let i=0;i<60;i++)stars1.push({x:Math.random()*W,y:Math.random()*H,r:Math.random()*1.2+0.3,s:0.4+Math.random()*0.3});
+  for(let i=0;i<30;i++)stars2.push({x:Math.random()*W,y:Math.random()*H,r:Math.random()*2+0.5,s:0.8+Math.random()*0.5});
+}
+initStars();
+function updateStars(dt){
+  for(const s of stars1){s.y+=s.s*dt*60;if(s.y>H)s.y=-2;}
+  for(const s of stars2){s.y+=s.s*dt*60;if(s.y>H)s.y=-2;}
+}
+function drawStars(){
+  for(const s of stars1){ctx.fillStyle=`rgba(255,255,255,${0.4+s.r*0.3})`;ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,Math.PI*2);ctx.fill();}
+  for(const s of stars2){ctx.fillStyle=`rgba(200,220,255,${0.7+s.r*0.1})`;ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,Math.PI*2);ctx.fill();}
+}
+
+// ── Ship ─────────────────────────────────────────────────
+const ship={x:0,y:0,r:18,vx:0,speed:260,alive:true};
+function initShip(){ship.x=W/2;ship.y=H-80;ship.vx=0;ship.alive=true;}
+function drawShip(shielded,shieldT){
+  ctx.save();
+  ctx.translate(ship.x,ship.y);
+  // Engine glow
+  const eg=ctx.createRadialGradient(0,14,0,0,14,20);
+  eg.addColorStop(0,'rgba(0,200,255,0.9)');eg.addColorStop(0.4,'rgba(0,100,255,0.5)');eg.addColorStop(1,'rgba(0,50,200,0)');
+  ctx.fillStyle=eg;ctx.beginPath();ctx.arc(0,16,20,0,Math.PI*2);ctx.fill();
+  // Body
+  ctx.beginPath();ctx.moveTo(0,-22);ctx.lineTo(14,16);ctx.lineTo(8,10);ctx.lineTo(-8,10);ctx.lineTo(-14,16);ctx.closePath();
+  ctx.fillStyle='#00e5ff';ctx.fill();ctx.strokeStyle='#80ffff';ctx.lineWidth=1.5;ctx.stroke();
+  // Cockpit
+  ctx.beginPath();ctx.ellipse(0,-6,5,8,0,0,Math.PI*2);ctx.fillStyle='rgba(0,200,255,0.5)';ctx.fill();
+  // Shield bubble
+  if(shielded){
+    const prog=shieldT>0?shieldT/3:1;
+    ctx.beginPath();ctx.arc(0,0,28,0,Math.PI*2);
+    ctx.strokeStyle=`rgba(255,220,0,${0.5+0.4*Math.sin(Date.now()/200)})`;
+    ctx.lineWidth=2+prog*2;ctx.stroke();
+    const sg=ctx.createRadialGradient(0,0,10,0,0,28);
+    sg.addColorStop(0,'rgba(255,220,0,0)');sg.addColorStop(1,`rgba(255,220,0,${0.1*prog})`);
+    ctx.fillStyle=sg;ctx.fill();
+  }
+  ctx.restore();
+}
+
+// ── Asteroids ─────────────────────────────────────────────
+let asteroids=[];
+function spawnAsteroid(spawnX){
+  const r=15+Math.random()*25;
+  const x=spawnX!==undefined?spawnX:r+Math.random()*(W-r*2);
+  const baseSpd=80+Math.random()*80;
+  const lvl=Math.min(level/60,3);
+  const spd=baseSpd*(1+lvl*0.8);
+  const pts=[];const segs=8+Math.floor(Math.random()*4);
+  for(let i=0;i<segs;i++){const a=i/segs*Math.PI*2;const rr=r*(0.7+Math.random()*0.5);pts.push({x:Math.cos(a)*rr,y:Math.sin(a)*rr});}
+  asteroids.push({x,y:-r,r,pts,vy:spd,vx:(Math.random()-0.5)*40,rot:0,rotSpd:(Math.random()-0.5)*2,segs});
+}
+function updateAsteroids(dt,slowMo){
+  const factor=slowMo?0.5:1;
+  for(const a of asteroids){a.y+=a.vy*dt*factor;a.x+=a.vx*dt*factor;a.rot+=a.rotSpd*dt*factor;if(a.x<a.r)a.x=a.r;if(a.x>W-a.r)a.x=W-a.r;}
+  asteroids=asteroids.filter(a=>a.y<H+a.r+10);
+}
+function drawAsteroids(){
+  for(const a of asteroids){
+    ctx.save();ctx.translate(a.x,a.y);ctx.rotate(a.rot);
+    ctx.beginPath();ctx.moveTo(a.pts[0].x,a.pts[0].y);
+    for(let i=1;i<a.pts.length;i++)ctx.lineTo(a.pts[i].x,a.pts[i].y);
+    ctx.closePath();
+    const g=ctx.createRadialGradient(-a.r*0.3,-a.r*0.3,0,0,0,a.r);
+    g.addColorStop(0,'#888');g.addColorStop(1,'#333');
+    ctx.fillStyle=g;ctx.fill();ctx.strokeStyle='#555';ctx.lineWidth=1;ctx.stroke();
+    ctx.restore();
+  }
+}
+
+// ── Power-ups ─────────────────────────────────────────────
+let powerups=[];
+function spawnPowerup(){
+  const type=Math.random()<0.5?'shield':'slow';
+  powerups.push({x:30+Math.random()*(W-60),y:-20,r:12,type,vy:80,rot:0});
+}
+function updatePowerups(dt,slowMo){
+  const f=slowMo?0.5:1;
+  for(const p of powerups){p.y+=p.vy*dt*f;p.rot+=2*dt;}
+  powerups=powerups.filter(p=>p.y<H+20);
+}
+function drawPowerups(){
+  for(const p of powerups){
+    ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.rot);
+    const col=p.type==='shield'?'#ffd700':'#00aaff';
+    const glow=ctx.createRadialGradient(0,0,2,0,0,p.r);
+    glow.addColorStop(0,col);glow.addColorStop(1,'transparent');
+    ctx.fillStyle=glow;ctx.beginPath();ctx.arc(0,0,p.r+6,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle=col;ctx.strokeStyle='#fff';ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.arc(0,0,p.r,0,Math.PI*2);ctx.fill();ctx.stroke();
+    ctx.fillStyle='#000';ctx.font='bold 10px Courier New';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(p.type==='shield'?'S':'T',0,0);
+    ctx.restore();
+  }
+}
+
+// ── Particles ─────────────────────────────────────────────
+let particles=[];
+function spawnExplosion(x,y){
+  for(let i=0;i<24;i++){
+    const a=Math.random()*Math.PI*2;const spd=40+Math.random()*160;
+    particles.push({x,y,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,life:1,maxLife:0.5+Math.random()*0.5,r:2+Math.random()*4,col:`hsl(${Math.random()*60+10},100%,60%)`});
+  }
+}
+function updateParticles(dt){
+  for(const p of particles){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=120*dt;p.life-=dt/p.maxLife;}
+  particles=particles.filter(p=>p.life>0);
+}
+function drawParticles(){
+  for(const p of particles){
+    ctx.globalAlpha=Math.max(p.life,0);
+    ctx.fillStyle=p.col;ctx.beginPath();ctx.arc(p.x,p.y,p.r*p.life,0,Math.PI*2);ctx.fill();
+  }
+  ctx.globalAlpha=1;
+}
+
+// ── Input ─────────────────────────────────────────────────
+const keys={};
+window.addEventListener('keydown',e=>{keys[e.code]=true;if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Space'].includes(e.code))e.preventDefault();});
+window.addEventListener('keyup',e=>{keys[e.code]=false;});
+let touchX=null;
+C.addEventListener('touchstart',e=>{e.preventDefault();touchX=e.touches[0].clientX;if(state!=='play')startGame();else getACtx();},{passive:false});
+C.addEventListener('touchmove',e=>{e.preventDefault();if(e.touches.length>0)touchX=e.touches[0].clientX;},{passive:false});
+C.addEventListener('touchend',e=>{e.preventDefault();touchX=null;},{passive:false});
+C.addEventListener('click',()=>{if(state!=='play')startGame();});
+window.addEventListener('keydown',e=>{if((e.code==='Space'||e.code==='Enter')&&state!=='play')startGame();});
+
+// ── Game State ────────────────────────────────────────────
+let state='start'; // start | play | dead
+let score=0,bestScore=parseInt(localStorage.getItem('asteroidDodgeBest')||'0');
+let elapsed=0,level=0;
+let shielded=false,shieldT=0;
+let slowMo=false,slowMoT=0;
+let spawnTimer=0,puTimer=0;
+let lastMilestone=0;
+let deathTime=0;
+
+function startGame(){
+  getACtx();
+  state='play';score=0;elapsed=0;level=0;
+  shielded=false;shieldT=0;slowMo=false;slowMoT=0;
+  asteroids=[];powerups=[];particles=[];
+  spawnTimer=0;puTimer=0;lastMilestone=0;
+  initShip();initStars();startHum();
+}
+function endGame(){
+  state='dead';
+  if(score>bestScore){bestScore=score;localStorage.setItem('asteroidDodgeBest',bestScore);}
+  spawnExplosion(ship.x,ship.y);playExplosion();stopHum();deathTime=elapsed;
+}
+
+// ── Collision ─────────────────────────────────────────────
+function dist2(ax,ay,bx,by){const dx=ax-bx,dy=ay-by;return dx*dx+dy*dy;}
+function checkCollisions(){
+  const sr=shielded?28:ship.r;
+  for(const a of asteroids){
+    if(dist2(ship.x,ship.y,a.x,a.y)<(sr+a.r-4)*(sr+a.r-4)){
+      if(shielded){shielded=false;shieldT=0;asteroids=asteroids.filter(x=>x!==a);playTone(200,'square',0.3,0.3);return;}
+      endGame();return;
+    }
+  }
+  for(let i=powerups.length-1;i>=0;i--){
+    const p=powerups[i];
+    if(dist2(ship.x,ship.y,p.x,p.y)<(ship.r+p.r)*(ship.r+p.r)){
+      playPickup();
+      if(p.type==='shield'){shielded=true;shieldT=3;}
+      else{slowMo=true;slowMoT=5;}
+      powerups.splice(i,1);
+    }
+  }
+}
+
+// ── Spawn Rate ────────────────────────────────────────────
+function spawnInterval(){return Math.max(0.35,1.2-level*0.012);}
+
+// ── Update ────────────────────────────────────────────────
+let last=null;
+function update(ts){
+  if(!last)last=ts;
+  const dt=Math.min((ts-last)/1000,0.05);last=ts;
+  if(state==='play'){
+    elapsed+=dt;level=elapsed;
+    score=Math.floor(elapsed*10);
+    if(Math.floor(score/100)>lastMilestone){lastMilestone=Math.floor(score/100);playMilestone();}
+    updateStars(dt);
+    // Ship movement
+    let ax=0;
+    if(keys['ArrowLeft']||keys['KeyA'])ax=-1;
+    if(keys['ArrowRight']||keys['KeyD'])ax=1;
+    if(touchX!==null){const dx=touchX-ship.x;ax=Math.sign(dx)*Math.min(Math.abs(dx)/40,1);}
+    ship.vx=ax*ship.speed;
+    ship.x+=ship.vx*dt;ship.x=Math.max(ship.r,Math.min(W-ship.r,ship.x));
+    // Timers
+    if(shielded){shieldT-=dt;if(shieldT<=0){shielded=false;shieldT=0;}}
+    if(slowMo){slowMoT-=dt;if(slowMoT<=0){slowMo=false;slowMoT=0;}}
+    // Spawn
+    spawnTimer-=dt;if(spawnTimer<=0){spawnAsteroid();spawnTimer=spawnInterval()+(Math.random()-0.5)*0.2;}
+    puTimer-=dt;if(puTimer<=0){spawnPowerup();puTimer=14+Math.random()*4;}
+    updateAsteroids(dt,slowMo);
+    updatePowerups(dt,slowMo);
+    updateParticles(dt);
+    checkCollisions();
+  } else {
+    updateStars(dt*0.3);
+    updateParticles(dt);
+  }
+  draw();
+  requestAnimationFrame(update);
+}
+
+// ── Draw ──────────────────────────────────────────────────
+function drawHUD(){
+  // Score
+  ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(0,0,W,44);
+  ctx.fillStyle='#00e5ff';ctx.font='bold 18px Courier New';ctx.textAlign='left';ctx.fillText('⬡ '+score,12,28);
+  ctx.fillStyle='#aaa';ctx.font='13px Courier New';ctx.textAlign='right';ctx.fillText('BEST '+bestScore,W-12,28);
+  // Time
+  const m=Math.floor(elapsed/60),s=Math.floor(elapsed%60);
+  ctx.textAlign='center';ctx.fillStyle='#888';ctx.font='12px Courier New';
+  ctx.fillText((m>0?m+'m ':'')+s+'s',W/2,28);
+  // Power-up bars
+  let bx=8;
+  if(shielded){drawBar(bx,H-30,90,shieldT/3,'#ffd700','SHIELD');bx+=100;}
+  if(slowMo){drawBar(bx,H-30,90,slowMoT/5,'#00aaff','SLOW-MO');}
+}
+function drawBar(x,y,w,pct,col,label){
+  ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillRect(x,y,w,20);
+  ctx.fillStyle=col;ctx.fillRect(x+1,y+1,Math.max(1,(w-2)*pct),18);
+  ctx.strokeStyle=col;ctx.lineWidth=1;ctx.strokeRect(x,y,w,20);
+  ctx.fillStyle='#fff';ctx.font='10px Courier New';ctx.textAlign='left';ctx.fillText(label,x+4,y+14);
+}
+function drawStartScreen(){
+  // Title glow
+  ctx.save();
+  ctx.shadowColor='#00e5ff';ctx.shadowBlur=30;
+  ctx.fillStyle='#00e5ff';ctx.font='bold 36px Courier New';ctx.textAlign='center';
+  ctx.fillText('ASTEROID',W/2,H*0.28);
+  ctx.fillText('DODGE',W/2,H*0.28+46);
+  ctx.restore();
+  // Ship preview
+  ctx.save();ctx.translate(W/2,H*0.50);
+  ctx.beginPath();ctx.moveTo(0,-22);ctx.lineTo(14,16);ctx.lineTo(8,10);ctx.lineTo(-8,10);ctx.lineTo(-14,16);ctx.closePath();
+  ctx.fillStyle='#00e5ff';ctx.fill();ctx.strokeStyle='#80ffff';ctx.lineWidth=1.5;ctx.stroke();
+  ctx.restore();
+  ctx.fillStyle='rgba(255,255,255,0.7)';ctx.font='15px Courier New';ctx.textAlign='center';
+  ctx.fillText('← → or A D to move',W/2,H*0.63);
+  ctx.fillText('Dodge asteroids. Survive!',W/2,H*0.63+24);
+  // Pulse start
+  const pulse=0.7+0.3*Math.sin(Date.now()/500);
+  ctx.globalAlpha=pulse;
+  ctx.fillStyle='#fff';ctx.font='bold 16px Courier New';
+  ctx.fillText('[ TAP / PRESS SPACE ]',W/2,H*0.78);
+  ctx.globalAlpha=1;
+  if(bestScore>0){ctx.fillStyle='#ffd700';ctx.font='14px Courier New';ctx.fillText('BEST: '+bestScore,W/2,H*0.86);}
+  // Controls legend
+  ctx.fillStyle='rgba(150,200,255,0.6)';ctx.font='11px Courier New';
+  ctx.fillText('🟡 SHIELD 3s  🔵 SLOW-MO 5s',W/2,H*0.93);
+}
+function drawDeadScreen(){
+  ctx.fillStyle='rgba(0,0,0,0.7)';ctx.fillRect(0,0,W,H);
+  ctx.save();ctx.shadowColor='#ff4444';ctx.shadowBlur=20;
+  ctx.fillStyle='#ff4444';ctx.font='bold 32px Courier New';ctx.textAlign='center';
+  ctx.fillText('GAME OVER',W/2,H*0.32);ctx.restore();
+  ctx.fillStyle='#00e5ff';ctx.font='bold 24px Courier New';ctx.textAlign='center';
+  ctx.fillText('SCORE: '+score,W/2,H*0.44);
+  if(score>=bestScore&&score>0){
+    ctx.fillStyle='#ffd700';ctx.font='13px Courier New';
+    ctx.fillText('★ NEW BEST! ★',W/2,H*0.52);
+  }else if(bestScore>0){ctx.fillStyle='#888';ctx.font='13px Courier New';ctx.fillText('BEST: '+bestScore,W/2,H*0.52);}
+  const m=Math.floor(deathTime/60),s=Math.floor(deathTime%60);
+  ctx.fillStyle='#aaa';ctx.font='14px Courier New';
+  ctx.fillText('SURVIVED: '+(m>0?m+'m ':'')+s+'s',W/2,H*0.60);
+  const pulse=0.7+0.3*Math.sin(Date.now()/500);
+  ctx.globalAlpha=pulse;ctx.fillStyle='#fff';ctx.font='bold 15px Courier New';
+  ctx.fillText('[ TAP / SPACE to retry ]',W/2,H*0.73);
+  ctx.globalAlpha=1;
+}
+function draw(){
+  ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);
+  drawStars();
+  if(state==='start'){drawParticles();drawStartScreen();return;}
+  drawAsteroids();drawPowerups();
+  if(state==='play'){drawShip(shielded,shieldT);}
+  drawParticles();
+  if(state==='play'){drawHUD();}
+  if(state==='dead'){drawDeadScreen();}
+  // Slow-mo vignette
+  if(slowMo){
+    ctx.fillStyle='rgba(0,100,255,0.08)';ctx.fillRect(0,0,W,H);
+    ctx.strokeStyle='rgba(0,150,255,0.3)';ctx.lineWidth=6;ctx.strokeRect(0,0,W,H);
+  }
+}
+
+requestAnimationFrame(update);
+</script>
+</body>
+</html>

@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Slide Puzzle 15 - 숫자 슬라이드 퍼즐</title>
+<meta name="description" content="클래식 15-퍼즐! 숫자 타일을 슬라이드해서 1~15 순서로 맞추세요. 이동 횟수와 시간을 최소화하세요.">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    color: #fff;
+    padding: 16px;
+    overflow-x: hidden;
+  }
+  .header {
+    text-align: center;
+    margin-bottom: 16px;
+  }
+  .header h1 {
+    font-size: clamp(1.4rem, 5vw, 2rem);
+    font-weight: 800;
+    background: linear-gradient(90deg, #f093fb, #f5a623, #4facfe);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 4px;
+  }
+  .header p {
+    font-size: 0.8rem;
+    color: #aaa;
+  }
+  .stats {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 16px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 10px 24px;
+  }
+  .stat {
+    text-align: center;
+  }
+  .stat-val {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #f5a623;
+  }
+  .stat-label {
+    font-size: 0.7rem;
+    color: #aaa;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .board-wrap {
+    position: relative;
+    margin-bottom: 16px;
+  }
+  .board {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    background: rgba(255,255,255,0.05);
+    border: 2px solid rgba(255,255,255,0.1);
+    border-radius: 16px;
+    padding: 10px;
+    width: min(88vw, 360px);
+    height: min(88vw, 360px);
+    touch-action: none;
+  }
+  .tile {
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: clamp(1rem, 4vw, 1.5rem);
+    font-weight: 800;
+    cursor: pointer;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+    user-select: none;
+    position: relative;
+    overflow: hidden;
+  }
+  .tile:not(.empty):hover {
+    transform: scale(0.95);
+  }
+  .tile:not(.empty):active {
+    transform: scale(0.9);
+  }
+  .tile.empty {
+    background: rgba(255,255,255,0.03);
+    border: 2px dashed rgba(255,255,255,0.08);
+    cursor: default;
+  }
+  .tile.movable {
+    box-shadow: 0 0 12px rgba(245, 166, 35, 0.5);
+  }
+  .tile.correct {
+    background: linear-gradient(135deg, #11998e, #38ef7d) !important;
+  }
+  .tile-num {
+    position: relative;
+    z-index: 1;
+  }
+  .tile-glow {
+    position: absolute;
+    width: 60%;
+    height: 60%;
+    background: rgba(255,255,255,0.15);
+    border-radius: 50%;
+    top: -20%;
+    left: -20%;
+  }
+  .controls {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-bottom: 16px;
+  }
+  .btn {
+    padding: 10px 22px;
+    border: none;
+    border-radius: 30px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    touch-action: manipulation;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, #f093fb, #f5a623);
+    color: #fff;
+    box-shadow: 0 4px 15px rgba(240, 147, 251, 0.4);
+  }
+  .btn-secondary {
+    background: rgba(255,255,255,0.1);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.2);
+  }
+  .btn:hover { transform: translateY(-2px); }
+  .btn:active { transform: translateY(0); }
+  .size-btns {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .size-btn {
+    padding: 6px 14px;
+    border: 2px solid rgba(255,255,255,0.2);
+    border-radius: 20px;
+    background: transparent;
+    color: #aaa;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .size-btn.active {
+    border-color: #f5a623;
+    color: #f5a623;
+    background: rgba(245, 166, 35, 0.1);
+  }
+  .win-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    z-index: 100;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 20px;
+  }
+  .win-overlay.show { display: flex; }
+  .win-box {
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    border: 2px solid rgba(255,255,255,0.15);
+    border-radius: 24px;
+    padding: 36px 40px;
+    max-width: 360px;
+    width: 100%;
+  }
+  .win-emoji { font-size: 4rem; margin-bottom: 12px; }
+  .win-title { font-size: 2rem; font-weight: 800; color: #f5a623; margin-bottom: 8px; }
+  .win-sub { font-size: 1rem; color: #aaa; margin-bottom: 20px; }
+  .win-stats { display: flex; gap: 30px; justify-content: center; margin-bottom: 24px; }
+  .how-to {
+    background: rgba(255,255,255,0.05);
+    border-radius: 12px;
+    padding: 12px 16px;
+    font-size: 0.78rem;
+    color: #aaa;
+    line-height: 1.6;
+    max-width: min(88vw, 360px);
+    text-align: center;
+  }
+  .how-to strong { color: #f5a623; }
+  .best-score {
+    font-size: 0.75rem;
+    color: #888;
+    margin-bottom: 8px;
+  }
+  .best-score span { color: #f5a623; font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>🔢 Slide Puzzle 15</h1>
+  <p>숫자 슬라이드 퍼즐</p>
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="stat-val" id="moves">0</div><div class="stat-label">이동</div></div>
+  <div class="stat"><div class="stat-val" id="timer">0:00</div><div class="stat-label">시간</div></div>
+  <div class="stat"><div class="stat-val" id="solved">0%</div><div class="stat-label">완성</div></div>
+</div>
+
+<div class="size-btns">
+  <button class="size-btn" onclick="setSize(3)">3×3</button>
+  <button class="size-btn active" onclick="setSize(4)">4×4</button>
+  <button class="size-btn" onclick="setSize(5)">5×5</button>
+</div>
+
+<div class="board-wrap">
+  <div class="board" id="board"></div>
+</div>
+
+<div class="controls">
+  <button class="btn btn-primary" onclick="newGame()">새 게임</button>
+  <button class="btn btn-secondary" onclick="solveHint()">힌트</button>
+</div>
+
+<div id="bestScore" class="best-score"></div>
+
+<div class="how-to">
+  <strong>플레이 방법</strong><br>
+  빈 칸 옆의 숫자 타일을 클릭하거나 스와이프해서 이동하세요.<br>
+  숫자를 <strong>1~15 순서</strong>로 (마지막 칸은 빈칸) 맞추면 클리어!
+</div>
+
+<div class="win-overlay" id="winOverlay">
+  <div class="win-box">
+    <div class="win-emoji">🎉</div>
+    <div class="win-title">클리어!</div>
+    <div class="win-sub" id="winSub">퍼즐을 완성했습니다!</div>
+    <div class="win-stats">
+      <div class="stat"><div class="stat-val" id="winMoves">-</div><div class="stat-label">이동</div></div>
+      <div class="stat"><div class="stat-val" id="winTime">-</div><div class="stat-label">시간</div></div>
+    </div>
+    <button class="btn btn-primary" style="width:100%" onclick="newGame(); document.getElementById('winOverlay').classList.remove('show')">다시 하기</button>
+  </div>
+</div>
+
+<script>
+  let size = 4;
+  let tiles = [];
+  let emptyIdx = size * size - 1;
+  let moves = 0;
+  let seconds = 0;
+  let timerInt = null;
+  let started = false;
+  let touchStartX, touchStartY;
+  const COLORS = [
+    'linear-gradient(135deg,#f093fb,#f5a623)',
+    'linear-gradient(135deg,#4facfe,#00f2fe)',
+    'linear-gradient(135deg,#43e97b,#38f9d7)',
+    'linear-gradient(135deg,#fa709a,#fee140)',
+    'linear-gradient(135deg,#a18cd1,#fbc2eb)',
+    'linear-gradient(135deg,#fccb90,#d57eeb)',
+    'linear-gradient(135deg,#e0c3fc,#8ec5fc)',
+    'linear-gradient(135deg,#f77062,#fe5196)',
+  ];
+
+  function setSize(n) {
+    size = n;
+    document.querySelectorAll('.size-btn').forEach((b,i) => b.classList.toggle('active', [3,4,5][i] === n));
+    newGame();
+  }
+
+  function isSolvable(arr, n) {
+    let inv = 0;
+    const flat = arr.filter(x => x !== 0);
+    for (let i = 0; i < flat.length; i++)
+      for (let j = i+1; j < flat.length; j++)
+        if (flat[i] > flat[j]) inv++;
+    if (n % 2 === 1) return inv % 2 === 0;
+    const emptyRow = Math.floor(arr.indexOf(0) / n);
+    return (inv + (n - emptyRow)) % 2 === 1;
+  }
+
+  function shuffle() {
+    let arr;
+    do {
+      arr = [...Array(size*size).keys()].sort(() => Math.random()-0.5);
+    } while (!isSolvable(arr, size) || isGoal(arr));
+    return arr;
+  }
+
+  function isGoal(arr) {
+    for (let i = 0; i < arr.length-1; i++) if (arr[i] !== i+1) return false;
+    return arr[arr.length-1] === 0;
+  }
+
+  function newGame() {
+    clearInterval(timerInt);
+    tiles = shuffle();
+    emptyIdx = tiles.indexOf(0);
+    moves = 0;
+    seconds = 0;
+    started = false;
+    updateTimer();
+    document.getElementById('moves').textContent = '0';
+    renderBoard();
+    updateSolved();
+    updateBest();
+  }
+
+  function renderBoard() {
+    const board = document.getElementById('board');
+    board.innerHTML = '';
+    board.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
+    tiles.forEach((val, idx) => {
+      const tile = document.createElement('div');
+      tile.className = 'tile' + (val === 0 ? ' empty' : '');
+      if (val !== 0) {
+        tile.style.background = COLORS[(val-1) % COLORS.length];
+        tile.style.boxShadow = '0 3px 12px rgba(0,0,0,0.3)';
+        const correct = val === idx+1;
+        if (correct) tile.classList.add('correct');
+        const movable = canMove(idx);
+        if (movable) tile.classList.add('movable');
+        tile.innerHTML = `<div class="tile-glow"></div><div class="tile-num">${val}</div>`;
+        tile.onclick = () => tryMove(idx);
+      }
+      board.appendChild(tile);
+    });
+    // touch events
+    board.ontouchstart = e => { touchStartX = e.touches[0].clientX; touchStartY = e.touches[0].clientY; };
+    board.ontouchend = e => {
+      const dx = e.changedTouches[0].clientX - touchStartX;
+      const dy = e.changedTouches[0].clientY - touchStartY;
+      const el = document.elementFromPoint(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+      const tile = el?.closest('.tile');
+      if (!tile) return;
+      const idx = [...document.getElementById('board').children].indexOf(tile);
+      if (Math.abs(dx) < 15 && Math.abs(dy) < 15) { tryMove(idx); return; }
+      const emptyR = Math.floor(emptyIdx/size), emptyC = emptyIdx%size;
+      const tileR = Math.floor(idx/size), tileC = idx%size;
+      if (tileR === emptyR) {
+        const dir = dx > 0 ? 1 : -1;
+        const step = emptyC - tileC;
+        if (Math.sign(step) === dir) tryMove(idx);
+      } else if (tileC === emptyC) {
+        const dir = dy > 0 ? 1 : -1;
+        const step = emptyR - tileR;
+        if (Math.sign(step) === dir) tryMove(idx);
+      }
+    };
+  }
+
+  function canMove(idx) {
+    const r = Math.floor(idx/size), c = idx%size;
+    const er = Math.floor(emptyIdx/size), ec = emptyIdx%size;
+    return (r === er && Math.abs(c-ec) === 1) || (c === ec && Math.abs(r-er) === 1);
+  }
+
+  function tryMove(idx) {
+    if (!canMove(idx)) {
+      // slide row/col
+      const r = Math.floor(idx/size), c = idx%size;
+      const er = Math.floor(emptyIdx/size), ec = emptyIdx%size;
+      if (r === er) {
+        const dir = ec > c ? 1 : -1;
+        let cur = idx;
+        while (cur !== emptyIdx) { const next = cur + dir; swapTile(cur, next); cur = next; }
+      } else if (c === ec) {
+        const dir = ec === c ? (er > r ? 1 : -1) : 0;
+        const rowDir = er > r ? 1 : -1;
+        let cur = idx;
+        while (cur !== emptyIdx) { const next = cur + rowDir*size; swapTile(cur, next); cur = next; }
+      } else return;
+    } else {
+      swapTile(idx, emptyIdx);
+    }
+    if (!started) { started = true; timerInt = setInterval(() => { seconds++; updateTimer(); }, 1000); }
+    moves++;
+    document.getElementById('moves').textContent = moves;
+    updateSolved();
+    renderBoard();
+    if (isGoal(tiles)) setTimeout(winGame, 200);
+  }
+
+  function swapTile(a, b) {
+    [tiles[a], tiles[b]] = [tiles[b], tiles[a]];
+    emptyIdx = tiles.indexOf(0);
+  }
+
+  function updateTimer() {
+    const m = Math.floor(seconds/60), s = seconds%60;
+    document.getElementById('timer').textContent = m + ':' + String(s).padStart(2,'0');
+  }
+
+  function updateSolved() {
+    let correct = 0;
+    tiles.forEach((v, i) => { if (v !== 0 && v === i+1) correct++; });
+    const pct = Math.round(correct / (size*size-1) * 100);
+    document.getElementById('solved').textContent = pct + '%';
+  }
+
+  function winGame() {
+    clearInterval(timerInt);
+    const m = Math.floor(seconds/60), s = seconds%60;
+    document.getElementById('winMoves').textContent = moves;
+    document.getElementById('winTime').textContent = m + ':' + String(s).padStart(2,'0');
+    const key = `best_${size}`;
+    const prev = JSON.parse(localStorage.getItem(key) || 'null');
+    if (!prev || moves < prev.moves || (moves === prev.moves && seconds < prev.seconds)) {
+      localStorage.setItem(key, JSON.stringify({moves, seconds}));
+      document.getElementById('winSub').textContent = '🏆 새 최고 기록!';
+    } else {
+      document.getElementById('winSub').textContent = `최고: ${prev.moves}회 ${Math.floor(prev.seconds/60)}:${String(prev.seconds%60).padStart(2,'0')}`;
+    }
+    document.getElementById('winOverlay').classList.add('show');
+  }
+
+  function updateBest() {
+    const key = `best_${size}`;
+    const b = JSON.parse(localStorage.getItem(key) || 'null');
+    const el = document.getElementById('bestScore');
+    if (b) el.innerHTML = `🏆 최고 기록: <span>${b.moves}회 ${Math.floor(b.seconds/60)}:${String(b.seconds%60).padStart(2,'0')}</span>`;
+    else el.textContent = '';
+  }
+
+  function solveHint() {
+    // highlight most-off tile
+    const board = document.getElementById('board');
+    const children = [...board.children];
+    let worst = -1, worstDist = -1;
+    tiles.forEach((v, i) => {
+      if (v === 0) return;
+      const target = v - 1;
+      const d = Math.abs(Math.floor(i/size) - Math.floor(target/size)) + Math.abs(i%size - target%size);
+      if (d > worstDist) { worstDist = d; worst = i; }
+    });
+    if (worst >= 0) {
+      children[worst].style.animation = 'pulse 0.5s ease 3';
+      const style = document.createElement('style');
+      style.textContent = '@keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(0.85)} }';
+      document.head.appendChild(style);
+      setTimeout(() => { children[worst].style.animation = ''; }, 1600);
+    }
+  }
+
+  // keyboard
+  document.addEventListener('keydown', e => {
+    const map = { ArrowLeft: emptyIdx+1, ArrowRight: emptyIdx-1, ArrowUp: emptyIdx+size, ArrowDown: emptyIdx-size };
+    const idx = map[e.key];
+    if (idx !== undefined && idx >= 0 && idx < size*size) tryMove(idx);
+  });
+
+  newGame();
+</script>
+</body>
+</html>

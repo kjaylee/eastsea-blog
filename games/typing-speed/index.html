@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0a0a1a">
+<title>Typing Speed — Neon Words</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#0a0a1a;--accent:#00f5ff;--accent2:#ff00ff;--accent3:#ffff00;
+    --accent4:#00ff88;--red:#ff3366;--panel:rgba(255,255,255,0.05);
+    --border:rgba(0,245,255,0.2);
+  }
+  html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:#e0e0ff;
+    font-family:'Courier New',monospace;touch-action:none}
+  #app{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;
+    position:relative;overflow:hidden}
+
+  /* Stars */
+  #stars{position:absolute;inset:0;pointer-events:none;z-index:0}
+
+  /* Header */
+  #header{z-index:10;width:100%;display:flex;justify-content:space-between;
+    align-items:center;padding:10px 16px;background:rgba(10,10,26,0.9);
+    border-bottom:1px solid var(--border)}
+  #title-label{font-size:clamp(14px,3vw,20px);font-weight:bold;
+    color:var(--accent);text-shadow:0 0 10px var(--accent)}
+  .stat-box{display:flex;gap:16px}
+  .stat{font-size:clamp(11px,2.5vw,15px);color:#aaa}
+  .stat span{color:var(--accent3);font-weight:bold}
+
+  /* Game area */
+  #arena{position:relative;flex:1;width:100%;overflow:hidden;z-index:5}
+  .word-chip{position:absolute;white-space:nowrap;font-size:clamp(12px,3vw,18px);
+    font-weight:bold;padding:4px 10px;border-radius:6px;cursor:default;
+    border:1px solid;transition:box-shadow 0.15s;user-select:none;pointer-events:none}
+  .word-chip.highlight{box-shadow:0 0 14px currentColor,inset 0 0 6px rgba(255,255,255,0.15)}
+  .word-chip.typed-ok{animation:chipOk 0.3s ease forwards}
+  @keyframes chipOk{to{transform:scale(1.4);opacity:0}}
+
+  /* Input bar */
+  #input-bar{z-index:10;width:100%;padding:10px 12px;background:rgba(10,10,26,0.95);
+    border-top:1px solid var(--border);display:flex;gap:8px;align-items:center}
+  #word-input{flex:1;background:rgba(0,245,255,0.06);border:1px solid var(--border);
+    border-radius:8px;padding:10px 14px;color:#fff;font-size:clamp(14px,4vw,20px);
+    font-family:'Courier New',monospace;outline:none;caret-color:var(--accent)}
+  #word-input:focus{border-color:var(--accent);box-shadow:0 0 8px var(--accent)}
+  #word-input.error{border-color:var(--red);box-shadow:0 0 8px var(--red);
+    animation:shake 0.2s ease}
+  @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+  #lives-display{font-size:clamp(16px,4vw,24px);letter-spacing:2px}
+
+  /* Screens */
+  .screen{position:absolute;inset:0;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;z-index:20;
+    background:rgba(10,10,26,0.96);gap:16px;padding:20px;text-align:center}
+  .screen.hidden{display:none}
+  .screen h1{font-size:clamp(24px,7vw,48px);font-weight:900;letter-spacing:2px}
+  .screen p{font-size:clamp(12px,3vw,16px);color:#aaa;max-width:360px;line-height:1.6}
+  .neon-btn{padding:12px 32px;font-size:clamp(14px,4vw,20px);font-weight:bold;
+    background:transparent;border:2px solid var(--accent);color:var(--accent);
+    border-radius:10px;cursor:pointer;font-family:'Courier New',monospace;
+    text-shadow:0 0 8px var(--accent);box-shadow:0 0 12px var(--accent);
+    transition:all 0.2s;letter-spacing:1px}
+  .neon-btn:hover{background:rgba(0,245,255,0.1);box-shadow:0 0 24px var(--accent)}
+  .neon-btn.pink{border-color:var(--accent2);color:var(--accent2);
+    text-shadow:0 0 8px var(--accent2);box-shadow:0 0 12px var(--accent2)}
+  .neon-btn.pink:hover{background:rgba(255,0,255,0.1);box-shadow:0 0 24px var(--accent2)}
+  .score-big{font-size:clamp(36px,10vw,72px);font-weight:900;color:var(--accent3);
+    text-shadow:0 0 20px var(--accent3)}
+  .hi-label{font-size:clamp(11px,2.5vw,14px);color:#888}
+  .level-btns{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+  table.stats-tbl{border-collapse:collapse;font-size:clamp(11px,2.5vw,14px)}
+  table.stats-tbl td{padding:4px 10px;color:#aaa}
+  table.stats-tbl td:first-child{color:#fff;font-weight:bold}
+
+  /* Mobile keyboard hint */
+  #kb-hint{position:absolute;bottom:62px;left:50%;transform:translateX(-50%);
+    z-index:15;background:rgba(0,245,255,0.08);border:1px solid var(--border);
+    border-radius:8px;padding:8px 16px;font-size:12px;color:#888;white-space:nowrap;
+    pointer-events:none;opacity:0;transition:opacity 0.3s}
+  #kb-hint.show{opacity:1}
+
+  /* Combo flash */
+  #combo-flash{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    z-index:15;font-size:clamp(24px,8vw,48px);font-weight:900;
+    text-shadow:0 0 20px currentColor;pointer-events:none;opacity:0;
+    transition:opacity 0.15s}
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="stars"></canvas>
+
+  <!-- Start Screen -->
+  <div class="screen" id="startScreen">
+    <h1 style="color:var(--accent);text-shadow:0 0 20px var(--accent)">⌨️ NEON WORDS</h1>
+    <p>Type the falling words before they hit the bottom!<br>Each miss costs a life. Combos multiply your score.</p>
+    <div style="color:var(--accent3);font-size:clamp(11px,2.5vw,14px)">
+      High Score: <span id="startHi">0</span>
+    </div>
+    <p style="font-size:12px;color:#666">Choose difficulty:</p>
+    <div class="level-btns">
+      <button class="neon-btn" onclick="startGame(1)">EASY</button>
+      <button class="neon-btn pink" onclick="startGame(2)">NORMAL</button>
+      <button class="neon-btn" style="border-color:#ff3366;color:#ff3366;box-shadow:0 0 12px #ff3366" onclick="startGame(3)">HARD</button>
+    </div>
+    <p style="font-size:11px;color:#555;margin-top:8px">Keyboard: type + Enter &nbsp;|&nbsp; Mobile: tap input field</p>
+  </div>
+
+  <!-- Game Over Screen -->
+  <div class="screen hidden" id="gameOverScreen">
+    <h1 style="color:var(--red);text-shadow:0 0 20px var(--red)">GAME OVER</h1>
+    <div class="score-big" id="finalScore">0</div>
+    <div class="hi-label" id="newHiLabel"></div>
+    <table class="stats-tbl">
+      <tr><td>Words Typed</td><td id="statWords">0</td></tr>
+      <tr><td>Accuracy</td><td id="statAcc">0%</td></tr>
+      <tr><td>Best Combo</td><td id="statCombo">x0</td></tr>
+      <tr><td>WPM</td><td id="statWpm">0</td></tr>
+    </table>
+    <div style="display:flex;gap:12px">
+      <button class="neon-btn" onclick="restartGame()">PLAY AGAIN</button>
+      <button class="neon-btn pink" onclick="showStart()">MENU</button>
+    </div>
+  </div>
+
+  <!-- HUD -->
+  <div id="header">
+    <div id="title-label">⌨️ NEON WORDS</div>
+    <div class="stat-box">
+      <div class="stat">SCORE <span id="hudScore">0</span></div>
+      <div class="stat">LVL <span id="hudLevel">1</span></div>
+      <div class="stat">COMBO <span id="hudCombo">x1</span></div>
+    </div>
+  </div>
+
+  <!-- Arena -->
+  <div id="arena"></div>
+  <div id="combo-flash"></div>
+  <div id="kb-hint">⬆️ Tap here to type</div>
+
+  <!-- Input Bar -->
+  <div id="input-bar">
+    <div id="lives-display">❤️❤️❤️</div>
+    <input id="word-input" type="text" autocomplete="off" autocorrect="off"
+           autocapitalize="off" spellcheck="false" placeholder="type here..." />
+  </div>
+</div>
+
+<script>
+// ── Audio Engine ───────────────────────────────────────────────────────────────
+const AC = new (window.AudioContext || window.webkitAudioContext)();
+function beep(freq, dur, type='sine', vol=0.15, decayTime=null){
+  try{
+    const o=AC.createOscillator(), g=AC.createGain();
+    o.connect(g); g.connect(AC.destination);
+    o.type=type; o.frequency.setValueAtTime(freq,AC.currentTime);
+    g.gain.setValueAtTime(vol,AC.currentTime);
+    const decay=decayTime||dur*0.6;
+    g.gain.exponentialRampToValueAtTime(0.001,AC.currentTime+decay);
+    o.start(); o.stop(AC.currentTime+dur);
+  }catch(e){}
+}
+function playTyping(){beep(880,0.04,'sine',0.08)}
+function playMatch(){
+  beep(660,0.05,'sine',0.12);
+  setTimeout(()=>beep(880,0.08,'sine',0.15),40);
+  setTimeout(()=>beep(1100,0.12,'sine',0.18),90);
+}
+function playCombo(n){
+  const f=440*(1+n*0.1);
+  beep(f,0.06,'square',0.12);
+  setTimeout(()=>beep(f*1.5,0.1,'sine',0.14),50);
+}
+function playMiss(){
+  beep(220,0.15,'sawtooth',0.12);
+  setTimeout(()=>beep(180,0.2,'sawtooth',0.1),80);
+}
+function playGameOver(){
+  [440,330,220,110].forEach((f,i)=>setTimeout(()=>beep(f,0.3,'sawtooth',0.1),i*120));
+}
+
+// ── Stars Background ───────────────────────────────────────────────────────────
+const starCanvas=document.getElementById('stars');
+const sCtx=starCanvas.getContext('2d');
+let stars=[];
+function initStars(){
+  starCanvas.width=window.innerWidth;
+  starCanvas.height=window.innerHeight;
+  stars=Array.from({length:80},()=>({
+    x:Math.random()*starCanvas.width,y:Math.random()*starCanvas.height,
+    r:Math.random()*1.5+0.3,a:Math.random()
+  }));
+}
+function drawStars(){
+  sCtx.clearRect(0,0,starCanvas.width,starCanvas.height);
+  stars.forEach(s=>{
+    s.a+=0.005;
+    const alpha=0.3+0.3*Math.sin(s.a);
+    sCtx.beginPath();sCtx.arc(s.x,s.y,s.r,0,Math.PI*2);
+    sCtx.fillStyle=`rgba(160,160,255,${alpha})`;sCtx.fill();
+  });
+}
+
+// ── Word Lists ─────────────────────────────────────────────────────────────────
+const WORDS_EASY=['cat','dog','sun','run','jump','star','code','play','time','blue',
+  'fire','wind','hero','zoom','fast','cool','flow','glow','neon','loop',
+  'bit','key','map','fox','sky','gem','ice','lag','net','oak'];
+const WORDS_MED=['pixel','laser','cyber','glitch','turbo','sonic','orbit','surge',
+  'flash','blaze','storm','hyper','swift','ghost','spark','drift','crush',
+  'phase','vortex','prism','nexus','quark','synth','pulse','valor','ridge',
+  'zenith','fused','clone','blade'];
+const WORDS_HARD=['terminal','keyboard','algorithm','frequency','intensity','protocol',
+  'quantum','synthesis','hyperdrive','phosphor','chromatic','amplitude',
+  'resonance','velocity','spectrum','dimension','interface','processor',
+  'electron','diffusion','encrypted','bootstrap','multicore','wavelength',
+  'luminance','refracted','bandwidth','timestamp','recursive','fibonacci'];
+
+// ── Colours palette ────────────────────────────────────────────────────────────
+const COLORS=[
+  {fg:'#00f5ff',bg:'rgba(0,245,255,0.08)',bd:'#00f5ff'},
+  {fg:'#ff00ff',bg:'rgba(255,0,255,0.08)',bd:'#ff00ff'},
+  {fg:'#ffff00',bg:'rgba(255,255,0,0.08)',bd:'#ffff00'},
+  {fg:'#00ff88',bg:'rgba(0,255,136,0.08)',bd:'#00ff88'},
+  {fg:'#ff8800',bg:'rgba(255,136,0,0.08)',bd:'#ff8800'},
+  {fg:'#aa88ff',bg:'rgba(170,136,255,0.08)',bd:'#aa88ff'},
+];
+
+// ── Game State ─────────────────────────────────────────────────────────────────
+let gameActive=false, paused=false;
+let score=0, lives=3, level=1, combo=1, bestCombo=1;
+let wordsTyped=0, totalAttempts=0;
+let wordChips=[], nextWordTimer=0, levelTimer=0;
+let difficultyMult=1, spawnInterval=3000, fallSpeed=0.3;
+let startTime=0, lastFrameTime=0;
+let rafId=null;
+let currentDifficulty=2;
+
+const arena=document.getElementById('arena');
+const wordInput=document.getElementById('word-input');
+const comboFlash=document.getElementById('combo-flash');
+
+function getWordPool(lv){
+  if(lv<=2) return WORDS_EASY;
+  if(lv<=5) return WORDS_MED;
+  return [...WORDS_MED,...WORDS_HARD];
+}
+function pickWord(lv){
+  const pool=getWordPool(lv);
+  return pool[Math.floor(Math.random()*pool.length)];
+}
+function colourFor(w){
+  let h=0;for(const c of w)h=(h*31+c.charCodeAt(0))&0xffff;
+  return COLORS[h%COLORS.length];
+}
+
+// ── Spawn word chip ────────────────────────────────────────────────────────────
+function spawnWord(){
+  const text=pickWord(level);
+  const col=colourFor(text);
+  const div=document.createElement('div');
+  div.className='word-chip';
+  div.textContent=text;
+  div.style.color=col.fg;
+  div.style.background=col.bg;
+  div.style.borderColor=col.bd;
+  div.style.textShadow=`0 0 8px ${col.fg}`;
+  // x position — avoid edges
+  const maxX=arena.clientWidth-160;
+  const x=Math.max(8,Math.random()*maxX);
+  div.style.left=x+'px';
+  div.style.top='-32px';
+  arena.appendChild(div);
+  wordChips.push({el:div,text,y:-32,speed:fallSpeed*(0.8+Math.random()*0.4)});
+}
+
+// ── Update HUD ─────────────────────────────────────────────────────────────────
+function updateHUD(){
+  document.getElementById('hudScore').textContent=score;
+  document.getElementById('hudLevel').textContent=level;
+  document.getElementById('hudCombo').textContent='x'+combo;
+  // lives
+  const hearts=['💀','💔','❤️','❤️❤️','❤️❤️❤️'];
+  document.getElementById('lives-display').textContent=hearts[Math.max(0,lives)];
+}
+
+// ── Main loop ──────────────────────────────────────────────────────────────────
+function gameLoop(ts){
+  if(!gameActive){return;}
+  const dt=Math.min(ts-(lastFrameTime||ts),50);
+  lastFrameTime=ts;
+
+  drawStars();
+
+  // Spawn
+  nextWordTimer-=dt;
+  if(nextWordTimer<=0){
+    spawnWord();
+    // max 6 simultaneous words
+    const maxW=Math.min(2+Math.floor(level/2),6);
+    if(wordChips.length<maxW) spawnWord();
+    nextWordTimer=spawnInterval;
+  }
+
+  // Level up every 30 s
+  levelTimer+=dt;
+  const levelInterval=30000;
+  if(levelTimer>=levelInterval){
+    levelTimer=0;
+    level++;
+    spawnInterval=Math.max(800,spawnInterval-200);
+    fallSpeed=Math.min(1.2,fallSpeed+0.05);
+    showComboFlash('LEVEL '+level+'!','#ffff00');
+    beep(660,0.1,'sine',0.15);
+    setTimeout(()=>beep(880,0.1,'sine',0.18),100);
+  }
+
+  // Move chips
+  const arenaH=arena.clientHeight;
+  for(let i=wordChips.length-1;i>=0;i--){
+    const c=wordChips[i];
+    c.y+=c.speed*dt*0.06;
+    c.el.style.top=c.y+'px';
+    if(c.y>arenaH){
+      // missed
+      c.el.remove();
+      wordChips.splice(i,1);
+      lives--;
+      combo=1;
+      playMiss();
+      updateHUD();
+      flashArena();
+      if(lives<=0){endGame();return;}
+    }
+  }
+
+  updateHUD();
+  rafId=requestAnimationFrame(gameLoop);
+}
+
+function flashArena(){
+  arena.style.background='rgba(255,51,102,0.15)';
+  setTimeout(()=>arena.style.background='',300);
+}
+
+// ── Input handling ─────────────────────────────────────────────────────────────
+wordInput.addEventListener('input',()=>{
+  if(!gameActive)return;
+  if(AC.state==='suspended')AC.resume();
+  const val=wordInput.value.trim().toLowerCase();
+  if(!val)return;
+  playTyping();
+  highlightMatches(val);
+  // auto-submit on exact match
+  const match=wordChips.findIndex(c=>c.text===val);
+  if(match!==-1) submitWord(val);
+});
+
+wordInput.addEventListener('keydown',e=>{
+  if(e.key==='Enter'){
+    if(!gameActive)return;
+    submitWord(wordInput.value.trim().toLowerCase());
+  }
+});
+
+function highlightMatches(val){
+  wordChips.forEach(c=>{
+    if(c.text.startsWith(val)){
+      c.el.classList.add('highlight');
+    } else {
+      c.el.classList.remove('highlight');
+    }
+  });
+}
+
+function submitWord(val){
+  totalAttempts++;
+  const idx=wordChips.findIndex(c=>c.text===val);
+  if(idx!==-1){
+    const chip=wordChips[idx];
+    // score: word length × combo × level
+    const pts=(chip.text.length*10)*combo*level;
+    score+=pts;
+    wordsTyped++;
+    combo=Math.min(combo+1,10);
+    bestCombo=Math.max(bestCombo,combo);
+    chip.el.classList.add('typed-ok');
+    playMatch();
+    if(combo>=3) playCombo(combo);
+    if(combo>=3) showComboFlash('COMBO x'+combo+'!',combo>=6?'#ff00ff':'#00f5ff');
+    setTimeout(()=>chip.el.remove(),300);
+    wordChips.splice(idx,1);
+    wordInput.value='';
+    // remove highlights
+    wordChips.forEach(c=>c.el.classList.remove('highlight'));
+  } else {
+    // wrong word
+    wordInput.classList.add('error');
+    setTimeout(()=>wordInput.classList.remove('error'),300);
+    combo=1;
+  }
+  updateHUD();
+}
+
+function showComboFlash(text,color){
+  comboFlash.textContent=text;
+  comboFlash.style.color=color;
+  comboFlash.style.textShadow=`0 0 20px ${color}`;
+  comboFlash.style.opacity='1';
+  clearTimeout(comboFlash._t);
+  comboFlash._t=setTimeout(()=>comboFlash.style.opacity='0',700);
+}
+
+// ── Game control ───────────────────────────────────────────────────────────────
+function startGame(diff){
+  currentDifficulty=diff;
+  // difficulty settings
+  if(diff===1){spawnInterval=3500;fallSpeed=0.22;difficultyMult=1;}
+  else if(diff===2){spawnInterval=2800;fallSpeed=0.32;difficultyMult=1.5;}
+  else{spawnInterval=2200;fallSpeed=0.45;difficultyMult=2;}
+
+  score=0;lives=3;level=1;combo=1;bestCombo=1;
+  wordsTyped=0;totalAttempts=0;
+  wordChips=[];nextWordTimer=500;levelTimer=0;
+  startTime=performance.now();lastFrameTime=0;
+
+  // clear arena
+  arena.innerHTML='';
+  wordInput.value='';
+
+  document.getElementById('startScreen').classList.add('hidden');
+  document.getElementById('gameOverScreen').classList.add('hidden');
+  gameActive=true;
+  if(rafId) cancelAnimationFrame(rafId);
+  rafId=requestAnimationFrame(gameLoop);
+  wordInput.focus();
+}
+
+function restartGame(){startGame(currentDifficulty);}
+
+function showStart(){
+  gameActive=false;
+  if(rafId) cancelAnimationFrame(rafId);
+  wordChips.forEach(c=>c.el.remove());wordChips=[];
+  document.getElementById('startScreen').classList.remove('hidden');
+  document.getElementById('gameOverScreen').classList.add('hidden');
+  document.getElementById('startHi').textContent=localStorage.getItem('neonwords_hi')||0;
+}
+
+function endGame(){
+  gameActive=false;
+  if(rafId) cancelAnimationFrame(rafId);
+  playGameOver();
+
+  const elapsed=(performance.now()-startTime)/60000;
+  const wpm=elapsed>0?Math.round(wordsTyped/elapsed):0;
+  const acc=totalAttempts>0?Math.round((wordsTyped/totalAttempts)*100):100;
+
+  const hiKey='neonwords_hi';
+  const prevHi=parseInt(localStorage.getItem(hiKey)||'0');
+  const isNew=score>prevHi;
+  if(isNew) localStorage.setItem(hiKey,score);
+
+  document.getElementById('finalScore').textContent=score;
+  document.getElementById('newHiLabel').textContent=isNew?'🏆 NEW HIGH SCORE!':'Best: '+prevHi;
+  document.getElementById('newHiLabel').style.color=isNew?'#ffff00':'#888';
+  document.getElementById('statWords').textContent=wordsTyped;
+  document.getElementById('statAcc').textContent=acc+'%';
+  document.getElementById('statCombo').textContent='x'+bestCombo;
+  document.getElementById('statWpm').textContent=wpm;
+
+  document.getElementById('gameOverScreen').classList.remove('hidden');
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────────
+window.addEventListener('resize',()=>{
+  initStars();
+  starCanvas.style.position='absolute';
+  starCanvas.style.inset='0';
+  starCanvas.style.zIndex='0';
+});
+initStars();
+starCanvas.style.position='absolute';
+starCanvas.style.inset='0';
+starCanvas.style.zIndex='0';
+document.getElementById('startHi').textContent=localStorage.getItem('neonwords_hi')||0;
+
+// Mobile: show input on tap
+arena.addEventListener('click',()=>{wordInput.focus();});
+
+// Loop for stars even on start screen
+(function starLoop(){drawStars();requestAnimationFrame(starLoop);})();
+</script>
+</body>
+</html>

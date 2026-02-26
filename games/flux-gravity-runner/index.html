@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>FLUX — Gravity Runner</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    background: #04040f;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+  canvas {
+    display: block;
+    touch-action: none;
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+// ═══════════════════════════════════════════════════════
+//  FLUX — Gravity Runner  |  HTML5 Canvas Game
+//  Single-file, no dependencies, Web Audio SFX
+// ═══════════════════════════════════════════════════════
+
+const canvas = document.getElementById('c');
+const ctx    = canvas.getContext('2d');
+
+// ── Responsive canvas ──────────────────────────────────
+let W = 800, H = 450;
+function resize() {
+  const aw = window.innerWidth, ah = window.innerHeight;
+  const scale = Math.min(aw / 800, ah / 450);
+  W = 800; H = 450;
+  canvas.width  = W;
+  canvas.height = H;
+  canvas.style.width  = (W * scale) + 'px';
+  canvas.style.height = (H * scale) + 'px';
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ── Web Audio API ──────────────────────────────────────
+let audioCtx = null;
+function ensureAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+}
+
+function playTone(freq, type, dur, vol, detune = 0) {
+  if (!audioCtx) return;
+  const osc  = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.connect(gain); gain.connect(audioCtx.destination);
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+  osc.detune.setValueAtTime(detune, audioCtx.currentTime);
+  gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
+  osc.start(audioCtx.currentTime);
+  osc.stop(audioCtx.currentTime + dur);
+}
+
+function sfxFlip() {
+  playTone(440, 'sine', 0.12, 0.25);
+  playTone(660, 'triangle', 0.08, 0.15, 50);
+}
+
+function sfxCrystal() {
+  playTone(880, 'sine', 0.15, 0.2);
+  playTone(1320, 'sine', 0.1, 0.12, -20);
+  playTone(1760, 'sine', 0.08, 0.08);
+}
+
+function sfxDeath() {
+  playTone(200, 'sawtooth', 0.3, 0.3);
+  playTone(150, 'square',   0.5, 0.2, -100);
+  playTone(80,  'sine',     0.8, 0.15);
+}
+
+function sfxStart() {
+  [523, 659, 784, 1047].forEach((f, i) => {
+    setTimeout(() => playTone(f, 'sine', 0.15, 0.18), i * 80);
+  });
+}
+
+// ── Palette ────────────────────────────────────────────
+const PAL = {
+  bg:       '#04040f',
+  bgMid:    '#080820',
+  player:   '#00eeff',
+  glow:     '#00aaff',
+  platform: '#2a2a5a',
+  platEdge: '#6060cc',
+  crystal:  '#ffdd00',
+  crystalG: '#ff9900',
+  spike:    '#ff3366',
+  spikeG:   '#ff0044',
+  star:     '#ffffff',
+  text:     '#e0e8ff',
+  accent:   '#aa88ff',
+  trail:    '#00eeff',
+};
+
+// ── Particle System ────────────────────────────────────
+const particles = [];
+function spawnParticles(x, y, color, count, speed, life, size) {
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const spd   = speed * (0.4 + Math.random() * 0.8);
+    particles.push({
+      x, y,
+      vx: Math.cos(angle) * spd,
+      vy: Math.sin(angle) * spd,
+      life, maxLife: life,
+      color,
+      size: size * (0.5 + Math.random() * 0.8),
+    });
+  }
+}
+
+function updateParticles(dt) {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.vx *= 0.94;
+    p.vy *= 0.94;
+    p.life -= dt;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+
+function drawParticles() {
+  particles.forEach(p => {
+    const t = p.life / p.maxLife;
+    ctx.globalAlpha = t * 0.9;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size * t, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+}
+
+// ── Stars (background) ─────────────────────────────────
+const stars = [];
+for (let i = 0; i < 120; i++) {
+  stars.push({
+    x: Math.random() * 800,
+    y: Math.random() * 450,
+    r: Math.random() * 1.4 + 0.2,
+    twinkle: Math.random() * Math.PI * 2,
+    speed: 0.3 + Math.random() * 0.5,
+  });
+}
+function drawStars(scrollX) {
+  stars.forEach(s => {
+    s.twinkle += 0.04;
+    const alpha = 0.3 + 0.3 * Math.sin(s.twinkle);
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = PAL.star;
+    ctx.beginPath();
+    ctx.arc(((s.x - scrollX * s.speed * 0.03) % 800 + 800) % 800, s.y, s.r, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+}
+
+// ── Platform Generator ─────────────────────────────────
+function makePlatform(x, y, w, h) {
+  return { x, y, w, h };
+}
+
+// ── Spike ──────────────────────────────────────────────
+function makeSpike(x, y, onCeiling) {
+  return { x, y, onCeiling };
+}
+
+// ── Crystal ────────────────────────────────────────────
+function makeCrystal(x, y) {
+  return { x, y, collected: false, bobOffset: Math.random() * Math.PI * 2 };
+}
+
+// ── Trail ──────────────────────────────────────────────
+const trailPoints = [];
+
+// ── Game State ─────────────────────────────────────────
+const STATE = { START: 0, PLAYING: 1, DYING: 2, GAMEOVER: 3 };
+let state = STATE.START;
+
+let player, platforms, spikes, crystals;
+let scrollX, speed, score, crystalScore, bestScore;
+let gravityDir;  // +1 = down, -1 = up
+let flipCooldown, flipAnim;
+let deathTimer;
+
+bestScore = 0;
+
+function initGame() {
+  scrollX = 0;
+  speed   = 220;
+  score   = 0;
+  crystalScore = 0;
+  gravityDir   = 1;
+  flipCooldown = 0;
+  flipAnim     = 0;
+  deathTimer   = 0;
+  trailPoints.length = 0;
+  particles.length   = 0;
+
+  player = {
+    x: 160, y: H / 2 - 16,
+    vy: 0,
+    r: 14,
+    onGround: false,
+    squish: 1,
+    squishVy: 0,
+    angle: 0,
+  };
+
+  // Initial platforms
+  platforms = [
+    makePlatform(-200, H - 60, 600, 20),      // floor start
+    makePlatform(-200, 40, 600, 20),           // ceiling start (visual)
+  ];
+  spikes   = [];
+  crystals = [];
+  generateWorld(800);
+}
+
+const PLAT_H = 18;
+const FLOOR_Y = H - 55;
+const CEIL_Y  = 40;
+
+let worldX = 600;  // how far we've generated
+
+function generateWorld(upTo) {
+  while (worldX < upTo) {
+    const gapMin = 80, gapMax = 200;
+    const gap = gapMin + Math.random() * (gapMax - gapMin);
+    const platLen = 120 + Math.random() * 200;
+
+    // Choose: floor or ceiling or both
+    const variant = Math.random();
+    if (variant < 0.4) {
+      // floor platform
+      platforms.push(makePlatform(worldX + gap, FLOOR_Y, platLen, PLAT_H));
+      // maybe ceiling too (open ceiling)
+    } else if (variant < 0.7) {
+      // ceiling platform
+      platforms.push(makePlatform(worldX + gap, CEIL_Y, platLen, PLAT_H));
+    } else {
+      // both
+      platforms.push(makePlatform(worldX + gap, FLOOR_Y, platLen, PLAT_H));
+      platforms.push(makePlatform(worldX + gap + 30, CEIL_Y, platLen - 30, PLAT_H));
+    }
+
+    // Spikes on platforms (with some probability)
+    if (Math.random() < 0.45 && score > 200) {
+      const pf = platforms[platforms.length - 1];
+      const sx = pf.x + 20 + Math.random() * (pf.w - 40);
+      const onCeil = (pf.y < H / 2);
+      spikes.push(makeSpike(sx, pf.y - (onCeil ? -PLAT_H : PLAT_H), onCeil));
+    }
+
+    // Crystals in the air
+    if (Math.random() < 0.6) {
+      const cx = worldX + gap + Math.random() * platLen;
+      const cy = CEIL_Y + PLAT_H + 40 + Math.random() * (FLOOR_Y - CEIL_Y - PLAT_H * 2 - 80);
+      crystals.push(makeCrystal(cx, cy));
+    }
+    if (Math.random() < 0.3) {
+      const cx = worldX + gap + Math.random() * platLen;
+      const cy = CEIL_Y + PLAT_H + 40 + Math.random() * (FLOOR_Y - CEIL_Y - PLAT_H * 2 - 80);
+      crystals.push(makeCrystal(cx, cy));
+    }
+
+    worldX += gap + platLen;
+  }
+}
+
+// ── Input ──────────────────────────────────────────────
+let flipPressed = false;
+
+function doFlip() {
+  if (state === STATE.PLAYING && flipCooldown <= 0) {
+    gravityDir *= -1;
+    player.vy = gravityDir * -3;
+    flipCooldown = 0.18;
+    flipAnim = 1.0;
+    spawnParticles(player.x, player.y, PAL.player, 18, 180, 0.5, 5);
+    sfxFlip();
+  }
+  if (state === STATE.START || state === STATE.GAMEOVER) {
+    startGame();
+  }
+}
+
+window.addEventListener('keydown', e => {
+  if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
+    e.preventDefault();
+    if (!flipPressed) { flipPressed = true; doFlip(); }
+  }
+});
+window.addEventListener('keyup', e => {
+  if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
+    flipPressed = false;
+  }
+});
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  ensureAudio();
+  doFlip();
+}, { passive: false });
+canvas.addEventListener('mousedown', e => {
+  ensureAudio();
+  doFlip();
+});
+
+// ── Start / Restart ────────────────────────────────────
+function startGame() {
+  ensureAudio();
+  initGame();
+  state = STATE.PLAYING;
+  sfxStart();
+}
+
+// ── Physics & Update ───────────────────────────────────
+const GRAVITY  = 1100;
+const MAX_VY   = 600;
+const SPIKE_R  = 10;
+const CRYSTAL_R= 16;
+
+function update(dt) {
+  if (state !== STATE.PLAYING && state !== STATE.DYING) return;
+
+  if (state === STATE.DYING) {
+    deathTimer -= dt;
+    updateParticles(dt);
+    if (deathTimer <= 0) state = STATE.GAMEOVER;
+    return;
+  }
+
+  // Speed ramp
+  speed = 220 + score * 0.08;
+  if (speed > 550) speed = 550;
+
+  scrollX += speed * dt;
+  score    = Math.floor(scrollX / 10);
+  if (score + crystalScore * 50 > bestScore) bestScore = score + crystalScore * 50;
+
+  // Generate more world ahead
+  generateWorld(scrollX + 1400);
+
+  // Cull far-behind objects
+  platforms = platforms.filter(p => p.x + p.w > scrollX - 200);
+  spikes    = spikes.filter(s => s.x > scrollX - 200);
+  crystals  = crystals.filter(c => c.x > scrollX - 200);
+
+  // Player physics
+  flipCooldown -= dt;
+  if (flipCooldown < 0) flipCooldown = 0;
+  flipAnim -= dt * 5;
+  if (flipAnim < 0) flipAnim = 0;
+
+  player.vy += gravityDir * GRAVITY * dt;
+  if (player.vy >  MAX_VY) player.vy =  MAX_VY;
+  if (player.vy < -MAX_VY) player.vy = -MAX_VY;
+  player.y += player.vy * dt;
+  player.angle += (speed / 120) * dt * gravityDir;
+
+  // Squish animation
+  player.squishVy += (1 - player.squish) * 40 * dt;
+  player.squishVy -= player.squishVy * 8 * dt;
+  player.squish += player.squishVy;
+  if (player.squish < 0.5) player.squish = 0.5;
+
+  player.onGround = false;
+
+  // Platform collision (AABB-ish + circle)
+  const pr = player.r;
+  platforms.forEach(p => {
+    const px = p.x - scrollX;
+    const py = p.y;
+    if (player.x + pr > px && player.x - pr < px + p.w) {
+      if (gravityDir === 1) {
+        // falling down — land on top
+        if (player.y + pr > py && player.y + pr < py + p.h + Math.abs(player.vy) * dt + 10 && player.vy >= 0) {
+          player.y = py - pr;
+          player.vy = 0;
+          player.onGround = true;
+          player.squishVy = -0.3;
+        }
+      } else {
+        // flying up — hit ceiling underside
+        if (player.y - pr < py + p.h && player.y - pr > py - Math.abs(player.vy) * dt - 10 && player.vy <= 0) {
+          player.y = py + p.h + pr;
+          player.vy = 0;
+          player.onGround = true;
+          player.squishVy = -0.3;
+        }
+      }
+    }
+  });
+
+  // Hard bounds (kill if out of screen)
+  if (player.y - pr > H + 40 || player.y + pr < -40) {
+    killPlayer();
+    return;
+  }
+
+  // Spike collision
+  spikes.forEach(s => {
+    const sx = s.x - scrollX;
+    const sy = s.y;
+    const dist = Math.hypot(player.x - sx, player.y - sy);
+    if (dist < pr + SPIKE_R - 4) {
+      killPlayer();
+      return;
+    }
+  });
+
+  // Crystal collection
+  crystals.forEach(c => {
+    if (c.collected) return;
+    const cx = c.x - scrollX;
+    const dist = Math.hypot(player.x - cx, player.y - c.y);
+    if (dist < pr + CRYSTAL_R) {
+      c.collected = true;
+      crystalScore++;
+      spawnParticles(cx, c.y, PAL.crystal, 14, 140, 0.5, 5);
+      sfxCrystal();
+    }
+  });
+
+  // Trail
+  trailPoints.unshift({ x: player.x, y: player.y });
+  if (trailPoints.length > 20) trailPoints.pop();
+
+  updateParticles(dt);
+}
+
+function killPlayer() {
+  state = STATE.DYING;
+  deathTimer = 1.2;
+  spawnParticles(player.x, player.y, PAL.player,   25, 250, 1.0, 6);
+  spawnParticles(player.x, player.y, PAL.glow,     20, 180, 0.8, 4);
+  spawnParticles(player.x, player.y, '#ffffff',    12, 320, 0.6, 3);
+  sfxDeath();
+  const total = score + crystalScore * 50;
+  if (total > bestScore) bestScore = total;
+}
+
+// ── Rendering ──────────────────────────────────────────
+let t = 0;
+
+function drawBackground() {
+  // Gradient bg
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#04040f');
+  grad.addColorStop(1, '#080820');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  // Grid lines
+  ctx.strokeStyle = 'rgba(60,60,120,0.18)';
+  ctx.lineWidth = 1;
+  const gridOff = (scrollX * 0.5) % 60;
+  for (let x = -gridOff; x < W + 60; x += 60) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+  }
+  for (let y = 0; y < H; y += 60) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+}
+
+function drawPlatforms() {
+  platforms.forEach(p => {
+    const px = p.x - scrollX;
+    if (px + p.w < -10 || px > W + 10) return;
+
+    // Platform glow
+    ctx.shadowColor = PAL.platEdge;
+    ctx.shadowBlur  = 12;
+    const grad = ctx.createLinearGradient(px, p.y, px, p.y + p.h);
+    grad.addColorStop(0, '#3a3a7a');
+    grad.addColorStop(1, '#1a1a3a');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.roundRect(px, p.y, p.w, p.h, 4);
+    ctx.fill();
+
+    // Top/bottom edge line
+    ctx.strokeStyle = PAL.platEdge;
+    ctx.lineWidth   = 2;
+    ctx.shadowBlur  = 16;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  });
+}
+
+function drawSpikes() {
+  spikes.forEach(s => {
+    const sx = s.x - scrollX;
+    if (sx < -20 || sx > W + 20) return;
+    const h  = 16;
+    const hw = 8;
+
+    ctx.shadowColor = PAL.spike;
+    ctx.shadowBlur  = 14;
+    ctx.fillStyle   = PAL.spike;
+
+    ctx.beginPath();
+    if (!s.onCeiling) {
+      // spike pointing up
+      ctx.moveTo(sx - hw, s.y);
+      ctx.lineTo(sx + hw, s.y);
+      ctx.lineTo(sx,      s.y - h);
+    } else {
+      // spike pointing down
+      ctx.moveTo(sx - hw, s.y);
+      ctx.lineTo(sx + hw, s.y);
+      ctx.lineTo(sx,      s.y + h);
+    }
+    ctx.closePath();
+    ctx.fill();
+
+    // Inner highlight
+    ctx.fillStyle = '#ff88aa';
+    ctx.beginPath();
+    if (!s.onCeiling) {
+      ctx.moveTo(sx - 3, s.y);
+      ctx.lineTo(sx + 3, s.y);
+      ctx.lineTo(sx,     s.y - h * 0.6);
+    } else {
+      ctx.moveTo(sx - 3, s.y);
+      ctx.lineTo(sx + 3, s.y);
+      ctx.lineTo(sx,     s.y + h * 0.6);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  });
+}
+
+function drawCrystals(now) {
+  crystals.forEach(c => {
+    if (c.collected) return;
+    const cx  = c.x - scrollX;
+    if (cx < -30 || cx > W + 30) return;
+    const bob = Math.sin(now * 2.5 + c.bobOffset) * 5;
+    const cy  = c.y + bob;
+    const r   = 10;
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(now * 1.2 + c.bobOffset);
+
+    ctx.shadowColor = PAL.crystal;
+    ctx.shadowBlur  = 18;
+
+    // Diamond shape
+    const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, r);
+    grad.addColorStop(0, '#fffaaa');
+    grad.addColorStop(0.5, PAL.crystal);
+    grad.addColorStop(1,   PAL.crystalG);
+    ctx.fillStyle = grad;
+
+    ctx.beginPath();
+    ctx.moveTo(0, -r);
+    ctx.lineTo(r * 0.7, 0);
+    ctx.lineTo(0, r);
+    ctx.lineTo(-r * 0.7, 0);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  });
+}
+
+function drawTrail() {
+  if (trailPoints.length < 2 || state === STATE.DYING) return;
+  for (let i = 0; i < trailPoints.length - 1; i++) {
+    const t0 = 1 - i / trailPoints.length;
+    ctx.strokeStyle = `rgba(0,220,255,${t0 * 0.5})`;
+    ctx.lineWidth   = player.r * 2 * t0 * 0.6;
+    ctx.lineCap     = 'round';
+    ctx.beginPath();
+    ctx.moveTo(trailPoints[i].x, trailPoints[i].y);
+    ctx.lineTo(trailPoints[i + 1].x, trailPoints[i + 1].y);
+    ctx.stroke();
+  }
+}
+
+function drawPlayer(now) {
+  if (state === STATE.DYING) return;
+  const px = player.x;
+  const py = player.y;
+  const pr = player.r;
+  const sq = player.squish;
+
+  ctx.save();
+  ctx.translate(px, py);
+
+  // Flip animation ring
+  if (flipAnim > 0) {
+    ctx.strokeStyle = `rgba(0,220,255,${flipAnim * 0.8})`;
+    ctx.lineWidth   = 2;
+    ctx.shadowColor = PAL.player;
+    ctx.shadowBlur  = 20;
+    ctx.beginPath();
+    ctx.arc(0, 0, pr + 12 + (1 - flipAnim) * 20, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  ctx.scale(1 / sq, sq);
+
+  // Outer glow
+  const glowGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, pr * 2.5);
+  glowGrad.addColorStop(0,   'rgba(0,200,255,0.35)');
+  glowGrad.addColorStop(0.5, 'rgba(0,150,255,0.12)');
+  glowGrad.addColorStop(1,   'rgba(0,100,255,0)');
+  ctx.fillStyle = glowGrad;
+  ctx.beginPath();
+  ctx.arc(0, 0, pr * 2.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Main orb
+  ctx.shadowColor = PAL.player;
+  ctx.shadowBlur  = 20;
+  const orbGrad = ctx.createRadialGradient(-pr * 0.3, -pr * 0.3, pr * 0.1, 0, 0, pr);
+  orbGrad.addColorStop(0, '#aaffff');
+  orbGrad.addColorStop(0.4, PAL.player);
+  orbGrad.addColorStop(1,   PAL.glow);
+  ctx.fillStyle = orbGrad;
+  ctx.beginPath();
+  ctx.arc(0, 0, pr, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Core shine
+  ctx.shadowBlur  = 0;
+  ctx.fillStyle   = 'rgba(255,255,255,0.6)';
+  ctx.beginPath();
+  ctx.arc(-pr * 0.3, -pr * 0.3, pr * 0.35, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Gravity indicator arrows
+  ctx.shadowColor = '#ffffff';
+  ctx.shadowBlur  = 6;
+  ctx.fillStyle   = 'rgba(255,255,255,0.8)';
+  const ar = pr * 0.4;
+  const ay = gravityDir * pr * 0.5;
+  ctx.beginPath();
+  ctx.moveTo(0,     ay + ar * gravityDir * 0.8);
+  ctx.lineTo(-ar,   ay - ar * gravityDir * 0.4);
+  ctx.lineTo( ar,   ay - ar * gravityDir * 0.4);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.restore();
+}
+
+// ── HUD ────────────────────────────────────────────────
+function drawHUD() {
+  const total = score + crystalScore * 50;
+
+  // Score
+  ctx.shadowColor = PAL.accent;
+  ctx.shadowBlur  = 12;
+  ctx.fillStyle   = PAL.text;
+  ctx.font        = 'bold 22px "Segoe UI", sans-serif';
+  ctx.textAlign   = 'left';
+  ctx.fillText(`SCORE  ${total.toString().padStart(6, '0')}`, 16, 32);
+
+  // Crystals
+  ctx.fillStyle   = PAL.crystal;
+  ctx.shadowColor = PAL.crystal;
+  ctx.font        = 'bold 16px "Segoe UI", sans-serif';
+  ctx.fillText(`◆ × ${crystalScore}`, 16, 54);
+
+  // Best
+  ctx.fillStyle   = 'rgba(170,136,255,0.7)';
+  ctx.shadowColor = PAL.accent;
+  ctx.font        = '14px "Segoe UI", sans-serif';
+  ctx.textAlign   = 'right';
+  ctx.fillText(`BEST  ${bestScore.toString().padStart(6, '0')}`, W - 16, 32);
+
+  // Speed indicator bar
+  const barW = 120, barH = 6;
+  const barX = W - 16 - barW, barY = 44;
+  const speedFrac = (speed - 220) / (550 - 220);
+  ctx.fillStyle   = 'rgba(255,255,255,0.1)';
+  ctx.fillRect(barX, barY, barW, barH);
+  const speedGrad = ctx.createLinearGradient(barX, 0, barX + barW, 0);
+  speedGrad.addColorStop(0, '#00eeff');
+  speedGrad.addColorStop(1, '#ff3366');
+  ctx.fillStyle   = speedGrad;
+  ctx.fillRect(barX, barY, barW * speedFrac, barH);
+  ctx.fillStyle   = 'rgba(150,150,200,0.7)';
+  ctx.font        = '11px "Segoe UI", sans-serif';
+  ctx.fillText('SPEED', W - 16, barY + barH + 12);
+
+  ctx.shadowBlur  = 0;
+  ctx.textAlign   = 'left';
+}
+
+// ── Gravity direction line ─────────────────────────────
+function drawGravLine() {
+  if (state !== STATE.PLAYING) return;
+  const alpha = 0.07 + 0.05 * Math.sin(t * 3);
+  if (gravityDir === 1) {
+    const grad = ctx.createLinearGradient(0, H - 60, 0, H);
+    grad.addColorStop(0, `rgba(0,200,255,0)`);
+    grad.addColorStop(1, `rgba(0,200,255,${alpha})`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, H - 60, W, 60);
+  } else {
+    const grad = ctx.createLinearGradient(0, 0, 0, 60);
+    grad.addColorStop(0, `rgba(0,200,255,${alpha})`);
+    grad.addColorStop(1, `rgba(0,200,255,0)`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, 60);
+  }
+}
+
+// ── START SCREEN ───────────────────────────────────────
+function drawStartScreen(now) {
+  // Animated orb float
+  const floatY = H / 2 - 30 + Math.sin(now * 1.5) * 12;
+
+  // Title glow
+  ctx.shadowColor = PAL.player;
+  ctx.shadowBlur  = 40;
+  ctx.fillStyle   = '#ffffff';
+  ctx.font        = 'bold 72px "Segoe UI", sans-serif';
+  ctx.textAlign   = 'center';
+  ctx.fillText('FLUX', W / 2, H / 2 - 90);
+
+  ctx.font        = '18px "Segoe UI", sans-serif';
+  ctx.fillStyle   = PAL.accent;
+  ctx.shadowColor = PAL.accent;
+  ctx.shadowBlur  = 10;
+  ctx.fillText('G R A V I T Y   R U N N E R', W / 2, H / 2 - 60);
+
+  // Demo orb
+  ctx.shadowColor = PAL.player;
+  ctx.shadowBlur  = 30;
+  const demoGrad = ctx.createRadialGradient(W/2-6, floatY-6, 2, W/2, floatY, 22);
+  demoGrad.addColorStop(0, '#aaffff');
+  demoGrad.addColorStop(0.5, PAL.player);
+  demoGrad.addColorStop(1,   PAL.glow);
+  ctx.fillStyle = demoGrad;
+  ctx.beginPath();
+  ctx.arc(W / 2, floatY, 22, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Pulse ring
+  const pulse = (now % 1.0);
+  ctx.strokeStyle = `rgba(0,220,255,${(1 - pulse) * 0.6})`;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(W / 2, floatY, 22 + pulse * 40, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Controls
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = 'rgba(200,210,255,0.85)';
+  ctx.font = '17px "Segoe UI", sans-serif';
+  ctx.fillText('Tap / Click / Space — flip gravity', W / 2, H / 2 + 80);
+
+  ctx.fillStyle = 'rgba(150,160,220,0.65)';
+  ctx.font = '14px "Segoe UI", sans-serif';
+  ctx.fillText('Collect crystals  ◆  Avoid spikes  ▲  Survive!', W / 2, H / 2 + 108);
+
+  // Blinking start prompt
+  if (Math.floor(now * 2) % 2 === 0) {
+    ctx.shadowColor = PAL.accent;
+    ctx.shadowBlur  = 18;
+    ctx.fillStyle   = PAL.accent;
+    ctx.font        = 'bold 20px "Segoe UI", sans-serif';
+    ctx.fillText('— TAP TO START —', W / 2, H / 2 + 148);
+  }
+
+  ctx.shadowBlur  = 0;
+  ctx.textAlign   = 'left';
+}
+
+// ── GAME OVER SCREEN ───────────────────────────────────
+function drawGameOver(now) {
+  // Overlay
+  ctx.fillStyle = 'rgba(4,4,20,0.75)';
+  ctx.fillRect(0, 0, W, H);
+
+  const total = score + crystalScore * 50;
+
+  ctx.shadowColor = PAL.spike;
+  ctx.shadowBlur  = 30;
+  ctx.fillStyle   = '#ff6688';
+  ctx.font        = 'bold 56px "Segoe UI", sans-serif';
+  ctx.textAlign   = 'center';
+  ctx.fillText('GAME OVER', W / 2, H / 2 - 60);
+
+  ctx.shadowColor = PAL.player;
+  ctx.shadowBlur  = 10;
+  ctx.fillStyle   = PAL.text;
+  ctx.font        = 'bold 28px "Segoe UI", sans-serif';
+  ctx.fillText(`SCORE  ${total.toString().padStart(6, '0')}`, W / 2, H / 2);
+
+  ctx.fillStyle = PAL.crystal;
+  ctx.shadowColor = PAL.crystal;
+  ctx.font = '20px "Segoe UI", sans-serif';
+  ctx.fillText(`◆ Crystals Collected: ${crystalScore}`, W / 2, H / 2 + 36);
+
+  ctx.fillStyle = 'rgba(170,136,255,0.8)';
+  ctx.shadowColor = PAL.accent;
+  ctx.font = '16px "Segoe UI", sans-serif';
+  ctx.fillText(`BEST: ${bestScore.toString().padStart(6, '0')}`, W / 2, H / 2 + 66);
+
+  if (Math.floor(now * 2) % 2 === 0) {
+    ctx.shadowColor = PAL.accent;
+    ctx.shadowBlur  = 18;
+    ctx.fillStyle   = PAL.accent;
+    ctx.font        = 'bold 20px "Segoe UI", sans-serif';
+    ctx.fillText('— TAP TO PLAY AGAIN —', W / 2, H / 2 + 108);
+  }
+
+  ctx.shadowBlur = 0;
+  ctx.textAlign  = 'left';
+}
+
+// ── MAIN LOOP ──────────────────────────────────────────
+let last = 0;
+function loop(ts) {
+  const dt  = Math.min((ts - last) / 1000, 0.05);
+  last = ts;
+  t += dt;
+
+  update(dt);
+
+  // Draw
+  drawBackground();
+  drawStars(scrollX);
+  drawGravLine();
+
+  if (state === STATE.PLAYING || state === STATE.DYING) {
+    drawPlatforms();
+    drawSpikes();
+    drawCrystals(t);
+    drawTrail();
+    drawParticles();
+    drawPlayer(t);
+    if (state === STATE.PLAYING) drawHUD();
+  } else if (state === STATE.START) {
+    drawStartScreen(t);
+  } else if (state === STATE.GAMEOVER) {
+    drawParticles();
+    drawGameOver(t);
+  }
+
+  requestAnimationFrame(loop);
+}
+
+// ── Boot ───────────────────────────────────────────────
+initGame();
+requestAnimationFrame(ts => { last = ts; requestAnimationFrame(loop); });
+</script>
+</body>
+</html>

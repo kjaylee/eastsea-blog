@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<meta name="theme-color" content="#1a0a2e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="description" content="Mole Bash - Whack the moles before time runs out!">
+<link rel="manifest" href="manifest.json">
+<title>Mole Bash</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{
+    width:100%;height:100%;
+    background:#1a0a2e;
+    display:flex;flex-direction:column;
+    align-items:center;justify-content:center;
+    overflow:hidden;
+    font-family:'Segoe UI',system-ui,sans-serif;
+    user-select:none;
+    touch-action:none;
+  }
+  #ui{
+    display:flex;flex-direction:column;align-items:center;
+    width:100%;max-width:420px;
+    padding:0 12px;
+    gap:8px;
+  }
+  #topBar{
+    width:100%;display:flex;justify-content:space-between;align-items:center;
+    padding:0 4px;
+  }
+  .stat{
+    display:flex;flex-direction:column;align-items:center;gap:2px;
+  }
+  .stat-label{
+    font-size:10px;letter-spacing:2px;text-transform:uppercase;
+    color:rgba(255,255,255,0.4);font-weight:600;
+  }
+  .stat-value{
+    font-size:22px;font-weight:700;color:#fff;
+    text-shadow:0 0 10px rgba(255,255,255,0.3);
+    min-width:48px;text-align:center;
+  }
+  #timerBar{
+    width:100%;height:8px;background:rgba(255,255,255,0.1);
+    border-radius:4px;overflow:hidden;
+  }
+  #timerFill{
+    height:100%;background:linear-gradient(90deg,#00d4ff,#7b2ff7);
+    border-radius:4px;width:100%;
+    transition:background 0.5s;
+  }
+  #comboWrap{
+    height:24px;display:flex;align-items:center;justify-content:center;
+  }
+  #comboText{
+    font-size:16px;font-weight:700;color:#ffcc00;
+    text-shadow:0 0 12px #ffcc00;
+    opacity:0;transition:opacity 0.2s;
+    letter-spacing:2px;
+  }
+  #canvas{
+    display:block;
+    border-radius:16px;
+    cursor:pointer;
+  }
+  #overlay{
+    position:fixed;inset:0;
+    background:rgba(10,4,22,0.88);
+    display:flex;flex-direction:column;
+    align-items:center;justify-content:center;
+    gap:20px;
+    backdrop-filter:blur(6px);
+    z-index:10;
+  }
+  #overlay.hidden{display:none}
+  #overlayIcon{font-size:72px;line-height:1}
+  #overlayTitle{
+    font-size:32px;font-weight:800;color:#fff;
+    letter-spacing:2px;text-shadow:0 0 20px rgba(123,47,247,0.8);
+  }
+  #overlayMsg{
+    font-size:14px;color:rgba(255,255,255,0.6);
+    text-align:center;max-width:280px;line-height:1.6;
+  }
+  #overlayScore{
+    font-size:48px;font-weight:800;color:#ffcc00;
+    text-shadow:0 0 20px #ffcc00;display:none;
+  }
+  #overlayBtn{
+    padding:14px 44px;
+    background:linear-gradient(135deg,#7b2ff7,#00d4ff);
+    border:none;border-radius:50px;
+    font-size:18px;font-weight:700;color:#fff;
+    cursor:pointer;letter-spacing:1px;
+    box-shadow:0 4px 20px rgba(123,47,247,0.5);
+    transition:transform 0.1s,box-shadow 0.1s;
+  }
+  #overlayBtn:active{transform:scale(0.95);box-shadow:0 2px 10px rgba(123,47,247,0.3)}
+  #bestLine{font-size:13px;color:rgba(255,255,255,0.4)}
+</style>
+</head>
+<body>
+<div id="ui">
+  <div id="topBar">
+    <div class="stat"><div class="stat-label">Score</div><div class="stat-value" id="scoreVal">0</div></div>
+    <div class="stat"><div class="stat-label">Best</div><div class="stat-value" id="bestVal">0</div></div>
+    <div class="stat"><div class="stat-label">Time</div><div class="stat-value" id="timeVal">60</div></div>
+  </div>
+  <div id="timerBar"><div id="timerFill"></div></div>
+  <div id="comboWrap"><div id="comboText"></div></div>
+  <canvas id="canvas"></canvas>
+</div>
+
+<div id="overlay">
+  <div id="overlayIcon">🐹</div>
+  <div id="overlayTitle">MOLE BASH</div>
+  <div id="overlayMsg">Whack the moles as fast as you can!<br>60 seconds. Combos = bonus points.</div>
+  <div id="overlayScore"></div>
+  <button id="overlayBtn">PLAY</button>
+  <div id="bestLine"></div>
+</div>
+
+<script>
+'use strict';
+
+// ── Config ──────────────────────────────────────────────────────────────────
+const COLS = 3, ROWS = 3;
+const TOTAL_TIME = 60;
+const GRID_PAD = 16;
+const HOLE_COLORS = { bg:'#2d1a5c', rim:'#3e2878', dirt:'#8b5e3c', darkDirt:'#6b4530' };
+const MOLE_BODY  = '#a0522d';
+const MOLE_FACE  = '#d2956e';
+const MOLE_EYE   = '#1a0a2e';
+const MOLE_NOSE  = '#7b3f26';
+const MOLE_CHEEK = 'rgba(255,120,100,0.4)';
+const MOLE_STAR  = '#ffcc00';
+const GOLDEN_MOLE_COL = '#ffd700';
+
+// ── State ────────────────────────────────────────────────────────────────────
+let canvas, ctx, W, H, cellW, cellH, holeR, moleR;
+let score, best, timeLeft, combo, comboTimer, lastComboTime;
+let moles = [];           // array of mole objects per cell
+let gameRunning = false;
+let spawnInterval = null;
+let tickInterval  = null;
+let hitParticles  = [];
+let flashCells    = [];
+
+// ── DOM refs ─────────────────────────────────────────────────────────────────
+const scoreVal  = document.getElementById('scoreVal');
+const bestVal   = document.getElementById('bestVal');
+const timeVal   = document.getElementById('timeVal');
+const timerFill = document.getElementById('timerFill');
+const comboText = document.getElementById('comboText');
+const overlay   = document.getElementById('overlay');
+const overlayIcon  = document.getElementById('overlayIcon');
+const overlayTitle = document.getElementById('overlayTitle');
+const overlayMsg   = document.getElementById('overlayMsg');
+const overlayScore = document.getElementById('overlayScore');
+const overlayBtn   = document.getElementById('overlayBtn');
+const bestLine     = document.getElementById('bestLine');
+
+// ── Init canvas ───────────────────────────────────────────────────────────────
+function resize() {
+  const uiPad = 12;
+  const topH   = 48 + 8 + 24; // topBar + timerBar + comboWrap
+  const avail  = Math.min(window.innerWidth, 420) - uiPad * 2;
+  const availH = window.innerHeight - topH - 32;
+  const size   = Math.min(avail, availH);
+  W = H = size;
+  canvas.width  = W;
+  canvas.height = H;
+  cellW = (W - GRID_PAD * 2) / COLS;
+  cellH = (H - GRID_PAD * 2) / ROWS;
+  holeR = Math.min(cellW, cellH) * 0.36;
+  moleR = holeR * 0.92;
+}
+
+// ── Mole class ─────────────────────────────────────────────────────────────
+function makeMole(col, row) {
+  const golden = Math.random() < 0.08; // 8% golden = 3x points
+  return {
+    col, row,
+    golden,
+    state: 'rising',  // rising | up | falling | dead
+    y: 0,            // 0=hidden, 1=fully shown (fraction)
+    upTime: golden ? 900 + Math.random() * 400 : 1400 + Math.random() * 600,
+    upElapsed: 0,
+    riseSpeed: 0.06 + Math.random() * 0.03,
+    fallSpeed: 0.07 + Math.random() * 0.03,
+    whacked: false,
+    whackAnim: 0,    // 0→1 for hit flash
+    stars: [],
+  };
+}
+
+// ── Spawn logic ───────────────────────────────────────────────────────────────
+function getOccupied() {
+  return new Set(moles.map(m => `${m.col},${m.row}`));
+}
+
+function trySpawn() {
+  const occ  = getOccupied();
+  const free = [];
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++)
+      if (!occ.has(`${c},${r}`)) free.push([c, r]);
+  if (free.length === 0) return;
+
+  // max 3 simultaneous moles
+  const alive = moles.filter(m => !m.whacked && m.state !== 'dead');
+  if (alive.length >= 3) return;
+
+  const [c, r] = free[Math.floor(Math.random() * free.length)];
+  moles.push(makeMole(c, r));
+}
+
+// ── Spawn interval based on elapsed time ─────────────────────────────────────
+function spawnIntervalMs() {
+  const elapsed = TOTAL_TIME - timeLeft;
+  if (elapsed < 10) return 1400;
+  if (elapsed < 20) return 1100;
+  if (elapsed < 35) return 850;
+  if (elapsed < 50) return 650;
+  return 500;
+}
+
+// ── Game loop ─────────────────────────────────────────────────────────────────
+let lastTs = 0;
+function loop(ts) {
+  if (!gameRunning) return;
+  const dt = Math.min(ts - lastTs, 80); // cap at 80ms
+  lastTs = ts;
+  update(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
+
+function update(dt) {
+  // update moles
+  moles = moles.filter(m => !(m.whacked && m.y <= 0 && m.state === 'dead'));
+
+  for (const m of moles) {
+    if (m.whacked) {
+      m.y = Math.max(0, m.y - m.fallSpeed * 2 * (dt / 16));
+      m.whackAnim = Math.min(1, m.whackAnim + 0.08 * (dt / 16));
+      if (m.y <= 0) m.state = 'dead';
+      continue;
+    }
+    switch (m.state) {
+      case 'rising':
+        m.y = Math.min(1, m.y + m.riseSpeed * (dt / 16));
+        if (m.y >= 1) m.state = 'up';
+        break;
+      case 'up':
+        m.upElapsed += dt;
+        if (m.upElapsed >= m.upTime) m.state = 'falling';
+        break;
+      case 'falling':
+        m.y = Math.max(0, m.y - m.fallSpeed * (dt / 16));
+        if (m.y <= 0) m.state = 'dead';
+        break;
+    }
+  }
+
+  // update particles
+  for (const p of hitParticles) {
+    p.x += p.vx * (dt / 16);
+    p.y += p.vy * (dt / 16);
+    p.vy += 0.3 * (dt / 16);
+    p.life -= dt / 600;
+  }
+  hitParticles = hitParticles.filter(p => p.life > 0);
+
+  // flash cells
+  for (const f of flashCells) {
+    f.alpha -= dt / 300;
+  }
+  flashCells = flashCells.filter(f => f.alpha > 0);
+
+  // combo decay
+  if (combo > 0 && Date.now() - lastComboTime > 2000) {
+    combo = 0;
+    comboText.style.opacity = '0';
+  }
+}
+
+// ── Draw ──────────────────────────────────────────────────────────────────────
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+
+  // background gradient
+  const bg = ctx.createRadialGradient(W/2, H/2, 0, W/2, H/2, W*0.7);
+  bg.addColorStop(0, '#2d1a5c');
+  bg.addColorStop(1, '#0f0720');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  // draw holes (back to front)
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      drawHole(c, r);
+    }
+  }
+
+  // draw moles sorted by row (painter's order)
+  const sorted = [...moles].sort((a, b) => a.row - b.row);
+  for (const m of sorted) drawMole(m);
+
+  // flash cells
+  for (const f of flashCells) {
+    const {cx, cy} = cellCenter(f.col, f.row);
+    ctx.beginPath();
+    ctx.arc(cx, cy, holeR * 1.2, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(255,255,255,${f.alpha * 0.25})`;
+    ctx.fill();
+  }
+
+  // particles
+  for (const p of hitParticles) {
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(${p.cr},${p.cg},${p.cb},${p.life})`;
+    ctx.fill();
+  }
+}
+
+function cellCenter(col, row) {
+  return {
+    cx: GRID_PAD + col * cellW + cellW / 2,
+    cy: GRID_PAD + row * cellH + cellH / 2,
+  };
+}
+
+function drawHole(col, row) {
+  const {cx, cy} = cellCenter(col, row);
+
+  // outer shadow ring
+  const shadow = ctx.createRadialGradient(cx, cy + holeR * 0.1, holeR * 0.3, cx, cy, holeR);
+  shadow.addColorStop(0, 'rgba(0,0,0,0.5)');
+  shadow.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = shadow;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + holeR * 0.1, holeR * 1.15, holeR * 0.45, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // dirt ellipse
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, holeR, holeR * 0.38, 0, 0, Math.PI * 2);
+  ctx.fillStyle = HOLE_COLORS.darkDirt;
+  ctx.fill();
+
+  // dirt highlight
+  ctx.beginPath();
+  ctx.ellipse(cx, cy - holeR * 0.06, holeR * 0.75, holeR * 0.22, 0, 0, Math.PI * 2);
+  ctx.fillStyle = HOLE_COLORS.dirt;
+  ctx.fill();
+
+  // inner dark hole
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, holeR * 0.82, holeR * 0.28, 0, 0, Math.PI * 2);
+  ctx.fillStyle = '#080412';
+  ctx.fill();
+}
+
+function drawMole(m) {
+  const {cx, cy} = cellCenter(m.col, m.row);
+  const showFrac = m.y; // 0 hidden, 1 fully visible
+  if (showFrac <= 0) return;
+
+  // Mole sits in the hole: clip below hole rim
+  const holeTop = cy - holeR * 0.38 + 4;
+  const fullTop = cy - moleR * 1.6;
+  const moleTopY = holeTop - showFrac * (holeTop - fullTop);
+
+  const moleH = moleR * 1.7;
+  const moleW = moleR * 1.1;
+
+  // clip to avoid drawing below dirt
+  ctx.save();
+  // Clip: only draw above the dirt surface
+  ctx.beginPath();
+  ctx.rect(cx - moleW - 4, 0, moleW * 2 + 8, cy - holeR * 0.10);
+  ctx.clip();
+
+  // whack flash
+  let bodyColor = m.golden ? GOLDEN_MOLE_COL : MOLE_BODY;
+  if (m.whacked && m.whackAnim < 0.5) {
+    const t = m.whackAnim * 2;
+    bodyColor = lerpColor(bodyColor, '#ffffff', t);
+  }
+
+  // body ellipse
+  const bodyTopY = moleTopY + moleH * 0.3;
+  ctx.beginPath();
+  ctx.ellipse(cx, bodyTopY + moleH * 0.35, moleW, moleH * 0.5, 0, 0, Math.PI * 2);
+  ctx.fillStyle = bodyColor;
+  ctx.fill();
+
+  // head (circle)
+  const headR = moleR * 0.72;
+  const headCY = moleTopY + headR * 0.9;
+  ctx.beginPath();
+  ctx.arc(cx, headCY, headR, 0, Math.PI * 2);
+  ctx.fillStyle = bodyColor;
+  ctx.fill();
+
+  // face
+  const faceR = headR * 0.72;
+  ctx.beginPath();
+  ctx.ellipse(cx, headCY + headR * 0.08, faceR, faceR * 0.88, 0, 0, Math.PI * 2);
+  ctx.fillStyle = m.golden ? '#ffe580' : MOLE_FACE;
+  ctx.fill();
+
+  // eyes
+  const eyeY = headCY - headR * 0.18;
+  const eyeX = headR * 0.32;
+  const eyeR = headR * 0.14;
+  ctx.fillStyle = MOLE_EYE;
+  ctx.beginPath(); ctx.arc(cx - eyeX, eyeY, eyeR, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx + eyeX, eyeY, eyeR, 0, Math.PI*2); ctx.fill();
+  // eye shine
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  ctx.beginPath(); ctx.arc(cx - eyeX + eyeR*0.35, eyeY - eyeR*0.35, eyeR*0.38, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx + eyeX + eyeR*0.35, eyeY - eyeR*0.35, eyeR*0.38, 0, Math.PI*2); ctx.fill();
+
+  // nose
+  ctx.beginPath();
+  ctx.ellipse(cx, headCY + headR * 0.12, headR * 0.16, headR * 0.10, 0, 0, Math.PI * 2);
+  ctx.fillStyle = m.golden ? '#d4900a' : MOLE_NOSE;
+  ctx.fill();
+
+  // cheeks
+  ctx.beginPath();
+  ctx.arc(cx - headR * 0.42, headCY + headR * 0.22, headR * 0.18, 0, Math.PI * 2);
+  ctx.fillStyle = MOLE_CHEEK;
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(cx + headR * 0.42, headCY + headR * 0.22, headR * 0.18, 0, Math.PI * 2);
+  ctx.fill();
+
+  // ears
+  ctx.beginPath();
+  ctx.ellipse(cx - headR * 0.7, headCY - headR * 0.6, headR * 0.22, headR * 0.28, -0.4, 0, Math.PI*2);
+  ctx.fillStyle = bodyColor;
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(cx + headR * 0.7, headCY - headR * 0.6, headR * 0.22, headR * 0.28, 0.4, 0, Math.PI*2);
+  ctx.fillStyle = bodyColor;
+  ctx.fill();
+
+  // inner ear
+  ctx.beginPath();
+  ctx.ellipse(cx - headR * 0.7, headCY - headR * 0.6, headR * 0.12, headR * 0.18, -0.4, 0, Math.PI*2);
+  ctx.fillStyle = m.golden ? '#ffaa00' : '#c87090';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(cx + headR * 0.7, headCY - headR * 0.6, headR * 0.12, headR * 0.18, 0.4, 0, Math.PI*2);
+  ctx.fill();
+
+  // golden star crown
+  if (m.golden) {
+    ctx.fillStyle = '#ffcc00';
+    ctx.font = `${headR * 0.7}px serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('★', cx, headCY - headR * 1.1);
+  }
+
+  ctx.restore();
+}
+
+// ── Hit detection ─────────────────────────────────────────────────────────────
+function hitTest(px, py) {
+  for (const m of moles) {
+    if (m.whacked || m.state === 'dead' || m.y < 0.3) continue;
+    const {cx, cy} = cellCenter(m.col, m.row);
+    const headCY = cy - holeR * 0.38 - moleR * 0.72 * 0.9 * m.y;
+    const dx = px - cx, dy = py - headCY;
+    const headR = moleR * 0.72;
+    if (dx*dx + dy*dy < (headR * 1.5) * (headR * 1.5)) return m;
+  }
+  return null;
+}
+
+function onTap(px, py) {
+  if (!gameRunning) return;
+  const m = hitTest(px, py);
+  if (m) {
+    whackMole(m);
+  } else {
+    // miss — reset combo
+    if (combo > 1) {
+      combo = 0;
+      comboText.style.opacity = '0';
+    }
+  }
+}
+
+function whackMole(m) {
+  m.whacked = true;
+  const pts = m.golden ? 30 : 10;
+  combo++;
+  lastComboTime = Date.now();
+
+  const bonusPts = combo >= 3 ? pts * (1 + Math.floor(combo / 3)) : pts;
+  score += bonusPts;
+  scoreVal.textContent = score;
+
+  // combo display
+  if (combo >= 2) {
+    comboText.textContent = `${combo}x COMBO! +${bonusPts}`;
+    comboText.style.opacity = '1';
+    setTimeout(() => { comboText.style.opacity = '0'; }, 900);
+  }
+
+  // particles
+  spawnParticles(
+    GRID_PAD + m.col * cellW + cellW / 2,
+    GRID_PAD + m.row * cellH + cellH / 2 - holeR * 0.7,
+    m.golden ? [255, 215, 0] : [255, 120, 60]
+  );
+  flashCells.push({ col: m.col, row: m.row, alpha: 1 });
+}
+
+function spawnParticles(x, y, [cr, cg, cb]) {
+  for (let i = 0; i < 12; i++) {
+    const angle = (Math.PI * 2 * i) / 12 + Math.random() * 0.5;
+    const speed = 2 + Math.random() * 4;
+    hitParticles.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 2,
+      r: 2 + Math.random() * 3,
+      cr, cg, cb,
+      life: 0.7 + Math.random() * 0.3,
+    });
+  }
+}
+
+// ── Timer ─────────────────────────────────────────────────────────────────────
+function startTimer() {
+  timeLeft = TOTAL_TIME;
+  tickInterval = setInterval(() => {
+    timeLeft--;
+    timeVal.textContent = timeLeft;
+    timerFill.style.width = (timeLeft / TOTAL_TIME * 100) + '%';
+    if (timeLeft <= 10) {
+      timerFill.style.background = 'linear-gradient(90deg,#ff4444,#ff8800)';
+    }
+    if (timeLeft <= 0) endGame();
+  }, 1000);
+}
+
+function startSpawner() {
+  let lastSpawnTime = 0;
+  function scheduleSpawn() {
+    if (!gameRunning) return;
+    const delay = spawnIntervalMs();
+    spawnInterval = setTimeout(() => {
+      trySpawn();
+      scheduleSpawn();
+    }, delay);
+  }
+  scheduleSpawn();
+}
+
+// ── Game control ──────────────────────────────────────────────────────────────
+function startGame() {
+  score = 0;
+  combo = 0;
+  moles = [];
+  hitParticles = [];
+  flashCells = [];
+  lastTs = performance.now();
+  gameRunning = true;
+
+  scoreVal.textContent = '0';
+  timeVal.textContent  = TOTAL_TIME;
+  timerFill.style.width = '100%';
+  timerFill.style.background = 'linear-gradient(90deg,#00d4ff,#7b2ff7)';
+  comboText.style.opacity = '0';
+
+  overlay.classList.add('hidden');
+  startTimer();
+  startSpawner();
+  requestAnimationFrame(loop);
+}
+
+function endGame() {
+  gameRunning = false;
+  clearInterval(tickInterval);
+  clearTimeout(spawnInterval);
+
+  if (score > best) {
+    best = score;
+    bestVal.textContent = best;
+    localStorage.setItem('mole_bash_best', best);
+  }
+
+  // show overlay
+  overlayIcon.textContent  = '🏆';
+  overlayTitle.textContent = 'GAME OVER';
+  overlayMsg.textContent   = score >= 200 ? 'Incredible reflexes!' :
+                             score >= 100 ? 'Nice bashing skills!' : 'Keep practicing!';
+  overlayScore.textContent = score + ' pts';
+  overlayScore.style.display = 'block';
+  overlayBtn.textContent   = 'PLAY AGAIN';
+  bestLine.textContent     = best > 0 ? `Best: ${best} pts` : '';
+  overlay.classList.remove('hidden');
+}
+
+// ── Input ─────────────────────────────────────────────────────────────────────
+canvas.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = W / rect.width;
+  const scaleY = H / rect.height;
+  onTap((e.clientX - rect.left) * scaleX, (e.clientY - rect.top) * scaleY);
+});
+
+overlayBtn.addEventListener('click', startGame);
+overlayBtn.addEventListener('touchend', e => { e.preventDefault(); startGame(); });
+
+// ── Utils ─────────────────────────────────────────────────────────────────────
+function lerpColor(a, b, t) {
+  const ah = parseInt(a.replace('#',''), 16);
+  const bh = parseInt(b.replace('#',''), 16);
+  const ar = (ah >> 16) & 0xff, ag = (ah >> 8) & 0xff, ab = ah & 0xff;
+  const br = (bh >> 16) & 0xff, bg = (bh >> 8) & 0xff, bb = bh & 0xff;
+  const r = Math.round(ar + (br-ar)*t);
+  const g = Math.round(ag + (bg-ag)*t);
+  const bl = Math.round(ab + (bb-ab)*t);
+  return `rgb(${r},${g},${bl})`;
+}
+
+// ── Bootstrap ─────────────────────────────────────────────────────────────────
+function init() {
+  canvas = document.getElementById('canvas');
+  ctx = canvas.getContext('2d');
+  best = parseInt(localStorage.getItem('mole_bash_best') || '0');
+  bestVal.textContent = best;
+  if (best > 0) bestLine.textContent = `Best: ${best} pts`;
+
+  window.addEventListener('resize', () => {
+    resize();
+    if (!gameRunning) draw();
+  });
+  resize();
+
+  // draw idle background
+  draw();
+}
+
+init();
+</script>
+</body>
+</html>

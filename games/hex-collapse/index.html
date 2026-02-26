@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Hex Collapse</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0d0517;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    font-family: 'Courier New', Courier, monospace;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  canvas {
+    display: block;
+    touch-action: none;
+    image-rendering: pixelated;
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+/* =====================================================================
+   HEX COLLAPSE — single-file HTML5 canvas puzzle game
+   Tetris × Match-3 on a hex grid. Warm sunset palette.
+   ===================================================================== */
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+// ── Constants ─────────────────────────────────────────────────────────
+const COLS = 7;
+const ROWS = 13;
+const PIECE_LEN = 3;
+
+// Warm sunset palette
+const COLORS = [
+  '#FF6B6B', // coral
+  '#FFA040', // amber
+  '#FFD700', // golden
+  '#8B2FC9', // deep purple
+  '#2DD4BF', // teal
+  '#FF4E8B', // rose
+];
+
+// ── Responsive sizing ─────────────────────────────────────────────────
+let HEX_R, HEX_W, HEX_H, OX, OY;
+let cw, ch;
+
+function resize() {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  // pointy-top hex: w = sqrt(3)*r, h = 2*r
+  // grid needs: COLS * sqrt(3)*r + sqrt(3)*r/2  (odd-col offset)
+  //             ROWS * 1.5*r + 0.5*r
+  const maxR_byW = (vw * 0.92) / (Math.sqrt(3) * (COLS + 0.5));
+  const maxR_byH = (vh * 0.92) / (1.5 * ROWS + 0.5);
+  HEX_R = Math.floor(Math.min(maxR_byW, maxR_byH, 38));
+  HEX_W = Math.sqrt(3) * HEX_R;
+  HEX_H = 2 * HEX_R;
+  cw = Math.ceil(HEX_W * (COLS + 0.5) + 20);
+  ch = Math.ceil(1.5 * HEX_R * ROWS + 0.5 * HEX_R + 20);
+  canvas.width = cw;
+  canvas.height = ch;
+  canvas.style.width  = cw + 'px';
+  canvas.style.height = ch + 'px';
+  OX = HEX_W / 2 + 10;
+  OY = HEX_R + 10;
+}
+resize();
+window.addEventListener('resize', () => { resize(); });
+
+// ── Audio ─────────────────────────────────────────────────────────────
+let audioCtx = null;
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+function playTone(freq, type, duration, vol = 0.18, detune = 0) {
+  try {
+    const ac = getAudioCtx();
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    osc.detune.value = detune;
+    gain.gain.setValueAtTime(vol, ac.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + duration);
+    osc.connect(gain);
+    gain.connect(ac.destination);
+    osc.start();
+    osc.stop(ac.currentTime + duration);
+  } catch(_) {}
+}
+function sfxMove()    { playTone(320, 'square', 0.06, 0.12); }
+function sfxRotate()  { playTone(480, 'triangle', 0.08, 0.14); }
+function sfxLand()    { playTone(160, 'square', 0.12, 0.2, -200); }
+function sfxMatch(chain) {
+  const freqs = [523, 659, 784, 988, 1175, 1397];
+  const f = freqs[Math.min(chain, freqs.length - 1)];
+  playTone(f, 'sine', 0.25, 0.22 + chain * 0.04);
+  if (chain > 1) setTimeout(() => playTone(f * 1.5, 'sine', 0.2, 0.15), 80);
+}
+function sfxGameOver() {
+  playTone(220, 'sawtooth', 0.4, 0.2);
+  setTimeout(() => playTone(180, 'sawtooth', 0.4, 0.2), 150);
+  setTimeout(() => playTone(130, 'sawtooth', 0.6, 0.2), 350);
+}
+function sfxStart() {
+  [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => playTone(f, 'sine', 0.15, 0.18), i * 80));
+}
+function sfxDrop()    { playTone(240, 'square', 0.09, 0.15, -400); }
+
+// ── Hex geometry ──────────────────────────────────────────────────────
+// Pointy-top hexagon. Odd columns shifted down by HEX_R * 0.5.
+function hexCenter(col, row) {
+  const x = OX + col * HEX_W;
+  const y = OY + row * HEX_R * 1.5 + (col % 2 === 1 ? HEX_R * 0.75 : 0);
+  return { x, y };
+}
+function drawHex(cx, cy, r, fill, stroke, alpha = 1) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const a = Math.PI / 180 * (60 * i - 30);
+    const px = cx + r * Math.cos(a);
+    const py = cy + r * Math.sin(a);
+    i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.fillStyle = fill;
+  ctx.fill();
+  if (stroke) {
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = r > 20 ? 2 : 1;
+    ctx.stroke();
+  }
+  // inner gloss
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const a = Math.PI / 180 * (60 * i - 30);
+    const pr = r * 0.6;
+    const px = cx + pr * Math.cos(a);
+    const py = cy + pr * Math.sin(a);
+    i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  const grd = ctx.createRadialGradient(cx - r * 0.15, cy - r * 0.2, r * 0.05, cx, cy, r * 0.7);
+  grd.addColorStop(0, 'rgba(255,255,255,0.28)');
+  grd.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = grd;
+  ctx.fill();
+  ctx.restore();
+}
+function drawHexOutline(cx, cy, r, stroke, lw = 2) {
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const a = Math.PI / 180 * (60 * i - 30);
+    const px = cx + r * Math.cos(a);
+    const py = cy + r * Math.sin(a);
+    i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = lw;
+  ctx.stroke();
+}
+
+// ── Hex adjacency (odd-q offset, pointy-top) ──────────────────────────
+function neighbors(col, row) {
+  const odd = col % 2 === 1;
+  return [
+    [col,   row - 1],
+    [col,   row + 1],
+    [col - 1, row + (odd ? 0 : -1)],
+    [col + 1, row + (odd ? 0 : -1)],
+    [col - 1, row + (odd ? 1 : 0)],
+    [col + 1, row + (odd ? 1 : 0)],
+  ].filter(([c, r]) => c >= 0 && c < COLS && r >= 0 && r < ROWS);
+}
+
+// ── Grid ──────────────────────────────────────────────────────────────
+let grid; // grid[row][col] = colorIndex | -1
+
+function emptyGrid() {
+  return Array.from({ length: ROWS }, () => Array(COLS).fill(-1));
+}
+
+// ── Piece ─────────────────────────────────────────────────────────────
+// A "piece" is PIECE_LEN stacked hexes falling in one column.
+let piece = { col: 0, row: -PIECE_LEN, colors: [] };
+
+function newPiece() {
+  const col = Math.floor(COLS / 2);
+  const colors = Array.from({ length: PIECE_LEN }, () => Math.floor(Math.random() * COLORS.length));
+  piece = { col, row: -PIECE_LEN, colors };
+}
+
+function rotatePiece() {
+  // rotate colors upward: [A,B,C] → [C,A,B]
+  const last = piece.colors.pop();
+  piece.colors.unshift(last);
+  sfxRotate();
+}
+
+function canPlace(col, row) {
+  for (let i = 0; i < PIECE_LEN; i++) {
+    const r = row + i;
+    if (r < 0) continue;
+    if (r >= ROWS) return false;
+    if (grid[r][col] !== -1) return false;
+  }
+  return true;
+}
+
+function lockPiece() {
+  for (let i = 0; i < PIECE_LEN; i++) {
+    const r = piece.row + i;
+    if (r < 0) continue;
+    if (r >= ROWS || grid[r][piece.col] !== -1) {
+      // collision during fall — game over signal
+      return false;
+    }
+    grid[r][piece.col] = piece.colors[i];
+  }
+  return true;
+}
+
+// ── Matching ──────────────────────────────────────────────────────────
+function findGroups() {
+  const visited = Array.from({ length: ROWS }, () => Array(COLS).fill(false));
+  const groups = [];
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      if (grid[r][c] === -1 || visited[r][c]) continue;
+      const color = grid[r][c];
+      // BFS
+      const group = [];
+      const queue = [[c, r]];
+      visited[r][c] = true;
+      while (queue.length) {
+        const [cc, cr] = queue.shift();
+        group.push([cc, cr]);
+        for (const [nc, nr] of neighbors(cc, cr)) {
+          if (!visited[nr][nc] && grid[nr][nc] === color) {
+            visited[nr][nc] = true;
+            queue.push([nc, nr]);
+          }
+        }
+      }
+      if (group.length >= 3) groups.push(group);
+    }
+  }
+  return groups;
+}
+
+function applyGravity() {
+  // Each column: compress non-empty cells to bottom.
+  for (let c = 0; c < COLS; c++) {
+    const cells = [];
+    for (let r = 0; r < ROWS; r++) {
+      if (grid[r][c] !== -1) cells.push(grid[r][c]);
+    }
+    for (let r = 0; r < ROWS; r++) {
+      const offset = ROWS - cells.length;
+      grid[r][c] = r < offset ? -1 : cells[r - offset];
+    }
+  }
+}
+
+// ── Particles ─────────────────────────────────────────────────────────
+let particles = [];
+
+function spawnParticles(cx, cy, color, count = 10) {
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 1.5 + Math.random() * 3.5;
+    particles.push({
+      x: cx, y: cy,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      color,
+      life: 1,
+      decay: 0.025 + Math.random() * 0.025,
+      size: HEX_R * (0.12 + Math.random() * 0.18),
+    });
+  }
+}
+
+function spawnChainBurst(cx, cy, chain) {
+  const count = 8 + chain * 4;
+  const sparkColor = ['#FFD700', '#FFF', '#FF6B6B', '#2DD4BF'][Math.min(chain - 1, 3)];
+  for (let i = 0; i < count; i++) {
+    const angle = (i / count) * Math.PI * 2;
+    const speed = 2 + Math.random() * (2 + chain);
+    particles.push({
+      x: cx, y: cy,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      color: sparkColor,
+      life: 1,
+      decay: 0.018 + Math.random() * 0.02,
+      size: HEX_R * (0.15 + Math.random() * 0.1 + chain * 0.02),
+    });
+  }
+}
+
+function updateParticles() {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.12;
+    p.life -= p.decay;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+
+function drawParticles() {
+  for (const p of particles) {
+    ctx.save();
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+// ── Score & level ─────────────────────────────────────────────────────
+let score, level, linesCleared, dropInterval, lastDrop, combo;
+
+function initGame() {
+  grid = emptyGrid();
+  score = 0;
+  level = 1;
+  linesCleared = 0;
+  combo = 0;
+  dropInterval = 900;
+  lastDrop = performance.now();
+  particles = [];
+  flashCells = [];
+  newPiece();
+  nextPieceColors = Array.from({ length: PIECE_LEN }, () => Math.floor(Math.random() * COLORS.length));
+}
+
+function calcScore(groupSizes, chain) {
+  let pts = 0;
+  for (const sz of groupSizes) pts += sz * sz * 10;
+  pts *= chain;
+  return pts;
+}
+
+// ── Flash animation ───────────────────────────────────────────────────
+let flashCells = []; // [{col, row, timer}]
+
+function addFlash(cells) {
+  for (const [c, r] of cells) {
+    flashCells.push({ col: c, row: r, timer: 1.0 });
+  }
+}
+function updateFlash() {
+  for (let i = flashCells.length - 1; i >= 0; i--) {
+    flashCells[i].timer -= 0.05;
+    if (flashCells[i].timer <= 0) flashCells.splice(i, 1);
+  }
+}
+function getFlash(c, r) {
+  for (const f of flashCells) {
+    if (f.col === c && f.row === r) return f.timer;
+  }
+  return 0;
+}
+
+// ── Game states ───────────────────────────────────────────────────────
+// 'start' | 'playing' | 'matching' | 'gameover'
+let state = 'start';
+let matchQueue = []; // pending chain resolves
+let matchTimer = 0;
+let nextPieceColors = [];
+let highScore = +(localStorage.getItem('hexCollapseHS') || 0);
+
+// ── Drop sequence ──────────────────────────────────────────────────────
+function doLock() {
+  sfxLand();
+  const ok = lockPiece();
+  if (!ok) {
+    endGame();
+    return;
+  }
+  // check if top rows are filled (game over condition)
+  for (let c = 0; c < COLS; c++) {
+    if (grid[0][c] !== -1) {
+      endGame();
+      return;
+    }
+  }
+  // begin match resolution
+  state = 'matching';
+  combo = 0;
+  resolveMatches();
+}
+
+function resolveMatches() {
+  const groups = findGroups();
+  if (groups.length === 0) {
+    // No match — spawn next piece
+    combo = 0;
+    spawnNext();
+    return;
+  }
+  combo++;
+  const sizes = groups.map(g => g.length);
+  score += calcScore(sizes, combo);
+  linesCleared += groups.reduce((a, g) => a + g.length, 0);
+  level = 1 + Math.floor(linesCleared / 30);
+  dropInterval = Math.max(150, 900 - (level - 1) * 70);
+
+  sfxMatch(combo);
+
+  // flash & particles
+  let allCells = [];
+  for (const g of groups) allCells = allCells.concat(g);
+  addFlash(allCells);
+
+  let midX = 0, midY = 0;
+  for (const [c, r] of allCells) {
+    const { x, y } = hexCenter(c, r);
+    midX += x; midY += y;
+  }
+  midX /= allCells.length; midY /= allCells.length;
+
+  for (const [c, r] of allCells) {
+    const { x, y } = hexCenter(c, r);
+    const colorIdx = grid[r][c];
+    spawnParticles(x, y, COLORS[colorIdx], 6);
+  }
+  if (combo > 1) spawnChainBurst(midX, midY, combo);
+
+  // Clear cells
+  for (const [c, r] of allCells) grid[r][c] = -1;
+
+  // After flash, apply gravity and re-check
+  setTimeout(() => {
+    applyGravity();
+    resolveMatches();
+  }, 420);
+}
+
+function spawnNext() {
+  piece = {
+    col: Math.floor(COLS / 2),
+    row: -PIECE_LEN,
+    colors: nextPieceColors.slice(),
+  };
+  nextPieceColors = Array.from({ length: PIECE_LEN }, () => Math.floor(Math.random() * COLORS.length));
+  if (!canPlace(piece.col, piece.row + 1) && piece.row + PIECE_LEN > 0) {
+    endGame();
+    return;
+  }
+  state = 'playing';
+  lastDrop = performance.now();
+}
+
+function endGame() {
+  sfxGameOver();
+  if (score > highScore) {
+    highScore = score;
+    localStorage.setItem('hexCollapseHS', highScore);
+  }
+  state = 'gameover';
+}
+
+// ── Input ─────────────────────────────────────────────────────────────
+function tryMoveLeft() {
+  if (state !== 'playing') return;
+  if (piece.col > 0 && canPlace(piece.col - 1, piece.row)) {
+    piece.col--;
+    sfxMove();
+  }
+}
+function tryMoveRight() {
+  if (state !== 'playing') return;
+  if (piece.col < COLS - 1 && canPlace(piece.col + 1, piece.row)) {
+    piece.col++;
+    sfxMove();
+  }
+}
+function tryDrop() {
+  if (state !== 'playing') return;
+  // Hard drop
+  while (canPlace(piece.col, piece.row + 1)) piece.row++;
+  sfxDrop();
+  doLock();
+}
+function tryRotate() {
+  if (state !== 'playing') return;
+  rotatePiece();
+}
+function trySoftDrop() {
+  if (state !== 'playing') return;
+  if (canPlace(piece.col, piece.row + 1)) {
+    piece.row++;
+    lastDrop = performance.now();
+  } else {
+    doLock();
+  }
+}
+
+document.addEventListener('keydown', e => {
+  if (state === 'start' || state === 'gameover') {
+    sfxStart();
+    initGame();
+    return;
+  }
+  switch (e.key) {
+    case 'ArrowLeft':  case 'a': case 'A': tryMoveLeft();  break;
+    case 'ArrowRight': case 'd': case 'D': tryMoveRight(); break;
+    case 'ArrowDown':  case 's': case 'S': trySoftDrop();  break;
+    case 'ArrowUp':    case 'w': case 'W': tryRotate();    break;
+    case ' ':                              tryDrop();       break;
+  }
+  e.preventDefault();
+});
+
+// ── Touch input ───────────────────────────────────────────────────────
+let touchStartX = 0, touchStartY = 0, touchStartTime = 0;
+const SWIPE_DIST = 30;
+
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  const t = e.touches[0];
+  touchStartX = t.clientX;
+  touchStartY = t.clientY;
+  touchStartTime = Date.now();
+  if (state === 'start' || state === 'gameover') {
+    sfxStart();
+    initGame();
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchend', e => {
+  e.preventDefault();
+  if (state !== 'playing') return;
+  const t = e.changedTouches[0];
+  const dx = t.clientX - touchStartX;
+  const dy = t.clientY - touchStartY;
+  const dt = Date.now() - touchStartTime;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+
+  if (dist < 15 && dt < 300) {
+    // Tap → rotate
+    tryRotate();
+  } else if (Math.abs(dx) > SWIPE_DIST && Math.abs(dx) > Math.abs(dy)) {
+    if (dx < 0) tryMoveLeft(); else tryMoveRight();
+  } else if (dy > SWIPE_DIST && Math.abs(dy) > Math.abs(dx)) {
+    if (dt < 200) tryDrop(); else trySoftDrop();
+  }
+}, { passive: false });
+
+// ── Drawing ───────────────────────────────────────────────────────────
+function drawBackground() {
+  const grad = ctx.createLinearGradient(0, 0, 0, ch);
+  grad.addColorStop(0, '#1a0535');
+  grad.addColorStop(1, '#0d021f');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, cw, ch);
+}
+
+function drawGrid() {
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const { x, y } = hexCenter(c, r);
+      const colorIdx = grid[r][c];
+      const flash = getFlash(c, r);
+      if (colorIdx === -1) {
+        // empty cell
+        drawHex(x, y, HEX_R - 1, 'rgba(255,255,255,0.04)', 'rgba(255,255,255,0.09)');
+      } else {
+        let fillColor = COLORS[colorIdx];
+        let alpha = 1;
+        if (flash > 0) {
+          alpha = 0.4 + flash * 0.6;
+          // white flash
+          ctx.save();
+          ctx.globalAlpha = flash * 0.7;
+          drawHex(x, y, HEX_R - 1, '#fff', null);
+          ctx.restore();
+        }
+        drawHex(x, y, HEX_R - 1, fillColor, 'rgba(0,0,0,0.3)', alpha);
+      }
+    }
+  }
+}
+
+function drawPiece() {
+  if (state !== 'playing') return;
+  // Ghost
+  let ghostRow = piece.row;
+  while (canPlace(piece.col, ghostRow + 1)) ghostRow++;
+  for (let i = 0; i < PIECE_LEN; i++) {
+    const gr = ghostRow + i;
+    if (gr < 0 || gr >= ROWS) continue;
+    const { x, y } = hexCenter(piece.col, gr);
+    drawHex(x, y, HEX_R - 1, 'rgba(255,255,255,0.08)', 'rgba(255,255,255,0.25)');
+  }
+  // Actual piece
+  for (let i = 0; i < PIECE_LEN; i++) {
+    const r = piece.row + i;
+    if (r < 0) continue;
+    const { x, y } = hexCenter(piece.col, r);
+    const col = COLORS[piece.colors[i]];
+    drawHex(x, y, HEX_R - 1, col, 'rgba(0,0,0,0.3)');
+    // border glow
+    ctx.save();
+    ctx.shadowColor = col;
+    ctx.shadowBlur = 10;
+    drawHexOutline(x, y, HEX_R - 2, col, 1.5);
+    ctx.restore();
+  }
+}
+
+function drawNextPiece() {
+  const panelX = cw - HEX_W * 1.4;
+  const panelY = HEX_R * 2;
+  ctx.fillStyle = 'rgba(255,255,255,0.06)';
+  ctx.beginPath();
+  ctx.roundRect(panelX - HEX_W * 0.7, panelY - HEX_R * 0.5, HEX_W * 1.8, HEX_R * (PIECE_LEN * 1.8 + 1), 8);
+  ctx.fill();
+
+  ctx.fillStyle = 'rgba(255,200,100,0.6)';
+  ctx.font = `${Math.max(9, HEX_R * 0.45)}px monospace`;
+  ctx.textAlign = 'center';
+  ctx.fillText('NEXT', panelX, panelY + HEX_R * 0.3);
+
+  for (let i = 0; i < PIECE_LEN; i++) {
+    const nx = panelX;
+    const ny = panelY + HEX_R * 1.2 + i * HEX_R * 1.55;
+    drawHex(nx, ny, HEX_R * 0.72, COLORS[nextPieceColors[i]], 'rgba(0,0,0,0.3)');
+  }
+}
+
+function drawHUD() {
+  const fSize = Math.max(10, HEX_R * 0.5);
+  ctx.font = `bold ${fSize}px monospace`;
+  ctx.textAlign = 'left';
+  ctx.fillStyle = 'rgba(255,200,100,0.8)';
+  ctx.fillText('SCORE', 8, fSize + 4);
+  ctx.fillStyle = '#fff';
+  ctx.font = `bold ${fSize * 1.3}px monospace`;
+  ctx.fillText(score, 8, fSize * 2.6);
+
+  ctx.font = `${fSize * 0.85}px monospace`;
+  ctx.fillStyle = 'rgba(200,180,255,0.7)';
+  ctx.fillText(`LV ${level}`, 8, fSize * 4.0);
+
+  ctx.fillStyle = 'rgba(150,150,180,0.5)';
+  ctx.font = `${fSize * 0.75}px monospace`;
+  ctx.fillText(`HI ${highScore}`, 8, fSize * 5.2);
+
+  if (combo > 1) {
+    const cx2 = cw / 2;
+    const cy2 = ch * 0.08;
+    ctx.save();
+    ctx.font = `bold ${fSize * 1.6}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = `hsl(${(Date.now() / 8) % 360}, 100%, 65%)`;
+    ctx.shadowColor = '#FFD700';
+    ctx.shadowBlur = 16;
+    ctx.fillText(`×${combo} CHAIN!`, cx2, cy2);
+    ctx.restore();
+  }
+}
+
+function drawControls() {
+  if (HEX_R < 20) return;
+  const fSize = Math.max(8, HEX_R * 0.38);
+  ctx.font = `${fSize}px monospace`;
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(150,130,200,0.45)';
+  const lines = ['←/→ MOVE', '↑ ROTATE', '↓/SPC DROP'];
+  lines.forEach((l, i) => ctx.fillText(l, cw / 2, ch - (lines.length - i) * (fSize + 4) - 4));
+}
+
+// ── Screens ───────────────────────────────────────────────────────────
+let titleAnim = 0;
+
+function drawStartScreen() {
+  titleAnim += 0.018;
+  drawBackground();
+
+  // animated hex field background
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const { x, y } = hexCenter(c, r);
+      const phase = (r * 0.3 + c * 0.5 + titleAnim) % (Math.PI * 2);
+      const ci = Math.floor(((Math.sin(phase) + 1) / 2) * COLORS.length) % COLORS.length;
+      drawHex(x, y, HEX_R - 1, COLORS[ci], null, 0.25);
+    }
+  }
+
+  // Overlay
+  ctx.fillStyle = 'rgba(13,5,30,0.72)';
+  ctx.fillRect(0, 0, cw, ch);
+
+  const cx = cw / 2;
+  const cy = ch / 2;
+  const fBig = Math.max(18, HEX_R * 1.1);
+  const fMed = Math.max(12, HEX_R * 0.6);
+  const fSm  = Math.max(9,  HEX_R * 0.42);
+
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.font = `bold ${fBig}px monospace`;
+  ctx.shadowColor = '#FF6B6B';
+  ctx.shadowBlur = 24;
+  ctx.fillStyle = '#FF6B6B';
+  ctx.fillText('HEX', cx, cy - fBig * 1.8);
+  ctx.shadowColor = '#FFA040';
+  ctx.fillStyle = '#FFA040';
+  ctx.fillText('COLLAPSE', cx, cy - fBig * 0.6);
+  ctx.restore();
+
+  ctx.textAlign = 'center';
+  ctx.font = `${fMed}px monospace`;
+  ctx.fillStyle = 'rgba(200,220,255,0.85)';
+  ctx.fillText('Match 3+ hexagons to collapse!', cx, cy + fMed * 0.5);
+
+  const pulse = 0.7 + 0.3 * Math.sin(Date.now() / 400);
+  ctx.font = `${fSm * 1.1}px monospace`;
+  ctx.fillStyle = `rgba(255,215,0,${pulse})`;
+  ctx.fillText('TAP or PRESS ANY KEY to start', cx, cy + fMed * 2.2);
+
+  if (highScore > 0) {
+    ctx.font = `${fSm}px monospace`;
+    ctx.fillStyle = 'rgba(180,160,255,0.6)';
+    ctx.fillText(`BEST: ${highScore}`, cx, cy + fMed * 3.4);
+  }
+
+  // mini how-to
+  const tips = ['← → move  ↑ rotate  ↓ soft drop', 'SPACE = hard drop | SWIPE on mobile'];
+  tips.forEach((t, i) => {
+    ctx.font = `${fSm * 0.85}px monospace`;
+    ctx.fillStyle = 'rgba(140,120,180,0.5)';
+    ctx.fillText(t, cx, ch - (tips.length - i) * (fSm + 5) - 10);
+  });
+}
+
+function drawGameOverScreen() {
+  // translucent overlay on top of frozen board
+  ctx.fillStyle = 'rgba(13,5,30,0.78)';
+  ctx.fillRect(0, 0, cw, ch);
+
+  const cx = cw / 2;
+  const cy = ch * 0.4;
+  const fBig = Math.max(16, HEX_R * 0.95);
+  const fMed = Math.max(11, HEX_R * 0.56);
+  const fSm  = Math.max(9,  HEX_R * 0.42);
+
+  ctx.textAlign = 'center';
+  ctx.font = `bold ${fBig}px monospace`;
+  ctx.fillStyle = '#FF6B6B';
+  ctx.shadowColor = '#FF4E8B';
+  ctx.shadowBlur = 18;
+  ctx.fillText('GAME OVER', cx, cy);
+  ctx.shadowBlur = 0;
+
+  ctx.font = `${fMed}px monospace`;
+  ctx.fillStyle = '#FFD700';
+  ctx.fillText(`SCORE: ${score}`, cx, cy + fMed * 1.6);
+
+  if (score >= highScore) {
+    ctx.font = `${fMed * 0.85}px monospace`;
+    ctx.fillStyle = '#FFA040';
+    ctx.fillText('✦ NEW HIGH SCORE ✦', cx, cy + fMed * 2.8);
+  } else {
+    ctx.font = `${fSm}px monospace`;
+    ctx.fillStyle = 'rgba(180,160,255,0.7)';
+    ctx.fillText(`BEST: ${highScore}`, cx, cy + fMed * 2.8);
+  }
+
+  const pulse = 0.7 + 0.3 * Math.sin(Date.now() / 400);
+  ctx.font = `${fSm * 1.1}px monospace`;
+  ctx.fillStyle = `rgba(255,215,0,${pulse})`;
+  ctx.fillText('TAP or PRESS ANY KEY to retry', cx, cy + fMed * 4.5);
+}
+
+// ── Main loop ─────────────────────────────────────────────────────────
+function loop(now) {
+  requestAnimationFrame(loop);
+
+  if (state === 'start') {
+    drawStartScreen();
+    return;
+  }
+
+  drawBackground();
+  drawGrid();
+
+  if (state === 'playing') {
+    // Gravity
+    if (now - lastDrop > dropInterval) {
+      if (canPlace(piece.col, piece.row + 1)) {
+        piece.row++;
+        lastDrop = now;
+      } else {
+        doLock();
+      }
+    }
+    drawPiece();
+    drawNextPiece();
+  }
+
+  if (state === 'matching') {
+    drawNextPiece();
+  }
+
+  updateFlash();
+  updateParticles();
+  drawParticles();
+  drawHUD();
+  drawControls();
+
+  if (state === 'gameover') {
+    drawGameOverScreen();
+  }
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

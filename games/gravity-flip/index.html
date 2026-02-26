@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Gravity Flip</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#111;display:flex;justify-content:center;align-items:center;height:100vh;overflow:hidden;font-family:'Arial',sans-serif}
+#gameWrapper{position:relative;width:min(100vw,480px);height:min(100vh,640px)}
+canvas{display:block;width:100%;height:100%}
+#ui{position:absolute;top:0;left:0;width:100%;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;pointer-events:none}
+#score{font-size:1.3rem;font-weight:700;color:#fff;text-shadow:0 0 8px #0ff}
+#best{font-size:1rem;color:rgba(255,255,255,0.6)}
+#overlay{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;background:rgba(0,0,0,0.8);color:#fff;gap:14px}
+#overlay h1{font-size:2rem;text-shadow:0 0 20px #0ff;text-align:center}
+#overlay p{font-size:.95rem;opacity:.8;text-align:center;max-width:280px;line-height:1.5}
+#overlay .fs{font-size:2.2rem;font-weight:700;color:#0ff;text-shadow:0 0 20px #0ff}
+#btn{padding:14px 40px;font-size:1.1rem;font-weight:700;background:linear-gradient(135deg,#0ff,#06f);border:none;border-radius:30px;cursor:pointer;color:#000;margin-top:4px}
+#btn:active{transform:scale(0.95)}
+</style>
+</head>
+<body>
+<div id="gameWrapper">
+  <canvas id="c"></canvas>
+  <div id="ui">
+    <span id="score">0m</span>
+    <span id="best">Best: 0m</span>
+  </div>
+  <div id="overlay">
+    <h1>🔃 Gravity Flip</h1>
+    <p>Tap/click to flip gravity.<br>Avoid the obstacles!</p>
+    <button id="btn" onclick="startGame()">Play</button>
+  </div>
+</div>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const wrapper = document.getElementById('gameWrapper');
+const overlay = document.getElementById('overlay');
+const scoreEl = document.getElementById('score');
+const bestEl = document.getElementById('best');
+
+let W, H, player, obstacles, score, best, gameActive, speed, spawnAccum, raf;
+best = parseInt(localStorage.getItem('gf_best') || '0');
+bestEl.textContent = 'Best: ' + best + 'm';
+
+function resize() {
+  W = canvas.offsetWidth; H = canvas.offsetHeight;
+  canvas.width = W; canvas.height = H;
+}
+
+const COLORS = {
+  bg1: '#0d0d2b', bg2: '#1a1a4b',
+  player: '#00e5ff',
+  obs: '#ff4444',
+  trail: 'rgba(0,229,255,0.3)'
+};
+
+class Player {
+  constructor() {
+    this.w = 28; this.h = 28;
+    this.x = W * 0.2;
+    this.y = H / 2;
+    this.vy = 0;
+    this.grav = 1;
+    this.trail = [];
+    this.flipping = false;
+    this.angle = 0;
+  }
+  flip() {
+    this.grav *= -1;
+    this.vy = this.grav * -8;
+    this.flipping = true;
+  }
+  update(dt) {
+    this.vy += this.grav * 0.55;
+    this.vy = Math.max(-14, Math.min(14, this.vy));
+    this.y += this.vy * dt * 60;
+    this.angle += (this.grav > 0 ? 1 : -1) * 5 * dt * 60;
+    this.trail.unshift({x: this.x + this.w/2, y: this.y + this.h/2});
+    if (this.trail.length > 12) this.trail.pop();
+  }
+  draw() {
+    this.trail.forEach((p, i) => {
+      ctx.save();
+      ctx.globalAlpha = (1 - i / this.trail.length) * 0.3;
+      ctx.fillStyle = COLORS.player;
+      const s = this.w * (1 - i / this.trail.length) * 0.6;
+      ctx.fillRect(p.x - s/2, p.y - s/2, s, s);
+      ctx.restore();
+    });
+    ctx.save();
+    ctx.translate(this.x + this.w/2, this.y + this.h/2);
+    ctx.rotate(this.angle * Math.PI / 180);
+    const g = ctx.createLinearGradient(-this.w/2, -this.h/2, this.w/2, this.h/2);
+    g.addColorStop(0, '#00e5ff');
+    g.addColorStop(1, '#0066ff');
+    ctx.fillStyle = g;
+    ctx.shadowColor = '#00e5ff';
+    ctx.shadowBlur = 12;
+    const s = this.w / 2;
+    ctx.beginPath();
+    ctx.moveTo(0, -s); ctx.lineTo(s, s); ctx.lineTo(-s, s); ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+  getBounds() { return {x:this.x+4, y:this.y+4, w:this.w-8, h:this.h-8}; }
+}
+
+class Obstacle {
+  constructor(type) {
+    this.w = 30 + Math.random() * 20;
+    this.h = 40 + Math.random() * 80;
+    this.x = W + 20;
+    this.type = type;
+    if (type === 'top') this.y = 0;
+    else if (type === 'bottom') this.y = H - this.h;
+    else { this.y = Math.random() * (H - this.h - 120) + 60; }
+    this.color = `hsl(${Math.random()*40 + 340},90%,55%)`;
+    this.passed = false;
+  }
+  update(dt) { this.x -= speed * dt * 60; }
+  draw() {
+    ctx.save();
+    ctx.fillStyle = this.color;
+    ctx.shadowColor = this.color;
+    ctx.shadowBlur = 8;
+    ctx.fillRect(this.x, this.y, this.w, this.h);
+    ctx.restore();
+  }
+  getBounds() { return {x:this.x, y:this.y, w:this.w, h:this.h}; }
+}
+
+function rectsOverlap(a, b) {
+  return a.x < b.x+b.w && a.x+a.w > b.x && a.y < b.y+b.h && a.y+a.h > b.y;
+}
+
+function drawBg() {
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, COLORS.bg1);
+  grad.addColorStop(1, COLORS.bg2);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+  // grid lines
+  ctx.strokeStyle = 'rgba(0,200,255,0.07)';
+  ctx.lineWidth = 1;
+  const gridOff = (Date.now() / 8) % 40;
+  for (let x = -gridOff; x < W; x += 40) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+  }
+  for (let y = 0; y < H; y += 40) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+  // floor/ceiling
+  ctx.fillStyle = '#00e5ff22';
+  ctx.fillRect(0, 0, W, 12);
+  ctx.fillRect(0, H-12, W, 12);
+  ctx.strokeStyle = '#00e5ff';
+  ctx.lineWidth = 2;
+  ctx.shadowColor = '#00e5ff'; ctx.shadowBlur = 8;
+  ctx.beginPath(); ctx.moveTo(0,12); ctx.lineTo(W,12); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0,H-12); ctx.lineTo(W,H-12); ctx.stroke();
+  ctx.shadowBlur = 0;
+}
+
+function startGame() {
+  overlay.style.display = 'none';
+  player = new Player();
+  obstacles = []; score = 0; speed = 3.5;
+  gameActive = true; spawnAccum = 0;
+  scoreEl.textContent = '0m';
+  if (raf) cancelAnimationFrame(raf);
+  let last = performance.now();
+  function loop(now) {
+    const dt = Math.min((now - last) / 1000, 0.05);
+    last = now;
+    if (gameActive) {
+      score += dt * 10;
+      speed = 3.5 + score * 0.012;
+      spawnAccum += dt;
+      const sr = Math.max(0.9, 2.2 - score * 0.008);
+      if (spawnAccum >= sr) {
+        spawnAccum = 0;
+        const t = Math.random();
+        if (t < 0.35) obstacles.push(new Obstacle('top'));
+        else if (t < 0.7) obstacles.push(new Obstacle('bottom'));
+        else obstacles.push(new Obstacle('mid'));
+      }
+      player.update(dt);
+      obstacles.forEach(o => { o.update(dt); if (!o.passed && o.x + o.w < player.x) { o.passed = true; } });
+      obstacles = obstacles.filter(o => o.x + o.w > -50);
+      // collision
+      const pb = player.getBounds();
+      if (player.y < 12 || player.y + player.h > H - 12) { endGame(); return; }
+      for (const o of obstacles) { if (rectsOverlap(pb, o.getBounds())) { endGame(); return; } }
+      scoreEl.textContent = Math.floor(score) + 'm';
+    }
+    drawBg();
+    obstacles.forEach(o => o.draw());
+    player.draw();
+    raf = requestAnimationFrame(loop);
+  }
+  raf = requestAnimationFrame(loop);
+}
+
+function endGame() {
+  gameActive = false;
+  const s = Math.floor(score);
+  if (s > best) { best = s; localStorage.setItem('gf_best', best); }
+  bestEl.textContent = 'Best: ' + best + 'm';
+  overlay.innerHTML = `<h1>💥 Crashed!</h1><div class="fs">${s}m</div><p>Best: ${best}m</p><button id="btn" onclick="startGame()">Try Again</button>`;
+  overlay.style.display = 'flex';
+}
+
+function onFlip() { if (gameActive) player.flip(); }
+canvas.addEventListener('click', onFlip);
+canvas.addEventListener('touchstart', e => { e.preventDefault(); onFlip(); }, {passive:false});
+document.addEventListener('keydown', e => { if (e.code === 'Space' || e.code === 'ArrowUp') onFlip(); });
+
+window.addEventListener('resize', resize);
+resize();
+</script>
+</body>
+</html>

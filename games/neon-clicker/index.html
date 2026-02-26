@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0a0a1a">
+<title>Neon Reactor — Idle Clicker</title>
+<style>
+  *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+  :root {
+    --bg: #0a0a1a; --bg2: #0f0f28; --accent: #7744ff;
+    --glow: #7744ffaa; --text: #d0d0ff; --dim: rgba(255,255,255,0.4);
+  }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    min-height: 100dvh; display: flex; flex-direction: column;
+    overflow: hidden; user-select: none; -webkit-user-select: none;
+  }
+  header {
+    text-align: center; padding: 10px 16px 4px;
+    border-bottom: 1px solid rgba(120,60,255,0.25);
+  }
+  header h1 {
+    font-size: 1.3rem; font-weight: 900; letter-spacing: 0.15em;
+    background: linear-gradient(90deg, #ff44ff, #44ffff);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  #energy-display {
+    font-size: 2rem; font-weight: 700; color: #c0ffb0;
+    text-shadow: 0 0 20px #60ff20; letter-spacing: 0.05em;
+    margin-top: 2px;
+  }
+  #energy-sub { font-size: 0.75rem; opacity: 0.55; margin-bottom: 2px; }
+  #prestige-bar {
+    font-size: 0.7rem; opacity: 0.5;
+    display: flex; justify-content: space-between; padding: 0 4px;
+  }
+
+  main { flex: 1; display: flex; overflow: hidden; }
+
+  /* Clicker section */
+  #clicker-col {
+    flex: 0 0 auto; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 8px 12px;
+    width: clamp(160px, 42vw, 220px);
+    border-right: 1px solid rgba(120,60,255,0.2);
+    gap: 12px;
+  }
+  #orb-wrap { position: relative; width: 130px; height: 130px; }
+  #orb {
+    width: 130px; height: 130px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 32%, #bb88ff, #5500cc 55%, #220055);
+    box-shadow: 0 0 40px #7744ffcc, 0 0 80px #7744ff44, inset 0 0 30px #bb88ff44;
+    cursor: pointer; transition: transform 0.06s;
+    position: relative; z-index: 1;
+  }
+  #orb:active { transform: scale(0.93); }
+  #orb::after {
+    content:''; position:absolute; top:18%; left:22%; width:28%; height:18%;
+    background:rgba(255,255,255,0.45); border-radius:50%; filter:blur(4px);
+  }
+  #pulse-ring {
+    position: absolute; inset: -8px; border-radius: 50%;
+    border: 3px solid #7744ff88; animation: pulse 2s ease-out infinite;
+  }
+  @keyframes pulse {
+    0%   { transform: scale(1); opacity: 0.7; }
+    100% { transform: scale(1.45); opacity: 0; }
+  }
+  #click-power {
+    font-size: 0.85rem; opacity: 0.65; text-align: center;
+  }
+  #per-sec {
+    font-size: 0.95rem; font-weight: 700; color: #88ffcc;
+    text-shadow: 0 0 10px #44ffaa;
+  }
+  #prestige-btn {
+    padding: 6px 14px; font-size: 0.7rem; font-weight: 700;
+    border: 1px solid #ff44ff; border-radius: 20px;
+    background: transparent; color: #ff44ff; cursor: pointer;
+    letter-spacing: 0.08em; transition: all 0.2s;
+    display: none;
+  }
+  #prestige-btn.visible { display: block; }
+  #prestige-btn:hover { background: #ff44ff22; box-shadow: 0 0 12px #ff44ffaa; }
+
+  /* Upgrades */
+  #upgrades-col {
+    flex: 1; overflow-y: auto; padding: 8px 10px; display: flex;
+    flex-direction: column; gap: 7px;
+  }
+  #upgrades-col::-webkit-scrollbar { width: 4px; }
+  #upgrades-col::-webkit-scrollbar-track { background: transparent; }
+  #upgrades-col::-webkit-scrollbar-thumb { background: #7744ff66; border-radius: 2px; }
+  .section-title {
+    font-size: 0.6rem; letter-spacing: 0.15em; text-transform: uppercase;
+    opacity: 0.4; margin-top: 4px;
+  }
+  .upgrade {
+    background: var(--bg2); border: 1px solid rgba(120,60,255,0.25);
+    border-radius: 10px; padding: 8px 10px;
+    display: flex; align-items: center; gap: 10px;
+    cursor: pointer; transition: border-color 0.15s, background 0.15s;
+    position: relative; overflow: hidden;
+  }
+  .upgrade:hover { border-color: rgba(120,60,255,0.6); background: rgba(80,40,160,0.18); }
+  .upgrade.can-buy { border-color: #7744ffaa; }
+  .upgrade.can-buy::before {
+    content:''; position:absolute; inset:0;
+    background: linear-gradient(90deg, transparent, rgba(120,60,255,0.07), transparent);
+    animation: shimmer 1.5s infinite;
+  }
+  @keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+  }
+  .upgrade.maxed { border-color: rgba(100,255,100,0.35); opacity: 0.6; cursor: default; }
+  .upg-icon { font-size: 1.6rem; flex-shrink: 0; width: 36px; text-align: center; }
+  .upg-info { flex: 1; min-width: 0; }
+  .upg-name { font-size: 0.85rem; font-weight: 700; color: #e0e0ff; }
+  .upg-desc { font-size: 0.65rem; opacity: 0.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .upg-right { text-align: right; flex-shrink: 0; }
+  .upg-cost { font-size: 0.8rem; font-weight: 700; color: #ffe060; }
+  .upg-owned { font-size: 0.65rem; opacity: 0.45; }
+
+  /* Float text */
+  .float-text {
+    position: fixed; pointer-events: none; font-weight: 700;
+    color: #c0ffb0; text-shadow: 0 0 10px #60ff20;
+    font-size: 1rem; animation: floatUp 0.9s ease-out forwards; z-index: 100;
+  }
+  @keyframes floatUp {
+    0%   { transform: translateY(0); opacity: 1; }
+    100% { transform: translateY(-60px); opacity: 0; }
+  }
+
+  #canvas-overlay {
+    position: fixed; inset: 0; pointer-events: none; z-index: 5;
+  }
+
+  #milestones {
+    position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%);
+    background: rgba(80,40,160,0.85); border: 1px solid #7744ff;
+    border-radius: 12px; padding: 8px 18px; font-size: 0.8rem;
+    font-weight: 700; color: #fff; text-shadow: 0 0 10px #7744ff;
+    z-index: 50; display: none; animation: popIn 0.3s;
+  }
+  @keyframes popIn { from { transform: translateX(-50%) scale(0.7); } to { transform: translateX(-50%) scale(1); } }
+</style>
+</head>
+<body>
+<canvas id="canvas-overlay"></canvas>
+
+<header>
+  <h1>⚡ NEON REACTOR</h1>
+  <div id="energy-display">0</div>
+  <div id="energy-sub">energy total: 0</div>
+  <div id="prestige-bar">
+    <span id="prestige-label">✨ Prestige ×<span id="prestige-mult">1</span></span>
+    <span id="prestige-total">0 total prestiges</span>
+  </div>
+</header>
+
+<main>
+  <div id="clicker-col">
+    <div id="orb-wrap">
+      <div id="orb"></div>
+      <div id="pulse-ring"></div>
+    </div>
+    <div id="click-power">+<span id="click-val">1</span> / click</div>
+    <div id="per-sec">0/s</div>
+    <button id="prestige-btn" onclick="prestige()">✨ PRESTIGE</button>
+  </div>
+  <div id="upgrades-col" id="upgrades"></div>
+</main>
+
+<div id="milestones"></div>
+
+<script>
+// ─── Audio ───────────────────────────────────────────────
+const AC = new (window.AudioContext || window.webkitAudioContext)();
+function tone(freq, type, dur, vol=0.1, delay=0) {
+  try {
+    const o = AC.createOscillator(), g = AC.createGain();
+    o.connect(g); g.connect(AC.destination);
+    o.type = type; o.frequency.value = freq;
+    const t = AC.currentTime + delay;
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.start(t); o.stop(t + dur);
+  } catch(e){}
+}
+function clickSound(power) {
+  const f = 200 + Math.min(power, 1000) * 0.3;
+  tone(f, 'sine', 0.08, 0.12);
+  tone(f * 1.5, 'triangle', 0.05, 0.06, 0.02);
+}
+function buySound() {
+  tone(440, 'sine', 0.1, 0.15);
+  tone(660, 'sine', 0.1, 0.12, 0.08);
+  tone(880, 'sine', 0.1, 0.1, 0.15);
+}
+function prestigeSound() {
+  for (let i = 0; i < 8; i++) tone(220 * Math.pow(2, i/8), 'sine', 0.15, 0.12, i*0.08);
+}
+function milestoneSound() {
+  tone(523, 'sine', 0.2, 0.2); tone(659, 'sine', 0.2, 0.18, 0.12); tone(784, 'sine', 0.3, 0.2, 0.24);
+}
+
+// ─── Canvas particles ─────────────────────────────────────
+const cvs = document.getElementById('canvas-overlay');
+const cx = cvs.getContext('2d');
+let particles = [];
+function resizeCvs() { cvs.width = innerWidth; cvs.height = innerHeight; }
+resizeCvs(); window.addEventListener('resize', resizeCvs);
+
+function spawnParticles(x, y, n=10, color='#c0ffb0') {
+  for (let i = 0; i < n; i++) {
+    const ang = Math.random() * Math.PI * 2;
+    const spd = 2 + Math.random() * 4;
+    particles.push({ x, y, vx: Math.cos(ang)*spd, vy: Math.sin(ang)*spd - 1,
+      life: 1, color, size: 2+Math.random()*4 });
+  }
+}
+function animParticles() {
+  cx.clearRect(0,0,cvs.width,cvs.height);
+  particles = particles.filter(p => p.life > 0);
+  for (const p of particles) {
+    p.x += p.vx; p.y += p.vy; p.vy += 0.12; p.life -= 0.04;
+    cx.save();
+    cx.globalAlpha = p.life;
+    cx.fillStyle = p.color;
+    cx.shadowColor = p.color; cx.shadowBlur = 8;
+    cx.beginPath(); cx.arc(p.x, p.y, p.size*p.life, 0, Math.PI*2); cx.fill();
+    cx.restore();
+  }
+  requestAnimationFrame(animParticles);
+}
+requestAnimationFrame(animParticles);
+
+// ─── Game State ───────────────────────────────────────────
+let energy = 0, totalEnergy = 0;
+let clickPower = 1, perSec = 0;
+let prestiges = 0, prestigeMult = 1;
+const SAVE_KEY = 'neon-reactor-v2';
+
+const UPGRADES = [
+  { id:'click1', name:'Plasma Touch', icon:'👆', desc:'×2 click power', cost:50, base:50, effect:'click2', owned:0, max:1 },
+  { id:'click2', name:'Spark Gauntlet', icon:'⚡', desc:'×5 click power', cost:500, base:500, effect:'click10', owned:0, max:1 },
+  { id:'click3', name:'Quantum Fist', icon:'🌀', desc:'×20 click power', cost:50000, base:50000, effect:'click50', owned:0, max:1 },
+
+  { id:'collector', name:'Energy Collector', icon:'🔋', desc:'+1/s each', cost:100, base:100, effect:'auto1', owned:0, max:50 },
+  { id:'generator', name:'Neon Generator', icon:'🌐', desc:'+8/s each', cost:1200, base:1200, effect:'auto8', owned:0, max:40 },
+  { id:'reactor',   name:'Micro Reactor',   icon:'☢️', desc:'+47/s each', cost:12000, base:12000, effect:'auto47', owned:0, max:30 },
+  { id:'accelerator',name:'Accelerator',    icon:'🚀', desc:'+260/s each', cost:130000, base:130000, effect:'auto260', owned:0, max:25 },
+  { id:'qcore',     name:'Quantum Core',    icon:'💠', desc:'+1400/s each', cost:1400000, base:1400000, effect:'auto1400', owned:0, max:20 },
+  { id:'singularity',name:'Singularity',    icon:'🌌', desc:'+7800/s each', cost:20000000, base:20000000, effect:'auto7800', owned:0, max:15 },
+
+  { id:'amp1', name:'Power Amplifier', icon:'📡', desc:'×1.5 all auto', cost:5000, base:5000, effect:'ampAuto', owned:0, max:1, ampVal:1.5 },
+  { id:'amp2', name:'Hyper Amp', icon:'🔮', desc:'×2 all auto', cost:100000, base:100000, effect:'ampAuto', owned:0, max:1, ampVal:2 },
+  { id:'amp3', name:'Omega Boost', icon:'⚛️', desc:'×5 all auto', cost:5000000, base:5000000, effect:'ampAuto', owned:0, max:1, ampVal:5 },
+];
+
+let autoAmplifier = 1;
+
+function calcPerSec() {
+  const autoPairs = [
+    ['collector',1], ['generator',8], ['reactor',47],
+    ['accelerator',260], ['qcore',1400], ['singularity',7800]
+  ];
+  let ps = 0;
+  for (const [id, rate] of autoPairs) {
+    const upg = UPGRADES.find(u => u.id === id);
+    ps += upg.owned * rate;
+  }
+  ps *= autoAmplifier * prestigeMult;
+  return ps;
+}
+
+function calcClickPower() {
+  let base = 1;
+  const click1 = UPGRADES.find(u => u.id === 'click1');
+  const click2 = UPGRADES.find(u => u.id === 'click2');
+  const click3 = UPGRADES.find(u => u.id === 'click3');
+  if (click1.owned) base *= 2;
+  if (click2.owned) base *= 5;
+  if (click3.owned) base *= 20;
+  return Math.round(base * prestigeMult);
+}
+
+function costFor(upg) {
+  return Math.ceil(upg.base * Math.pow(1.15, upg.owned) / prestigeMult);
+}
+
+function fmt(n) {
+  if (n < 1000) return Math.floor(n).toString();
+  if (n < 1e6) return (n/1000).toFixed(1) + 'K';
+  if (n < 1e9) return (n/1e6).toFixed(2) + 'M';
+  if (n < 1e12) return (n/1e9).toFixed(2) + 'B';
+  if (n < 1e15) return (n/1e12).toFixed(2) + 'T';
+  return (n/1e15).toFixed(2) + 'Qa';
+}
+
+// ─── UI Rendering ─────────────────────────────────────────
+function renderUpgrades() {
+  const col = document.getElementById('upgrades-col');
+  col.innerHTML = '<div class="section-title">Click Upgrades</div>';
+  for (const upg of UPGRADES.filter(u => u.id.startsWith('click'))) renderUpg(col, upg);
+  col.innerHTML += '<div class="section-title" style="margin-top:6px">Auto Producers</div>';
+  for (const upg of UPGRADES.filter(u => ['collector','generator','reactor','accelerator','qcore','singularity'].includes(u.id))) renderUpg(col, upg);
+  col.innerHTML += '<div class="section-title" style="margin-top:6px">Amplifiers</div>';
+  for (const upg of UPGRADES.filter(u => u.id.startsWith('amp'))) renderUpg(col, upg);
+}
+
+function renderUpg(col, upg) {
+  const cost = costFor(upg);
+  const maxed = upg.owned >= upg.max;
+  const canBuy = !maxed && energy >= cost;
+  const div = document.createElement('div');
+  div.className = 'upgrade' + (canBuy ? ' can-buy' : '') + (maxed ? ' maxed' : '');
+  div.innerHTML = `
+    <div class="upg-icon">${upg.icon}</div>
+    <div class="upg-info">
+      <div class="upg-name">${upg.name}</div>
+      <div class="upg-desc">${upg.desc}</div>
+    </div>
+    <div class="upg-right">
+      <div class="upg-cost">${maxed ? 'MAX' : fmt(cost)+'⚡'}</div>
+      <div class="upg-owned">${upg.owned}/${upg.max}</div>
+    </div>`;
+  if (!maxed) div.addEventListener('click', () => buyUpgrade(upg));
+  col.appendChild(div);
+}
+
+let lastRender = 0;
+function updateUI(force=false) {
+  const now = Date.now();
+  if (!force && now - lastRender < 200) return;
+  lastRender = now;
+  document.getElementById('energy-display').textContent = fmt(energy) + ' ⚡';
+  document.getElementById('energy-sub').textContent = 'total: ' + fmt(totalEnergy);
+  document.getElementById('per-sec').textContent = fmt(perSec) + '/s';
+  document.getElementById('click-val').textContent = fmt(clickPower);
+  document.getElementById('prestige-mult').textContent = prestigeMult;
+  document.getElementById('prestige-total').textContent = prestiges + ' total prestiges';
+  // prestige button: unlock at 1M total energy
+  const pb = document.getElementById('prestige-btn');
+  if (totalEnergy >= 1e6) pb.classList.add('visible');
+  else pb.classList.remove('visible');
+  renderUpgrades();
+}
+
+// ─── Click Handler ────────────────────────────────────────
+function floatText(x, y, text) {
+  const el = document.createElement('div');
+  el.className = 'float-text';
+  el.style.left = (x - 20) + 'px';
+  el.style.top = (y - 20) + 'px';
+  el.textContent = text;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 1000);
+}
+
+const orb = document.getElementById('orb');
+function doClick(x, y) {
+  if (AC.state === 'suspended') AC.resume();
+  const gain = clickPower;
+  energy += gain;
+  totalEnergy += gain;
+  clickSound(gain);
+  spawnParticles(x, y, 6, '#c0ffb0');
+  floatText(x, y, '+' + fmt(gain));
+  checkMilestones();
+  updateUI();
+}
+
+orb.addEventListener('click', e => doClick(e.clientX, e.clientY));
+orb.addEventListener('touchstart', e => {
+  e.preventDefault();
+  const t = e.touches[0];
+  doClick(t.clientX, t.clientY);
+}, { passive: false });
+
+// ─── Buy Upgrade ──────────────────────────────────────────
+function buyUpgrade(upg) {
+  if (AC.state === 'suspended') AC.resume();
+  if (upg.owned >= upg.max) return;
+  const cost = costFor(upg);
+  if (energy < cost) return;
+  energy -= cost;
+  upg.owned++;
+
+  // apply amplifier
+  if (upg.effect === 'ampAuto') {
+    autoAmplifier *= upg.ampVal;
+  }
+
+  perSec = calcPerSec();
+  clickPower = calcClickPower();
+  buySound();
+  checkMilestones();
+  save();
+  updateUI(true);
+}
+
+// ─── Auto Tick ────────────────────────────────────────────
+let lastTick = Date.now();
+setInterval(() => {
+  const now = Date.now();
+  const dt = (now - lastTick) / 1000;
+  lastTick = now;
+  if (perSec > 0) {
+    const gain = perSec * dt;
+    energy += gain;
+    totalEnergy += gain;
+    checkMilestones();
+  }
+  updateUI();
+}, 100);
+
+// ─── Milestones ───────────────────────────────────────────
+const MILESTONES = [
+  [1000, '🎉 1K Energy!'], [10000, '🔥 10K Energy!'], [100000, '💥 100K!'],
+  [1e6, '🚀 1 Million!'], [1e9, '🌌 1 Billion!'], [1e12, '⚛️ 1 Trillion!']
+];
+let shownMilestones = new Set();
+function checkMilestones() {
+  for (const [thresh, msg] of MILESTONES) {
+    if (totalEnergy >= thresh && !shownMilestones.has(thresh)) {
+      shownMilestones.add(thresh);
+      showMilestone(msg);
+      milestoneSound();
+    }
+  }
+}
+function showMilestone(msg) {
+  const el = document.getElementById('milestones');
+  el.textContent = msg; el.style.display = 'block';
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.style.display = 'none'; }, 3000);
+}
+
+// ─── Prestige ─────────────────────────────────────────────
+function prestige() {
+  if (totalEnergy < 1e6) return;
+  if (!confirm('Prestige? You lose all energy and upgrades but multiply gains permanently!')) return;
+  prestigeSound();
+  prestiges++;
+  prestigeMult = Math.pow(2, prestiges); // ×2 each prestige
+  energy = 0; totalEnergy = 0;
+  autoAmplifier = 1;
+  for (const u of UPGRADES) u.owned = 0;
+  perSec = 0;
+  clickPower = calcClickPower();
+  shownMilestones.clear();
+  save();
+  updateUI(true);
+  spawnParticles(innerWidth/2, innerHeight/2, 60, '#ff44ff');
+  spawnParticles(innerWidth/2, innerHeight/2, 60, '#44ffff');
+}
+
+// ─── Save / Load ──────────────────────────────────────────
+function save() {
+  localStorage.setItem(SAVE_KEY, JSON.stringify({
+    energy, totalEnergy, prestiges, prestigeMult, autoAmplifier,
+    upgrades: UPGRADES.map(u => u.owned),
+    savedAt: Date.now()
+  }));
+}
+
+function load() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return;
+    const d = JSON.parse(raw);
+    prestiges = d.prestiges || 0;
+    prestigeMult = d.prestigeMult || 1;
+    autoAmplifier = d.autoAmplifier || 1;
+    if (d.upgrades) d.upgrades.forEach((n,i) => { if (UPGRADES[i]) UPGRADES[i].owned = n; });
+    perSec = calcPerSec();
+    clickPower = calcClickPower();
+
+    // Offline earnings
+    const offSec = Math.min((Date.now() - (d.savedAt||Date.now())) / 1000, 3600);
+    const offline = perSec * offSec;
+    energy = (d.energy || 0) + offline;
+    totalEnergy = (d.totalEnergy || 0) + offline;
+
+    if (offline > 1) {
+      setTimeout(() => {
+        showMilestone(`⏰ Offline: +${fmt(offline)}⚡`);
+        milestoneSound();
+      }, 800);
+    }
+  } catch(e) { console.warn('Load failed', e); }
+}
+
+load();
+updateUI(true);
+
+// Auto-save every 15s
+setInterval(() => save(), 15000);
+window.addEventListener('beforeunload', save);
+
+// Orb pulse sync with perSec
+setInterval(() => {
+  const speed = perSec > 0 ? Math.max(0.5, 3 - Math.log10(perSec+1)*0.4) : 2;
+  document.getElementById('pulse-ring').style.animationDuration = speed + 's';
+}, 500);
+</script>
+</body>
+</html>

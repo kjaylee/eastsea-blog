@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Neon Slots — Slot Machine Roguelite</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0a0a1a;--panel:#0f0f2a;--border:#1a1a3a;
+  --cyan:#00ffff;--magenta:#ff00ff;--yellow:#ffff00;
+  --green:#00ff88;--red:#ff3355;--gold:#ffd700;
+  --purple:#aa00ff;--orange:#ff8800;
+}
+body{background:var(--bg);color:#fff;font-family:'Segoe UI',sans-serif;min-height:100vh;overflow-x:hidden}
+.glow-text{text-shadow:0 0 10px currentColor,0 0 20px currentColor}
+.glow-box{box-shadow:0 0 10px currentColor,0 0 20px currentColor}
+
+/* SCREENS */
+#screen-start,#screen-game,#screen-shop,#screen-over,#screen-win{
+  display:none;flex-direction:column;align-items:center;justify-content:flex-start;
+  min-height:100vh;padding:16px;
+}
+.active{display:flex!important}
+
+/* START SCREEN */
+#screen-start{justify-content:center;text-align:center}
+#screen-start h1{font-size:clamp(2rem,8vw,4rem);color:var(--cyan);animation:pulse 2s ease-in-out infinite}
+#screen-start p{color:#aaa;margin:12px 0;max-width:480px;line-height:1.6;font-size:clamp(0.85rem,3vw,1rem)}
+.btn{
+  padding:14px 32px;border:2px solid var(--cyan);background:transparent;
+  color:var(--cyan);font-size:1.1rem;cursor:pointer;border-radius:8px;
+  transition:all .2s;letter-spacing:1px;font-weight:bold;margin:8px;
+}
+.btn:hover,.btn:active{background:var(--cyan);color:var(--bg);box-shadow:0 0 20px var(--cyan)}
+.btn-gold{border-color:var(--gold);color:var(--gold)}
+.btn-gold:hover{background:var(--gold);color:var(--bg);box-shadow:0 0 20px var(--gold)}
+.btn-red{border-color:var(--red);color:var(--red)}
+.btn-red:hover{background:var(--red);color:#fff;box-shadow:0 0 20px var(--red)}
+.btn-green{border-color:var(--green);color:var(--green)}
+.btn-green:hover{background:var(--green);color:var(--bg);box-shadow:0 0 20px var(--green)}
+
+/* HUD */
+#hud{
+  display:flex;justify-content:space-around;width:100%;max-width:500px;
+  background:var(--panel);border:1px solid var(--border);border-radius:12px;
+  padding:10px;margin-bottom:12px;flex-wrap:wrap;gap:8px;
+}
+.hud-item{text-align:center}
+.hud-label{font-size:0.65rem;color:#666;text-transform:uppercase;letter-spacing:1px}
+.hud-val{font-size:1.2rem;font-weight:bold}
+.hud-val.gold{color:var(--gold)}
+.hud-val.cyan{color:var(--cyan)}
+.hud-val.red{color:var(--red)}
+.hud-val.purple{color:var(--purple)}
+
+/* GRID */
+#slot-grid{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:8px;
+  width:100%;max-width:360px;margin:8px auto;
+}
+.slot-cell{
+  background:var(--panel);border:2px solid var(--border);border-radius:10px;
+  aspect-ratio:1;display:flex;align-items:center;justify-content:center;
+  font-size:clamp(2rem,9vw,3.5rem);cursor:default;transition:all .3s;position:relative;
+  overflow:hidden;
+}
+.slot-cell.spinning{animation:spin-blur .6s ease-out}
+.slot-cell.matched{border-color:var(--gold);box-shadow:0 0 15px var(--gold);animation:match-pulse .5s ease-out}
+.slot-cell.skull{border-color:var(--red);box-shadow:0 0 12px var(--red)}
+.slot-cell.wild{border-color:var(--purple);box-shadow:0 0 12px var(--purple)}
+@keyframes spin-blur{0%{filter:blur(4px) brightness(2)}100%{filter:none}}
+@keyframes match-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.15)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
+
+/* SPIN BTN */
+#spin-btn{
+  width:100%;max-width:360px;padding:16px;font-size:1.3rem;
+  border:3px solid var(--cyan);background:transparent;color:var(--cyan);
+  cursor:pointer;border-radius:12px;font-weight:bold;letter-spacing:2px;
+  transition:all .2s;margin:8px 0;
+}
+#spin-btn:hover:not(:disabled),#spin-btn:active:not(:disabled){
+  background:var(--cyan);color:var(--bg);box-shadow:0 0 30px var(--cyan);
+}
+#spin-btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* LOG */
+#log{
+  width:100%;max-width:360px;background:var(--panel);border:1px solid var(--border);
+  border-radius:8px;padding:10px;max-height:110px;overflow-y:auto;
+  font-size:0.8rem;line-height:1.7;
+}
+.log-line{color:#aaa}
+.log-line.good{color:var(--green)}
+.log-line.bad{color:var(--red)}
+.log-line.gold{color:var(--gold)}
+
+/* DECK */
+#deck-area{width:100%;max-width:500px;margin-top:10px}
+#deck-area h3{color:var(--cyan);font-size:.8rem;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px}
+#deck-display{display:flex;flex-wrap:wrap;gap:4px}
+.deck-sym{
+  background:var(--panel);border:1px solid var(--border);border-radius:6px;
+  padding:4px 8px;font-size:1.2rem;cursor:default;
+}
+
+/* SHOP */
+#screen-shop{text-align:center;justify-content:center}
+#screen-shop h2{color:var(--yellow);font-size:1.8rem;margin-bottom:4px}
+#shop-round-info{color:#aaa;margin-bottom:16px;font-size:.9rem}
+#shop-offers{display:flex;flex-wrap:wrap;justify-content:center;gap:12px;margin:12px 0;width:100%;max-width:520px}
+.shop-card{
+  background:var(--panel);border:2px solid var(--border);border-radius:12px;
+  padding:16px;width:140px;cursor:pointer;transition:all .2s;
+}
+.shop-card:hover{border-color:var(--yellow);box-shadow:0 0 15px var(--yellow)}
+.shop-card .sym{font-size:2.5rem;margin-bottom:6px}
+.shop-card .name{font-weight:bold;font-size:.9rem;margin-bottom:4px}
+.shop-card .desc{font-size:.75rem;color:#aaa;line-height:1.4}
+.shop-card .cost{color:var(--gold);font-weight:bold;margin-top:8px}
+.shop-card.remove-mode{border-color:var(--red)}
+.shop-card.remove-mode:hover{box-shadow:0 0 15px var(--red)}
+#remove-list{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;max-width:500px;margin:8px 0}
+.remove-sym{
+  background:var(--panel);border:2px solid var(--border);border-radius:8px;
+  padding:10px;font-size:1.6rem;cursor:pointer;transition:all .2s;
+}
+.remove-sym:hover{border-color:var(--red);box-shadow:0 0 12px var(--red)}
+
+/* GAME OVER / WIN */
+#screen-over{justify-content:center;text-align:center}
+#screen-over h1{font-size:3rem;color:var(--red)}
+#screen-win{justify-content:center;text-align:center}
+#screen-win h1{font-size:2.5rem;color:var(--yellow);animation:pulse 1.5s infinite}
+.result-stats{background:var(--panel);border-radius:12px;padding:20px;margin:16px 0;min-width:260px}
+.result-stat{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)}
+.result-stat:last-child{border-bottom:none}
+
+/* RENT INFO */
+#rent-row{
+  display:flex;justify-content:space-between;align-items:center;
+  width:100%;max-width:360px;background:var(--panel);border-radius:8px;
+  padding:8px 12px;margin:4px 0;font-size:.85rem;
+}
+</style>
+</head>
+<body>
+
+<!-- START SCREEN -->
+<div id="screen-start" class="active">
+  <h1 class="glow-text">🎰 NEON SLOTS</h1>
+  <p style="color:var(--yellow);font-size:1.1rem;margin:8px 0">Slot Machine Roguelite</p>
+  <p>Spin the 3×3 grid to earn gold. Pay rent each round — it rises every turn. Visit the shop between rounds to build your deck. Survive 12 rounds to win!</p>
+  <div style="margin:16px 0;background:var(--panel);border-radius:10px;padding:14px;max-width:440px;text-align:left">
+    <p style="color:var(--cyan);font-weight:bold;margin-bottom:8px">Symbol Guide</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:.85rem">
+      <span>💎 Diamond — +3 gold</span><span>🍒 Cherry — +2 gold</span>
+      <span>🔔 Bell — +2 gold</span><span>7️⃣ Seven — +5 gold</span>
+      <span>🃏 Wild — matches any</span><span>💀 Skull — −5 gold</span>
+      <span style="color:var(--yellow)">🌟 Star — +10 gold (rare)</span><span style="color:var(--orange)">🔥 Fire — burn skulls</span>
+    </div>
+    <p style="margin-top:10px;font-size:.8rem;color:#aaa">Adjacent matches multiply: 2=×2, 3=×3</p>
+  </div>
+  <button class="btn btn-gold" onclick="startGame()">▶ START GAME</button>
+  <p id="hi-display" style="color:#666;font-size:.85rem;margin-top:8px"></p>
+</div>
+
+<!-- GAME SCREEN -->
+<div id="screen-game">
+  <div id="hud">
+    <div class="hud-item"><div class="hud-label">Gold</div><div id="hud-gold" class="hud-val gold">100</div></div>
+    <div class="hud-item"><div class="hud-label">Rent</div><div id="hud-rent" class="hud-val red">10</div></div>
+    <div class="hud-item"><div class="hud-label">Round</div><div id="hud-round" class="hud-val cyan">1</div></div>
+    <div class="hud-item"><div class="hud-label">Hi-Score</div><div id="hud-hi" class="hud-val purple">0</div></div>
+  </div>
+  <div id="rent-row">
+    <span>Next Rent: <span id="next-rent" style="color:var(--red)">10</span></span>
+    <span>After spin: <span id="after-spin" style="color:var(--yellow)">?</span></span>
+  </div>
+  <div id="slot-grid"></div>
+  <button id="spin-btn" onclick="doSpin()">⚡ SPIN</button>
+  <div id="log"></div>
+  <div id="deck-area"><h3>Your Deck</h3><div id="deck-display"></div></div>
+</div>
+
+<!-- SHOP SCREEN -->
+<div id="screen-shop">
+  <h2>🏪 SHOP</h2>
+  <div id="shop-round-info"></div>
+  <p style="color:#aaa;font-size:.85rem;margin-bottom:8px">Gold: <span id="shop-gold" style="color:var(--gold);font-weight:bold">0</span></p>
+  <div id="shop-offers"></div>
+  <div style="margin:8px 0">
+    <button class="btn btn-red" onclick="openRemove()">🗑 REMOVE SYMBOL</button>
+  </div>
+  <div id="remove-area" style="display:none">
+    <p style="color:var(--red);margin-bottom:6px;font-size:.9rem">Choose a symbol to remove (free)</p>
+    <div id="remove-list"></div>
+    <button class="btn" onclick="cancelRemove()" style="margin-top:8px">Cancel</button>
+  </div>
+  <button class="btn btn-green" onclick="endShop()" style="margin-top:12px">▶ NEXT ROUND →</button>
+</div>
+
+<!-- GAME OVER -->
+<div id="screen-over">
+  <h1 class="glow-text">GAME OVER</h1>
+  <div class="result-stats">
+    <div class="result-stat"><span>Rounds Survived</span><span id="over-rounds" style="color:var(--cyan)">0</span></div>
+    <div class="result-stat"><span>Final Gold</span><span id="over-gold" style="color:var(--gold)">0</span></div>
+    <div class="result-stat"><span>Hi-Score</span><span id="over-hi" style="color:var(--purple)">0</span></div>
+  </div>
+  <button class="btn btn-gold" onclick="startGame()">▶ PLAY AGAIN</button>
+  <button class="btn" onclick="showStart()">⬅ MENU</button>
+</div>
+
+<!-- WIN SCREEN -->
+<div id="screen-win">
+  <h1 class="glow-text">🏆 YOU WIN!</h1>
+  <p style="color:var(--yellow);font-size:1.1rem;margin:8px 0">12 Rounds Survived!</p>
+  <div class="result-stats">
+    <div class="result-stat"><span>Rounds</span><span id="win-rounds" style="color:var(--cyan)">12</span></div>
+    <div class="result-stat"><span>Final Gold</span><span id="win-gold" style="color:var(--gold)">0</span></div>
+    <div class="result-stat"><span>Hi-Score</span><span id="win-hi" style="color:var(--purple)">0</span></div>
+  </div>
+  <button class="btn btn-gold" onclick="startGame()">▶ PLAY AGAIN</button>
+  <button class="btn" onclick="showStart()">⬅ MENU</button>
+</div>
+
+<script>
+// ─── AUDIO ───────────────────────────────────────────────────────────────────
+const AC = new (window.AudioContext || window.webkitAudioContext)();
+function beep(freq,type,dur,vol=0.3){
+  const osc=AC.createOscillator(),g=AC.createGain();
+  osc.connect(g);g.connect(AC.destination);
+  osc.type=type;osc.frequency.value=freq;
+  g.gain.setValueAtTime(vol,AC.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001,AC.currentTime+dur);
+  osc.start();osc.stop(AC.currentTime+dur);
+}
+function sfxSpin(){beep(220,'sawtooth',.08,.2);setTimeout(()=>beep(330,'sawtooth',.08,.2),80);setTimeout(()=>beep(440,'sawtooth',.08,.2),160)}
+function sfxMatch(){beep(660,'sine',.15,.4);setTimeout(()=>beep(880,'sine',.15,.4),100)}
+function sfxSkull(){beep(110,'square',.3,.5)}
+function sfxCoin(){beep(880,'sine',.08,.3);setTimeout(()=>beep(1100,'sine',.08,.3),80)}
+function sfxGameOver(){beep(220,'sawtooth',.4,.5);setTimeout(()=>beep(165,'sawtooth',.4,.5),200);setTimeout(()=>beep(110,'square',.6,.5),400)}
+function sfxWin(){[880,1100,1320,1760].forEach((f,i)=>setTimeout(()=>beep(f,'sine',.2,.4),i*120))}
+
+// ─── SYMBOLS ─────────────────────────────────────────────────────────────────
+const SYMBOLS = {
+  '💎':{value:3,rarity:'common',name:'Diamond'},
+  '🍒':{value:2,rarity:'common',name:'Cherry'},
+  '🔔':{value:2,rarity:'common',name:'Bell'},
+  '7️⃣':{value:5,rarity:'common',name:'Seven'},
+  '🃏':{value:0,rarity:'special',name:'Wild',wild:true},
+  '💀':{value:-5,rarity:'special',name:'Skull',penalty:true},
+  '🌟':{value:10,rarity:'rare',name:'Star'},
+  '🔥':{value:4,rarity:'rare',name:'Fire',burnSkulls:true},
+};
+const COMMON_POOL=['💎','💎','💎','🍒','🍒','🔔','🔔','7️⃣','7️⃣','7️⃣','7️⃣','7️⃣'];
+const SHOP_ITEMS=[
+  {sym:'💎',name:'Diamond',desc:'+3 gold each',cost:15},
+  {sym:'🍒',name:'Cherry',desc:'+2 gold each',cost:10},
+  {sym:'🔔',name:'Bell',desc:'+2 gold each',cost:10},
+  {sym:'7️⃣',name:'Seven',desc:'+5 gold each',cost:25},
+  {sym:'🃏',name:'Wild',desc:'Counts as any symbol',cost:30},
+  {sym:'💀',name:'Skull',desc:'−5 gold (removable)',cost:0,isSell:true,sellGold:20},
+  {sym:'🌟',name:'Star',desc:'+10 gold each (rare)',cost:50},
+  {sym:'🔥',name:'Fire',desc:'+4 gold + burns adjacent skulls',cost:40},
+];
+
+// ─── STATE ────────────────────────────────────────────────────────────────────
+let G={};
+function newGame(){
+  G={
+    gold:100, rent:10, round:1,
+    deck:[...COMMON_POOL,'💀','🃏'],
+    grid:Array(9).fill(null),
+    spinning:false,
+    shopDone:false,
+  };
+}
+
+// ─── SCREENS ──────────────────────────────────────────────────────────────────
+function show(id){
+  document.querySelectorAll('[id^="screen-"]').forEach(el=>el.classList.remove('active'));
+  document.getElementById('screen-'+id).classList.add('active');
+}
+function showStart(){
+  const hi=localStorage.getItem('neon-slots-hi')||0;
+  document.getElementById('hi-display').textContent=`Best: Round ${hi}`;
+  show('start');
+}
+function startGame(){
+  if(AC.state==='suspended')AC.resume();
+  newGame();
+  renderGame();
+  show('game');
+}
+
+// ─── GRID ─────────────────────────────────────────────────────────────────────
+function renderGrid(highlights=[]){
+  const el=document.getElementById('slot-grid');
+  el.innerHTML='';
+  G.grid.forEach((sym,i)=>{
+    const cell=document.createElement('div');
+    cell.className='slot-cell';
+    if(sym){
+      cell.textContent=sym;
+      if(sym==='💀')cell.classList.add('skull');
+      if(sym==='🃏')cell.classList.add('wild');
+      if(highlights.includes(i))cell.classList.add('matched');
+    }
+    el.appendChild(cell);
+  });
+}
+
+function renderDeck(){
+  const counts={};
+  G.deck.forEach(s=>counts[s]=(counts[s]||0)+1);
+  const el=document.getElementById('deck-display');
+  el.innerHTML='';
+  Object.entries(counts).forEach(([sym,cnt])=>{
+    const d=document.createElement('div');
+    d.className='deck-sym';
+    d.title=SYMBOLS[sym]?SYMBOLS[sym].name:sym;
+    d.textContent=sym+(cnt>1?` ×${cnt}`:'');
+    el.appendChild(d);
+  });
+}
+
+function renderGame(){
+  document.getElementById('hud-gold').textContent=G.gold;
+  document.getElementById('hud-rent').textContent=G.rent;
+  document.getElementById('hud-round').textContent=G.round;
+  const hi=localStorage.getItem('neon-slots-hi')||0;
+  document.getElementById('hud-hi').textContent=hi;
+  document.getElementById('next-rent').textContent=G.rent;
+  document.getElementById('after-spin').textContent='?';
+  renderGrid();
+  renderDeck();
+}
+
+// ─── ADJACENCY ────────────────────────────────────────────────────────────────
+function getAdjacent(i){
+  const r=Math.floor(i/3),c=i%3;
+  const neighbors=[];
+  for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){
+    if(dr===0&&dc===0)continue;
+    const nr=r+dr,nc=c+dc;
+    if(nr>=0&&nr<3&&nc>=0&&nc<3)neighbors.push(nr*3+nc);
+  }
+  return neighbors;
+}
+
+function countAdjMatches(grid,idx,sym){
+  const realSym = sym==='🃏' ? null : sym;
+  return getAdjacent(idx).filter(j=>{
+    const s=grid[j];
+    if(!s)return false;
+    if(s==='🃏')return true;
+    return realSym ? s===realSym : false;
+  }).length;
+}
+
+// ─── SPIN LOGIC ───────────────────────────────────────────────────────────────
+async function doSpin(){
+  if(G.spinning)return;
+  G.spinning=true;
+  if(AC.state==='suspended')AC.resume();
+  document.getElementById('spin-btn').disabled=true;
+
+  // Draw 9 symbols from deck
+  const newGrid=[];
+  const deckCopy=[...G.deck];
+  for(let i=0;i<9;i++){
+    if(deckCopy.length===0)deckCopy.push(...G.deck); // refill
+    const idx=Math.floor(Math.random()*deckCopy.length);
+    newGrid.push(deckCopy.splice(idx,1)[0]);
+  }
+
+  // Unlock rares at round 4+
+  if(G.round>=4){
+    newGrid.forEach((_,i)=>{if(Math.random()<0.04)newGrid[i]='🌟'});
+  }
+  if(G.round>=6){
+    newGrid.forEach((_,i)=>{if(Math.random()<0.03)newGrid[i]='🔥'});
+  }
+
+  // Fire burns adjacent skulls
+  newGrid.forEach((s,i)=>{
+    if(s==='🔥'){
+      getAdjacent(i).forEach(j=>{if(newGrid[j]==='💀')newGrid[j]='💨'});
+    }
+  });
+  // Remove smoked skulls
+  newGrid.forEach((s,i)=>{if(s==='💨')newGrid[i]=s});
+
+  G.grid=newGrid;
+
+  // Animate
+  sfxSpin();
+  renderGridSpinning();
+  await delay(700);
+
+  // Calculate earnings
+  let earned=0;
+  let log=[];
+  const highlights=[];
+
+  // First pass: skull burns
+  const smoked=[];
+  newGrid.forEach((s,i)=>{
+    if(s==='🔥'){
+      const adj=getAdjacent(i).filter(j=>newGrid[j]==='💀');
+      if(adj.length>0){smoked.push(...adj);sfxSkull();}
+    }
+  });
+
+  newGrid.forEach((sym,i)=>{
+    if(smoked.includes(i)){newGrid[i]='💨';return;}
+    const info=SYMBOLS[sym];
+    if(!info||info.wild)return;
+    if(info.penalty){
+      earned+=info.value;
+      log.push({text:`💀 Skull penalty: ${info.value}`,cls:'bad'});
+      sfxSkull();
+      return;
+    }
+    const adjCount=countAdjMatches(newGrid,i,sym);
+    let val=info.value;
+    let mult=1;
+    if(adjCount>=3)mult=3;
+    else if(adjCount>=2)mult=2;
+    const gain=val*mult;
+    earned+=gain;
+    if(adjCount>=2){highlights.push(i);sfxMatch();log.push({text:`${sym} ×${mult} match: +${gain}`,cls:'gold'});}
+    else{sfxCoin();log.push({text:`${sym}: +${gain}`,cls:'good'});}
+  });
+
+  G.grid=newGrid;
+  renderGrid(highlights);
+
+  // Wild bonus
+  const wilds=newGrid.filter(s=>s==='🃏').length;
+  if(wilds>0){earned+=wilds*2;log.push({text:`🃏 Wild bonus: +${wilds*2}`,cls:'good'});}
+
+  // Fire bonus
+  const fires=newGrid.filter(s=>s==='🔥').length;
+  if(fires>0&&smoked.length>0){log.push({text:`🔥 Burned ${smoked.length} skull(s)!`,cls:'good'});}
+
+  G.gold+=earned;
+  addLog(log);
+  addLog([{text:`── Earned: +${earned}`,cls:earned>=0?'good':'bad'}]);
+
+  // Pay rent
+  await delay(500);
+  G.gold-=G.rent;
+  addLog([{text:`🏠 Rent paid: −${G.rent}`,cls:'bad'}]);
+  document.getElementById('hud-gold').textContent=G.gold;
+
+  if(G.gold<0){
+    // Game over
+    await delay(600);
+    sfxGameOver();
+    endGame();
+    return;
+  }
+
+  G.round++;
+  const oldRent=G.rent;
+  G.rent=Math.floor(G.rent*1.2+3);
+  addLog([{text:`Round ${G.round} begins. Rent now: ${G.rent}`,cls:'gold'}]);
+
+  if(G.round>12){
+    // Win
+    await delay(400);
+    sfxWin();
+    doWin();
+    return;
+  }
+
+  updateHi();
+  renderGame();
+  G.spinning=false;
+  document.getElementById('spin-btn').disabled=false;
+
+  // Go to shop
+  await delay(400);
+  openShop();
+}
+
+function renderGridSpinning(){
+  const cells=document.querySelectorAll('.slot-cell');
+  cells.forEach((c,i)=>{
+    c.textContent=['🎰','❓','⚡','🌀','💫','✨','🎲','🔮','💥'][Math.floor(Math.random()*9)];
+    c.classList.add('spinning');
+    setTimeout(()=>{c.classList.remove('spinning');if(G.grid[i])c.textContent=G.grid[i]},300+i*60);
+  });
+}
+
+function addLog(lines){
+  const el=document.getElementById('log');
+  lines.forEach(l=>{
+    const d=document.createElement('div');
+    d.className='log-line '+(l.cls||'');
+    d.textContent=l.text;
+    el.appendChild(d);
+  });
+  el.scrollTop=el.scrollHeight;
+}
+
+// ─── SHOP ─────────────────────────────────────────────────────────────────────
+function openShop(){
+  document.getElementById('shop-round-info').textContent=`Round ${G.round} — Gold: ${G.gold}`;
+  document.getElementById('shop-gold').textContent=G.gold;
+  document.getElementById('remove-area').style.display='none';
+
+  // Generate 3 random offers
+  const pool=[...SHOP_ITEMS];
+  if(G.round<4)pool.splice(pool.findIndex(s=>s.sym==='🌟'),1);
+  if(G.round<6)pool.splice(pool.findIndex(s=>s.sym==='🔥'),1);
+
+  const shuffled=pool.sort(()=>Math.random()-.5).slice(0,3);
+  const el=document.getElementById('shop-offers');
+  el.innerHTML='';
+  shuffled.forEach(item=>{
+    const card=document.createElement('div');
+    card.className='shop-card';
+    card.innerHTML=`<div class="sym">${item.sym}</div>
+      <div class="name">${item.name}</div>
+      <div class="desc">${item.desc}</div>
+      <div class="cost">${item.isSell?`Sell for ${item.sellGold}💰`:(item.cost===0?'FREE':'Cost: '+item.cost+'💰')}</div>`;
+    card.onclick=()=>buyItem(item);
+    el.appendChild(card);
+  });
+  show('shop');
+}
+
+function buyItem(item){
+  if(item.isSell){
+    // Sell: remove from deck
+    const idx=G.deck.indexOf(item.sym);
+    if(idx===-1){alert('No '+item.name+' in deck!');return;}
+    G.deck.splice(idx,1);
+    G.gold+=item.sellGold;
+    sfxCoin();
+  } else {
+    if(item.cost>0&&G.gold<item.cost){alert('Not enough gold!');return;}
+    G.gold-=item.cost;
+    G.deck.push(item.sym);
+    sfxCoin();
+  }
+  document.getElementById('shop-gold').textContent=G.gold;
+  document.getElementById('shop-round-info').textContent=`Round ${G.round} — Gold: ${G.gold}`;
+}
+
+function openRemove(){
+  const el=document.getElementById('remove-list');
+  el.innerHTML='';
+  const unique=[...new Set(G.deck)];
+  unique.forEach(sym=>{
+    const d=document.createElement('div');
+    d.className='remove-sym';
+    d.textContent=sym;
+    d.title='Remove '+sym;
+    d.onclick=()=>removeSym(sym);
+    el.appendChild(d);
+  });
+  document.getElementById('remove-area').style.display='block';
+}
+
+function removeSym(sym){
+  const idx=G.deck.indexOf(sym);
+  if(idx===-1)return;
+  G.deck.splice(idx,1);
+  sfxCoin();
+  document.getElementById('remove-area').style.display='none';
+}
+
+function cancelRemove(){document.getElementById('remove-area').style.display='none';}
+
+function endShop(){show('game');renderGame();}
+
+// ─── GAME END ─────────────────────────────────────────────────────────────────
+function updateHi(){
+  const hi=parseInt(localStorage.getItem('neon-slots-hi')||0);
+  if(G.round-1>hi)localStorage.setItem('neon-slots-hi',G.round-1);
+}
+
+function endGame(){
+  const rounds=G.round-1;
+  const hi=Math.max(rounds,parseInt(localStorage.getItem('neon-slots-hi')||0));
+  localStorage.setItem('neon-slots-hi',hi);
+  document.getElementById('over-rounds').textContent=rounds;
+  document.getElementById('over-gold').textContent=G.gold;
+  document.getElementById('over-hi').textContent=hi;
+  show('over');
+}
+
+function doWin(){
+  const rounds=G.round-1;
+  const hi=Math.max(rounds,parseInt(localStorage.getItem('neon-slots-hi')||0));
+  localStorage.setItem('neon-slots-hi',hi);
+  document.getElementById('win-rounds').textContent=rounds;
+  document.getElementById('win-gold').textContent=G.gold;
+  document.getElementById('win-hi').textContent=hi;
+  show('win');
+}
+
+function delay(ms){return new Promise(r=>setTimeout(r,ms));}
+
+// Init
+showStart();
+</script>
+</body>
+</html>

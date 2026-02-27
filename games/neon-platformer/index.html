@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Neon Platformer — Endless Vertical</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#0a0a1a;color:#fff;font-family:'Courier New',monospace;overflow:hidden;touch-action:none;user-select:none;}
+#wrapper{display:flex;flex-direction:column;align-items:center;justify-content:center;width:100vw;height:100vh;}
+canvas{display:block;max-width:100%;max-height:100%;}
+#ui{position:fixed;top:0;left:50%;transform:translateX(-50%);width:min(400px,100vw);display:flex;justify-content:space-between;padding:8px 16px;z-index:10;pointer-events:none;}
+.stat{font-size:14px;color:#0ff;text-shadow:0 0 8px #0ff;}
+#screen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(10,10,26,0.92);z-index:20;gap:16px;}
+#screen h1{font-size:clamp(28px,6vw,48px);color:#0ff;text-shadow:0 0 20px #0ff,0 0 40px #0ff;letter-spacing:4px;}
+#screen p{color:#8af;font-size:14px;text-align:center;max-width:320px;line-height:1.7;}
+#screen .hisc{color:#ff0;text-shadow:0 0 10px #ff0;font-size:18px;}
+.btn{padding:12px 32px;border:2px solid #0ff;background:transparent;color:#0ff;font-family:'Courier New',monospace;font-size:16px;cursor:pointer;letter-spacing:2px;text-shadow:0 0 8px #0ff;box-shadow:0 0 16px rgba(0,255,255,0.3);transition:all .2s;}
+.btn:hover,.btn:active{background:rgba(0,255,255,0.15);box-shadow:0 0 30px rgba(0,255,255,0.6);}
+#mobile-btns{position:fixed;bottom:20px;left:0;right:0;display:flex;justify-content:space-between;padding:0 20px;z-index:10;}
+.mob-btn{width:70px;height:70px;border:2px solid #0ff;border-radius:50%;background:rgba(0,255,255,0.1);display:flex;align-items:center;justify-content:center;font-size:28px;cursor:pointer;box-shadow:0 0 16px rgba(0,255,255,0.3);}
+#shoot-btn{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);width:60px;height:60px;border:2px solid #f0f;border-radius:50%;background:rgba(255,0,255,0.1);display:flex;align-items:center;justify-content:center;font-size:22px;cursor:pointer;box-shadow:0 0 16px rgba(255,0,255,0.3);display:none;}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui">
+  <span class="stat" id="score-display">HEIGHT: 0</span>
+  <span class="stat" id="hi-display">BEST: 0</span>
+</div>
+<div id="screen">
+  <h1>NEON PLATFORMER</h1>
+  <p>Auto-jump on platforms.<br>← → Arrow keys or tilt to move.<br>Tap to shoot enemies (score &gt; 500).</p>
+  <p class="hisc" id="hi-text">BEST: 0</p>
+  <button class="btn" id="start-btn">START</button>
+</div>
+<div id="mobile-btns" style="display:none;">
+  <div class="mob-btn" id="left-btn">◀</div>
+  <div class="mob-btn" id="right-btn">▶</div>
+</div>
+<div id="shoot-btn">🔫</div>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const W = 400, H = 600;
+const HI_KEY = 'neon-platformer-hi';
+
+let hi = parseInt(localStorage.getItem(HI_KEY)||'0');
+document.getElementById('hi-text').textContent = 'BEST: ' + hi;
+document.getElementById('hi-display').textContent = 'BEST: ' + hi;
+
+// Audio
+const AC = new (window.AudioContext||window.webkitAudioContext)();
+function beep(freq,dur,type='sine',vol=0.15){
+  try{
+    const o=AC.createOscillator(), g=AC.createGain();
+    o.connect(g); g.connect(AC.destination);
+    o.type=type; o.frequency.value=freq;
+    g.gain.setValueAtTime(vol,AC.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001,AC.currentTime+dur);
+    o.start(); o.stop(AC.currentTime+dur);
+  }catch(e){}
+}
+function sfxJump(){beep(300,0.1,'square',0.12);}
+function sfxSpring(){beep(600,0.18,'square',0.18);beep(900,0.1,'square',0.12);}
+function sfxBreak(){beep(150,0.15,'sawtooth',0.15);}
+function sfxShoot(){beep(800,0.07,'square',0.1);}
+function sfxHit(){beep(200,0.2,'sawtooth',0.2);}
+function sfxDie(){beep(150,0.3,'sawtooth',0.2);beep(100,0.4,'sawtooth',0.2);}
+function sfxEnemy(){beep(120,0.15,'square',0.1);}
+
+// Resize
+function resize(){
+  const vw=window.innerWidth, vh=window.innerHeight;
+  const scale=Math.min(vw/W,vh/H);
+  canvas.width=W; canvas.height=H;
+  canvas.style.width=(W*scale)+'px';
+  canvas.style.height=(H*scale)+'px';
+}
+resize(); window.addEventListener('resize',resize);
+
+// State
+let state='start'; // start | play | over
+let score=0, player, platforms=[], bullets=[], enemies=[], particles=[];
+let cameraY=0; // world Y at top of screen (increases as player goes up)
+let keys={left:false,right:false};
+let tiltX=0;
+let spawnY=0; // next platform Y to spawn (world coords, higher = further up)
+
+// Mobile
+const isMobile=/Mobi|Android|Touch/i.test(navigator.userAgent)||window.innerWidth<600;
+if(isMobile){
+  document.getElementById('mobile-btns').style.display='flex';
+}
+
+document.getElementById('left-btn').addEventListener('touchstart',e=>{keys.left=true;e.preventDefault();},{passive:false});
+document.getElementById('left-btn').addEventListener('touchend',e=>{keys.left=false;e.preventDefault();},{passive:false});
+document.getElementById('right-btn').addEventListener('touchstart',e=>{keys.right=true;e.preventDefault();},{passive:false});
+document.getElementById('right-btn').addEventListener('touchend',e=>{keys.right=false;e.preventDefault();},{passive:false});
+
+// Device tilt
+if(window.DeviceOrientationEvent){
+  window.addEventListener('deviceorientation',e=>{
+    tiltX=(e.gamma||0)/30; // -1 to 1
+    tiltX=Math.max(-1,Math.min(1,tiltX));
+  });
+}
+
+// Keyboard
+window.addEventListener('keydown',e=>{
+  if(e.key==='ArrowLeft'||e.key==='a')keys.left=true;
+  if(e.key==='ArrowRight'||e.key==='d')keys.right=true;
+  if(e.key===' '&&state==='play')shoot();
+});
+window.addEventListener('keyup',e=>{
+  if(e.key==='ArrowLeft'||e.key==='a')keys.left=false;
+  if(e.key==='ArrowRight'||e.key==='d')keys.right=false;
+});
+
+// Touch shoot / jump
+canvas.addEventListener('touchstart',e=>{
+  if(state==='play'){
+    // Check if tap is on left/right half for directional
+    const touch=e.touches[0];
+    const rect=canvas.getBoundingClientRect();
+    const tx=(touch.clientX-rect.left)/rect.width*W;
+    if(score>500) shoot();
+  }
+},{passive:false});
+
+document.getElementById('shoot-btn').addEventListener('touchstart',e=>{
+  if(state==='play')shoot();
+  e.preventDefault();
+},{passive:false});
+
+document.getElementById('start-btn').addEventListener('click',startGame);
+
+function startGame(){
+  if(AC.state==='suspended')AC.resume();
+  document.getElementById('screen').style.display='none';
+  document.getElementById('mobile-btns').style.display=isMobile?'flex':'none';
+  state='play';
+  initGame();
+}
+
+function initGame(){
+  score=0; cameraY=0; platforms=[]; bullets=[]; enemies=[]; particles=[];
+  spawnY=0;
+
+  player={
+    x:W/2, y:H-150,
+    vy:0, vx:0,
+    w:28, h:28,
+    jumping:false
+  };
+  player.vy=-14; // initial jump
+
+  // Initial platforms
+  platforms.push({x:W/2-30,y:H-100,w:70,h:12,type:'normal',used:false,mx:0,dir:1});
+  for(let i=0;i<10;i++) spawnPlatform();
+  updateUI();
+}
+
+function spawnPlatform(){
+  spawnY -= getRand(60,100);
+  const diff = Math.min(1, Math.max(0, score/3000));
+  let type='normal';
+  const r=Math.random();
+  if(r<0.1+diff*0.15) type='breakable';
+  else if(r<0.2+diff*0.1) type='moving';
+  else if(r<0.28) type='spring';
+
+  platforms.push({
+    x:getRand(20,W-80),
+    y:spawnY,
+    w:getRand(50,80),
+    h:12,
+    type,
+    used:false,
+    mx:type==='moving'?getRand(0.5,2):0,
+    dir:1
+  });
+}
+
+function getRand(a,b){return a+Math.random()*(b-a);}
+
+function shoot(){
+  sfxShoot();
+  bullets.push({x:player.x,y:player.y,vy:-10,w:6,h:12});
+}
+
+function spawnEnemy(){
+  enemies.push({
+    x:getRand(20,W-40),
+    y:cameraY-30,
+    w:28,h:28,
+    vx:getRand(0.8,1.8)*(Math.random()<0.5?1:-1),
+    hp:1
+  });
+}
+
+function addParticles(x,y,color,n=10){
+  for(let i=0;i<n;i++){
+    const ang=Math.random()*Math.PI*2;
+    const spd=getRand(1,4);
+    particles.push({x,y,vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd,
+      life:1,color,r:getRand(2,5)});
+  }
+}
+
+let last=0;
+function loop(ts){
+  if(state!=='play'){requestAnimationFrame(loop);return;}
+  const dt=Math.min((ts-last)/16.67,3); last=ts;
+  update(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
+
+function update(dt){
+  // Movement
+  const spd=4*dt;
+  let dx=0;
+  if(keys.left) dx=-1;
+  if(keys.right) dx=1;
+  if(!keys.left&&!keys.right) dx=tiltX;
+  player.vx=dx*5;
+  player.x+=player.vx*dt;
+
+  // Wrap
+  if(player.x<-player.w/2) player.x=W+player.w/2;
+  if(player.x>W+player.w/2) player.x=-player.w/2;
+
+  // Gravity
+  player.vy+=0.5*dt;
+  player.y+=player.vy*dt;
+
+  // Camera: keep player in middle-upper area
+  const screenPY=player.y-cameraY;
+  if(screenPY<H*0.4){
+    const delta=H*0.4-screenPY;
+    cameraY-=delta;
+    // Update score (height in world coords)
+    const newScore=Math.floor(-cameraY/10);
+    if(newScore>score) score=newScore;
+  }
+
+  // Fall off bottom = game over
+  if(player.y-cameraY>H+60){
+    endGame();
+    return;
+  }
+
+  // Platform collisions (only when falling)
+  if(player.vy>0){
+    for(const p of platforms){
+      if(p.used&&p.type==='breakable') continue;
+      const px=p.x, py=p.y, pw=p.w, ph=p.h;
+      const pl=player.x-player.w/2, pr=player.x+player.w/2;
+      const pt=player.y-player.h/2, pb=player.y+player.h/2;
+      if(pr>px&&pl<px+pw&&pb>py&&pb<py+ph+player.vy*dt+5){
+        if(p.type==='breakable'){
+          p.used=true; sfxBreak();
+          addParticles(p.x+p.w/2,p.y,'#f80',8);
+          player.vy=-14; sfxJump();
+        } else if(p.type==='spring'){
+          player.vy=-22; sfxSpring();
+          addParticles(p.x+p.w/2,p.y,'#ff0',10);
+        } else {
+          player.vy=-14; sfxJump();
+        }
+        player.y=py-player.h/2;
+        break;
+      }
+    }
+  }
+
+  // Move moving platforms
+  for(const p of platforms){
+    if(p.type==='moving'){
+      p.x+=p.mx*p.dir*dt;
+      if(p.x<10||p.x+p.w>W-10) p.dir*=-1;
+    }
+  }
+
+  // Spawn more platforms
+  const topWorld=cameraY; // world Y at top of screen
+  while(spawnY>topWorld-H){
+    spawnPlatform();
+  }
+
+  // Spawn enemies
+  if(score>500&&Math.random()<0.005*dt){
+    spawnEnemy();
+  }
+
+  // Move enemies
+  for(const e of enemies){
+    e.x+=e.vx*dt;
+    if(e.x<0||e.x+e.w>W) e.vx*=-1;
+  }
+
+  // Bullets
+  for(const b of bullets){b.y+=b.vy*dt;}
+  // Bullet-enemy collision
+  for(let bi=bullets.length-1;bi>=0;bi--){
+    const b=bullets[bi];
+    for(let ei=enemies.length-1;ei>=0;ei--){
+      const e=enemies[ei];
+      if(b.x>e.x&&b.x<e.x+e.w&&b.y>e.y&&b.y<e.y+e.h){
+        sfxHit();
+        addParticles(e.x+e.w/2,e.y+e.h/2,'#f0f',10);
+        enemies.splice(ei,1);
+        bullets.splice(bi,1);
+        score+=50;
+        break;
+      }
+    }
+  }
+
+  // Player-enemy collision
+  for(let ei=enemies.length-1;ei>=0;ei--){
+    const e=enemies[ei];
+    const dx2=player.x-(e.x+e.w/2), dy2=player.y-(e.y+e.h/2);
+    if(Math.abs(dx2)<22&&Math.abs(dy2)<22){
+      sfxDie();
+      endGame();
+      return;
+    }
+  }
+
+  // Remove off-screen bullets / enemies / platforms
+  bullets.filter(b=>b.y-cameraY>H+50).forEach(()=>{});
+  for(let i=bullets.length-1;i>=0;i--){if(bullets[i].y-cameraY>H+50)bullets.splice(i,1);}
+  for(let i=enemies.length-1;i>=0;i--){if(enemies[i].y-cameraY>H+100)enemies.splice(i,1);}
+  for(let i=platforms.length-1;i>=0;i--){if(platforms[i].y-cameraY>H+50)platforms.splice(i,1);}
+
+  // Particles
+  for(const p of particles){
+    p.x+=p.vx*dt; p.y+=p.vy*dt; p.life-=0.04*dt; p.vy+=0.1*dt;
+  }
+  for(let i=particles.length-1;i>=0;i--){if(particles[i].life<=0)particles.splice(i,1);}
+
+  // Show shoot button when score > 500
+  document.getElementById('shoot-btn').style.display=score>500&&isMobile?'flex':'none';
+  updateUI();
+}
+
+function updateUI(){
+  document.getElementById('score-display').textContent='HEIGHT: '+score;
+  document.getElementById('hi-display').textContent='BEST: '+hi;
+}
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#0a0a1a';
+  ctx.fillRect(0,0,W,H);
+
+  // Grid bg
+  ctx.strokeStyle='rgba(0,100,255,0.06)';
+  ctx.lineWidth=1;
+  const gsize=40;
+  const yOff=((cameraY%gsize)+gsize)%gsize;
+  for(let y=yOff-gsize;y<H+gsize;y+=gsize){
+    ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();
+  }
+  for(let x=0;x<W;x+=gsize){
+    ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();
+  }
+
+  // Platforms
+  for(const p of platforms){
+    const sy=p.y-cameraY;
+    if(sy<-20||sy>H+20) continue;
+    let col,glo;
+    if(p.used){col='#333';glo='rgba(80,80,80,0.3)';}
+    else if(p.type==='normal'){col='#0f8';glo='rgba(0,255,100,0.5)';}
+    else if(p.type==='moving'){col='#08f';glo='rgba(0,100,255,0.5)';}
+    else if(p.type==='breakable'){col='#f80';glo='rgba(255,100,0,0.5)';}
+    else if(p.type==='spring'){col='#ff0';glo='rgba(255,220,0,0.6)';}
+    ctx.save();
+    ctx.shadowColor=col;ctx.shadowBlur=12;
+    ctx.fillStyle=col;
+    ctx.beginPath();
+    ctx.roundRect(p.x,sy,p.w,p.h,4);
+    ctx.fill();
+    // Spring bounce indicator
+    if(p.type==='spring'){
+      ctx.fillStyle='#fff';
+      ctx.font='10px Courier New';
+      ctx.fillText('↑',p.x+p.w/2-4,sy+10);
+    }
+    ctx.restore();
+  }
+
+  // Enemies
+  for(const e of enemies){
+    const sy=e.y-cameraY;
+    if(sy<-30||sy>H+30) continue;
+    ctx.save();
+    ctx.shadowColor='#f0f';ctx.shadowBlur=16;
+    ctx.fillStyle='#f0f';
+    // Draw enemy shape
+    ctx.beginPath();
+    ctx.arc(e.x+e.w/2,sy+e.h/2,12,0,Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle='#0a0a1a';
+    // Eyes
+    ctx.fillRect(e.x+e.w/2-7,sy+e.h/2-3,5,5);
+    ctx.fillRect(e.x+e.w/2+2,sy+e.h/2-3,5,5);
+    ctx.restore();
+  }
+
+  // Bullets
+  for(const b of bullets){
+    const sy=b.y-cameraY;
+    ctx.save();
+    ctx.shadowColor='#0ff';ctx.shadowBlur=10;
+    ctx.fillStyle='#0ff';
+    ctx.fillRect(b.x-b.w/2,sy,b.w,b.h);
+    ctx.restore();
+  }
+
+  // Particles
+  for(const p of particles){
+    const sy=p.y-cameraY;
+    ctx.save();
+    ctx.globalAlpha=p.life;
+    ctx.shadowColor=p.color;ctx.shadowBlur=8;
+    ctx.fillStyle=p.color;
+    ctx.beginPath();
+    ctx.arc(p.x,sy,p.r,0,Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // Player
+  const py=player.y-cameraY;
+  ctx.save();
+  ctx.shadowColor='#0ff';ctx.shadowBlur=20;
+  ctx.fillStyle='#0ff';
+  ctx.beginPath();
+  ctx.roundRect(player.x-player.w/2,py-player.h/2,player.w,player.h,5);
+  ctx.fill();
+  // Face
+  ctx.shadowBlur=0;
+  ctx.fillStyle='#0a0a1a';
+  ctx.fillRect(player.x-8,py-4,5,5);
+  ctx.fillRect(player.x+3,py-4,5,5);
+  ctx.fillRect(player.x-5,py+4,10,3);
+  ctx.restore();
+
+  // Score (already in UI overlay)
+}
+
+function endGame(){
+  state='over';
+  sfxDie();
+  if(score>hi){
+    hi=score;
+    localStorage.setItem(HI_KEY,hi);
+  }
+  const scr=document.getElementById('screen');
+  scr.innerHTML=`
+    <h1>GAME OVER</h1>
+    <p>Height reached</p>
+    <p class="hisc">${score}</p>
+    <p style="color:#8af">BEST: ${hi}</p>
+    <button class="btn" id="restart-btn">PLAY AGAIN</button>
+  `;
+  scr.style.display='flex';
+  document.getElementById('restart-btn').addEventListener('click',()=>{
+    scr.style.display='none';
+    state='play';
+    initGame();
+  });
+}
+
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

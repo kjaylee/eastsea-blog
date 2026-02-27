@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>🔮 Neon Alchemy — Merge & Discover</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden}
+body{background:#0a0a1a;color:#fff;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;user-select:none;-webkit-user-select:none;touch-action:none}
+
+h1{font-size:clamp(18px,5vw,28px);color:#f0f;text-shadow:0 0 15px #f0f;letter-spacing:3px;margin:8px 0 4px;flex-shrink:0}
+#subtitle{font-size:11px;color:#888;margin-bottom:6px;flex-shrink:0}
+
+#score-bar{display:flex;gap:16px;font-size:12px;margin-bottom:8px;flex-shrink:0}
+#score-el{color:#0ff;text-shadow:0 0 6px #0ff}
+#hi-el{color:#ff0;text-shadow:0 0 6px #ff0}
+
+#main{display:flex;gap:10px;flex:1;width:100%;max-width:520px;padding:0 8px;min-height:0}
+
+/* Grid */
+#grid-wrap{display:flex;flex-direction:column;align-items:center;gap:6px;flex-shrink:0}
+#grid{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;background:#0d0d2a;border:1px solid #f0f3;border-radius:10px;padding:8px}
+.cell{width:clamp(58px,12vw,72px);height:clamp(58px,12vw,72px);background:#11112a;border:1px solid #2a2a5a;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:grab;transition:border-color .15s,box-shadow .15s;position:relative;overflow:hidden}
+.cell:empty{cursor:default}
+.cell.has-el{border-color:#f0f4}
+.cell.has-el:hover{border-color:#f0f;box-shadow:0 0 10px #f0f4}
+.cell.drag-over{border-color:#0ff;box-shadow:0 0 12px #0ff6;background:#0ff1}
+.cell.dragging{opacity:0.45;border-color:#888}
+.cell .emoji{font-size:clamp(22px,5.5vw,28px);line-height:1}
+.cell .name{font-size:clamp(7px,1.8vw,9px);color:#bbb;text-align:center;margin-top:2px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 2px}
+.cell.spawn-anim{animation:spawnEl 0.4s ease-out}
+@keyframes spawnEl{0%{transform:scale(0.3);opacity:0}60%{transform:scale(1.15)}100%{transform:scale(1);opacity:1}}
+
+/* Log */
+#log-wrap{flex:1;min-width:0;display:flex;flex-direction:column;max-height:100%}
+#log-title{font-size:11px;color:#888;margin-bottom:5px;flex-shrink:0;text-align:center}
+#log{flex:1;overflow-y:auto;background:#0d0d2a;border:1px solid #f0f3;border-radius:8px;padding:6px;min-height:0}
+#log::-webkit-scrollbar{width:4px}
+#log::-webkit-scrollbar-track{background:#0a0a1a}
+#log::-webkit-scrollbar-thumb{background:#f0f4;border-radius:2px}
+.log-entry{font-size:clamp(9px,2.2vw,11px);color:#ccc;padding:2px 0;border-bottom:1px solid #ffffff08;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.log-entry.new{color:#0ff;text-shadow:0 0 6px #0ff}
+.log-entry .le{color:#f0f}
+
+/* Buttons */
+#btns{display:flex;gap:6px;margin-top:6px;flex-shrink:0}
+.btn{background:transparent;border:1px solid;font-family:inherit;font-size:10px;padding:5px 10px;border-radius:5px;cursor:pointer;letter-spacing:1px}
+.btn-r{border-color:#f0f;color:#f0f}
+.btn-r:hover{background:#f0f2}
+.btn-g{border-color:#0f8;color:#0f8}
+.btn-g:hover{background:#0f82}
+
+/* Drag ghost */
+#drag-ghost{position:fixed;pointer-events:none;display:none;flex-direction:column;align-items:center;justify-content:center;width:60px;height:60px;background:#11112a;border:2px solid #0ff;border-radius:8px;box-shadow:0 0 16px #0ff8;z-index:999;transform:translate(-50%,-50%)}
+#drag-ghost .emoji{font-size:26px}
+#drag-ghost .name{font-size:8px;color:#0ff}
+
+/* Screens */
+#screen,#win-screen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#0a0a1aee;text-align:center;padding:20px;z-index:20}
+#screen h1{font-size:clamp(26px,8vw,50px);color:#f0f;text-shadow:0 0 20px #f0f;margin-bottom:10px}
+.scrn-btn{background:transparent;border:2px solid #f0f;color:#f0f;font-family:inherit;font-size:clamp(14px,4vw,18px);padding:12px 32px;border-radius:8px;cursor:pointer;letter-spacing:2px;text-shadow:0 0 8px #f0f;box-shadow:0 0 15px #f0f4;margin-top:12px}
+.scrn-btn:hover{background:#f0f2}
+.rules{font-size:clamp(11px,3vw,14px);color:#aaa;background:#ffffff08;border:1px solid #f0f3;border-radius:10px;padding:14px 18px;margin:10px 0;max-width:380px;line-height:1.8}
+.rules span{color:#f0f}
+.win-icon{font-size:64px;margin-bottom:10px;animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{text-shadow:0 0 20px #ff0}50%{text-shadow:0 0 40px #ff0,0 0 80px #ff0}}
+
+/* Merge flash */
+.merge-flash{position:fixed;inset:0;background:rgba(255,0,255,0.08);pointer-events:none;z-index:18;animation:flash .3s ease-out forwards}
+@keyframes flash{0%{opacity:1}100%{opacity:0}}
+
+/* Hint */
+#hint{position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:10px;color:#444;text-align:center;pointer-events:none}
+</style>
+</head>
+<body>
+
+<h1>🔮 NEON ALCHEMY</h1>
+<div id="subtitle">Discover all elements • Drag to combine</div>
+<div id="score-bar">
+  <div id="score-el">DISCOVERED: 0</div>
+  <div id="hi-el">BEST: 0</div>
+</div>
+
+<div id="main">
+  <div id="grid-wrap">
+    <div id="grid"></div>
+    <div id="btns">
+      <button class="btn btn-r" onclick="resetGame()">RESET</button>
+      <button class="btn btn-g" onclick="spawnRandom()">+SPAWN</button>
+    </div>
+  </div>
+  <div id="log-wrap">
+    <div id="log-title">DISCOVERY LOG</div>
+    <div id="log"></div>
+  </div>
+</div>
+
+<div id="drag-ghost"><div class="emoji" id="ghost-emoji"></div><div class="name" id="ghost-name"></div></div>
+<div id="hint">Drag element onto another to combine</div>
+
+<div id="screen">
+  <h1>🔮 NEON ALCHEMY</h1>
+  <div class="rules">
+    <span>DRAG</span> one element onto another<br>
+    Combine to discover new elements<br>
+    <span>30+</span> recipes to find<br>
+    Goal: discover the <span>Philosopher's Stone</span> 🔮<br>
+    Score = unique elements found
+  </div>
+  <button class="scrn-btn" onclick="startGame()">BEGIN TRANSMUTATION</button>
+</div>
+
+<div id="win-screen" class="hidden" style="position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#0a0a1aee;text-align:center;padding:20px;z-index:20">
+  <div class="win-icon">🔮</div>
+  <h1 style="font-size:clamp(20px,6vw,40px);color:#ff0;text-shadow:0 0 20px #ff0;font-family:'Courier New',monospace;letter-spacing:3px;margin-bottom:10px">PHILOSOPHER'S STONE!</h1>
+  <div style="font-size:clamp(13px,3.5vw,18px);color:#f0f;text-shadow:0 0 10px #f0f;margin-bottom:6px">You have achieved immortality!</div>
+  <div id="win-score" style="font-size:clamp(15px,4vw,22px);color:#0ff;text-shadow:0 0 10px #0ff;margin-bottom:16px"></div>
+  <button class="scrn-btn" onclick="resetGame()">PLAY AGAIN</button>
+</div>
+
+<script>
+const LS_KEY = 'neon-alchemy-hi';
+
+// ── ELEMENTS ──────────────────────────────────────────────────────────────
+const EL = {
+  // Base
+  fire:    {id:'fire',    name:'Fire',       emoji:'🔥', tier:0, col:'#f82'},
+  water:   {id:'water',  name:'Water',       emoji:'💧', tier:0, col:'#08f'},
+  earth:   {id:'earth',  name:'Earth',       emoji:'🌍', tier:0, col:'#8a5'},
+  air:     {id:'air',    name:'Air',         emoji:'💨', tier:0, col:'#aef'},
+  // Tier 1
+  steam:   {id:'steam',  name:'Steam',       emoji:'♨️',  tier:1, col:'#fff'},
+  lava:    {id:'lava',   name:'Lava',        emoji:'🌋',  tier:1, col:'#f60'},
+  smoke:   {id:'smoke',  name:'Smoke',       emoji:'🌫️',  tier:1, col:'#999'},
+  mud:     {id:'mud',    name:'Mud',         emoji:'🟫',  tier:1, col:'#864'},
+  rain:    {id:'rain',   name:'Rain',        emoji:'🌧️',  tier:1, col:'#46f'},
+  dust:    {id:'dust',   name:'Dust',        emoji:'🌪️',  tier:1, col:'#c96'},
+  // Tier 2
+  cloud:   {id:'cloud',  name:'Cloud',       emoji:'☁️',  tier:2, col:'#cdf'},
+  stone:   {id:'stone',  name:'Stone',       emoji:'🪨',  tier:2, col:'#888'},
+  plant:   {id:'plant',  name:'Plant',       emoji:'🌿',  tier:2, col:'#4c4'},
+  sand:    {id:'sand',   name:'Sand',        emoji:'⏳',  tier:2, col:'#db8'},
+  brick:   {id:'brick',  name:'Brick',       emoji:'🧱',  tier:2, col:'#c63'},
+  fog:     {id:'fog',    name:'Fog',         emoji:'🌁',  tier:2, col:'#abb'},
+  swamp:   {id:'swamp',  name:'Swamp',       emoji:'🐸',  tier:2, col:'#5a3'},
+  // Tier 3
+  metal:   {id:'metal',  name:'Metal',       emoji:'⚙️',  tier:3, col:'#aaa'},
+  mountain:{id:'mountain',name:'Mountain',   emoji:'🏔️',  tier:3, col:'#9ab'},
+  forest:  {id:'forest', name:'Forest',      emoji:'🌲',  tier:3, col:'#2a5'},
+  volcano: {id:'volcano',name:'Volcano',     emoji:'🌋',  tier:3, col:'#f44'},
+  lightning:{id:'lightning',name:'Lightning',emoji:'⚡',  tier:3, col:'#ff0'},
+  beach:   {id:'beach',  name:'Beach',       emoji:'🏝️',  tier:3, col:'#fa8'},
+  // Tier 4
+  gold:    {id:'gold',   name:'Gold',        emoji:'🪙',  tier:4, col:'#ff0'},
+  tool:    {id:'tool',   name:'Tool',        emoji:'🔨',  tier:4, col:'#c8a'},
+  crystal: {id:'crystal',name:'Crystal',    emoji:'🔷',  tier:4, col:'#0ff'},
+  electricity:{id:'electricity',name:'Electricity',emoji:'⚡',tier:4,col:'#0ff'},
+  moss:    {id:'moss',   name:'Moss',        emoji:'🌱',  tier:4, col:'#3a3'},
+  // Tier 5
+  sword:   {id:'sword',  name:'Sword',       emoji:'⚔️',  tier:5, col:'#cdf'},
+  robot:   {id:'robot',  name:'Robot',       emoji:'🤖',  tier:5, col:'#4cf'},
+  house:   {id:'house',  name:'House',       emoji:'🏠',  tier:5, col:'#fa4'},
+  diamond: {id:'diamond',name:'Diamond',     emoji:'💎',  tier:5, col:'#0ff'},
+  // Tier 6
+  ring:    {id:'ring',   name:'Ring',        emoji:'💍',  tier:6, col:'#ff0'},
+  city:    {id:'city',   name:'City',        emoji:'🏙️',  tier:6, col:'#88f'},
+  energy:  {id:'energy', name:'Energy',      emoji:'🌟',  tier:6, col:'#ff8'},
+  // Tier 7
+  philosopher:{id:'philosopher',name:"Philosopher's Stone",emoji:'🔮',tier:7,col:'#f0f'},
+};
+
+// ── RECIPES [a, b] → result (order-insensitive) ─────────────────────────
+const RECIPES = [
+  // Tier 1
+  ['fire','water','steam'],
+  ['earth','fire','lava'],
+  ['air','fire','smoke'],
+  ['water','earth','mud'],
+  ['air','water','rain'],
+  ['air','earth','dust'],
+  // Tier 2
+  ['steam','air','cloud'],
+  ['lava','water','stone'],
+  ['rain','earth','plant'],
+  ['dust','water','sand'],
+  ['mud','fire','brick'],
+  ['smoke','air','fog'],
+  ['mud','plant','swamp'],
+  // Tier 3
+  ['stone','fire','metal'],
+  ['stone','earth','mountain'],
+  ['plant','rain','forest'],
+  ['mountain','fire','volcano'],
+  ['cloud','fire','lightning'],
+  ['sand','water','beach'],
+  // Tier 4
+  ['lightning','metal','gold'],
+  ['stone','metal','tool'],
+  ['lightning','cloud','electricity'],
+  ['swamp','stone','moss'],
+  ['volcano','stone','crystal'],
+  // Tier 5
+  ['metal','fire','sword'],
+  ['metal','electricity','robot'],
+  ['brick','stone','house'],
+  ['crystal','stone','diamond'],
+  // Tier 6
+  ['gold','metal','ring'],
+  ['house','metal','city'],
+  ['lightning','crystal','energy'],
+  // Tier 7 — Philosopher's Stone
+  ['gold','diamond','philosopher'],
+  // Bonus combos
+  ['fog','forest','moss'],
+  ['beach','plant','forest'],
+  ['electricity','tool','robot'],
+  ['ring','diamond','philosopher'],
+];
+
+// Build lookup map: "a|b" and "b|a" → result
+const recipeMap = {};
+for(const [a,b,r] of RECIPES){
+  recipeMap[a+'|'+b] = r;
+  recipeMap[b+'|'+a] = r;
+}
+
+function combine(idA, idB){
+  return recipeMap[idA+'|'+idB] || null;
+}
+
+// ── AUDIO ─────────────────────────────────────────────────────────────────
+let AC = null;
+function getAC(){
+  if(!AC) AC = new (window.AudioContext||window.webkitAudioContext)();
+  if(AC.state==='suspended') AC.resume();
+  return AC;
+}
+function tone(freq,type,dur,vol,delay=0){
+  const ac=getAC();
+  const o=ac.createOscillator(), g=ac.createGain();
+  o.connect(g);g.connect(ac.destination);
+  o.type=type;o.frequency.value=freq;
+  g.gain.setValueAtTime(0,ac.currentTime+delay);
+  g.gain.linearRampToValueAtTime(vol,ac.currentTime+delay+0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001,ac.currentTime+delay+dur);
+  o.start(ac.currentTime+delay);
+  o.stop(ac.currentTime+delay+dur+0.05);
+}
+function sndMerge(tier){
+  const base = 220 + tier * 110;
+  tone(base,'sine',0.12,0.35);
+  tone(base*1.5,'sine',0.18,0.25,0.05);
+  tone(base*2,'triangle',0.1,0.15,0.1);
+}
+function sndNoMerge(){tone(160,'sawtooth',0.1,0.25);}
+function sndPhilosopher(){
+  for(let i=0;i<5;i++) tone(440*Math.pow(1.25,i),'sine',0.5,0.3,i*0.1);
+}
+function sndSpawn(){tone(330,'triangle',0.1,0.2);}
+
+// ── GRID STATE ─────────────────────────────────────────────────────────────
+const ROWS=4, COLS=4;
+let grid = new Array(ROWS*COLS).fill(null); // null or element id
+let discovered = new Set();
+let hiScore = 0;
+let score = 0;
+let gameActive = false;
+
+function idx(r,c){return r*COLS+c;}
+
+function emptyIndices(){
+  return grid.map((v,i)=>v===null?i:-1).filter(i=>i>=0);
+}
+
+function placeEl(cellIdx, elId){
+  grid[cellIdx] = elId;
+  renderCell(cellIdx);
+}
+
+function clearCell(cellIdx){
+  grid[cellIdx] = null;
+  renderCell(cellIdx);
+}
+
+function renderCell(i){
+  const cell = document.querySelectorAll('.cell')[i];
+  if(!cell) return;
+  const id = grid[i];
+  if(id){
+    const el = EL[id];
+    cell.innerHTML = `<div class="emoji">${el.emoji}</div><div class="name">${el.name}</div>`;
+    cell.dataset.el = id;
+    cell.classList.add('has-el');
+  } else {
+    cell.innerHTML = '';
+    delete cell.dataset.el;
+    cell.classList.remove('has-el');
+  }
+}
+
+function discover(elId){
+  if(!discovered.has(elId)){
+    discovered.add(elId);
+    score = discovered.size;
+    if(score > hiScore){
+      hiScore = score;
+      localStorage.setItem(LS_KEY, hiScore);
+    }
+    updateScoreBar();
+    addLog(elId, true);
+    return true;
+  }
+  return false;
+}
+
+function updateScoreBar(){
+  document.getElementById('score-el').textContent = 'DISCOVERED: '+score+'/'+Object.keys(EL).length;
+  document.getElementById('hi-el').textContent = 'BEST: '+hiScore;
+}
+
+function addLog(elId, isNew){
+  const el = EL[elId];
+  const entry = document.createElement('div');
+  entry.className = 'log-entry' + (isNew?' new':'');
+  entry.innerHTML = `<span class="le">${el.emoji}</span> ${el.name}${isNew?' ✨':''}`;
+  const log = document.getElementById('log');
+  log.insertBefore(entry, log.firstChild);
+  if(isNew) setTimeout(()=>entry.classList.remove('new'),2000);
+}
+
+// ── DRAG & DROP (mouse + touch) ────────────────────────────────────────────
+let dragFrom = -1; // cell index
+let dragElId = null;
+const ghost = document.getElementById('drag-ghost');
+const ghostEmoji = document.getElementById('ghost-emoji');
+const ghostName = document.getElementById('ghost-name');
+
+function startDrag(cellIdx, x, y){
+  if(!gameActive) return;
+  const id = grid[cellIdx];
+  if(!id) return;
+  dragFrom = cellIdx;
+  dragElId = id;
+  const el = EL[id];
+  ghostEmoji.textContent = el.emoji;
+  ghostName.textContent = el.name;
+  ghost.style.display = 'flex';
+  moveGhost(x, y);
+  document.querySelectorAll('.cell')[cellIdx].classList.add('dragging');
+}
+
+function moveGhost(x, y){
+  ghost.style.left = x+'px';
+  ghost.style.top = y+'px';
+}
+
+function endDrag(x, y){
+  ghost.style.display = 'none';
+  document.querySelectorAll('.cell').forEach(c=>c.classList.remove('dragging','drag-over'));
+  if(dragFrom === -1) return;
+
+  // find target cell under (x,y)
+  const el = document.elementFromPoint(x, y);
+  const cell = el ? el.closest('.cell') : null;
+  if(cell){
+    const cells = Array.from(document.querySelectorAll('.cell'));
+    const toIdx = cells.indexOf(cell);
+    if(toIdx >= 0 && toIdx !== dragFrom){
+      doMerge(dragFrom, toIdx);
+    }
+  }
+  dragFrom = -1;
+  dragElId = null;
+}
+
+function getCellUnder(x, y){
+  const cells = Array.from(document.querySelectorAll('.cell'));
+  for(const c of cells){
+    const r = c.getBoundingClientRect();
+    if(x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom) return c;
+  }
+  return null;
+}
+
+function doMerge(fromIdx, toIdx){
+  const idA = grid[fromIdx];
+  const idB = grid[toIdx];
+  if(!idA||!idB) return;
+  if(idA===idB){sndNoMerge();return;} // same element, no recipe
+  const resultId = combine(idA, idB);
+  if(!resultId){
+    sndNoMerge();
+    flashMsg(`No recipe: ${EL[idA].name} + ${EL[idB].name}`);
+    return;
+  }
+  // Remove both
+  clearCell(fromIdx);
+  clearCell(toIdx);
+  // Place result in toIdx with animation
+  grid[toIdx] = resultId;
+  const cell = document.querySelectorAll('.cell')[toIdx];
+  renderCell(toIdx);
+  cell.classList.add('spawn-anim');
+  setTimeout(()=>cell.classList.remove('spawn-anim'),400);
+
+  const isNew = discover(resultId);
+  sndMerge(EL[resultId].tier);
+  addMergeFlash();
+
+  if(resultId === 'philosopher'){
+    setTimeout(()=>{
+      sndPhilosopher();
+      showWin();
+    }, 500);
+    return;
+  }
+
+  // Spawn a new base element in empty cell
+  setTimeout(()=>spawnRandom(), 200);
+}
+
+function addMergeFlash(){
+  const f = document.createElement('div');
+  f.className = 'merge-flash';
+  document.body.appendChild(f);
+  setTimeout(()=>f.remove(), 350);
+}
+
+function flashMsg(msg){
+  // brief toast
+  let t = document.createElement('div');
+  t.style.cssText = 'position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:#f0f2;border:1px solid #f0f;color:#f0f;font-size:11px;padding:5px 12px;border-radius:6px;z-index:100;pointer-events:none;font-family:Courier New';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(), 1500);
+}
+
+function spawnRandom(){
+  const empty = emptyIndices();
+  if(empty.length === 0) return;
+  const cellIdx = empty[Math.floor(Math.random()*empty.length)];
+  // Weighted random: more base elements early
+  const baseEls = ['fire','water','earth','air'];
+  const knownEls = Array.from(discovered);
+  const pool = [...baseEls, ...baseEls]; // base weighted 2x
+  if(knownEls.length > 4) pool.push(...knownEls.slice(0, Math.min(6, knownEls.length)));
+  const pick = pool[Math.floor(Math.random()*pool.length)];
+  grid[cellIdx] = pick;
+  const cell = document.querySelectorAll('.cell')[cellIdx];
+  renderCell(cellIdx);
+  cell.classList.add('spawn-anim');
+  setTimeout(()=>cell.classList.remove('spawn-anim'), 400);
+  sndSpawn();
+  if(!discovered.has(pick)) discover(pick);
+}
+
+// ── Mouse drag ──────────────────────────────────────────────────────────────
+let mouseDown = false;
+document.getElementById('grid').addEventListener('mousedown', e=>{
+  const cell = e.target.closest('.cell');
+  if(!cell||!cell.dataset.el) return;
+  const cells = Array.from(document.querySelectorAll('.cell'));
+  mouseDown = true;
+  startDrag(cells.indexOf(cell), e.clientX, e.clientY);
+  e.preventDefault();
+});
+document.addEventListener('mousemove', e=>{
+  if(!mouseDown||dragFrom===-1) return;
+  moveGhost(e.clientX, e.clientY);
+  // hover highlight
+  document.querySelectorAll('.cell').forEach(c=>c.classList.remove('drag-over'));
+  const c = getCellUnder(e.clientX, e.clientY);
+  if(c&&c.dataset.el){
+    const cells = Array.from(document.querySelectorAll('.cell'));
+    if(cells.indexOf(c) !== dragFrom) c.classList.add('drag-over');
+  }
+});
+document.addEventListener('mouseup', e=>{
+  if(!mouseDown) return;
+  mouseDown = false;
+  endDrag(e.clientX, e.clientY);
+});
+
+// ── Touch drag ─────────────────────────────────────────────────────────────
+let touchActive = false;
+document.getElementById('grid').addEventListener('touchstart', e=>{
+  const touch = e.touches[0];
+  const cell = document.elementFromPoint(touch.clientX, touch.clientY)?.closest('.cell');
+  if(!cell||!cell.dataset.el) return;
+  const cells = Array.from(document.querySelectorAll('.cell'));
+  touchActive = true;
+  startDrag(cells.indexOf(cell), touch.clientX, touch.clientY);
+  e.preventDefault();
+},{passive:false});
+
+document.addEventListener('touchmove', e=>{
+  if(!touchActive||dragFrom===-1) return;
+  const touch = e.touches[0];
+  moveGhost(touch.clientX, touch.clientY);
+  document.querySelectorAll('.cell').forEach(c=>c.classList.remove('drag-over'));
+  const c = getCellUnder(touch.clientX, touch.clientY);
+  if(c&&c.dataset.el){
+    const cells = Array.from(document.querySelectorAll('.cell'));
+    if(cells.indexOf(c) !== dragFrom) c.classList.add('drag-over');
+  }
+  e.preventDefault();
+},{passive:false});
+
+document.addEventListener('touchend', e=>{
+  if(!touchActive) return;
+  touchActive = false;
+  const touch = e.changedTouches[0];
+  endDrag(touch.clientX, touch.clientY);
+},{passive:false});
+
+// ── Game init ──────────────────────────────────────────────────────────────
+function buildGrid(){
+  const gridEl = document.getElementById('grid');
+  gridEl.innerHTML = '';
+  for(let i=0;i<ROWS*COLS;i++){
+    const cell = document.createElement('div');
+    cell.className = 'cell';
+    gridEl.appendChild(cell);
+  }
+}
+
+function resetGame(){
+  gameActive = false;
+  document.getElementById('win-screen').classList.add('hidden');
+  grid = new Array(ROWS*COLS).fill(null);
+  discovered = new Set();
+  score = 0;
+  document.getElementById('log').innerHTML = '';
+  hiScore = parseInt(localStorage.getItem(LS_KEY)||'0');
+  buildGrid();
+  // Place 4 base elements
+  const bases = ['fire','water','earth','air'];
+  const positions = [0,3,12,15];
+  for(let i=0;i<4;i++){
+    placeEl(positions[i], bases[i]);
+    discover(bases[i]);
+  }
+  updateScoreBar();
+  gameActive = true;
+}
+
+function startGame(){
+  document.getElementById('screen').classList.add('hidden');
+  resetGame();
+}
+
+function showWin(){
+  document.getElementById('win-score').textContent = `Discovered ${score} / ${Object.keys(EL).length} elements`;
+  document.getElementById('win-screen').classList.remove('hidden');
+}
+
+// ── Boot ────────────────────────────────────────────────────────────────────
+hiScore = parseInt(localStorage.getItem(LS_KEY)||'0');
+buildGrid();
+updateScoreBar();
+</script>
+</body>
+</html>

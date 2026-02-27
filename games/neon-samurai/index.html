@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>⚔️ Neon Samurai — One-Button Slash</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0a1a;color:#fff;font-family:'Courier New',monospace;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
+canvas{display:block;margin:0 auto}
+#ui{position:fixed;top:0;left:0;width:100%;pointer-events:none}
+#hud{display:flex;justify-content:space-between;padding:12px 20px;font-size:14px;text-shadow:0 0 8px #0ff}
+#kills{color:#0ff}#combo{color:#f0f}#hi{color:#ff0}
+#screen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#0a0a1aee;text-align:center;padding:20px;z-index:10}
+#screen h1{font-size:clamp(28px,8vw,56px);color:#0ff;text-shadow:0 0 20px #0ff,0 0 40px #0ff;margin-bottom:8px;letter-spacing:4px}
+#screen .sub{font-size:clamp(12px,3.5vw,18px);color:#888;margin-bottom:20px;line-height:1.6}
+#screen .rules{font-size:clamp(11px,3vw,15px);color:#aaa;background:#ffffff08;border:1px solid #0ff3;border-radius:12px;padding:16px 20px;margin-bottom:20px;max-width:400px;line-height:1.8}
+#screen .rules span{color:#0ff}
+.btn{background:transparent;border:2px solid #0ff;color:#0ff;font-family:inherit;font-size:clamp(14px,4vw,18px);padding:12px 36px;border-radius:8px;cursor:pointer;letter-spacing:2px;text-shadow:0 0 8px #0ff;box-shadow:0 0 15px #0ff4,inset 0 0 15px #0ff1;transition:all .15s}
+.btn:hover,.btn:active{background:#0ff2;box-shadow:0 0 25px #0ff8,inset 0 0 25px #0ff3}
+#gameover .score-display{font-size:clamp(18px,5vw,30px);color:#f0f;text-shadow:0 0 15px #f0f;margin:10px 0}
+#gameover .hi-display{font-size:clamp(13px,3.5vw,18px);color:#ff0;text-shadow:0 0 10px #ff0;margin-bottom:20px}
+.hidden{display:none!important}
+#boss-bar{position:fixed;bottom:60px;left:50%;transform:translateX(-50%);width:60%;max-width:300px;height:16px;background:#333;border-radius:8px;border:1px solid #f0f3;overflow:hidden;display:none}
+#boss-fill{height:100%;background:linear-gradient(90deg,#f0f,#f80);border-radius:8px;transition:width .2s;box-shadow:0 0 8px #f0f}
+#boss-label{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);font-size:12px;color:#f0f;text-shadow:0 0 6px #f0f;white-space:nowrap}
+#slash-zone{position:fixed;bottom:0;left:0;width:100%;height:50px;background:linear-gradient(transparent,#0ff08);pointer-events:none;opacity:0;transition:opacity .15s}
+</style>
+</head>
+<body>
+
+<canvas id="c"></canvas>
+<div id="ui">
+  <div id="hud">
+    <div id="kills">KILLS: 0</div>
+    <div id="combo"></div>
+    <div id="hi">BEST: 0</div>
+  </div>
+</div>
+<div id="boss-label" class="hidden">⚠️ BOSS</div>
+<div id="boss-bar" class="hidden"><div id="boss-fill" style="width:100%"></div></div>
+<div id="slash-zone"></div>
+
+<div id="screen" id="start">
+  <h1>⚔️ NEON<br>SAMURAI</h1>
+  <div class="sub">One-Button Slash • Timing is Everything</div>
+  <div class="rules">
+    <span>TAP / CLICK / SPACE</span> to slash<br>
+    Perfect timing = <span>ONE-HIT KILL</span><br>
+    Miss = enemy passes through<br>
+    <span>COMBO</span> multiplies your score<br>
+    Boss appears every <span>10 kills</span>
+  </div>
+  <button class="btn" onclick="startGame()">SLASH START</button>
+</div>
+
+<div id="gameover" class="screen hidden" style="position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#0a0a1aee;text-align:center;padding:20px;z-index:10">
+  <h1 style="font-size:clamp(24px,7vw,48px);color:#f0f;text-shadow:0 0 20px #f0f,0 0 40px #f0f;margin-bottom:8px;letter-spacing:4px;font-family:'Courier New',monospace">GAME OVER</h1>
+  <div class="score-display">KILLS: <span id="final-kills">0</span></div>
+  <div class="hi-display">BEST: <span id="final-hi">0</span></div>
+  <button class="btn" onclick="startGame()" style="margin-top:8px">PLAY AGAIN</button>
+</div>
+
+<script>
+const C = document.getElementById('c');
+const ctx = C.getContext('2d');
+const LS_KEY = 'neon-samurai-hi';
+
+let W, H, cx, cy;
+function resize(){
+  W = C.width = Math.min(window.innerWidth, 480);
+  H = C.height = window.innerHeight;
+  cx = W/2; cy = H/2;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// --- Audio ---
+const AC = new (window.AudioContext || window.webkitAudioContext)();
+function resumeAC(){if(AC.state==='suspended')AC.resume();}
+function beep(freq,type,dur,vol,delay=0){
+  const osc=AC.createOscillator(), g=AC.createGain();
+  osc.connect(g);g.connect(AC.destination);
+  osc.type=type;osc.frequency.value=freq;
+  g.gain.setValueAtTime(0,AC.currentTime+delay);
+  g.gain.linearRampToValueAtTime(vol,AC.currentTime+delay+0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001,AC.currentTime+delay+dur);
+  osc.start(AC.currentTime+delay);
+  osc.stop(AC.currentTime+delay+dur+0.05);
+}
+function sndSlash(perfect){
+  if(perfect){
+    beep(880,'sawtooth',0.08,0.4);
+    beep(1200,'sine',0.15,0.3,0.02);
+    beep(440,'square',0.06,0.2,0.05);
+  } else {
+    beep(200,'sawtooth',0.15,0.3);
+  }
+}
+function sndMiss(){beep(120,'sawtooth',0.2,0.3);}
+function sndBossHit(){beep(660,'sawtooth',0.1,0.4);beep(440,'square',0.1,0.2,0.05);}
+function sndDie(){beep(180,'sawtooth',0.4,0.5);beep(100,'square',0.6,0.4,0.1);}
+function sndCombo(c){beep(400+c*60,'sine',0.12,0.35);}
+
+// --- Game State ---
+let state = 'start'; // start | play | gameover
+let kills, combo, hiScore, frame, enemies, particles, slashEffect, bossHp, bossMax, isBoss, bossPhase, nextBossAtKills, gameSpeed;
+
+function initGame(){
+  kills=0; combo=0; frame=0; enemies=[]; particles=[]; slashEffect=null;
+  isBoss=false; bossHp=0; bossMax=0; bossPhase=0; nextBossAtKills=10;
+  gameSpeed=1.0;
+  hiScore = parseInt(localStorage.getItem(LS_KEY)||'0');
+  updateHUD();
+}
+
+function updateHUD(){
+  document.getElementById('kills').textContent = 'KILLS: '+kills;
+  document.getElementById('combo').textContent = combo>1?'COMBO ×'+combo:'';
+  document.getElementById('hi').textContent = 'BEST: '+hiScore;
+}
+
+// Enemy: {x,y,dir,speed,hp,maxHp,perfect,isBoss,slashCount,lastSlashTime,pattern,patternIdx,trail:[]}
+const SWORD_Y_FRAC = 0.65; // samurai stands at 65% height
+
+function spawnEnemy(){
+  const dir = Math.random()<0.5?-1:1;
+  const x = dir===-1 ? -40 : W+40;
+  const spd = (1.5 + kills*0.04 + Math.random()*0.5) * gameSpeed;
+  enemies.push({
+    x, y: H*SWORD_Y_FRAC,
+    dir, speed: Math.min(spd, 6),
+    hp:1, maxHp:1, isBoss:false,
+    trail:[], dead:false, miss:false
+  });
+}
+
+function spawnBoss(){
+  isBoss=true;
+  bossMax=3; bossHp=3; bossPhase=0;
+  // boss comes from random side
+  const dir = Math.random()<0.5?-1:1;
+  enemies.push({
+    x: dir===-1?-60:W+60,
+    y: H*SWORD_Y_FRAC,
+    dir, speed: (2.0+kills*0.03)*gameSpeed,
+    hp:3, maxHp:3, isBoss:true,
+    trail:[], dead:false, miss:false,
+    pattern:['⬇','⬆','⬇'], patternIdx:0, slashCount:0
+  });
+  document.getElementById('boss-bar').style.display='block';
+  document.getElementById('boss-label').classList.remove('hidden');
+  updateBossBar();
+}
+
+function updateBossBar(){
+  document.getElementById('boss-fill').style.width=(bossHp/bossMax*100)+'%';
+}
+
+function hideBossUI(){
+  document.getElementById('boss-bar').style.display='none';
+  document.getElementById('boss-label').classList.add('hidden');
+}
+
+// Perfect zone: when enemy center is within ±slashRange px of cx
+function getSlashRange(e){
+  return e.isBoss ? 65 : 50;
+}
+function isPerfect(e){
+  return Math.abs(e.x - cx) <= getSlashRange(e);
+}
+
+function slash(){
+  resumeAC();
+  if(state!=='play') return;
+  if(enemies.length===0){sndMiss();return;}
+
+  // find closest enemy
+  let best=null, bestD=9999;
+  for(const e of enemies){
+    if(e.dead||e.miss) continue;
+    const d = Math.abs(e.x - cx);
+    if(d<bestD){bestD=d;best=e;}
+  }
+  if(!best){sndMiss();return;}
+
+  const perfect = isPerfect(best);
+  slashEffect = {t:0, x:cx, y:H*SWORD_Y_FRAC, perfect};
+
+  if(perfect){
+    if(best.isBoss){
+      best.hp--;
+      bossHp--;
+      sndBossHit();
+      updateBossBar();
+      spawnParticles(cx, H*SWORD_Y_FRAC, '#f0f', 20);
+      if(best.hp<=0){
+        best.dead=true;
+        kills+=3; combo++;
+        isBoss=false; hideBossUI();
+        sndCombo(combo);
+        nextBossAtKills=kills+10;
+      }
+    } else {
+      best.dead=true;
+      kills++; combo++;
+      sndSlash(true);
+      sndCombo(combo);
+      spawnParticles(cx, H*SWORD_Y_FRAC, '#0ff', 14);
+      // level up speed
+      gameSpeed = 1.0 + kills*0.012;
+      if(kills>=nextBossAtKills && !isBoss && enemies.filter(e=>e.isBoss).length===0){
+        spawnBoss();
+        nextBossAtKills=kills+10;
+      }
+    }
+  } else {
+    combo=0;
+    sndMiss();
+    spawnParticles(cx, H*SWORD_Y_FRAC, '#f80', 6);
+  }
+  if(kills>hiScore){
+    hiScore=kills;
+    localStorage.setItem(LS_KEY,hiScore);
+  }
+  updateHUD();
+}
+
+function spawnParticles(x,y,col,n){
+  for(let i=0;i<n;i++){
+    const a=Math.random()*Math.PI*2, s=2+Math.random()*5;
+    particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-2,col,life:1,maxLife:1});
+  }
+}
+
+let spawnTimer=0, spawnInterval=120;
+
+function update(){
+  if(state!=='play') return;
+  frame++;
+  spawnTimer++;
+  spawnInterval = Math.max(40, 120 - kills*1.2);
+  if(spawnTimer>=spawnInterval && !isBoss){
+    spawnTimer=0;
+    spawnEnemy();
+  }
+
+  // update enemies
+  for(const e of enemies){
+    if(e.dead) continue;
+    e.trail.push({x:e.x,y:e.y});
+    if(e.trail.length>8) e.trail.shift();
+    e.x += e.dir * e.speed;
+
+    // enemy passed through
+    if((e.dir===-1&&e.x < -60)||(e.dir===1&&e.x > W+60)){
+      if(e.isBoss){
+        isBoss=false; hideBossUI();
+      }
+      e.miss=true;
+      combo=0;
+      updateHUD();
+      spawnParticles(e.x<0?20:W-20, e.y, '#f00', 8);
+    }
+  }
+  enemies = enemies.filter(e=>!e.dead&&!e.miss);
+
+  // update particles
+  for(const p of particles){
+    p.x+=p.vx; p.y+=p.vy; p.vy+=0.18;
+    p.life-=0.04;
+    p.vx*=0.95; p.vy*=0.95;
+  }
+  particles=particles.filter(p=>p.life>0);
+
+  // slash effect
+  if(slashEffect) slashEffect.t+=0.08;
+}
+
+function drawStick(x, y, col, scale=1, boss=false){
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.strokeStyle=col;
+  ctx.lineWidth=(boss?3:2)*scale;
+  ctx.shadowColor=col;
+  ctx.shadowBlur=boss?18:10;
+
+  // head
+  ctx.beginPath();
+  ctx.arc(0,-36*scale, 10*scale,0,Math.PI*2);
+  ctx.stroke();
+  // body
+  ctx.beginPath();ctx.moveTo(0,-26*scale);ctx.lineTo(0,0);ctx.stroke();
+  // legs
+  ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(-12*scale,22*scale);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(12*scale,22*scale);ctx.stroke();
+  // arms
+  ctx.beginPath();ctx.moveTo(0,-18*scale);ctx.lineTo(-18*scale,-6*scale);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(0,-18*scale);ctx.lineTo(18*scale,-6*scale);ctx.stroke();
+  // sword (right arm extension)
+  if(boss){
+    ctx.strokeStyle='#f0f';ctx.shadowColor='#f0f';
+    ctx.lineWidth=3*scale;
+    ctx.beginPath();ctx.moveTo(18*scale,-6*scale);ctx.lineTo(42*scale,-18*scale);ctx.stroke();
+  } else {
+    ctx.strokeStyle='#0ff';ctx.shadowColor='#0ff';
+    ctx.lineWidth=2*scale;
+    ctx.beginPath();ctx.moveTo(18*scale,-6*scale);ctx.lineTo(36*scale,-14*scale);ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawSamurai(){
+  const x=cx, y=H*SWORD_Y_FRAC;
+  ctx.save();
+  ctx.translate(x,y);
+  ctx.strokeStyle='#ff0';
+  ctx.lineWidth=2.5;
+  ctx.shadowColor='#ff0';
+  ctx.shadowBlur=15;
+  // head
+  ctx.beginPath();ctx.arc(0,-40,12,0,Math.PI*2);ctx.stroke();
+  // body
+  ctx.beginPath();ctx.moveTo(0,-28);ctx.lineTo(0,4);ctx.stroke();
+  // legs
+  ctx.beginPath();ctx.moveTo(0,4);ctx.lineTo(-15,28);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(0,4);ctx.lineTo(15,28);ctx.stroke();
+  // arms ready
+  ctx.beginPath();ctx.moveTo(0,-20);ctx.lineTo(-22,-6);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(0,-20);ctx.lineTo(22,-6);ctx.stroke();
+  // katana up
+  ctx.strokeStyle='#fff';ctx.shadowColor='#fff';ctx.lineWidth=3;
+  ctx.beginPath();ctx.moveTo(22,-6);ctx.lineTo(42,-36);ctx.stroke();
+  ctx.restore();
+}
+
+function drawPerfectZone(){
+  const y=H*SWORD_Y_FRAC, r=48;
+  ctx.save();
+  const grad=ctx.createRadialGradient(cx,y,0,cx,y,r);
+  grad.addColorStop(0,'rgba(0,255,255,0.07)');
+  grad.addColorStop(1,'rgba(0,255,255,0)');
+  ctx.fillStyle=grad;
+  ctx.beginPath();ctx.arc(cx,y,r,0,Math.PI*2);ctx.fill();
+  // ring
+  ctx.strokeStyle='rgba(0,255,255,0.18)';
+  ctx.lineWidth=1.5;
+  ctx.setLineDash([4,6]);
+  ctx.beginPath();ctx.arc(cx,y,r,0,Math.PI*2);ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+function drawSlashEffect(){
+  if(!slashEffect||slashEffect.t>1) return;
+  const {x,y,perfect,t}=slashEffect;
+  const alpha=1-t;
+  const len=80+t*60;
+  const col=perfect?`rgba(0,255,255,${alpha})`:`rgba(255,136,0,${alpha})`;
+  ctx.save();
+  ctx.strokeStyle=col;
+  ctx.shadowColor=col;
+  ctx.shadowBlur=20;
+  ctx.lineWidth=3+t*2;
+  ctx.lineCap='round';
+  // diagonal slash lines
+  for(let i=-1;i<=1;i++){
+    const off=i*10;
+    ctx.beginPath();
+    ctx.moveTo(x-len/2+off,y+len/3);
+    ctx.lineTo(x+len/2+off,y-len/3);
+    ctx.stroke();
+  }
+  // perfect label
+  if(perfect&&t<0.5){
+    ctx.fillStyle=`rgba(0,255,255,${1-t*2})`;
+    ctx.font=`bold ${20+t*15}px Courier New`;
+    ctx.textAlign='center';
+    ctx.shadowBlur=15;
+    ctx.fillText('PERFECT!',x,y-60-t*30);
+  }
+  ctx.restore();
+}
+
+function drawFloor(){
+  ctx.save();
+  const y=H*SWORD_Y_FRAC+35;
+  ctx.strokeStyle='rgba(0,255,255,0.12)';
+  ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();
+  // grid lines
+  ctx.strokeStyle='rgba(0,255,255,0.04)';
+  for(let i=0;i<W;i+=40){
+    ctx.beginPath();ctx.moveTo(i,y);ctx.lineTo(i+20,y+H*0.35);ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+
+  // bg gradient
+  const bg=ctx.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0,'#0a0a1a');
+  bg.addColorStop(1,'#0d0520');
+  ctx.fillStyle=bg;
+  ctx.fillRect(0,0,W,H);
+
+  drawFloor();
+  drawPerfectZone();
+
+  // draw enemy trails
+  for(const e of enemies){
+    if(e.dead) continue;
+    for(let i=0;i<e.trail.length;i++){
+      const a=(i+1)/e.trail.length*0.4;
+      const col=e.isBoss?`rgba(255,0,255,${a})`:`rgba(0,255,255,${a})`;
+      ctx.fillStyle=col;
+      ctx.beginPath();ctx.arc(e.trail[i].x,e.trail[i].y,3*(i+1)/e.trail.length,0,Math.PI*2);ctx.fill();
+    }
+  }
+
+  // draw enemies
+  for(const e of enemies){
+    if(e.dead) continue;
+    const col=e.isBoss?'#f0f':'#0ff';
+    const scale=e.isBoss?1.5:1;
+    drawStick(e.x, e.y, col, scale, e.isBoss);
+    // hp bar for boss
+    if(e.isBoss){
+      const bw=60,bh=6,bx=e.x-bw/2,by=e.y-75;
+      ctx.fillStyle='#333';ctx.fillRect(bx,by,bw,bh);
+      ctx.fillStyle='#f0f';ctx.shadowColor='#f0f';ctx.shadowBlur=6;
+      ctx.fillRect(bx,by,bw*(e.hp/e.maxHp),bh);
+      ctx.shadowBlur=0;
+    }
+    // perfect zone indicator
+    if(isPerfect(e)){
+      ctx.save();
+      ctx.strokeStyle=e.isBoss?'#f0f8':'#0ff8';
+      ctx.lineWidth=2;
+      ctx.shadowColor=e.isBoss?'#f0f':'#0ff';
+      ctx.shadowBlur=10;
+      ctx.beginPath();ctx.arc(e.x,e.y-20,22,0,Math.PI*2);ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  drawSamurai();
+  drawSlashEffect();
+
+  // particles
+  for(const p of particles){
+    ctx.save();
+    ctx.fillStyle=p.col;
+    ctx.globalAlpha=p.life;
+    ctx.shadowColor=p.col;ctx.shadowBlur=6;
+    ctx.beginPath();ctx.arc(p.x,p.y,3,0,Math.PI*2);ctx.fill();
+    ctx.restore();
+  }
+
+  // combo glow
+  if(combo>2){
+    ctx.save();
+    const grad=ctx.createRadialGradient(cx,H*SWORD_Y_FRAC,0,cx,H*SWORD_Y_FRAC,80);
+    const a=Math.min(combo*0.04,0.25);
+    grad.addColorStop(0,`rgba(255,0,255,${a})`);
+    grad.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=grad;
+    ctx.beginPath();ctx.arc(cx,H*SWORD_Y_FRAC,80,0,Math.PI*2);ctx.fill();
+    ctx.restore();
+  }
+}
+
+function loop(){
+  if(state==='play'){update();draw();}
+  requestAnimationFrame(loop);
+}
+
+function startGame(){
+  document.getElementById('screen').classList.add('hidden');
+  document.getElementById('gameover').classList.add('hidden');
+  hideBossUI();
+  initGame();
+  state='play';
+  resumeAC();
+}
+
+function endGame(){
+  state='gameover';
+  if(kills>hiScore){
+    hiScore=kills;
+    localStorage.setItem(LS_KEY,hiScore);
+  }
+  sndDie();
+  document.getElementById('final-kills').textContent=kills;
+  document.getElementById('final-hi').textContent=hiScore;
+  document.getElementById('gameover').classList.remove('hidden');
+  hideBossUI();
+}
+
+// -- Input
+document.addEventListener('keydown',e=>{
+  if(e.code==='Space'||e.code==='ArrowUp'||e.code==='KeyZ'){e.preventDefault();slash();}
+});
+C.addEventListener('click',slash);
+C.addEventListener('touchstart',e=>{e.preventDefault();slash();},{passive:false});
+document.getElementById('gameover').addEventListener('click',e=>{
+  if(e.target.classList.contains('btn'))return;
+  // ignore accidental taps that aren't on button but on overlay — actually allow it
+});
+
+// start screen touch suppression
+document.getElementById('screen').addEventListener('touchstart',e=>{e.stopPropagation();},{passive:false});
+document.getElementById('gameover').addEventListener('touchstart',e=>{e.stopPropagation();},{passive:false});
+
+hiScore = parseInt(localStorage.getItem(LS_KEY)||'0');
+document.getElementById('hi').textContent='BEST: '+hiScore;
+loop();
+</script>
+</body>
+</html>

@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>Neon Crossword</title>
+  <link rel="icon" href="data:," />
+  <style>
+    :root{
+      --bg:#0a0a1a; --panel:#11112a; --cyan:#22f0ff; --pink:#ff4fd8; --violet:#8a6bff; --text:#eaf6ff;
+      --good:#29ffd2; --bad:#ff4466;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;font-family:Inter,Segoe UI,system-ui,sans-serif;background:radial-gradient(circle at 20% 0%,#16163b 0,#0a0a1a 50%);color:var(--text)}
+    .app{max-width:980px;margin:0 auto;padding:14px;display:flex;flex-direction:column;gap:12px}
+    .card{background:rgba(17,17,42,.88);border:1px solid #2f2f70;border-radius:14px;box-shadow:0 0 20px #000 inset,0 0 18px #1b1b49}
+    .screen{padding:22px;text-align:center}
+    h1,h2{margin:6px 0 10px;text-shadow:0 0 12px var(--cyan)}
+    .sub{opacity:.85;font-size:14px;line-height:1.4}
+    .btn{background:#1c1c45;color:var(--text);border:1px solid #3a3a85;border-radius:10px;padding:10px 14px;cursor:pointer;font-weight:700}
+    .btn:hover{box-shadow:0 0 12px #3f4bff}
+    .btn:active{transform:translateY(1px)}
+    .btn-main{background:linear-gradient(135deg,#173466,#3f2f8f);border-color:#4e76d6;box-shadow:0 0 14px #2f61ff66}
+    .hidden{display:none!important}
+
+    .hud{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:10px}
+    .pill{padding:8px;border-radius:10px;background:#171739;border:1px solid #30306f;text-align:center;font-size:13px}
+    .pill b{display:block;color:var(--cyan);font-size:16px;text-shadow:0 0 8px var(--cyan)}
+
+    .play-wrap{display:grid;grid-template-columns:minmax(280px,1fr) 1fr;gap:12px}
+    .board-wrap{padding:12px;display:flex;flex-direction:column;gap:10px;align-items:center}
+    .board{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;width:min(94vw,430px)}
+    .cell{aspect-ratio:1/1;border-radius:8px;border:1px solid #32327a;background:#16163b;color:#d7f7ff;font-size:clamp(18px,3.6vw,24px);font-weight:800;text-transform:uppercase;position:relative;text-shadow:0 0 8px #4cf;touch-action:manipulation}
+    .cell.block{background:#060611;border-color:#121226;cursor:default}
+    .cell.active{outline:2px solid var(--pink);box-shadow:0 0 14px #ff4fd8aa}
+    .cell.correct{background:#09303a;border-color:#1fffe4;color:#affff7;box-shadow:0 0 12px #1fffe455}
+    .cell.wrong{animation:wrongFlash .3s ease;border-color:var(--bad);box-shadow:0 0 14px #ff4068aa;background:#330915}
+    @keyframes wrongFlash{0%{transform:scale(1)}50%{transform:scale(1.08)}100%{transform:scale(1)}}
+
+    .keyboard{display:grid;gap:6px;width:min(94vw,430px)}
+    .key-row{display:grid;gap:6px;grid-template-columns:repeat(10,1fr)}
+    .key-row.r2{grid-template-columns:repeat(9,1fr)}
+    .key-row.r3{grid-template-columns:repeat(8,1fr)}
+    .key{padding:9px 0;border-radius:8px;border:1px solid #333382;background:#1a1a43;color:#d9e7ff;font-weight:700;touch-action:manipulation}
+    .key.special{background:#2f1f4a;border-color:#7f5fb3}
+
+    .clues{padding:12px;display:grid;gap:10px}
+    .clue-cols{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .clue-box{background:#121231;border:1px solid #2f2f73;border-radius:10px;padding:8px}
+    .clue-box h3{margin:0 0 8px;color:var(--cyan);font-size:14px}
+    ol{margin:0;padding-left:20px;display:grid;gap:6px}
+    li{font-size:13px;line-height:1.3;cursor:pointer}
+    li.active{color:#fff; text-shadow:0 0 10px var(--pink)}
+    .actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+
+    @media (max-width:900px){
+      .play-wrap{grid-template-columns:1fr}
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+  <section id="startScreen" class="card screen">
+    <h1>🧩 Neon Crossword</h1>
+    <p class="sub">Fill the 7×7 mini crossword. Tap a cell, type letters (or use the neon keyboard), use up to 3 hints, and beat your best time.</p>
+    <p class="sub" id="bestLine"></p>
+    <button class="btn btn-main" id="startBtn">Start Puzzle</button>
+  </section>
+
+  <section id="gameScreen" class="card hidden">
+    <div class="hud">
+      <div class="pill">Timer<b id="timer">00:00</b></div>
+      <div class="pill">Hints Left<b id="hints">3</b></div>
+      <div class="pill">Puzzle<b id="setName">-</b></div>
+      <div class="pill">Completions<b id="completions">0</b></div>
+    </div>
+
+    <div class="play-wrap">
+      <div class="board-wrap">
+        <div id="board" class="board"></div>
+        <div class="actions">
+          <button class="btn" id="toggleDirBtn">Direction: Across</button>
+          <button class="btn" id="hintBtn">Reveal Hint</button>
+          <button class="btn" id="clearBtn">Clear Cell</button>
+        </div>
+        <div id="keyboard" class="keyboard"></div>
+      </div>
+
+      <div class="clues">
+        <div class="clue-cols">
+          <div class="clue-box">
+            <h3>Across</h3>
+            <ol id="acrossList"></ol>
+          </div>
+          <div class="clue-box">
+            <h3>Down</h3>
+            <ol id="downList"></ol>
+          </div>
+        </div>
+        <p class="sub" id="activeHint"></p>
+      </div>
+    </div>
+  </section>
+
+  <section id="overScreen" class="card screen hidden">
+    <h2 id="overTitle">Puzzle Complete</h2>
+    <p class="sub" id="overText"></p>
+    <button class="btn btn-main" id="playAgainBtn">Play Again</button>
+  </section>
+</div>
+
+<script>
+(() => {
+  const SLUG = 'neon-crossword';
+  const HI_KEY = `${SLUG}-hi`;
+  const $ = (id) => document.getElementById(id);
+
+  const PUZZLES = [
+    {
+      name:'A',
+      rows:['OTHER','THERE','HEART','ERROR','RETRO'],
+      across:[
+        '1) Different one',
+        '2) In that place',
+        '3) Core of emotion',
+        '4) Mistake in code',
+        '5) Vintage style'
+      ],
+      down:[
+        '1) Alternative choice',
+        '2) Opposite of here',
+        '3) Emotion center',
+        '4) Bug or mistake',
+        '5) Old-school vibe'
+      ]
+    },
+    {
+      name:'B',
+      rows:['STATE','TERRA','ARBOR','TROUT','EARTH'],
+      across:[
+        '1) Political region',
+        '2) Latin word for Earth',
+        '3) Tree (formal term)',
+        '4) Freshwater fish',
+        '5) Our planet'
+      ],
+      down:[
+        '1) Region under one government',
+        '2) Ground or soil',
+        '3) Tree in botanical naming',
+        '4) River fish species',
+        '5) World beneath our feet'
+      ]
+    },
+    {
+      name:'C',
+      rows:['FIRST','IDAHO','RATIO','SHIRT','TOOTH'],
+      across:[
+        '1) Earliest in order',
+        '2) U.S. state with Boise',
+        '3) Comparison value',
+        '4) Top clothing item',
+        '5) White part of a smile'
+      ],
+      down:[
+        '1) Opposite of last',
+        '2) Northwestern U.S. state',
+        '3) Proportion between values',
+        '4) Garment with sleeves',
+        '5) One part of the bite'
+      ]
+    }
+  ];
+
+  let puzzle = null;
+  let direction = 'across';
+  let selected = {r:0,c:0};
+  let values = [];
+  let locked = [];
+  let hintsLeft = 3;
+  let startedAt = 0;
+  let timerId = null;
+  let playing = false;
+
+  function loadStats(){
+    try{
+      const parsed = JSON.parse(localStorage.getItem(HI_KEY) || '{}');
+      return { bestTime: parsed.bestTime ?? null, completions: parsed.completions ?? 0 };
+    }catch(_){
+      return { bestTime:null, completions:0 };
+    }
+  }
+
+  function saveStats(winSeconds){
+    const s = loadStats();
+    const bestTime = s.bestTime == null ? winSeconds : Math.min(s.bestTime, winSeconds);
+    const completions = s.completions + 1;
+    localStorage.setItem(HI_KEY, JSON.stringify({bestTime, completions}));
+    return {bestTime, completions};
+  }
+
+  function fmt(sec){
+    const m = String(Math.floor(sec/60)).padStart(2,'0');
+    const s = String(sec%60).padStart(2,'0');
+    return `${m}:${s}`;
+  }
+
+  function beep(type='tap'){
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if(!Ctx) return;
+    if(!beep.ctx) beep.ctx = new Ctx();
+    const ctx = beep.ctx;
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = type==='bad' ? 'sawtooth' : 'sine';
+    const now = ctx.currentTime;
+    const map = {tap:[440,.06], good:[780,.09], bad:[130,.13], win:[980,.18], hint:[620,.1]};
+    const [f,d] = map[type] || map.tap;
+    o.frequency.setValueAtTime(f, now);
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(0.18, now+0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, now+d);
+    o.connect(g); g.connect(ctx.destination);
+    o.start(now); o.stop(now+d+0.02);
+  }
+
+  function makeBoard(){
+    const board = $('board');
+    board.innerHTML = '';
+    for(let br=0;br<7;br++){
+      for(let bc=0;bc<7;bc++){
+        const btn = document.createElement('button');
+        btn.className = 'cell';
+        btn.dataset.br = br;
+        btn.dataset.bc = bc;
+
+        const active = br>=1 && br<=5 && bc>=1 && bc<=5;
+        if(!active){
+          btn.classList.add('block');
+          btn.disabled = true;
+        }else{
+          btn.addEventListener('click', ()=>{
+            const r = br-1, c = bc-1;
+            if(selected.r===r && selected.c===c) direction = direction==='across' ? 'down' : 'across';
+            selected = {r,c};
+            render();
+            beep('tap');
+          });
+        }
+        board.appendChild(btn);
+      }
+    }
+  }
+
+  function makeKeyboard(){
+    const wrap = $('keyboard');
+    const rows = ['QWERTYUIOP','ASDFGHJKL','ZXCVBNM'];
+    wrap.innerHTML='';
+    rows.forEach((str, idx)=>{
+      const row = document.createElement('div');
+      row.className = `key-row r${idx+1}`;
+      [...str].forEach(ch=>{
+        const b = document.createElement('button');
+        b.className='key';
+        b.textContent=ch;
+        b.addEventListener('click', ()=> inputLetter(ch));
+        row.appendChild(b);
+      });
+      if(idx===2){
+        const back = document.createElement('button');
+        back.className='key special';
+        back.textContent='⌫';
+        back.addEventListener('click', clearCell);
+        row.appendChild(back);
+      }
+      wrap.appendChild(row);
+    });
+  }
+
+  function renderClues(){
+    $('acrossList').innerHTML = '';
+    $('downList').innerHTML = '';
+    puzzle.across.forEach((c,i)=>{
+      const li=document.createElement('li'); li.textContent=c;
+      if(direction==='across' && selected.r===i) li.classList.add('active');
+      li.addEventListener('click', ()=>{direction='across';selected={r:i,c:selected.c};render();});
+      $('acrossList').appendChild(li);
+    });
+    puzzle.down.forEach((c,i)=>{
+      const li=document.createElement('li'); li.textContent=c;
+      if(direction==='down' && selected.c===i) li.classList.add('active');
+      li.addEventListener('click', ()=>{direction='down';selected={r:selected.r,c:i};render();});
+      $('downList').appendChild(li);
+    });
+    const clue = direction==='across' ? puzzle.across[selected.r] : puzzle.down[selected.c];
+    $('activeHint').textContent = `Active clue: ${clue}`;
+  }
+
+  function render(){
+    $('toggleDirBtn').textContent = `Direction: ${direction[0].toUpperCase()+direction.slice(1)}`;
+    $('hints').textContent = hintsLeft;
+    const stats = loadStats();
+    $('completions').textContent = stats.completions;
+
+    document.querySelectorAll('.cell').forEach((cell)=>{
+      const br = +cell.dataset.br, bc = +cell.dataset.bc;
+      if(!(br>=1 && br<=5 && bc>=1 && bc<=5)) return;
+      const r=br-1,c=bc-1;
+      cell.classList.toggle('active', selected.r===r && selected.c===c);
+      cell.classList.toggle('correct', locked[r][c]);
+      cell.textContent = values[r][c] || '';
+    });
+
+    renderClues();
+    if(playing){
+      const sec = Math.floor((Date.now()-startedAt)/1000);
+      $('timer').textContent = fmt(sec);
+    }
+  }
+
+  function move(delta){
+    if(direction==='across') selected.c = Math.min(4, Math.max(0, selected.c + delta));
+    else selected.r = Math.min(4, Math.max(0, selected.r + delta));
+  }
+
+  function clearCell(){
+    if(!playing) return;
+    const {r,c} = selected;
+    if(locked[r][c]) return;
+    values[r][c]='';
+    render();
+    beep('tap');
+  }
+
+  function inputLetter(ch){
+    if(!playing || !/^[A-Z]$/.test(ch)) return;
+    const {r,c} = selected;
+    if(locked[r][c]){ beep('tap'); move(1); render(); return; }
+
+    const target = puzzle.rows[r][c];
+    if(ch===target){
+      values[r][c]=ch;
+      locked[r][c]=true;
+      move(1);
+      beep('good');
+      if(isComplete()) return winGame();
+    }else{
+      values[r][c]=ch;
+      const cell = document.querySelector(`.cell[data-br="${r+1}"][data-bc="${c+1}"]`);
+      if(cell){
+        cell.classList.add('wrong');
+        setTimeout(()=>{
+          cell.classList.remove('wrong');
+          if(!locked[r][c]) values[r][c]='';
+          render();
+        }, 260);
+      }
+      beep('bad');
+    }
+    render();
+  }
+
+  function isComplete(){
+    for(let r=0;r<5;r++) for(let c=0;c<5;c++) if(!locked[r][c]) return false;
+    return true;
+  }
+
+  function useHint(){
+    if(!playing || hintsLeft<=0) return;
+    const open=[];
+    for(let r=0;r<5;r++) for(let c=0;c<5;c++) if(!locked[r][c]) open.push({r,c});
+    if(!open.length) return;
+    const pick = open[Math.floor(Math.random()*open.length)];
+    locked[pick.r][pick.c]=true;
+    values[pick.r][pick.c]=puzzle.rows[pick.r][pick.c];
+    selected={...pick};
+    hintsLeft--;
+    beep('hint');
+    if(isComplete()) return winGame();
+    render();
+  }
+
+  function startGame(){
+    puzzle = PUZZLES[Math.floor(Math.random()*PUZZLES.length)];
+    values = Array.from({length:5},()=>Array(5).fill(''));
+    locked = Array.from({length:5},()=>Array(5).fill(false));
+    hintsLeft = 3;
+    direction='across';
+    selected={r:0,c:0};
+    startedAt = Date.now();
+    playing = true;
+
+    $('setName').textContent = puzzle.name;
+    $('startScreen').classList.add('hidden');
+    $('overScreen').classList.add('hidden');
+    $('gameScreen').classList.remove('hidden');
+
+    clearInterval(timerId);
+    timerId = setInterval(render, 250);
+    makeBoard();
+    makeKeyboard();
+    render();
+  }
+
+  function winGame(){
+    playing = false;
+    clearInterval(timerId);
+    const sec = Math.floor((Date.now()-startedAt)/1000);
+    const st = saveStats(sec);
+    $('overTitle').textContent = '✅ Puzzle Complete';
+    $('overText').textContent = `Time: ${fmt(sec)} · Best: ${fmt(st.bestTime)} · Total completions: ${st.completions}`;
+    $('gameScreen').classList.add('hidden');
+    $('overScreen').classList.remove('hidden');
+    beep('win');
+    setTimeout(()=>beep('good'),130);
+    setTimeout(()=>beep('good'),260);
+  }
+
+  function refreshStartStats(){
+    const st = loadStats();
+    $('bestLine').textContent = st.bestTime==null
+      ? 'Best Time: - · Completions: 0'
+      : `Best Time: ${fmt(st.bestTime)} · Completions: ${st.completions}`;
+  }
+
+  document.addEventListener('keydown',(e)=>{
+    if(!playing) return;
+    const key = e.key;
+    if(/^[a-zA-Z]$/.test(key)){ e.preventDefault(); inputLetter(key.toUpperCase()); return; }
+    if(key==='Backspace' || key==='Delete'){ e.preventDefault(); clearCell(); return; }
+    if(key==='ArrowLeft'){ e.preventDefault(); direction='across'; move(-1); render(); return; }
+    if(key==='ArrowRight'){ e.preventDefault(); direction='across'; move(1); render(); return; }
+    if(key==='ArrowUp'){ e.preventDefault(); direction='down'; move(-1); render(); return; }
+    if(key==='ArrowDown'){ e.preventDefault(); direction='down'; move(1); render(); return; }
+    if(key==='Tab'){ e.preventDefault(); direction = direction==='across' ? 'down' : 'across'; render(); }
+  });
+
+  $('startBtn').addEventListener('click', startGame);
+  $('playAgainBtn').addEventListener('click', () => { refreshStartStats(); startGame(); });
+  $('toggleDirBtn').addEventListener('click', ()=>{ direction = direction==='across' ? 'down' : 'across'; render(); beep('tap'); });
+  $('hintBtn').addEventListener('click', useHint);
+  $('clearBtn').addEventListener('click', clearCell);
+
+  refreshStartStats();
+})();
+</script>
+</body>
+</html>

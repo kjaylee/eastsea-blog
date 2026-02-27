@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Neon Timer — Pomodoro</title>
+<meta name="description" content="Neon Pomodoro Timer — focus sessions with glowing circular progress, sound notifications, and customizable durations.">
+<meta name="theme-color" content="#0a0a1a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Neon Timer">
+<script>
+(function(){
+  var manifest={name:"Neon Timer — Pomodoro",short_name:"NeonTimer",start_url:"./",display:"standalone",background_color:"#0a0a1a",theme_color:"#00f5ff",description:"Neon Pomodoro focus timer",icons:[{src:"data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='12' fill='%230a0a1a'/><text x='32' y='44' text-anchor='middle' font-size='36'>⏱</text></svg>",sizes:"any",type:"image/svg+xml"}]};
+  var blob=new Blob([JSON.stringify(manifest)],{type:'application/json'});
+  var url=URL.createObjectURL(blob);
+  var link=document.createElement('link');link.rel='manifest';link.href=url;
+  document.head.appendChild(link);
+})();
+</script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  :root{
+    --bg:#0a0a1a;--panel:#0f0f28;--accent:#00f5ff;--work:#ff2d78;--brk:#00f5ff;--long:#a020f0;
+    --glow1:0 0 10px var(--accent),0 0 30px var(--accent),0 0 60px var(--accent);
+    --glow-w:0 0 10px var(--work),0 0 30px var(--work),0 0 60px var(--work);
+    --glow-l:0 0 10px var(--long),0 0 30px var(--long),0 0 60px var(--long);
+    --r:16px;--font:'Segoe UI',system-ui,sans-serif;
+  }
+  html,body{height:100%;overflow-x:hidden}
+  body{background:var(--bg);color:#e0e0ff;font-family:var(--font);min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px}
+  /* Stars */
+  body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse at 20% 30%,rgba(0,245,255,.04) 0%,transparent 60%),radial-gradient(ellipse at 80% 70%,rgba(255,45,120,.04) 0%,transparent 60%);pointer-events:none}
+  h1{font-size:clamp(1.1rem,4vw,1.6rem);letter-spacing:.2em;text-transform:uppercase;color:var(--accent);text-shadow:var(--glow1);margin-bottom:6px}
+  .subtitle{font-size:.75rem;letter-spacing:.15em;color:rgba(255,255,255,.4);text-transform:uppercase;margin-bottom:24px}
+
+  /* Mode tabs */
+  .mode-tabs{display:flex;gap:8px;margin-bottom:24px}
+  .tab-btn{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:rgba(255,255,255,.5);padding:6px 16px;font-size:.8rem;letter-spacing:.1em;cursor:pointer;transition:.2s;text-transform:uppercase}
+  .tab-btn.active{border-color:var(--c-mode);color:var(--c-mode);box-shadow:0 0 12px var(--c-mode)}
+  .tab-btn:hover:not(.active){color:rgba(255,255,255,.8);border-color:rgba(255,255,255,.3)}
+
+  /* Ring */
+  .ring-wrap{position:relative;width:min(280px,75vw);height:min(280px,75vw);margin-bottom:24px}
+  svg.ring{width:100%;height:100%;transform:rotate(-90deg)}
+  .ring-bg{fill:none;stroke:rgba(255,255,255,.06);stroke-width:12}
+  .ring-fg{fill:none;stroke:var(--c-mode);stroke-width:12;stroke-linecap:round;stroke-dasharray:691.15;stroke-dashoffset:0;filter:drop-shadow(0 0 8px var(--c-mode)) drop-shadow(0 0 16px var(--c-mode));transition:stroke-dashoffset .4s ease,stroke .4s}
+  .ring-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
+  .time-display{font-size:clamp(2.8rem,12vw,4.2rem);font-weight:700;letter-spacing:.05em;color:#fff;text-shadow:0 0 20px var(--c-mode)}
+  .session-label{font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--c-mode);opacity:.8}
+
+  /* Session dots */
+  .session-dots{display:flex;gap:8px;margin-bottom:20px}
+  .dot{width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.15);transition:.3s}
+  .dot.done{background:var(--work);border-color:var(--work);box-shadow:0 0 8px var(--work)}
+
+  /* Controls */
+  .controls{display:flex;gap:12px;align-items:center;margin-bottom:20px}
+  .ctrl-btn{width:52px;height:52px;border-radius:50%;border:2px solid rgba(255,255,255,.15);background:rgba(255,255,255,.05);color:#fff;font-size:1.3rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.2s}
+  .ctrl-btn:hover{border-color:var(--c-mode);box-shadow:0 0 12px var(--c-mode)}
+  .ctrl-btn.primary{width:68px;height:68px;border-color:var(--c-mode);box-shadow:0 0 16px var(--c-mode);font-size:1.6rem}
+  .ctrl-btn:active{transform:scale(.9)}
+
+  /* Settings panel */
+  .settings{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:var(--r);padding:16px 20px;width:min(320px,90vw);margin-top:4px}
+  .settings h2{font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.4);margin-bottom:12px}
+  .setting-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:8px}
+  .setting-row:last-child{margin-bottom:0}
+  .setting-row label{font-size:.8rem;color:rgba(255,255,255,.6);min-width:100px}
+  .setting-row input{width:60px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.15);border-radius:6px;color:#fff;padding:4px 8px;font-size:.85rem;text-align:center;outline:none}
+  .setting-row input:focus{border-color:var(--accent)}
+  .save-btn{margin-top:12px;width:100%;padding:8px;background:rgba(0,245,255,.1);border:1px solid var(--accent);border-radius:8px;color:var(--accent);font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;transition:.2s}
+  .save-btn:hover{background:rgba(0,245,255,.2);box-shadow:0 0 12px var(--accent)}
+
+  /* Toast */
+  .toast{position:fixed;top:20px;left:50%;transform:translateX(-50%) translateY(-80px);background:rgba(10,10,26,.95);border:1px solid var(--accent);border-radius:10px;padding:10px 24px;font-size:.85rem;color:var(--accent);letter-spacing:.1em;transition:transform .35s ease;z-index:999;white-space:nowrap;box-shadow:0 0 20px var(--accent)}
+  .toast.show{transform:translateX(-50%) translateY(0)}
+
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+  .running .time-display{animation:pulse 1s ease-in-out infinite}
+  .paused .time-display{animation:none}
+</style>
+</head>
+<body>
+<h1>⏱ Neon Timer</h1>
+<p class="subtitle">Pomodoro Focus Session</p>
+
+<div class="mode-tabs">
+  <button class="tab-btn active" data-mode="work">Work</button>
+  <button class="tab-btn" data-mode="short">Short Break</button>
+  <button class="tab-btn" data-mode="long">Long Break</button>
+</div>
+
+<div class="ring-wrap">
+  <svg class="ring" viewBox="0 0 220 220">
+    <circle class="ring-bg" cx="110" cy="110" r="100"/>
+    <circle class="ring-fg" id="ringFg" cx="110" cy="110" r="100"/>
+  </svg>
+  <div class="ring-center">
+    <div class="time-display" id="timeDisplay">25:00</div>
+    <div class="session-label" id="sessionLabel">Work</div>
+  </div>
+</div>
+
+<div class="session-dots" id="sessionDots"></div>
+
+<div class="controls">
+  <button class="ctrl-btn" id="resetBtn" title="Reset">↺</button>
+  <button class="ctrl-btn primary" id="startBtn" title="Start/Pause">▶</button>
+  <button class="ctrl-btn" id="skipBtn" title="Skip">⏭</button>
+</div>
+
+<div class="settings">
+  <h2>⚙ Settings</h2>
+  <div class="setting-row">
+    <label>Work (min)</label>
+    <input type="number" id="setWork" value="25" min="1" max="99">
+  </div>
+  <div class="setting-row">
+    <label>Short Break (min)</label>
+    <input type="number" id="setShort" value="5" min="1" max="99">
+  </div>
+  <div class="setting-row">
+    <label>Long Break (min)</label>
+    <input type="number" id="setLong" value="15" min="1" max="99">
+  </div>
+  <div class="setting-row">
+    <label>Sessions / cycle</label>
+    <input type="number" id="setSessions" value="4" min="2" max="8">
+  </div>
+  <button class="save-btn" id="saveBtn">Save Settings</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+'use strict';
+const STORAGE_KEY='neon-timer-data';
+
+// ---- State ----
+let cfg={work:25,shortBreak:5,longBreak:15,sessionsPerCycle:4};
+let mode='work'; // 'work'|'short'|'long'
+let running=false;
+let secondsLeft=0;
+let totalSeconds=0;
+let completedSessions=0;
+let timerID=null;
+let ctx=null;
+
+// ---- Color per mode ----
+const MODE_COLOR={work:'#ff2d78',short:'#00f5ff',long:'#a020f0'};
+const MODE_LABEL={work:'Work',short:'Short Break',long:'Long Break'};
+
+// ---- Elements ----
+const timeDisplay=document.getElementById('timeDisplay');
+const sessionLabel=document.getElementById('sessionLabel');
+const ringFg=document.getElementById('ringFg');
+const startBtn=document.getElementById('startBtn');
+const resetBtn=document.getElementById('resetBtn');
+const skipBtn=document.getElementById('skipBtn');
+const sessionDots=document.getElementById('sessionDots');
+const toast=document.getElementById('toast');
+const setWork=document.getElementById('setWork');
+const setShort=document.getElementById('setShort');
+const setLong=document.getElementById('setLong');
+const setSessions=document.getElementById('setSessions');
+const saveBtn=document.getElementById('saveBtn');
+const tabs=document.querySelectorAll('.tab-btn');
+
+// ---- Audio ----
+function getCtx(){if(!ctx)ctx=new(window.AudioContext||window.webkitAudioContext)();return ctx;}
+function beep(freq=880,type='sine',dur=0.2,vol=0.3){
+  try{
+    const c=getCtx();
+    const o=c.createOscillator();
+    const g=c.createGain();
+    o.connect(g);g.connect(c.destination);
+    o.type=type;o.frequency.setValueAtTime(freq,c.currentTime);
+    g.gain.setValueAtTime(vol,c.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001,c.currentTime+dur);
+    o.start(c.currentTime);o.stop(c.currentTime+dur);
+  }catch(e){}
+}
+function playTick(){beep(880,'sine',0.05,0.05);}
+function playComplete(){
+  [440,550,660,880].forEach((f,i)=>setTimeout(()=>beep(f,'sine',.3,.25),i*120));
+}
+function playStart(){beep(440,'sine',0.12,0.2);}
+
+// ---- Load / Save ----
+function load(){
+  try{
+    const d=JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}');
+    if(d.cfg)Object.assign(cfg,d.cfg);
+    if(typeof d.completedSessions==='number')completedSessions=d.completedSessions%cfg.sessionsPerCycle;
+  }catch(e){}
+}
+function save(){
+  try{localStorage.setItem(STORAGE_KEY,JSON.stringify({cfg,completedSessions}));}catch(e){}
+}
+
+// ---- Ring ----
+const CIRC=2*Math.PI*100; // ≈ 628.3
+function updateRing(ratio){
+  ringFg.style.strokeDashoffset=CIRC*(1-ratio);
+}
+
+// ---- Display ----
+function formatTime(s){
+  const m=Math.floor(s/60).toString().padStart(2,'0');
+  const sec=(s%60).toString().padStart(2,'0');
+  return `${m}:${sec}`;
+}
+function render(){
+  timeDisplay.textContent=formatTime(secondsLeft);
+  const ratio=totalSeconds>0?secondsLeft/totalSeconds:1;
+  updateRing(ratio);
+  document.documentElement.style.setProperty('--c-mode',MODE_COLOR[mode]);
+  sessionLabel.textContent=MODE_LABEL[mode];
+  ringFg.style.stroke=MODE_COLOR[mode];
+  updateDots();
+}
+function updateDots(){
+  sessionDots.innerHTML='';
+  for(let i=0;i<cfg.sessionsPerCycle;i++){
+    const d=document.createElement('div');
+    d.className='dot'+(i<completedSessions?' done':'');
+    sessionDots.appendChild(d);
+  }
+}
+
+// ---- Timer core ----
+function getDuration(){
+  return (mode==='work'?cfg.work:mode==='short'?cfg.shortBreak:cfg.longBreak)*60;
+}
+function setMode(m){
+  mode=m;
+  tabs.forEach(t=>t.classList.toggle('active',t.dataset.mode===m));
+  reset(false);
+}
+function reset(notify=true){
+  clearInterval(timerID);timerID=null;running=false;
+  totalSeconds=getDuration();
+  secondsLeft=totalSeconds;
+  startBtn.textContent='▶';
+  document.body.classList.remove('running','paused');
+  render();
+  if(notify)beep(330,'triangle',0.1,0.15);
+}
+function start(){
+  if(running){pause();return;}
+  if(secondsLeft===0){reset(false);}
+  running=true;
+  startBtn.textContent='⏸';
+  document.body.classList.add('running');
+  document.body.classList.remove('paused');
+  playStart();
+  timerID=setInterval(tick,1000);
+}
+function pause(){
+  running=false;
+  clearInterval(timerID);timerID=null;
+  startBtn.textContent='▶';
+  document.body.classList.remove('running');
+  document.body.classList.add('paused');
+  beep(440,'triangle',0.08,0.1);
+}
+function tick(){
+  if(secondsLeft>0){
+    secondsLeft--;
+    if(secondsLeft<=10&&secondsLeft>0)playTick();
+    render();
+  }
+  if(secondsLeft===0){
+    clearInterval(timerID);timerID=null;
+    running=false;
+    startBtn.textContent='▶';
+    document.body.classList.remove('running');
+    onComplete();
+  }
+}
+function onComplete(){
+  playComplete();
+  if(mode==='work'){
+    completedSessions++;
+    if(completedSessions>=cfg.sessionsPerCycle){
+      completedSessions=0;
+      showToast('🎉 Cycle complete! Long break time.');
+      setMode('long');
+    }else{
+      showToast(`✅ Session ${completedSessions}/${cfg.sessionsPerCycle} done! Short break.`);
+      setMode('short');
+    }
+  }else{
+    showToast('⚡ Break done! Back to work.');
+    setMode('work');
+  }
+  save();
+}
+function skip(){
+  clearInterval(timerID);timerID=null;running=false;
+  if(mode==='work'){
+    completedSessions++;
+    if(completedSessions>=cfg.sessionsPerCycle){completedSessions=0;setMode('long');}
+    else{setMode('short');}
+  }else{setMode('work');}
+  save();
+  beep(550,'square',0.1,0.15);
+}
+
+// ---- Toast ----
+let toastTimer=null;
+function showToast(msg){
+  toast.textContent=msg;
+  toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>toast.classList.remove('show'),3500);
+}
+
+// ---- Settings ----
+function applySettings(){
+  const w=parseInt(setWork.value)||25;
+  const s=parseInt(setShort.value)||5;
+  const l=parseInt(setLong.value)||15;
+  const n=parseInt(setSessions.value)||4;
+  cfg.work=Math.max(1,Math.min(99,w));
+  cfg.shortBreak=Math.max(1,Math.min(99,s));
+  cfg.longBreak=Math.max(1,Math.min(99,l));
+  cfg.sessionsPerCycle=Math.max(2,Math.min(8,n));
+  setWork.value=cfg.work;setShort.value=cfg.shortBreak;setLong.value=cfg.longBreak;setSessions.value=cfg.sessionsPerCycle;
+  completedSessions=Math.min(completedSessions,cfg.sessionsPerCycle-1);
+  reset(false);
+  save();
+  showToast('✔ Settings saved!');
+}
+function loadSettingsUI(){
+  setWork.value=cfg.work;setShort.value=cfg.shortBreak;setLong.value=cfg.longBreak;setSessions.value=cfg.sessionsPerCycle;
+}
+
+// ---- Events ----
+startBtn.addEventListener('click',start);
+resetBtn.addEventListener('click',()=>reset(true));
+skipBtn.addEventListener('click',skip);
+saveBtn.addEventListener('click',applySettings);
+tabs.forEach(t=>t.addEventListener('click',()=>setMode(t.dataset.mode)));
+
+// Keyboard
+document.addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT')return;
+  if(e.code==='Space'){e.preventDefault();start();}
+  if(e.code==='KeyR')reset(true);
+  if(e.code==='KeyS')skip();
+});
+
+// ---- Init ----
+load();
+loadSettingsUI();
+document.documentElement.style.setProperty('--c-mode',MODE_COLOR[mode]);
+totalSeconds=getDuration();
+secondsLeft=totalSeconds;
+render();
+})();
+</script>
+</body>
+</html>

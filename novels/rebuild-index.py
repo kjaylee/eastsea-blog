@@ -380,6 +380,35 @@ def main():
     with open(os.path.join(OUT_DIR, "series.html"), "w", encoding="utf-8") as f:
         f.write(series_html)
 
+    # ─── Generate manifest.json ───
+    from datetime import datetime as dt
+    manifest = {
+        "generatedAt": dt.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "novels": []
+    }
+    for s in series_list:
+        novel_entry = {
+            "slug": s["slug"],
+            "title": s["title"],
+            "author": s["author"],
+            "genre": s["tags"],
+            "status": "연재중",
+            "totalEpisodes": len(s["episodes"]),
+            "latestDate": s["episodes"][0]["_date"] if s["episodes"] else "",
+            "episodes": []
+        }
+        # Sort episodes oldest first for manifest
+        for ep in sorted(s["episodes"], key=lambda e: e["_episode"]):
+            novel_entry["episodes"].append({
+                "num": str(ep["_episode"]).zfill(3),
+                "title": ep["_title"],
+                "date": ep["_date"]
+            })
+        manifest["novels"].append(novel_entry)
+
+    with open(os.path.join(OUT_DIR, "manifest.json"), "w", encoding="utf-8") as f:
+        json.dump(manifest, f, ensure_ascii=False, indent=2)
+
     # Summary
     print(f"✅ Rebuilt: {len(series_list)} series, {len(episodes)} total episodes")
     for s in series_list:

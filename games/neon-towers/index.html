@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Neon Towers 🗼</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:#0a0a1a;color:#fff;font-family:'Courier New',monospace;overflow:hidden;height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;user-select:none;-webkit-tap-highlight-color:transparent}
+  canvas{display:block;touch-action:none;cursor:pointer}
+  #ui{position:fixed;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:center;padding:8px 16px;background:#0a0a1a99;backdrop-filter:blur(4px);z-index:10;border-bottom:1px solid #ff00ff22}
+  .stat{display:flex;flex-direction:column;align-items:center;gap:2px}
+  .stat-label{font-size:9px;color:#ffffff55;text-transform:uppercase;letter-spacing:2px}
+  .stat-val{font-size:20px;font-weight:bold;text-shadow:0 0 10px currentColor}
+  #score-val{color:#ff00ff}
+  #hi-val{color:#00ffff}
+  #combo-val{color:#ffff00}
+  .overlay{position:fixed;inset:0;background:#0a0a1af0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;z-index:20;transition:opacity .3s}
+  .overlay.hidden{opacity:0;pointer-events:none}
+  h1{font-size:clamp(30px,7vw,56px);font-weight:900;letter-spacing:6px;background:linear-gradient(135deg,#ff00ff,#00ffff,#ff6600);-webkit-background-clip:text;-webkit-text-fill-color:transparent;filter:drop-shadow(0 0 20px #ff00ff)}
+  .tagline{color:#ffffff77;font-size:11px;letter-spacing:3px;text-transform:uppercase}
+  .btn{background:transparent;border:2px solid #ff00ff;color:#ff00ff;padding:12px 40px;font-family:inherit;font-size:14px;font-weight:bold;letter-spacing:3px;cursor:pointer;text-transform:uppercase;transition:all .2s;border-radius:4px}
+  .btn:hover,.btn:active{background:#ff00ff22;box-shadow:0 0 24px #ff00ff88;transform:scale(1.05)}
+  .hi-display{color:#00ffff88;font-size:12px;letter-spacing:2px}
+  .controls{color:#ffffff33;font-size:10px;letter-spacing:2px;text-align:center;line-height:2}
+  .big-score{font-size:clamp(48px,10vw,80px);font-weight:900;color:#ff00ff;text-shadow:0 0 30px #ff00ff,0 0 60px #ff00ff88}
+  #perfect-flash{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-size:clamp(18px,4vw,28px);font-weight:900;color:#ffff00;text-shadow:0 0 20px #ffff00;letter-spacing:4px;pointer-events:none;opacity:0;z-index:30;transition:opacity .1s}
+  #perfect-flash.show{opacity:1}
+  .speed-indicator{color:#ff660088;font-size:10px;letter-spacing:2px;text-transform:uppercase}
+</style>
+</head>
+<body>
+
+<div id="ui">
+  <div class="stat"><span class="stat-label">Score</span><span class="stat-val" id="score-val">0</span></div>
+  <div class="stat"><span class="stat-label">Combo</span><span class="stat-val" id="combo-val">×1</span></div>
+  <div class="stat"><span class="stat-label">Best</span><span class="stat-val" id="hi-val">0</span></div>
+</div>
+
+<canvas id="c"></canvas>
+<div id="perfect-flash">✨ PERFECT ✨</div>
+
+<div class="overlay" id="start-screen">
+  <h1>NEON TOWERS</h1>
+  <div class="tagline">Tap to Drop. Stack to Win.</div>
+  <div class="hi-display" id="start-hi">Best: 0</div>
+  <button class="btn" id="start-btn">PLAY</button>
+  <div class="controls">
+    TAP / SPACE / CLICK to drop<br>
+    Stack precisely for PERFECT bonus<br>
+    Combo multiplier for consecutive perfects
+  </div>
+</div>
+
+<div class="overlay hidden" id="over-screen">
+  <h1>TOWER DONE</h1>
+  <div class="big-score" id="over-score">0</div>
+  <div class="hi-display" id="over-hi">Best: 0</div>
+  <button class="btn" id="restart-btn">REBUILD</button>
+</div>
+
+<script>
+const C=document.getElementById('c');
+const ctx=C.getContext('2d');
+const scoreEl=document.getElementById('score-val');
+const hiEl=document.getElementById('hi-val');
+const comboEl=document.getElementById('combo-val');
+const perfectFlash=document.getElementById('perfect-flash');
+const startScreen=document.getElementById('start-screen');
+const overScreen=document.getElementById('over-screen');
+const startHi=document.getElementById('start-hi');
+const overScore=document.getElementById('over-score');
+const overHi=document.getElementById('over-hi');
+
+let hiScore=parseInt(localStorage.getItem('neon-towers-hi')||'0');
+hiEl.textContent=hiScore;startHi.textContent='Best: '+hiScore;
+
+// Audio
+const AC=new(window.AudioContext||window.webkitAudioContext)();
+function beep(freq,dur,vol=0.2,type='sine',ramp=true){
+  const o=AC.createOscillator(),g=AC.createGain();
+  const dist=AC.createWaveShaper();
+  const curve=new Float32Array(256);
+  for(let i=0;i<256;i++)curve[i]=i<128?i/128-1:(i-128)/128;
+  dist.curve=curve;
+  o.connect(dist);dist.connect(g);g.connect(AC.destination);
+  o.type=type;o.frequency.setValueAtTime(freq,AC.currentTime);
+  g.gain.setValueAtTime(vol,AC.currentTime);
+  if(ramp)g.gain.exponentialRampToValueAtTime(0.001,AC.currentTime+dur);
+  o.start();o.stop(AC.currentTime+dur);
+}
+function sfxDrop(perfect){
+  if(perfect){
+    [523,659,784,1047].forEach((f,i)=>setTimeout(()=>beep(f,.12,.18,'sine'),i*50));
+  } else {
+    beep(260,.15,.15,'triangle');beep(220,.2,.1,'sine');
+  }
+}
+function sfxCombo(n){beep(300+n*80,.1,.2,'sine');beep(600+n*80,.15,.2,'sine');}
+function sfxFall(){beep(150,.4,.3,'sawtooth');beep(80,.6,.3,'square',false);}
+function sfxStart(){[220,330,440,550,660].forEach((f,i)=>setTimeout(()=>beep(f,.1,.15,'sine'),i*60));}
+
+// Responsive sizing
+let W,H,BH,BASE_Y,VISIBLE_BLOCKS;
+const NEON_PALETTE=['#ff00ff','#00ffff','#ff6600','#00ff88','#ffff00','#ff3366','#33aaff','#aa00ff'];
+function resize(){
+  const uiH=document.getElementById('ui').offsetHeight;
+  W=Math.min(window.innerWidth,480);
+  H=window.innerHeight-uiH;
+  C.width=W;C.height=H;
+  C.style.marginTop=uiH+'px';
+  BH=Math.max(18,Math.floor(H*0.045));
+  VISIBLE_BLOCKS=Math.floor((H-80)/BH)+2;
+  BASE_Y=H-40;
+}
+resize();
+window.addEventListener('resize',()=>{resize();if(!running&&!gameStarted)drawTitle();});
+
+// Game state
+let running,gameStarted,score,combo,comboCount;
+let tower=[]; // {x, w, color, y}
+let moving; // current sliding block
+let baseW;
+let moveDir,moveSpeed;
+let animId;
+let perfectTimer=0;
+let particles=[];
+let cameraY=0; // scroll offset
+
+function initGame(){
+  score=0;combo=1;comboCount=0;
+  tower=[];particles=[];cameraY=0;
+  scoreEl.textContent=0;comboEl.textContent='×1';
+  const W60=Math.floor(W*0.55);
+  baseW=W60;
+  // Base block
+  tower.push({x:Math.floor(W/2-baseW/2),w:baseW,color:NEON_PALETTE[0],y:BASE_Y,level:0});
+  spawnMoving();
+  running=true;gameStarted=true;
+  sfxStart();
+}
+
+function getLevel(){return tower.length;}
+function getSpeed(){
+  const lvl=getLevel();
+  return Math.min(6, 1.5 + lvl * 0.18);
+}
+function spawnMoving(){
+  const lvl=getLevel();
+  const prevBlock=tower[tower.length-1];
+  const prevW=prevBlock.w;
+  const color=NEON_PALETTE[lvl%NEON_PALETTE.length];
+  const blockW=prevW; // same width as last placed
+  moveDir=Math.random()<0.5?1:-1;
+  const startX=moveDir>0?-blockW:W;
+  moving={x:startX,w:blockW,color,targetY:prevBlock.y-BH,level:lvl};
+  moveSpeed=getSpeed();
+}
+
+function drop(){
+  if(!running||!moving)return;
+  const prev=tower[tower.length-1];
+  // Calculate overlap
+  const left=Math.max(moving.x,prev.x);
+  const right=Math.min(moving.x+moving.w,prev.x+prev.w);
+  const overlap=right-left;
+  if(overlap<=0){
+    // Miss — game over
+    moving.x=left; // freeze for visual
+    tower.push({...moving,y:moving.targetY,placed:true});
+    fall();
+    return;
+  }
+  const isPerfect=Math.abs(overlap-prev.w)<3; // within 3px = perfect
+  // Place the block (trimmed)
+  const placed={x:left,w:overlap,color:moving.color,y:moving.targetY,level:moving.level,placed:true};
+  tower.push(placed);
+  // Trim particles
+  spawnTrimParticles(moving,placed,prev);
+  // Scoring
+  let pts;
+  if(isPerfect){
+    comboCount++;combo=Math.min(comboCount,8);
+    pts=(20+getLevel()*5)*combo;
+    showPerfect();
+    sfxCombo(combo);
+    // Perfect — restore width slightly (mercy)
+    placed.w=Math.min(prev.w,placed.w+2);
+    placed.x=prev.x+(prev.w-placed.w)/2;
+  } else {
+    comboCount=0;combo=1;
+    pts=(10+getLevel()*2);
+    sfxDrop(false);
+  }
+  score+=pts;
+  scoreEl.textContent=score;
+  comboEl.textContent='×'+combo;
+  sfxDrop(isPerfect);
+  // Camera scroll
+  if(moving.targetY<H*0.4+cameraY){
+    cameraY=H*0.4-moving.targetY+cameraY; // shift up
+    // Actually shift tower down visually
+    const shift=BH;
+    tower.forEach(b=>b.y+=shift);
+    placed.y+=shift;
+  }
+  spawnMoving();
+}
+
+function fall(){
+  running=false;
+  sfxFall();
+  if(score>hiScore){hiScore=score;localStorage.setItem('neon-towers-hi',hiScore);}
+  hiEl.textContent=hiScore;
+  overScore.textContent=score;
+  overHi.textContent='Best: '+hiScore;
+  setTimeout(()=>overScreen.classList.remove('hidden'),800);
+}
+
+function showPerfect(){
+  perfectFlash.classList.add('show');
+  clearTimeout(perfectFlash._t);
+  perfectFlash._t=setTimeout(()=>perfectFlash.classList.remove('show'),700);
+}
+
+function spawnTrimParticles(mov,placed,prev){
+  const colors=[mov.color,'#ffffff'];
+  const rects=[];
+  if(mov.x<placed.x)rects.push({x:mov.x,w:placed.x-mov.x});
+  if(mov.x+mov.w>placed.x+placed.w)rects.push({x:placed.x+placed.w,w:(mov.x+mov.w)-(placed.x+placed.w)});
+  rects.forEach(r=>{
+    for(let i=0;i<12;i++){
+      particles.push({
+        x:r.x+Math.random()*r.w,
+        y:mov.targetY+BH/2,
+        vx:(Math.random()-0.5)*4,
+        vy:-(Math.random()*3+1),
+        life:1,decay:0.03+Math.random()*0.02,
+        color:colors[Math.floor(Math.random()*colors.length)],
+        r:Math.random()*3+1
+      });
+    }
+  });
+}
+
+let lastTs=0;
+function gameLoop(ts){
+  animId=requestAnimationFrame(gameLoop);
+  const dt=Math.min(ts-lastTs,50);lastTs=ts;
+  if(!running&&!gameStarted){drawTitle();return;}
+  if(running&&moving){
+    moving.x+=moveDir*moveSpeed*(dt/16);
+    if(moving.x>W){moving.x=W;moveDir=-1;}
+    if(moving.x+moving.w<0){moving.x=-moving.w;moveDir=1;}
+  }
+  // Particles
+  particles=particles.filter(p=>{
+    p.x+=p.vx;p.y+=p.vy;p.vy+=0.18;p.life-=p.decay;
+    return p.life>0&&p.y<H+20;
+  });
+  render();
+}
+
+function render(){
+  ctx.clearRect(0,0,W,H);
+  drawBg();
+  drawTower();
+  if(running&&moving)drawMoving();
+  drawParticles();
+  drawBase();
+}
+
+function drawBg(){
+  // Subtle grid
+  ctx.strokeStyle='#ffffff06';ctx.lineWidth=.5;
+  const gs=40;
+  for(let x=0;x<W;x+=gs){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(let y=0;y<H;y+=gs){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+  // Vignette
+  const vg=ctx.createRadialGradient(W/2,H/2,H*0.2,W/2,H/2,H*0.9);
+  vg.addColorStop(0,'transparent');vg.addColorStop(1,'rgba(10,10,26,0.7)');
+  ctx.fillStyle=vg;ctx.fillRect(0,0,W,H);
+}
+
+function drawBlock(b,alpha=1,glow=true){
+  const{x,w,color,y}=b;
+  if(y<-BH*2||y>H+BH)return;
+  ctx.save();
+  ctx.globalAlpha=alpha;
+  if(glow){ctx.shadowColor=color;ctx.shadowBlur=14;}
+  // Fill
+  const grad=ctx.createLinearGradient(x,y,x,y+BH);
+  grad.addColorStop(0,color+'cc');
+  grad.addColorStop(1,color+'66');
+  ctx.fillStyle=grad;
+  ctx.fillRect(x,y,w,BH);
+  // Top highlight
+  ctx.fillStyle='rgba(255,255,255,0.2)';
+  ctx.fillRect(x,y,w,Math.floor(BH*0.25));
+  // Border
+  ctx.strokeStyle=color;ctx.lineWidth=1.5;
+  ctx.strokeRect(x+0.75,y+0.75,w-1.5,BH-1.5);
+  ctx.restore();
+}
+function drawMoving(){
+  const{x,w,color,targetY}=moving;
+  // Shadow preview below
+  const prev=tower[tower.length-1];
+  const lft=Math.max(x,prev.x);
+  const rgt=Math.min(x+w,prev.x+prev.w);
+  if(rgt>lft){
+    ctx.save();ctx.globalAlpha=0.18;
+    ctx.fillStyle=color;
+    ctx.fillRect(lft,targetY,rgt-lft,BH);
+    ctx.restore();
+  }
+  // Speed ghost
+  ctx.save();ctx.globalAlpha=0.08;
+  ctx.fillStyle=color;
+  ctx.fillRect(x-moveDir*8,targetY,w,BH);
+  ctx.restore();
+  // Main block
+  drawBlock({x,w,color,y:targetY},1,true);
+  // Motion blur
+  ctx.save();ctx.globalAlpha=0.12;ctx.fillStyle=color;
+  ctx.fillRect(x-moveDir*w*0.15,targetY,w*0.12,BH);
+  ctx.restore();
+}
+function drawTower(){
+  tower.forEach((b,i)=>{
+    const alpha=i===0?0.5:1;
+    drawBlock(b,alpha,i>0);
+  });
+}
+function drawBase(){
+  // Floor line
+  ctx.save();
+  ctx.strokeStyle='#ff00ff44';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(0,BASE_Y+BH);ctx.lineTo(W,BASE_Y+BH);ctx.stroke();
+  // Level counter on side
+  ctx.fillStyle='#ffffff22';ctx.font=`${Math.floor(H*0.022)}px 'Courier New'`;
+  ctx.textAlign='left';ctx.textBaseline='middle';
+  const lvl=tower.length-1;
+  if(lvl>0)ctx.fillText(`LVL ${lvl}`,8,tower[tower.length-1].y+BH/2);
+  ctx.restore();
+}
+function drawParticles(){
+  particles.forEach(p=>{
+    ctx.save();ctx.globalAlpha=p.life;
+    ctx.shadowColor=p.color;ctx.shadowBlur=6;
+    ctx.fillStyle=p.color;
+    ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();
+    ctx.restore();
+  });
+}
+function drawTitle(){
+  ctx.clearRect(0,0,W,H);drawBg();
+}
+
+// Input
+document.addEventListener('keydown',e=>{
+  if(e.code==='Space'||e.key===' '){e.preventDefault();if(running)drop();}
+});
+C.addEventListener('click',()=>{if(running)drop();});
+C.addEventListener('touchstart',e=>{e.preventDefault();if(running)drop();},{passive:false});
+document.getElementById('start-btn').addEventListener('click',e=>{
+  e.stopPropagation();
+  if(AC.state==='suspended')AC.resume();
+  startScreen.classList.add('hidden');
+  resize();initGame();
+  lastTs=performance.now();
+  animId&&cancelAnimationFrame(animId);
+  requestAnimationFrame(gameLoop);
+});
+document.getElementById('restart-btn').addEventListener('click',e=>{
+  e.stopPropagation();
+  if(AC.state==='suspended')AC.resume();
+  overScreen.classList.add('hidden');
+  resize();initGame();
+  lastTs=performance.now();
+  animId&&cancelAnimationFrame(animId);
+  requestAnimationFrame(gameLoop);
+});
+
+// Init
+hiEl.textContent=hiScore;startHi.textContent='Best: '+hiScore;
+gameStarted=false;running=false;
+animId=requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>

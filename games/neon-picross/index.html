@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Neon Picross — Nonogram Puzzle</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0a1a;color:#e0e0ff;font-family:'Segoe UI',sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;touch-action:none}
+h1{font-size:clamp(1.4rem,4vw,2.2rem);text-align:center;color:#00ffff;text-shadow:0 0 20px #00ffff,0 0 40px #00aaff;letter-spacing:4px;margin-bottom:4px}
+.subtitle{color:#8888cc;font-size:.8rem;letter-spacing:2px;text-align:center;margin-bottom:16px}
+.screen{display:none;flex-direction:column;align-items:center;justify-content:center;width:100%;max-width:600px;padding:16px}
+.screen.active{display:flex}
+.btn{background:transparent;border:1px solid #00ffff;color:#00ffff;padding:10px 28px;border-radius:4px;cursor:pointer;font-size:.9rem;letter-spacing:2px;text-transform:uppercase;transition:all .2s;margin:6px;text-shadow:0 0 8px #00ffff;box-shadow:0 0 8px #00ffff33}
+.btn:hover,.btn:active{background:#00ffff22;box-shadow:0 0 16px #00ffff}
+.btn.diff{font-size:.8rem;padding:8px 20px}
+.btn.diff.easy{border-color:#39ff14;color:#39ff14;text-shadow:0 0 8px #39ff14;box-shadow:0 0 8px #39ff1433}
+.btn.diff.easy:hover{background:#39ff1422;box-shadow:0 0 16px #39ff14}
+.btn.diff.medium{border-color:#ffcc00;color:#ffcc00;text-shadow:0 0 8px #ffcc00;box-shadow:0 0 8px #ffcc0033}
+.btn.diff.medium:hover{background:#ffcc0022;box-shadow:0 0 16px #ffcc00}
+.btn.diff.hard{border-color:#ff3366;color:#ff3366;text-shadow:0 0 8px #ff3366;box-shadow:0 0 8px #ff336633}
+.btn.diff.hard:hover{background:#ff336622;box-shadow:0 0 16px #ff3366}
+.hiscores{display:flex;gap:24px;margin:12px 0}
+.hi-item{text-align:center;font-size:.75rem;color:#8888cc}
+.hi-item span{display:block;color:#00ffff;font-size:.9rem;text-shadow:0 0 8px #00ffff}
+#game-screen{max-width:none;width:100%;padding:8px}
+.game-ui{display:flex;justify-content:center;align-items:center;gap:16px;margin-bottom:8px;flex-wrap:wrap}
+.ui-stat{font-size:.75rem;color:#8888cc;text-align:center}
+.ui-stat span{display:block;font-size:1rem;color:#00ffff;text-shadow:0 0 8px #00ffff}
+.errors-display{display:flex;gap:4px;justify-content:center}
+.err-dot{width:14px;height:14px;border-radius:50%;background:#333;border:1px solid #555;transition:all .3s}
+.err-dot.lit{background:#ff3366;box-shadow:0 0 8px #ff3366;border-color:#ff3366}
+canvas{display:block;margin:0 auto;cursor:crosshair;touch-action:none;border:1px solid #00ffff44;box-shadow:0 0 20px #00ffff22}
+.mode-btns{display:flex;gap:8px;margin-top:8px;justify-content:center}
+.mode-btn{font-size:.7rem;padding:5px 14px;border-radius:3px}
+.mode-btn.fill{border-color:#00ffff;color:#00ffff}
+.mode-btn.mark{border-color:#ff9900;color:#ff9900;text-shadow:0 0 8px #ff9900;box-shadow:0 0 8px #ff990033}
+.mode-btn.active.fill{background:#00ffff22;box-shadow:0 0 12px #00ffff}
+.mode-btn.active.mark{background:#ff990022;box-shadow:0 0 12px #ff9900}
+#go-screen .go-title{font-size:2rem;color:#ff3366;text-shadow:0 0 20px #ff3366;letter-spacing:4px;margin-bottom:8px}
+#go-screen .go-sub{font-size:.85rem;color:#8888cc;margin-bottom:16px}
+#win-screen .win-title{font-size:2rem;color:#39ff14;text-shadow:0 0 20px #39ff14,0 0 40px #39ff14;letter-spacing:4px;margin-bottom:8px}
+#win-screen .win-sub{font-size:.85rem;color:#8888cc;margin-bottom:16px}
+.help-text{font-size:.68rem;color:#555;text-align:center;margin-top:6px}
+</style>
+</head>
+<body>
+
+<!-- START SCREEN -->
+<div id="start-screen" class="screen active">
+  <h1>⬛ NEON PICROSS</h1>
+  <div class="subtitle">NONOGRAM PUZZLE</div>
+  <div class="hiscores">
+    <div class="hi-item">EASY BEST<span id="hi-easy">--:--</span></div>
+    <div class="hi-item">MED BEST<span id="hi-med">--:--</span></div>
+    <div class="hi-item">HARD BEST<span id="hi-hard">--:--</span></div>
+  </div>
+  <p style="font-size:.75rem;color:#8888cc;margin-bottom:12px;text-align:center">Fill cells to reveal the hidden pixel art.<br>Right-click or long-press to mark with ✗.<br>3 errors = game over.</p>
+  <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center">
+    <button class="btn diff easy" onclick="startGame(5)">5×5 EASY</button>
+    <button class="btn diff medium" onclick="startGame(10)">10×10 MEDIUM</button>
+    <button class="btn diff hard" onclick="startGame(15)">15×15 HARD</button>
+  </div>
+</div>
+
+<!-- GAME SCREEN -->
+<div id="game-screen" class="screen">
+  <div class="game-ui">
+    <div class="ui-stat">TIME<span id="timer-display">00:00</span></div>
+    <div class="ui-stat">ERRORS
+      <div class="errors-display">
+        <div class="err-dot" id="e0"></div>
+        <div class="err-dot" id="e1"></div>
+        <div class="err-dot" id="e2"></div>
+      </div>
+    </div>
+    <div class="ui-stat">FILLED<span id="filled-display">0/0</span></div>
+    <div class="ui-stat" style="cursor:pointer" onclick="showStart()">⬅ QUIT</div>
+  </div>
+  <canvas id="gc" oncontextmenu="return false"></canvas>
+  <div class="mode-btns">
+    <button class="btn mode-btn fill active" id="fill-btn" onclick="setMode('fill')">✦ FILL</button>
+    <button class="btn mode-btn mark" id="mark-btn" onclick="setMode('mark')">✗ MARK</button>
+  </div>
+  <div class="help-text">Tap to fill · Long-press or right-click to mark X</div>
+</div>
+
+<!-- WIN SCREEN -->
+<div id="win-screen" class="screen">
+  <div class="win-title">SOLVED!</div>
+  <div class="win-sub" id="win-msg"></div>
+  <canvas id="reveal-canvas" style="border:1px solid #39ff1444;box-shadow:0 0 20px #39ff1422;margin-bottom:12px"></canvas>
+  <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center">
+    <button class="btn diff easy" onclick="startGame(5)">5×5</button>
+    <button class="btn diff medium" onclick="startGame(10)">10×10</button>
+    <button class="btn diff hard" onclick="startGame(15)">15×15</button>
+    <button class="btn" onclick="showStart()">MENU</button>
+  </div>
+</div>
+
+<!-- GAME OVER SCREEN -->
+<div id="go-screen" class="screen">
+  <div class="go-title">GAME OVER</div>
+  <div class="go-sub">3 errors — better luck next time!</div>
+  <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center">
+    <button class="btn diff easy" onclick="startGame(5)">5×5</button>
+    <button class="btn diff medium" onclick="startGame(10)">10×10</button>
+    <button class="btn diff hard" onclick="startGame(15)">15×15</button>
+    <button class="btn" onclick="showStart()">MENU</button>
+  </div>
+</div>
+
+<script>
+// ── Audio ──────────────────────────────────────────────────────────
+const AC=new(window.AudioContext||window.webkitAudioContext)();
+function beep(freq=440,type='sine',dur=0.08,vol=0.15,delay=0){
+  const o=AC.createOscillator(),g=AC.createGain();
+  o.connect(g);g.connect(AC.destination);
+  o.type=type;o.frequency.value=freq;
+  const t=AC.currentTime+delay;
+  g.gain.setValueAtTime(0,t);
+  g.gain.linearRampToValueAtTime(vol,t+0.01);
+  g.gain.linearRampToValueAtTime(0,t+dur);
+  o.start(t);o.stop(t+dur+0.01);
+}
+function sndFill(){beep(660,'sine',0.06,0.12)}
+function sndMark(){beep(220,'triangle',0.08,0.1)}
+function sndError(){beep(180,'sawtooth',0.2,0.2);beep(140,'sawtooth',0.2,0.15,0.2)}
+function sndWin(){[523,659,784,1047].forEach((f,i)=>beep(f,'sine',0.15,0.2,i*0.12))}
+function sndGO(){beep(300,'sawtooth',0.3,0.25);beep(200,'sawtooth',0.3,0.2,0.3)}
+
+// ── Patterns ─────────────────────────────────────────────────────
+const PATTERNS={
+  5:[
+    [[0,0,0,0,0],[0,1,1,1,0],[0,1,0,1,0],[0,1,1,1,0],[0,0,0,0,0]],// box
+    [[0,0,1,0,0],[0,1,1,1,0],[1,1,1,1,1],[0,1,1,1,0],[0,0,1,0,0]],// cross+
+    [[1,1,0,1,1],[1,0,0,0,1],[0,0,1,0,0],[1,0,0,0,1],[1,1,0,1,1]],// X frame
+    [[0,1,1,1,0],[1,0,0,0,1],[1,0,1,0,1],[1,0,0,0,1],[0,1,1,1,0]],// circle dot
+    [[1,0,1,0,1],[0,1,0,1,0],[1,0,1,0,1],[0,1,0,1,0],[1,0,1,0,1]],// checker
+    [[0,0,1,0,0],[0,1,1,1,0],[1,1,1,1,1],[0,1,0,1,0],[1,0,0,0,1]],// person
+  ],
+  10:[],
+  15:[]
+};
+
+function rng(seed){let s=seed;return()=>{s=(s*1664525+1013904223)&0xFFFFFFFF;return(s>>>0)/0xFFFFFFFF}}
+
+function genPattern(n,seed){
+  const r=rng(seed);
+  const g=[];
+  for(let i=0;i<n;i++){g.push([]);for(let j=0;j<n;j++)g[i].push(0);}
+  // grow random blobs
+  const blobs=Math.floor(n*0.5)+2;
+  for(let b=0;b<blobs;b++){
+    const cx=Math.floor(r()*n),cy=Math.floor(r()*n);
+    const rad=1+Math.floor(r()*(n/5));
+    for(let i=0;i<n;i++)for(let j=0;j<n;j++){
+      const dx=i-cy,dy=j-cx;
+      if(dx*dx+dy*dy<=rad*rad)g[i][j]=1;
+    }
+  }
+  // ensure some cells filled
+  let cnt=g.flat().reduce((a,v)=>a+v,0);
+  if(cnt<n)for(let i=Math.floor(n/3);i<Math.floor(2*n/3);i++)for(let j=Math.floor(n/3);j<Math.floor(2*n/3);j++)g[i][j]=1;
+  return g;
+}
+
+function getClues(grid,n){
+  const rows=[],cols=[];
+  for(let i=0;i<n;i++){
+    let run=0,clue=[];
+    for(let j=0;j<n;j++){if(grid[i][j]){run++}else{if(run>0){clue.push(run);run=0;}}}
+    if(run>0)clue.push(run);
+    rows.push(clue.length?clue:[0]);
+  }
+  for(let j=0;j<n;j++){
+    let run=0,clue=[];
+    for(let i=0;i<n;i++){if(grid[i][j]){run++}else{if(run>0){clue.push(run);run=0;}}}
+    if(run>0)clue.push(run);
+    cols.push(clue.length?clue:[0]);
+  }
+  return{rows,cols};
+}
+
+// ── Game State ────────────────────────────────────────────────────
+let G={};
+let timerInterval=null;
+let mode='fill';// 'fill' or 'mark'
+let longPressTimer=null;
+let isDragging=false;
+let dragMode=null;// what mode the drag started in
+
+function setMode(m){
+  mode=m;
+  document.getElementById('fill-btn').classList.toggle('active',m==='fill');
+  document.getElementById('mark-btn').classList.toggle('active',m==='mark');
+}
+
+function showStart(){
+  clearInterval(timerInterval);
+  ['start-screen','game-screen','win-screen','go-screen'].forEach(id=>{
+    document.getElementById(id).classList.remove('active');
+  });
+  document.getElementById('start-screen').classList.add('active');
+  // update hiscores
+  const fmt=s=>s===null?'--:--':`${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
+  document.getElementById('hi-easy').textContent=fmt(parseInt(localStorage.getItem('neon-picross-hi-5'))||null);
+  document.getElementById('hi-med').textContent=fmt(parseInt(localStorage.getItem('neon-picross-hi-10'))||null);
+  document.getElementById('hi-hard').textContent=fmt(parseInt(localStorage.getItem('neon-picross-hi-15'))||null);
+}
+
+function showScreen(id){
+  ['start-screen','game-screen','win-screen','go-screen'].forEach(sid=>{
+    document.getElementById(sid).classList.remove('active');
+  });
+  document.getElementById(id).classList.add('active');
+}
+
+function startGame(n){
+  if(AC.state==='suspended')AC.resume();
+  clearInterval(timerInterval);
+  const seed=Date.now()%99999;
+  let pattern;
+  if(n===5){
+    const arr=PATTERNS[5];
+    pattern=arr[Math.floor(Math.random()*arr.length)];
+  } else {
+    pattern=genPattern(n,seed);
+  }
+  const clues=getClues(pattern,n);
+  const totalFilled=pattern.flat().reduce((a,v)=>a+v,0);
+  G={
+    n,pattern,clues,totalFilled,
+    state:Array.from({length:n},()=>Array(n).fill(0)),// 0=empty,1=filled,2=marked
+    errors:0,
+    filledCount:0,
+    seconds:0,
+    done:false,
+    seed
+  };
+  // reset error dots
+  for(let i=0;i<3;i++)document.getElementById('e'+i).classList.remove('lit');
+  document.getElementById('filled-display').textContent=`0/${totalFilled}`;
+  document.getElementById('timer-display').textContent='00:00';
+  showScreen('game-screen');
+  initCanvas(n);
+  drawBoard();
+  timerInterval=setInterval(()=>{
+    if(G.done)return;
+    G.seconds++;
+    const m=Math.floor(G.seconds/60),s=G.seconds%60;
+    document.getElementById('timer-display').textContent=`${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  },1000);
+}
+
+// ── Canvas Rendering ─────────────────────────────────────────────
+let canvas,ctx,CELL,CLUE_SIZE,OFFSET_X,OFFSET_Y;
+
+function initCanvas(n){
+  canvas=document.getElementById('gc');
+  ctx=canvas.getContext('2d');
+  const maxW=Math.min(window.innerWidth-32,window.innerHeight-180);
+  const maxClue=n===5?1:n===10?3:4;// max clue length for padding
+  CLUE_SIZE=Math.floor(maxW/(n+maxClue+1));
+  CELL=CLUE_SIZE;
+  OFFSET_X=maxClue*CLUE_SIZE+CLUE_SIZE;
+  OFFSET_Y=maxClue*CLUE_SIZE+CLUE_SIZE;
+  canvas.width=OFFSET_X+n*CELL;
+  canvas.height=OFFSET_Y+n*CELL;
+  canvas.style.width=canvas.width+'px';
+  canvas.style.height=canvas.height+'px';
+}
+
+const NEON_FILL='#00ffff';
+const NEON_MARK='#ff3366';
+const NEON_EMPTY='#1a1a2e';
+const NEON_GRID='#1e1e3a';
+const NEON_CLUE='#8888cc';
+const NEON_CLUE_DONE='#00ffff44';
+
+function drawBoard(){
+  const{n,pattern,clues,state}=G;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle='#0a0a1a';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  // draw clue backgrounds
+  for(let i=0;i<n;i++){
+    const rowClue=clues.rows[i];
+    const rowDone=isRowDone(i);
+    const x=0,y=OFFSET_Y+i*CELL;
+    if(rowDone){ctx.fillStyle='#00ffff08';ctx.fillRect(x,y,OFFSET_X,CELL);}
+  }
+  for(let j=0;j<n;j++){
+    const colDone=isColDone(j);
+    if(colDone){ctx.fillStyle='#00ffff08';ctx.fillRect(OFFSET_X+j*CELL,0,CELL,OFFSET_Y);}
+  }
+
+  // draw row clues
+  for(let i=0;i<n;i++){
+    const clue=clues.rows[i];
+    const done=isRowDone(i);
+    ctx.font=`bold ${Math.floor(CELL*0.45)}px monospace`;
+    ctx.textBaseline='middle';
+    ctx.textAlign='right';
+    ctx.fillStyle=done?'#00ffff44':NEON_CLUE;
+    const yc=OFFSET_Y+i*CELL+CELL/2;
+    const str=clue.join(' ');
+    ctx.fillText(str,OFFSET_X-4,yc);
+  }
+  // draw col clues
+  for(let j=0;j<n;j++){
+    const clue=clues.cols[j];
+    const done=isColDone(j);
+    ctx.font=`bold ${Math.floor(CELL*0.42)}px monospace`;
+    ctx.textAlign='center';
+    ctx.textBaseline='bottom';
+    ctx.fillStyle=done?'#00ffff44':NEON_CLUE;
+    const xc=OFFSET_X+j*CELL+CELL/2;
+    // stack each number
+    for(let k=0;k<clue.length;k++){
+      const yc=OFFSET_Y-(clue.length-1-k)*CELL-2;
+      ctx.fillText(clue[k],xc,yc);
+    }
+  }
+
+  // draw cells
+  for(let i=0;i<n;i++){
+    for(let j=0;j<n;j++){
+      const x=OFFSET_X+j*CELL,y=OFFSET_Y+i*CELL;
+      const s=state[i][j];
+      // bg
+      ctx.fillStyle=NEON_EMPTY;
+      ctx.fillRect(x+1,y+1,CELL-2,CELL-2);
+      if(s===1){
+        // filled
+        const grd=ctx.createRadialGradient(x+CELL/2,y+CELL/2,0,x+CELL/2,y+CELL/2,CELL/2);
+        grd.addColorStop(0,'#00ffff');
+        grd.addColorStop(1,'#0088cc');
+        ctx.fillStyle=grd;
+        ctx.fillRect(x+1,y+1,CELL-2,CELL-2);
+        ctx.shadowColor='#00ffff';ctx.shadowBlur=6;
+        ctx.fillRect(x+2,y+2,CELL-4,CELL-4);
+        ctx.shadowBlur=0;
+      } else if(s===2){
+        // marked X
+        ctx.strokeStyle='#ff3366';
+        ctx.lineWidth=2;
+        ctx.shadowColor='#ff3366';ctx.shadowBlur=4;
+        ctx.beginPath();ctx.moveTo(x+4,y+4);ctx.lineTo(x+CELL-4,y+CELL-4);ctx.stroke();
+        ctx.beginPath();ctx.moveTo(x+CELL-4,y+4);ctx.lineTo(x+4,y+CELL-4);ctx.stroke();
+        ctx.shadowBlur=0;
+      }
+      // grid lines
+      ctx.strokeStyle=NEON_GRID;
+      ctx.lineWidth=1;
+      ctx.strokeRect(x,y,CELL,CELL);
+      // thick lines every 5
+      if(j%5===0){ctx.strokeStyle='#3333aa';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x,OFFSET_Y);ctx.lineTo(x,OFFSET_Y+n*CELL);ctx.stroke();}
+      if(i%5===0){ctx.strokeStyle='#3333aa';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(OFFSET_X,y);ctx.lineTo(OFFSET_X+n*CELL,y);ctx.stroke();}
+    }
+  }
+  // outer border
+  ctx.strokeStyle='#00ffff66';
+  ctx.lineWidth=2;
+  ctx.strokeRect(OFFSET_X,OFFSET_Y,n*CELL,n*CELL);
+}
+
+function isRowDone(i){
+  const{n,pattern,state}=G;
+  for(let j=0;j<n;j++)if(pattern[i][j]===1&&state[i][j]!==1)return false;
+  return true;
+}
+function isColDone(j){
+  const{n,pattern,state}=G;
+  for(let i=0;i<n;i++)if(pattern[i][j]===1&&state[i][j]!==1)return false;
+  return true;
+}
+
+function getCellFromPoint(x,y){
+  const col=Math.floor((x-OFFSET_X)/CELL);
+  const row=Math.floor((y-OFFSET_Y)/CELL);
+  if(col<0||row<0||col>=G.n||row>=G.n)return null;
+  return{row,col};
+}
+
+function applyCell(row,col,m){
+  if(G.done)return;
+  const{pattern,state}=G;
+  const cur=state[row][col];
+  if(m==='fill'){
+    if(cur===1)return;// already filled
+    if(cur===2){state[row][col]=0;drawBoard();return;}// unmark
+    // check if correct
+    if(pattern[row][col]===1){
+      state[row][col]=1;
+      G.filledCount++;
+      document.getElementById('filled-display').textContent=`${G.filledCount}/${G.totalFilled}`;
+      sndFill();
+      drawBoard();
+      checkWin();
+    } else {
+      // error
+      G.errors++;
+      document.getElementById('e'+(G.errors-1)).classList.add('lit');
+      sndError();
+      // flash wrong cell
+      flashCell(row,col,'#ff3366');
+      if(G.errors>=3){gameOver();}
+    }
+  } else {
+    // mark mode
+    if(cur===0){state[row][col]=2;sndMark();}
+    else if(cur===2){state[row][col]=0;}
+    else return;
+    drawBoard();
+  }
+}
+
+function flashCell(row,col,color){
+  const x=OFFSET_X+col*CELL,y=OFFSET_Y+row*CELL;
+  let t=0;
+  const iv=setInterval(()=>{
+    t++;
+    ctx.fillStyle=t%2===0?NEON_EMPTY:color+'88';
+    ctx.fillRect(x+1,y+1,CELL-2,CELL-2);
+    if(t>5){clearInterval(iv);drawBoard();}
+  },80);
+}
+
+function checkWin(){
+  if(G.filledCount>=G.totalFilled){
+    G.done=true;
+    clearInterval(timerInterval);
+    sndWin();
+    // save best time
+    const key=`neon-picross-hi-${G.n}`;
+    const prev=parseInt(localStorage.getItem(key))||Infinity;
+    if(G.seconds<prev)localStorage.setItem(key,G.seconds);
+    const fmt=s=>`${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
+    document.getElementById('win-msg').textContent=`Time: ${fmt(G.seconds)} · Errors: ${G.errors}`;
+    setTimeout(()=>{
+      showScreen('win-screen');
+      drawReveal();
+    },800);
+  }
+}
+
+function drawReveal(){
+  const rc=document.getElementById('reveal-canvas');
+  const n=G.n;
+  const SZ=Math.min(200,Math.floor((window.innerWidth-64)/n)*n);
+  const cs=Math.floor(SZ/n);
+  rc.width=n*cs;rc.height=n*cs;
+  const rctx=rc.getContext('2d');
+  rctx.fillStyle='#0a0a1a';rctx.fillRect(0,0,rc.width,rc.height);
+  for(let i=0;i<n;i++)for(let j=0;j<n;j++){
+    if(G.pattern[i][j]){
+      const grd=rctx.createRadialGradient(j*cs+cs/2,i*cs+cs/2,0,j*cs+cs/2,i*cs+cs/2,cs/2);
+      grd.addColorStop(0,'#00ffff');grd.addColorStop(1,'#0044aa');
+      rctx.fillStyle=grd;
+      rctx.shadowColor='#00ffff';rctx.shadowBlur=8;
+      rctx.fillRect(j*cs+1,i*cs+1,cs-2,cs-2);
+      rctx.shadowBlur=0;
+    }
+  }
+}
+
+function gameOver(){
+  G.done=true;
+  clearInterval(timerInterval);
+  sndGO();
+  setTimeout(()=>showScreen('go-screen'),800);
+}
+
+// ── Input ─────────────────────────────────────────────────────────
+canvas&&canvas.addEventListener('mousedown',e=>{
+  if(e.button===2){
+    const r=canvas.getBoundingClientRect();
+    const c=getCellFromPoint(e.clientX-r.left,e.clientY-r.top);
+    if(c)applyCell(c.row,c.col,'mark');
+    return;
+  }
+  isDragging=true;
+  const r=canvas.getBoundingClientRect();
+  const c=getCellFromPoint(e.clientX-r.left,e.clientY-r.top);
+  if(c){dragMode=mode;applyCell(c.row,c.col,mode);}
+});
+document.addEventListener('mousemove',e=>{
+  if(!isDragging)return;
+  const r=canvas&&canvas.getBoundingClientRect();
+  if(!r)return;
+  const c=getCellFromPoint(e.clientX-r.left,e.clientY-r.top);
+  if(c)applyCell(c.row,c.col,dragMode||mode);
+});
+document.addEventListener('mouseup',()=>{isDragging=false;dragMode=null;});
+
+// Touch events
+let touchStart=null;
+document.addEventListener('touchstart',e=>{
+  const t=e.touches[0];
+  if(!canvas)return;
+  const r=canvas.getBoundingClientRect();
+  const c=getCellFromPoint(t.clientX-r.left,t.clientY-r.top);
+  if(!c)return;
+  touchStart={row:c.row,col:c.col,time:Date.now()};
+  longPressTimer=setTimeout(()=>{
+    if(touchStart){applyCell(touchStart.row,touchStart.col,'mark');touchStart=null;}
+  },500);
+  e.preventDefault();
+},{passive:false});
+document.addEventListener('touchmove',e=>{
+  clearTimeout(longPressTimer);
+  if(!touchStart)return;
+  const t=e.touches[0];
+  if(!canvas)return;
+  const r=canvas.getBoundingClientRect();
+  const c=getCellFromPoint(t.clientX-r.left,t.clientY-r.top);
+  if(c&&(c.row!==touchStart.row||c.col!==touchStart.col)){
+    applyCell(c.row,c.col,mode);
+    touchStart={row:c.row,col:c.col,time:Date.now()};
+  }
+  e.preventDefault();
+},{passive:false});
+document.addEventListener('touchend',e=>{
+  clearTimeout(longPressTimer);
+  if(touchStart&&Date.now()-touchStart.time<500){
+    applyCell(touchStart.row,touchStart.col,mode);
+  }
+  touchStart=null;
+  e.preventDefault();
+},{passive:false});
+
+// Keyboard shortcuts
+document.addEventListener('keydown',e=>{
+  if(e.key==='f'||e.key==='F')setMode('fill');
+  if(e.key==='m'||e.key==='M'||e.key==='x'||e.key==='X')setMode('mark');
+});
+
+// Reassign canvas events after game starts
+function initCanvas(n){
+  canvas=document.getElementById('gc');
+  ctx=canvas.getContext('2d');
+  const maxW=Math.min(window.innerWidth-32,window.innerHeight-180,520);
+  const maxClue=n===5?1:n===10?3:4;
+  CLUE_SIZE=Math.max(18,Math.floor(maxW/(n+maxClue+1)));
+  CELL=CLUE_SIZE;
+  OFFSET_X=maxClue*CLUE_SIZE+CLUE_SIZE;
+  OFFSET_Y=maxClue*CLUE_SIZE+CLUE_SIZE;
+  canvas.width=OFFSET_X+n*CELL;
+  canvas.height=OFFSET_Y+n*CELL;
+  canvas.style.maxWidth='100%';
+
+  // rebind events
+  canvas.oncontextmenu=e=>{
+    e.preventDefault();
+    const r=canvas.getBoundingClientRect();
+    const sx=canvas.width/canvas.offsetWidth;
+    const sy=canvas.height/canvas.offsetHeight;
+    const c=getCellFromPoint((e.clientX-r.left)*sx,(e.clientY-r.top)*sy);
+    if(c)applyCell(c.row,c.col,'mark');
+  };
+  canvas.onmousedown=e=>{
+    if(e.button===2)return;
+    const r=canvas.getBoundingClientRect();
+    const sx=canvas.width/canvas.offsetWidth;
+    const sy=canvas.height/canvas.offsetHeight;
+    isDragging=true;
+    const c=getCellFromPoint((e.clientX-r.left)*sx,(e.clientY-r.top)*sy);
+    if(c){dragMode=mode;applyCell(c.row,c.col,mode);}
+  };
+  canvas.onmousemove=e=>{
+    if(!isDragging)return;
+    const r=canvas.getBoundingClientRect();
+    const sx=canvas.width/canvas.offsetWidth;
+    const sy=canvas.height/canvas.offsetHeight;
+    const c=getCellFromPoint((e.clientX-r.left)*sx,(e.clientY-r.top)*sy);
+    if(c)applyCell(c.row,c.col,dragMode||mode);
+  };
+  canvas.ontouchstart=e=>{
+    const t=e.touches[0];
+    const r=canvas.getBoundingClientRect();
+    const sx=canvas.width/canvas.offsetWidth;
+    const sy=canvas.height/canvas.offsetHeight;
+    const c=getCellFromPoint((t.clientX-r.left)*sx,(t.clientY-r.top)*sy);
+    if(!c)return;
+    touchStart={row:c.row,col:c.col,time:Date.now()};
+    longPressTimer=setTimeout(()=>{
+      if(touchStart){applyCell(touchStart.row,touchStart.col,'mark');touchStart=null;}
+    },500);
+    e.preventDefault();
+  };
+  canvas.ontouchmove=e=>{
+    clearTimeout(longPressTimer);
+    if(!touchStart)return;
+    const t=e.touches[0];
+    const r=canvas.getBoundingClientRect();
+    const sx=canvas.width/canvas.offsetWidth;
+    const sy=canvas.height/canvas.offsetHeight;
+    const c=getCellFromPoint((t.clientX-r.left)*sx,(t.clientY-r.top)*sy);
+    if(c&&(c.row!==touchStart.row||c.col!==touchStart.col)){
+      applyCell(c.row,c.col,mode);
+      touchStart={row:c.row,col:c.col,time:Date.now()};
+    }
+    e.preventDefault();
+  };
+  canvas.ontouchend=e=>{
+    clearTimeout(longPressTimer);
+    if(touchStart&&Date.now()-touchStart.time<500){
+      applyCell(touchStart.row,touchStart.col,mode);
+    }
+    touchStart=null;
+    e.preventDefault();
+  };
+}
+
+// Init
+showStart();
+</script>
+</body>
+</html>

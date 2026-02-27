@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>🃏 Neon Memory Match</title>
+<style>
+  /* ===== RESET & BASE ===== */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%; min-height: 100%;
+    background: #0a0a1a;
+    color: #fff;
+    font-family: 'Courier New', monospace;
+    user-select: none;
+  }
+
+  /* ===== SCREENS ===== */
+  .screen {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 16px;
+    background: rgba(10,10,26,0.97);
+    z-index: 20;
+    padding: 20px;
+  }
+  .screen.hidden { display: none; }
+
+  /* ===== LOGO ===== */
+  .logo {
+    font-size: clamp(1.8rem, 7vw, 3.2rem);
+    font-weight: 900;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #f0f;
+    text-shadow: 0 0 12px #f0f, 0 0 36px #f0f, 0 0 70px #a0f;
+    animation: glowpulse 2.4s infinite alternate;
+    text-align: center;
+  }
+  @keyframes glowpulse {
+    from { text-shadow: 0 0 10px #f0f, 0 0 30px #f0f; }
+    to   { text-shadow: 0 0 22px #f0f, 0 0 60px #f0f, 0 0 100px #a0f; }
+  }
+
+  .subtitle { font-size: 0.8rem; color: #886699; letter-spacing: 2px; text-align: center; }
+
+  /* ===== BUTTONS ===== */
+  .btn-group { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+
+  .sel-btn {
+    padding: 9px 20px;
+    border: 2px solid #f0f;
+    background: transparent;
+    color: #f0f;
+    font-family: inherit;
+    font-size: 0.85rem;
+    letter-spacing: 2px;
+    cursor: pointer;
+    text-transform: uppercase;
+    border-radius: 4px;
+    transition: all .15s;
+  }
+  .sel-btn:hover, .sel-btn.active {
+    background: #f0f;
+    color: #0a0a1a;
+    box-shadow: 0 0 14px #f0f;
+  }
+
+  .play-btn {
+    margin-top: 6px;
+    padding: 13px 44px;
+    border: 2px solid #0ff;
+    background: transparent;
+    color: #0ff;
+    font-family: inherit;
+    font-size: clamp(0.95rem, 3vw, 1.15rem);
+    letter-spacing: 3px;
+    cursor: pointer;
+    text-transform: uppercase;
+    border-radius: 4px;
+    transition: all .15s;
+  }
+  .play-btn:hover {
+    background: #0ff;
+    color: #0a0a1a;
+    box-shadow: 0 0 20px #0ff;
+  }
+
+  /* ===== HUD ===== */
+  #hud {
+    position: fixed; top: 0; left: 0; right: 0;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 18px;
+    background: rgba(10,10,26,0.85);
+    backdrop-filter: blur(4px);
+    z-index: 10;
+    border-bottom: 1px solid #1a1a3a;
+  }
+  .hud-val {
+    font-size: clamp(0.8rem, 2.5vw, 1rem);
+    color: #0ff;
+    text-shadow: 0 0 8px #0ff;
+    letter-spacing: 1px;
+  }
+  .hud-label { font-size: 0.6rem; color: #446688; letter-spacing: 1px; display: block; }
+
+  /* ===== GAME BOARD ===== */
+  #gameArea {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding-top: 70px;
+    padding-bottom: 20px;
+  }
+  #gameArea.active { display: flex; }
+
+  #board {
+    display: grid;
+    gap: clamp(6px, 1.5vw, 12px);
+    padding: clamp(8px, 2vw, 16px);
+  }
+
+  /* ===== CARDS ===== */
+  .card {
+    position: relative;
+    cursor: pointer;
+    perspective: 600px;
+  }
+  .card-inner {
+    width: 100%; height: 100%;
+    position: relative;
+    transform-style: preserve-3d;
+    transition: transform 0.4s cubic-bezier(.4,0,.2,1);
+  }
+  .card.flipped .card-inner  { transform: rotateY(180deg); }
+  .card.matched .card-inner  { transform: rotateY(180deg); }
+
+  .card-face {
+    position: absolute; inset: 0;
+    border-radius: 8px;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  /* Back face */
+  .card-back {
+    background: #0d0d2a;
+    border: 2px solid #1e1e4a;
+    box-shadow: inset 0 0 10px rgba(0,255,255,0.05);
+  }
+
+  /* Front face */
+  .card-front {
+    background: #0a0a2a;
+    border: 2px solid #f0f;
+    transform: rotateY(180deg);
+    box-shadow: 0 0 12px #f0f, inset 0 0 10px rgba(255,0,255,0.1);
+  }
+  .card.matched .card-front {
+    border-color: #0f0;
+    box-shadow: 0 0 18px #0f0, inset 0 0 14px rgba(0,255,0,0.15);
+  }
+
+  .card-symbol {
+    width: 70%; height: 70%;
+    display: block;
+  }
+
+  /* ===== COMBO FLASH ===== */
+  #combo-flash {
+    position: fixed;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: clamp(2rem, 8vw, 4rem);
+    font-weight: 900;
+    color: #ff0;
+    text-shadow: 0 0 30px #ff0;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s;
+    z-index: 30;
+    letter-spacing: 4px;
+  }
+
+  /* ===== RESULT SCREEN ===== */
+  .result-big {
+    font-size: clamp(2rem, 7vw, 3rem);
+    font-weight: 900;
+    color: #0f0;
+    text-shadow: 0 0 20px #0f0, 0 0 50px #0f0;
+    letter-spacing: 4px;
+    text-align: center;
+  }
+  .stat-row {
+    display: flex; gap: 32px; flex-wrap: wrap; justify-content: center;
+  }
+  .stat {
+    text-align: center;
+  }
+  .stat-val   { font-size: 1.6rem; color: #0ff; text-shadow: 0 0 10px #0ff; }
+  .stat-label { font-size: 0.7rem; color: #446688; letter-spacing: 1px; margin-top: 2px; }
+  .best-row   { font-size: 0.8rem; color: #886699; letter-spacing: 1px; }
+</style>
+</head>
+<body>
+
+<!-- ===== START SCREEN ===== -->
+<div class="screen" id="startScreen">
+  <div class="logo">🃏 NEON MEMORY</div>
+  <div class="subtitle">FLIP CARDS · FIND PAIRS · CHAIN COMBOS</div>
+
+  <div class="subtitle" style="margin-top:8px">GRID SIZE</div>
+  <div class="btn-group">
+    <button class="sel-btn" data-grid="easy">4 × 3  EASY</button>
+    <button class="sel-btn active" data-grid="medium">4 × 4  MEDIUM</button>
+    <button class="sel-btn" data-grid="hard">6 × 4  HARD</button>
+  </div>
+
+  <button class="play-btn" id="startBtn">▶ START</button>
+  <div class="subtitle" style="font-size:0.7rem">Consecutive matches = combo bonus!</div>
+</div>
+
+<!-- ===== GAME OVER SCREEN ===== -->
+<div class="screen hidden" id="gameOverScreen">
+  <div class="result-big">🏆 CLEARED!</div>
+  <div class="stat-row">
+    <div class="stat">
+      <div class="stat-val" id="finalScore">0</div>
+      <div class="stat-label">SCORE</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val" id="finalTime">0s</div>
+      <div class="stat-label">TIME</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val" id="finalMoves">0</div>
+      <div class="stat-label">MOVES</div>
+    </div>
+  </div>
+  <div class="best-row" id="bestRow">BEST: —</div>
+  <button class="play-btn" id="restartBtn">↺ PLAY AGAIN</button>
+  <button class="sel-btn" id="menuBtn" style="border-color:#886699;color:#886699;margin-top:4px">MENU</button>
+</div>
+
+<!-- ===== HUD ===== -->
+<div id="hud">
+  <div>
+    <span class="hud-label">TIME</span>
+    <span class="hud-val" id="hudTime">0:00</span>
+  </div>
+  <div style="text-align:center">
+    <span class="hud-label">SCORE</span>
+    <span class="hud-val" id="hudScore">0</span>
+  </div>
+  <div style="text-align:right">
+    <span class="hud-label">MOVES</span>
+    <span class="hud-val" id="hudMoves">0</span>
+  </div>
+</div>
+
+<!-- ===== GAME AREA ===== -->
+<div id="gameArea">
+  <div id="board"></div>
+</div>
+
+<!-- ===== COMBO FLASH ===== -->
+<div id="combo-flash">COMBO!</div>
+
+<!-- ===== CANVAS (for symbol drawing) ===== -->
+<canvas id="symbolCanvas" style="display:none"></canvas>
+
+<script>
+"use strict";
+/* =====================================================
+   NEON MEMORY MATCH — Main Script
+   ===================================================== */
+
+// ── Audio (Web Audio API) ─────────────────────────────
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+function playTone(freq, dur, type = 'sine', vol = 0.12) {
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  const osc  = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+  gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+  osc.start();
+  osc.stop(audioCtx.currentTime + dur);
+}
+
+const SFX = {
+  flip  : () => playTone(600, 0.06, 'triangle'),
+  match : () => { playTone(660, 0.1, 'sine'); setTimeout(() => playTone(880, 0.12, 'sine'), 100); },
+  combo : () => { playTone(880,0.08,'sine'); setTimeout(()=>playTone(1100,0.1,'sine'),90); setTimeout(()=>playTone(1320,0.15,'sine'),180); },
+  miss  : () => playTone(200, 0.1, 'square', 0.08),
+  win   : () => {
+    [440,550,660,880,1100].forEach((f,i) =>
+      setTimeout(() => playTone(f, 0.15, 'sine', 0.13), i * 100));
+  },
+};
+
+// ── Grid configs ──────────────────────────────────────
+const GRIDS = {
+  easy:   { cols: 4, rows: 3 }, // 12 cards, 6 pairs
+  medium: { cols: 4, rows: 4 }, // 16 cards, 8 pairs
+  hard:   { cols: 6, rows: 4 }, // 24 cards, 12 pairs
+};
+
+// ── Neon symbols (drawn via canvas) ──────────────────
+// Each symbol is a function that draws on a given 2D context
+const SYMBOLS = [
+  // 0: Star
+  (cx, s) => {
+    const r1 = s * 0.45, r2 = s * 0.2;
+    const pts = 5;
+    cx.beginPath();
+    for (let i = 0; i < pts * 2; i++) {
+      const r     = i % 2 === 0 ? r1 : r2;
+      const angle = (Math.PI / pts) * i - Math.PI / 2;
+      i === 0 ? cx.moveTo(Math.cos(angle) * r, Math.sin(angle) * r)
+              : cx.lineTo(Math.cos(angle) * r, Math.sin(angle) * r);
+    }
+    cx.closePath();
+  },
+  // 1: Diamond
+  (cx, s) => {
+    cx.beginPath();
+    cx.moveTo(0, -s * 0.45);
+    cx.lineTo(s * 0.3, 0);
+    cx.lineTo(0, s * 0.45);
+    cx.lineTo(-s * 0.3, 0);
+    cx.closePath();
+  },
+  // 2: Triangle
+  (cx, s) => {
+    const h = s * 0.45;
+    cx.beginPath();
+    cx.moveTo(0, -h);
+    cx.lineTo(h * 0.87, h * 0.5);
+    cx.lineTo(-h * 0.87, h * 0.5);
+    cx.closePath();
+  },
+  // 3: Circle
+  (cx, s) => {
+    cx.beginPath();
+    cx.arc(0, 0, s * 0.38, 0, Math.PI * 2);
+  },
+  // 4: Cross / Plus
+  (cx, s) => {
+    const t = s * 0.15, h = s * 0.44;
+    cx.beginPath();
+    cx.rect(-t, -h, t*2, h*2);
+    cx.rect(-h, -t, h*2, t*2);
+  },
+  // 5: Hexagon
+  (cx, s) => {
+    cx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = (Math.PI / 3) * i - Math.PI / 6;
+      i === 0 ? cx.moveTo(Math.cos(a) * s*0.42, Math.sin(a) * s*0.42)
+              : cx.lineTo(Math.cos(a) * s*0.42, Math.sin(a) * s*0.42);
+    }
+    cx.closePath();
+  },
+  // 6: Arrow (up)
+  (cx, s) => {
+    const h = s * 0.42, w = s * 0.28, sw = s * 0.15;
+    cx.beginPath();
+    cx.moveTo(0, -h);
+    cx.lineTo(w, 0);
+    cx.lineTo(sw, 0);
+    cx.lineTo(sw, h);
+    cx.lineTo(-sw, h);
+    cx.lineTo(-sw, 0);
+    cx.lineTo(-w, 0);
+    cx.closePath();
+  },
+  // 7: Lightning bolt
+  (cx, s) => {
+    cx.beginPath();
+    cx.moveTo(s * 0.1, -s * 0.44);
+    cx.lineTo(-s * 0.15, 0);
+    cx.lineTo(s * 0.05, 0);
+    cx.lineTo(-s * 0.1, s * 0.44);
+    cx.lineTo(s * 0.2, -s * 0.04);
+    cx.lineTo(s * 0.02, -s * 0.04);
+    cx.closePath();
+  },
+  // 8: Heart
+  (cx, s) => {
+    const sc = s * 0.4;
+    cx.beginPath();
+    cx.moveTo(0, sc * 0.3);
+    cx.bezierCurveTo(-sc * 0.1, 0, -sc, 0, -sc, -sc * 0.5);
+    cx.bezierCurveTo(-sc, -sc, 0, -sc * 0.9, 0, -sc * 0.3);
+    cx.bezierCurveTo(0, -sc * 0.9, sc, -sc, sc, -sc * 0.5);
+    cx.bezierCurveTo(sc, 0, sc * 0.1, 0, 0, sc * 0.3);
+    cx.closePath();
+  },
+  // 9: Moon
+  (cx, s) => {
+    cx.beginPath();
+    cx.arc(0, 0, s * 0.38, 0.3, Math.PI * 1.7);
+    cx.arc(s * 0.12, s * 0.06, s * 0.28, Math.PI * 1.7, 0.3, true);
+    cx.closePath();
+  },
+  // 10: Pentagon
+  (cx, s) => {
+    cx.beginPath();
+    for (let i = 0; i < 5; i++) {
+      const a = (Math.PI * 2 / 5) * i - Math.PI / 2;
+      i === 0 ? cx.moveTo(Math.cos(a) * s*0.42, Math.sin(a) * s*0.42)
+              : cx.lineTo(Math.cos(a) * s*0.42, Math.sin(a) * s*0.42);
+    }
+    cx.closePath();
+  },
+  // 11: Ring / Donut
+  (cx, s) => {
+    cx.arc(0, 0, s * 0.4, 0, Math.PI * 2);
+    cx.arc(0, 0, s * 0.22, 0, Math.PI * 2, true);
+  },
+];
+
+// Neon colours per symbol
+const NEON_COLORS = [
+  '#ff0','#0ff','#f0f','#0f0','#f80','#a0f',
+  '#0af','#f04','#ff80ff','#80ffff','#ffaa00','#00ffaa',
+];
+
+// ── Globals ───────────────────────────────────────────
+const LS_KEY = 'neon-memory-hi';
+
+let difficulty  = 'medium';
+let grid        = GRIDS[difficulty];
+let cards       = [];      // [{id, pairId, el, flipped, matched}]
+let flipped     = [];      // currently face-up (max 2)
+let lockBoard   = false;
+let moves       = 0;
+let matchCount  = 0;
+let combo       = 0;
+let score       = 0;
+let timerSec    = 0;
+let timerHandle = null;
+let gameRunning = false;
+let cardSize    = 80;      // px, calculated per grid
+
+// ── Best score ────────────────────────────────────────
+function loadBest() {
+  try { return JSON.parse(localStorage.getItem(LS_KEY)) || {}; }
+  catch { return {}; }
+}
+function saveBest(key, val) {
+  const b = loadBest();
+  if (!b[key] || val > b[key]) b[key] = val;
+  localStorage.setItem(LS_KEY, JSON.stringify(b));
+}
+
+// ── UI helpers ────────────────────────────────────────
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+  document.getElementById('gameArea').classList.remove('active');
+  if (id === 'game') {
+    document.getElementById('gameArea').classList.add('active');
+  } else if (id) {
+    document.getElementById(id).classList.remove('hidden');
+  }
+}
+
+// Difficulty selector
+document.querySelectorAll('.sel-btn[data-grid]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.sel-btn[data-grid]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    difficulty = btn.dataset.grid;
+    grid = GRIDS[difficulty];
+  });
+});
+
+// ── Symbol rendering ──────────────────────────────────
+function renderSymbol(pairId, size) {
+  const offscreen = document.getElementById('symbolCanvas');
+  offscreen.width  = size;
+  offscreen.height = size;
+  const cx = offscreen.getContext('2d');
+  cx.clearRect(0, 0, size, size);
+
+  const color = NEON_COLORS[pairId % NEON_COLORS.length];
+  cx.save();
+  cx.translate(size / 2, size / 2);
+  cx.fillStyle   = color;
+  cx.strokeStyle = color;
+  cx.lineWidth   = size * 0.06;
+  cx.shadowColor = color;
+  cx.shadowBlur  = 16;
+
+  SYMBOLS[pairId % SYMBOLS.length](cx, size);
+
+  // Rings cause fill+stroke clipping issues — always fill+stroke
+  if (pairId % SYMBOLS.length === 11) {
+    // Ring: use even-odd fill rule
+    cx.fillStyle = 'transparent';
+    cx.strokeStyle = color;
+    cx.lineWidth   = size * 0.1;
+    cx.beginPath();
+    cx.arc(0, 0, size * 0.35, 0, Math.PI * 2);
+    cx.stroke();
+  } else {
+    cx.fill();
+    // bright outline
+    cx.shadowBlur  = 24;
+    cx.strokeStyle = '#fff';
+    cx.lineWidth   = size * 0.025;
+    cx.stroke();
+  }
+  cx.restore();
+
+  return offscreen.toDataURL();
+}
+
+// ── Card size calculation ─────────────────────────────
+function calcCardSize() {
+  const vw  = window.innerWidth;
+  const vh  = window.innerHeight - 70 - 40; // subtract HUD + padding
+  const gap = Math.max(6, Math.min(12, vw * 0.015));
+  const maxW = Math.floor((vw - gap * (grid.cols + 1)) / grid.cols);
+  const maxH = Math.floor((vh - gap * (grid.rows + 1)) / grid.rows);
+  return Math.min(maxW, maxH, 130);
+}
+
+// ── Build board ───────────────────────────────────────
+function buildBoard() {
+  cardSize = calcCardSize();
+  const totalPairs = (grid.cols * grid.rows) / 2;
+  const board      = document.getElementById('board');
+  board.innerHTML  = '';
+
+  // Setup grid CSS
+  board.style.gridTemplateColumns = `repeat(${grid.cols}, ${cardSize}px)`;
+  board.style.gridTemplateRows    = `repeat(${grid.rows}, ${cardSize}px)`;
+
+  // Create pairs array
+  const pairIds = [];
+  for (let i = 0; i < totalPairs; i++) pairIds.push(i, i);
+  // Shuffle (Fisher-Yates)
+  for (let i = pairIds.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pairIds[i], pairIds[j]] = [pairIds[j], pairIds[i]];
+  }
+
+  cards = [];
+  pairIds.forEach((pairId, idx) => {
+    const card = document.createElement('div');
+    card.className  = 'card';
+    card.style.width  = cardSize + 'px';
+    card.style.height = cardSize + 'px';
+    card.innerHTML = `
+      <div class="card-inner">
+        <div class="card-face card-back">
+          <canvas width="${Math.round(cardSize*0.6)}" height="${Math.round(cardSize*0.6)}" style="opacity:0.15"></canvas>
+        </div>
+        <div class="card-face card-front">
+          <img class="card-symbol" src="${renderSymbol(pairId, Math.round(cardSize * 0.72))}" alt="symbol">
+        </div>
+      </div>`;
+
+    // Draw subtle pattern on card back
+    const backCanvas = card.querySelector('.card-back canvas');
+    const bctx = backCanvas.getContext('2d');
+    const bs   = backCanvas.width;
+    bctx.strokeStyle = '#0ff';
+    bctx.lineWidth   = 1;
+    for (let i = 0; i < 4; i++) {
+      bctx.strokeRect(i * 4, i * 4, bs - i * 8, bs - i * 8);
+    }
+    bctx.beginPath();
+    bctx.moveTo(0, 0); bctx.lineTo(bs, bs);
+    bctx.moveTo(bs, 0); bctx.lineTo(0, bs);
+    bctx.stroke();
+
+    const cardData = { id: idx, pairId, el: card, flipped: false, matched: false };
+    cards.push(cardData);
+    card.addEventListener('click', () => onCardClick(cardData));
+    board.appendChild(card);
+  });
+}
+
+// ── Card click handler ────────────────────────────────
+function onCardClick(card) {
+  if (!gameRunning || lockBoard || card.flipped || card.matched) return;
+  SFX.flip();
+
+  card.flipped = true;
+  card.el.classList.add('flipped');
+  flipped.push(card);
+
+  if (flipped.length === 2) {
+    moves++;
+    updateHUD();
+    lockBoard = true;
+    setTimeout(checkMatch, 700);
+  }
+}
+
+function checkMatch() {
+  const [a, b] = flipped;
+  if (a.pairId === b.pairId) {
+    // MATCH
+    a.matched = b.matched = true;
+    a.el.classList.add('matched');
+    b.el.classList.add('matched');
+    combo++;
+    matchCount++;
+
+    const basePoints = 100;
+    const comboBonus = combo > 1 ? (combo - 1) * 50 : 0;
+    score += basePoints + comboBonus;
+    updateHUD();
+
+    if (combo > 1) {
+      showComboFlash(`COMBO ×${combo}! +${comboBonus}`);
+      SFX.combo();
+    } else {
+      SFX.match();
+    }
+
+    if (matchCount === cards.length / 2) {
+      // All matched — win!
+      endGame();
+    }
+  } else {
+    // MISS
+    combo = 0;
+    SFX.miss();
+    a.flipped = b.flipped = false;
+    setTimeout(() => {
+      a.el.classList.remove('flipped');
+      b.el.classList.remove('flipped');
+    }, 100);
+  }
+
+  flipped  = [];
+  lockBoard = false;
+}
+
+// ── Combo flash ───────────────────────────────────────
+function showComboFlash(text) {
+  const el   = document.getElementById('combo-flash');
+  el.textContent = text;
+  el.style.opacity = '1';
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.style.opacity = '0'; }, 900);
+}
+
+// ── Timer ─────────────────────────────────────────────
+function startTimer() {
+  timerSec    = 0;
+  clearInterval(timerHandle);
+  timerHandle = setInterval(() => { timerSec++; updateHUD(); }, 1000);
+}
+function stopTimer() { clearInterval(timerHandle); }
+
+function formatTime(s) {
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+// ── HUD update ────────────────────────────────────────
+function updateHUD() {
+  document.getElementById('hudTime').textContent  = formatTime(timerSec);
+  document.getElementById('hudScore').textContent = score;
+  document.getElementById('hudMoves').textContent = moves;
+}
+
+// ── Start game ────────────────────────────────────────
+function startGame() {
+  moves      = 0;
+  matchCount = 0;
+  combo      = 0;
+  score      = 0;
+  flipped    = [];
+  lockBoard  = false;
+  gameRunning = true;
+
+  buildBoard();
+  showScreen('game');
+  updateHUD();
+  startTimer();
+}
+
+// ── End game ─────────────────────────────────────────
+function endGame() {
+  stopTimer();
+  gameRunning = false;
+  SFX.win();
+
+  // Efficiency bonus: fewer moves = more points
+  const totalPairs = cards.length / 2;
+  const minMoves   = totalPairs;
+  const efficiency = Math.max(0, minMoves / moves);
+  const timeBonus  = Math.max(0, Math.floor(1000 - timerSec * 5));
+  const effBonus   = Math.floor(efficiency * 500);
+  score += timeBonus + effBonus;
+
+  // Save best
+  const bestKey = `${difficulty}`;
+  saveBest(bestKey, score);
+  const b = loadBest();
+
+  document.getElementById('finalScore').textContent = score;
+  document.getElementById('finalTime').textContent  = formatTime(timerSec);
+  document.getElementById('finalMoves').textContent = moves;
+  document.getElementById('bestRow').textContent    =
+    `BEST [${difficulty.toUpperCase()}]: ${b[bestKey] || score}`;
+
+  setTimeout(() => showScreen('gameOverScreen'), 800);
+}
+
+// ── Button wiring ─────────────────────────────────────
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('restartBtn').addEventListener('click', startGame);
+document.getElementById('menuBtn').addEventListener('click', () => showScreen('startScreen'));
+
+// ── Handle resize ─────────────────────────────────────
+let resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    if (gameRunning) buildBoard(); // re-layout if game active
+  }, 300);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Neon Sudoku</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0a0a1a;--grid-bg:#0d0d22;--cell-bg:#12122a;
+  --cyan:#00f5ff;--pink:#ff006e;--purple:#9b00ff;--green:#00ff88;--yellow:#ffff00;
+  --blue:#4488ff;--text:#e0e0ff;--sub:#7777aa;--err:#ff3355;
+  --given:#99bbff;--user:#00f5ff;--pencil:#8888bb;
+}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:8px 4px;overflow-x:hidden;user-select:none;touch-action:manipulation}
+h1{font-size:clamp(1.6rem,5vw,2.4rem);font-weight:900;letter-spacing:4px;color:var(--cyan);text-shadow:0 0 16px var(--cyan),0 0 32px var(--cyan);margin:6px 0 2px}
+.tagline{color:var(--sub);font-size:0.75rem;letter-spacing:2px;margin-bottom:8px}
+/* Top bar */
+.top-bar{display:flex;gap:8px;width:100%;max-width:420px;margin-bottom:8px;align-items:center;justify-content:space-between}
+.timer-box{background:var(--cell-bg);border:1px solid var(--purple);border-radius:8px;padding:6px 12px;display:flex;flex-direction:column;align-items:center;min-width:80px;box-shadow:0 0 8px rgba(155,0,255,.3)}
+.timer-box .label{font-size:.6rem;letter-spacing:2px;color:var(--sub);text-transform:uppercase}
+.timer-box .val{font-size:1.1rem;font-weight:700;color:var(--cyan);font-variant-numeric:tabular-nums}
+.diff-btns{display:flex;gap:5px}
+.diff-btn{background:transparent;border:1px solid var(--sub);color:var(--sub);padding:5px 10px;border-radius:5px;cursor:pointer;font-size:.7rem;letter-spacing:1px;transition:all .2s;text-transform:uppercase}
+.diff-btn.active,.diff-btn:hover{border-color:var(--cyan);color:var(--cyan);box-shadow:0 0 8px rgba(0,245,255,.3)}
+/* Grid */
+.grid-outer{position:relative;margin-bottom:8px}
+.grid{display:grid;grid-template-columns:repeat(9,1fr);gap:1px;background:var(--purple);border:2px solid var(--cyan);border-radius:8px;padding:0;overflow:hidden;box-shadow:0 0 24px rgba(0,245,255,.25),0 0 48px rgba(155,0,255,.15);width:min(420px,98vw);aspect-ratio:1}
+.cell{background:var(--cell-bg);position:relative;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .1s;border:none;outline:none;aspect-ratio:1}
+/* Box borders */
+.cell:nth-child(3n){border-right:2px solid var(--purple)}
+.cell:nth-child(9n){border-right:none}
+.row2 .cell,.row5 .cell{border-bottom:2px solid var(--purple)}
+/* Actually, let me use row class approach */
+.cell.box-right{border-right:2px solid var(--purple)}
+.cell.box-bottom{border-bottom:2px solid var(--purple)}
+.cell.selected{background:#1a2040!important}
+.cell.highlight{background:#151530}
+.cell.same-num{background:#162040}
+.cell.error-cell{background:#2a0a12}
+.cell .given{font-size:clamp(.9rem,3.5vw,1.4rem);font-weight:700;color:var(--given);text-shadow:0 0 8px rgba(148,187,255,.5)}
+.cell .user-val{font-size:clamp(.9rem,3.5vw,1.4rem);font-weight:700;color:var(--user);text-shadow:0 0 8px rgba(0,245,255,.6)}
+.cell .user-val.err{color:var(--err);text-shadow:0 0 8px rgba(255,51,85,.6)}
+/* Pencil marks */
+.pencil-grid{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);width:100%;height:100%;padding:1px}
+.pm{display:flex;align-items:center;justify-content:center;font-size:clamp(.35rem,1.5vw,.55rem);color:var(--pencil);line-height:1}
+/* Controls */
+.controls{display:flex;flex-wrap:wrap;gap:6px;width:100%;max-width:420px;margin-bottom:8px;justify-content:center}
+.btn{background:transparent;border:1px solid var(--cyan);color:var(--cyan);padding:7px 12px;border-radius:6px;cursor:pointer;font-size:.75rem;letter-spacing:1px;text-transform:uppercase;transition:all .2s;text-shadow:0 0 6px var(--cyan);box-shadow:0 0 6px rgba(0,245,255,.2)}
+.btn:hover,.btn:active{background:rgba(0,245,255,.12);box-shadow:0 0 14px rgba(0,245,255,.5)}
+.btn.active{background:rgba(0,245,255,.2);box-shadow:0 0 14px rgba(0,245,255,.5)}
+.btn.pink{border-color:var(--pink);color:var(--pink);text-shadow:0 0 6px var(--pink);box-shadow:0 0 6px rgba(255,0,110,.2)}
+.btn.pink:hover,.btn.pink:active{background:rgba(255,0,110,.12)}
+.btn.green{border-color:var(--green);color:var(--green);text-shadow:0 0 6px var(--green);box-shadow:0 0 6px rgba(0,255,136,.2)}
+.btn.green:hover,.btn.green:active{background:rgba(0,255,136,.12)}
+/* Number pad */
+.numpad{display:grid;grid-template-columns:repeat(9,1fr);gap:5px;width:100%;max-width:420px;margin-bottom:8px}
+.npad-btn{aspect-ratio:1;background:var(--cell-bg);border:1px solid var(--purple);border-radius:6px;color:var(--blue);font-size:clamp(.9rem,3.5vw,1.4rem);font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;text-shadow:0 0 8px var(--blue);box-shadow:0 0 6px rgba(68,136,255,.2)}
+.npad-btn:hover,.npad-btn:active{background:rgba(68,136,255,.2);border-color:var(--blue);box-shadow:0 0 14px rgba(68,136,255,.5)}
+.npad-btn.pencil-mode{color:var(--pencil);text-shadow:none;border-color:rgba(136,136,187,.5)}
+/* Stats row */
+.stats-row{display:flex;gap:10px;width:100%;max-width:420px;margin-bottom:6px}
+.stat-box{flex:1;background:var(--cell-bg);border:1px solid rgba(155,0,255,.3);border-radius:6px;padding:5px;text-align:center}
+.stat-box .label{font-size:.6rem;color:var(--sub);letter-spacing:1px;text-transform:uppercase}
+.stat-box .val{font-size:.95rem;font-weight:700;color:var(--cyan)}
+/* Overlay */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.88);display:flex;align-items:center;justify-content:center;z-index:50;backdrop-filter:blur(4px)}
+.overlay.hidden{display:none}
+.modal{background:var(--grid-bg);border:2px solid var(--cyan);border-radius:16px;padding:28px 24px;text-align:center;max-width:340px;width:92%;box-shadow:0 0 40px rgba(0,245,255,.35)}
+.modal h2{font-size:1.8rem;color:var(--cyan);text-shadow:0 0 20px var(--cyan);margin-bottom:6px}
+.modal p{color:var(--sub);margin-bottom:14px;font-size:.85rem;line-height:1.6}
+.modal-btns{display:flex;gap:10px;margin-top:16px;justify-content:center;flex-wrap:wrap}
+.modal .btn{padding:10px 20px}
+.win-time{font-size:2rem;font-weight:900;color:var(--yellow);text-shadow:0 0 16px var(--yellow);margin:8px 0}
+.win-diff{color:var(--green);font-size:.9rem}
+.confetti-dot{position:fixed;pointer-events:none;border-radius:50%;animation:confFall linear forwards}
+@keyframes confFall{0%{opacity:1;transform:translateY(0) rotate(0deg)}100%{opacity:0;transform:translateY(90vh) rotate(720deg)}}
+</style>
+</head>
+<body>
+<h1>NEON SUDOKU</h1>
+<p class="tagline">LOGIC · GLOW · SOLVE</p>
+
+<div class="top-bar">
+  <div class="timer-box">
+    <div class="label">Time</div>
+    <div class="val" id="timerDisplay">00:00</div>
+  </div>
+  <div class="diff-btns">
+    <button class="diff-btn active" data-diff="easy">Easy</button>
+    <button class="diff-btn" data-diff="medium">Med</button>
+    <button class="diff-btn" data-diff="hard">Hard</button>
+  </div>
+  <div class="timer-box">
+    <div class="label">Errors</div>
+    <div class="val" id="errCount" style="color:var(--err)">0</div>
+  </div>
+</div>
+
+<div class="grid-outer">
+  <div class="grid" id="grid"></div>
+</div>
+
+<div class="numpad" id="numpad"></div>
+
+<div class="controls">
+  <button class="btn" id="undoBtn">↩ Undo</button>
+  <button class="btn" id="redoBtn">↪ Redo</button>
+  <button class="btn active" id="pencilBtn">✏ Pencil</button>
+  <button class="btn pink" id="eraseBtn">⌫ Erase</button>
+  <button class="btn green" id="hintBtn">💡 Hint</button>
+  <button class="btn" id="newBtn">New</button>
+</div>
+
+<div class="stats-row">
+  <div class="stat-box"><div class="label">Best Easy</div><div class="val" id="bestEasy">--:--</div></div>
+  <div class="stat-box"><div class="label">Best Med</div><div class="val" id="bestMed">--:--</div></div>
+  <div class="stat-box"><div class="label">Best Hard</div><div class="val" id="bestHard">--:--</div></div>
+</div>
+
+<!-- Start overlay -->
+<div class="overlay" id="startOverlay">
+  <div class="modal">
+    <h2>NEON SUDOKU</h2>
+    <p>Fill each row, column, and 3×3 box with digits 1–9. No repeats!</p>
+    <div style="color:var(--sub);font-size:.78rem;line-height:2;margin:8px 0;text-align:left">
+      ✏ <b style="color:var(--cyan)">Pencil</b> — toggle candidate marks<br>
+      💡 <b style="color:var(--green)">Hint</b> — reveal one cell (3 per game)<br>
+      ↩↪ <b style="color:var(--cyan)">Undo / Redo</b> — full history<br>
+      🖱 Click cell → tap number
+    </div>
+    <div class="modal-btns">
+      <button class="btn" onclick="startGame()">▶ START</button>
+    </div>
+  </div>
+</div>
+
+<!-- Win overlay -->
+<div class="overlay hidden" id="winOverlay">
+  <div class="modal">
+    <h2>🎉 SOLVED!</h2>
+    <div class="win-diff" id="winDiff"></div>
+    <div class="win-time" id="winTime"></div>
+    <div id="winBest" style="color:var(--green);display:none;margin-top:4px">🏆 BEST TIME!</div>
+    <div class="modal-btns">
+      <button class="btn" onclick="newGame()">▶ NEW GAME</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+// ===== Audio =====
+let AC;
+function getAC(){if(!AC)AC=new(window.AudioContext||window.webkitAudioContext)();if(AC.state==='suspended')AC.resume();return AC;}
+function beep(f,d,t='sine',v=0.08){try{const ac=getAC(),o=ac.createOscillator(),g=ac.createGain();o.connect(g);g.connect(ac.destination);o.type=t;o.frequency.value=f;g.gain.setValueAtTime(v,ac.currentTime);g.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+d);o.start();o.stop(ac.currentTime+d);}catch(e){}}
+function sfxPlace(){beep(440,.07,'sine',.06)}
+function sfxErase(){beep(220,.06,'sawtooth',.04)}
+function sfxError(){beep(180,.15,'sawtooth',.1)}
+function sfxHint(){[660,880,1100].forEach((f,i)=>setTimeout(()=>beep(f,.1,'sine',.08),i*60))}
+function sfxWin(){[523,659,784,1047,1319].forEach((f,i)=>setTimeout(()=>beep(f,.25,'sine',.1),i*100))}
+function sfxPencil(){beep(330,.05,'square',.04)}
+
+// ===== Sudoku Generator =====
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+function makeFull(){
+  const grid=Array.from({length:9},()=>Array(9).fill(0));
+  // Fill with backtracking + random
+  function valid(g,r,c,n){
+    for(let i=0;i<9;i++){if(g[r][i]===n||g[i][c]===n)return false;}
+    const br=Math.floor(r/3)*3,bc=Math.floor(c/3)*3;
+    for(let i=0;i<3;i++)for(let j=0;j<3;j++)if(g[br+i][bc+j]===n)return false;
+    return true;
+  }
+  function fill(pos){
+    if(pos===81)return true;
+    const r=Math.floor(pos/9),c=pos%9;
+    const nums=shuffle([1,2,3,4,5,6,7,8,9]);
+    for(const n of nums){
+      if(valid(grid,r,c,n)){grid[r][c]=n;if(fill(pos+1))return true;grid[r][c]=0;}
+    }
+    return false;
+  }
+  fill(0);
+  return grid;
+}
+function copyGrid(g){return g.map(r=>[...r]);}
+function solveSudoku(g){
+  // Returns solution count (stop at 2)
+  const grid=copyGrid(g);
+  function valid(r,c,n){
+    for(let i=0;i<9;i++){if(grid[r][i]===n||grid[i][c]===n)return false;}
+    const br=Math.floor(r/3)*3,bc=Math.floor(c/3)*3;
+    for(let i=0;i<3;i++)for(let j=0;j<3;j++)if(grid[br+i][bc+j]===n)return false;
+    return true;
+  }
+  let count=0;
+  function solve(){
+    for(let pos=0;pos<81;pos++){
+      const r=Math.floor(pos/9),c=pos%9;
+      if(!grid[r][c]){
+        for(let n=1;n<=9;n++){
+          if(valid(r,c,n)){
+            grid[r][c]=n;solve();grid[r][c]=0;
+            if(count>=2)return;
+          }
+        }
+        return;
+      }
+    }
+    count++;
+  }
+  solve();
+  return count;
+}
+function makePuzzle(givens){
+  const full=makeFull();
+  const puzzle=copyGrid(full);
+  let cells=shuffle(Array.from({length:81},(_,i)=>i));
+  let removed=0;
+  const target=81-givens;
+  for(const pos of cells){
+    if(removed>=target)break;
+    const r=Math.floor(pos/9),c=pos%9;
+    const bak=puzzle[r][c];
+    puzzle[r][c]=0;
+    if(solveSudoku(puzzle)===1)removed++;
+    else puzzle[r][c]=bak;
+  }
+  return{puzzle,solution:full};
+}
+
+// ===== State =====
+let puzzle=null,solution=null,userGrid=null,pencilGrid=null;
+let givens=new Set();
+let selected=-1;// index 0-80
+let pencilMode=false;
+let errorCount=0;
+let hintsLeft=3;
+let undoStack=[],redoStack=[];
+let timerSec=0,timerInterval=null;
+let difficulty='easy';
+let gameActive=false;
+const DIFF_GIVENS={easy:38,medium:30,hard:24};
+const BEST_KEY={easy:'neon-sudoku-best-easy',medium:'neon-sudoku-best-medium',hard:'neon-sudoku-best-hard'};
+
+// ===== Render =====
+const gridEl=document.getElementById('grid');
+const numpadEl=document.getElementById('numpad');
+const pencilBtn=document.getElementById('pencilBtn');
+const timerDisplay=document.getElementById('timerDisplay');
+const errCountEl=document.getElementById('errCount');
+
+function buildGrid(){
+  gridEl.innerHTML='';
+  for(let i=0;i<81;i++){
+    const r=Math.floor(i/9),c=i%9;
+    const cell=document.createElement('div');
+    cell.className='cell';
+    cell.dataset.idx=i;
+    // Box borders
+    if(c===2||c===5)cell.classList.add('box-right');
+    if(r===2||r===5)cell.classList.add('box-bottom');
+    cell.addEventListener('click',()=>selectCell(i));
+    gridEl.appendChild(cell);
+  }
+}
+function buildNumpad(){
+  numpadEl.innerHTML='';
+  for(let n=1;n<=9;n++){
+    const btn=document.createElement('button');
+    btn.className='npad-btn'+(pencilMode?' pencil-mode':'');
+    btn.textContent=n;
+    btn.addEventListener('click',()=>inputNumber(n));
+    numpadEl.appendChild(btn);
+  }
+}
+function renderAll(){
+  const cells=gridEl.querySelectorAll('.cell');
+  cells.forEach((cell,i)=>{
+    cell.innerHTML='';
+    cell.classList.remove('selected','highlight','same-num','error-cell');
+    const r=Math.floor(i/9),c=i%9;
+    if(givens.has(i)){
+      const s=document.createElement('span');s.className='given';s.textContent=puzzle[r][c];cell.appendChild(s);
+    } else if(userGrid[r][c]>0){
+      const s=document.createElement('span');
+      s.className='user-val';
+      if(userGrid[r][c]!==solution[r][c])s.classList.add('err');
+      s.textContent=userGrid[r][c];cell.appendChild(s);
+    } else {
+      // Pencil marks
+      const marks=pencilGrid[r][c];
+      if(marks.size>0){
+        const pg=document.createElement('div');pg.className='pencil-grid';
+        for(let n=1;n<=9;n++){
+          const pm=document.createElement('div');pm.className='pm';
+          pm.textContent=marks.has(n)?n:'';
+          pg.appendChild(pm);
+        }
+        cell.appendChild(pg);
+      }
+    }
+  });
+  // Highlight selected
+  if(selected>=0){
+    const sr=Math.floor(selected/9),sc=selected%9;
+    const sv=givens.has(selected)?puzzle[sr][sc]:userGrid[sr][sc];
+    cells.forEach((cell,i)=>{
+      const r=Math.floor(i/9),c=i%9;
+      // Same row/col/box
+      if(i!==selected&&(r===sr||c===sc||(Math.floor(r/3)===Math.floor(sr/3)&&Math.floor(c/3)===Math.floor(sc/3))))
+        cell.classList.add('highlight');
+      // Same number
+      if(sv>0&&i!==selected){
+        const cv=givens.has(i)?puzzle[r][c]:userGrid[r][c];
+        if(cv===sv)cell.classList.add('same-num');
+      }
+      if(i===selected)cell.classList.add('selected');
+    });
+    // Error highlight
+    cells.forEach((cell,i)=>{
+      const r=Math.floor(i/9),c=i%9;
+      if(!givens.has(i)&&userGrid[r][c]>0&&userGrid[r][c]!==solution[r][c])cell.classList.add('error-cell');
+    });
+  }
+}
+function updateNumpadStyle(){
+  numpadEl.querySelectorAll('.npad-btn').forEach(b=>{
+    b.className='npad-btn'+(pencilMode?' pencil-mode':'');
+  });
+  pencilBtn.classList.toggle('active',pencilMode);
+}
+
+// ===== Game Logic =====
+function selectCell(idx){
+  selected=idx;renderAll();
+}
+function inputNumber(n){
+  if(!gameActive||selected<0)return;
+  if(givens.has(selected))return;
+  const r=Math.floor(selected/9),c=selected%9;
+  if(pencilMode){
+    sfxPencil();
+    saveHistory();
+    if(pencilGrid[r][c].has(n))pencilGrid[r][c].delete(n);
+    else pencilGrid[r][c].add(n);
+    redoStack=[];
+  } else {
+    if(userGrid[r][c]===n)return;
+    saveHistory();
+    const prev=userGrid[r][c];
+    userGrid[r][c]=n;
+    redoStack=[];
+    if(n!==solution[r][c]){errorCount++;errCountEl.textContent=errorCount;sfxError();}
+    else{sfxPlace();clearPencilForCell(r,c);checkWin();}
+  }
+  renderAll();
+}
+function clearPencilForCell(r,c){
+  pencilGrid[r][c].clear();
+  // Clear from peers
+  const v=userGrid[r][c];
+  for(let i=0;i<9;i++){if(i!==c)pencilGrid[r][i].delete(v);}
+  for(let i=0;i<9;i++){if(i!==r)pencilGrid[i][c].delete(v);}
+  const br=Math.floor(r/3)*3,bc=Math.floor(c/3)*3;
+  for(let i=0;i<3;i++)for(let j=0;j<3;j++){
+    const pr=br+i,pc=bc+j;if(pr!==r||pc!==c)pencilGrid[pr][pc].delete(v);
+  }
+}
+function eraseCell(){
+  if(!gameActive||selected<0)return;
+  if(givens.has(selected))return;
+  const r=Math.floor(selected/9),c=selected%9;
+  if(userGrid[r][c]===0&&pencilGrid[r][c].size===0)return;
+  saveHistory();sfxErase();
+  userGrid[r][c]=0;pencilGrid[r][c].clear();redoStack=[];
+  renderAll();
+}
+function checkWin(){
+  for(let r=0;r<9;r++)for(let c=0;c<9;c++){
+    const v=givens.has(r*9+c)?puzzle[r][c]:userGrid[r][c];
+    if(v!==solution[r][c])return;
+  }
+  // Won!
+  stopTimer();sfxWin();gameActive=false;
+  spawnConfetti();
+  const t=formatTime(timerSec);
+  document.getElementById('winDiff').textContent=difficulty.toUpperCase();
+  document.getElementById('winTime').textContent=t;
+  const bk=BEST_KEY[difficulty];
+  const prev=localStorage.getItem(bk);
+  const wb=document.getElementById('winBest');
+  if(!prev||timerSec<parseInt(prev)){localStorage.setItem(bk,timerSec);wb.style.display='block';updateBestDisplay();}
+  else wb.style.display='none';
+  setTimeout(()=>document.getElementById('winOverlay').classList.remove('hidden'),400);
+}
+function hint(){
+  if(!gameActive||hintsLeft<=0)return;
+  // Find empty or wrong cell
+  let candidates=[];
+  for(let i=0;i<81;i++){
+    if(!givens.has(i)){
+      const r=Math.floor(i/9),c=i%9;
+      if(userGrid[r][c]!==solution[r][c])candidates.push(i);
+    }
+  }
+  if(!candidates.length)return;
+  // Prefer selected if wrong
+  let target=candidates.includes(selected)?selected:candidates[Math.floor(Math.random()*candidates.length)];
+  saveHistory();sfxHint();hintsLeft--;
+  const r=Math.floor(target/9),c=target%9;
+  userGrid[r][c]=solution[r][c];pencilGrid[r][c].clear();
+  clearPencilForCell(r,c);redoStack=[];
+  selected=target;renderAll();checkWin();
+  document.getElementById('hintBtn').textContent='💡 Hint ('+(hintsLeft)+')';
+}
+
+// ===== Undo/Redo =====
+function copyState(){return{u:userGrid.map(r=>r.slice()),p:pencilGrid.map(r=>r.map(s=>new Set(s)))};}
+function saveHistory(){undoStack.push(copyState());}
+function doUndo(){
+  if(!undoStack.length)return;
+  redoStack.push(copyState());
+  const s=undoStack.pop();
+  userGrid=s.u;pencilGrid=s.p;
+  sfxErase();renderAll();
+}
+function doRedo(){
+  if(!redoStack.length)return;
+  undoStack.push(copyState());
+  const s=redoStack.pop();
+  userGrid=s.u;pencilGrid=s.p;
+  sfxPlace();renderAll();
+}
+
+// ===== Timer =====
+function startTimer(){clearInterval(timerInterval);timerInterval=setInterval(()=>{timerSec++;timerDisplay.textContent=formatTime(timerSec);},1000);}
+function stopTimer(){clearInterval(timerInterval);}
+function formatTime(s){const m=Math.floor(s/60);const sec=s%60;return String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0');}
+function updateBestDisplay(){
+  ['easy','medium','hard'].forEach(d=>{
+    const k=BEST_KEY[d];const v=localStorage.getItem(k);
+    const el=document.getElementById('best'+d.charAt(0).toUpperCase()+d.slice(1));
+    el.textContent=v?formatTime(parseInt(v)):'--:--';
+  });
+}
+
+// ===== Game Flow =====
+function startGame(){
+  document.getElementById('startOverlay').classList.add('hidden');
+  newGame();
+}
+function newGame(){
+  document.getElementById('winOverlay').classList.add('hidden');
+  const g=DIFF_GIVENS[difficulty];
+  const{puzzle:p,solution:s}=makePuzzle(g);
+  puzzle=p;solution=s;
+  userGrid=Array.from({length:9},()=>Array(9).fill(0));
+  pencilGrid=Array.from({length:9},()=>Array.from({length:9},()=>new Set()));
+  givens=new Set();
+  for(let r=0;r<9;r++)for(let c=0;c<9;c++)if(puzzle[r][c]>0)givens.add(r*9+c);
+  errorCount=0;errCountEl.textContent=0;
+  hintsLeft=3;document.getElementById('hintBtn').textContent='💡 Hint (3)';
+  undoStack=[];redoStack=[];
+  selected=-1;
+  timerSec=0;timerDisplay.textContent='00:00';stopTimer();startTimer();
+  gameActive=true;
+  renderAll();
+}
+window.startGame=startGame;
+window.newGame=newGame;
+
+// ===== Confetti =====
+function spawnConfetti(){
+  const colors=['#00f5ff','#ff006e','#9b00ff','#00ff88','#ffff00','#ff6b35'];
+  for(let i=0;i<50;i++){
+    const d=document.createElement('div');d.className='confetti-dot';
+    const size=Math.random()*8+4;
+    d.style.cssText=`width:${size}px;height:${size}px;background:${colors[Math.floor(Math.random()*colors.length)]};left:${Math.random()*100}vw;top:-10px;animation-duration:${1+Math.random()*2}s;animation-delay:${Math.random()*.5}s`;
+    document.body.appendChild(d);
+    setTimeout(()=>d.remove(),3000);
+  }
+}
+
+// ===== Controls wiring =====
+document.getElementById('pencilBtn').onclick=()=>{pencilMode=!pencilMode;updateNumpadStyle();};
+document.getElementById('eraseBtn').onclick=eraseCell;
+document.getElementById('hintBtn').onclick=hint;
+document.getElementById('newBtn').onclick=newGame;
+document.getElementById('undoBtn').onclick=doUndo;
+document.getElementById('redoBtn').onclick=doRedo;
+
+document.querySelectorAll('.diff-btn').forEach(b=>{
+  b.onclick=()=>{
+    difficulty=b.dataset.diff;
+    document.querySelectorAll('.diff-btn').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    newGame();
+  };
+});
+
+// Keyboard
+document.addEventListener('keydown',e=>{
+  if(!gameActive)return;
+  if(e.key>='1'&&e.key<='9'){e.preventDefault();inputNumber(+e.key);}
+  else if(e.key==='Backspace'||e.key==='Delete'){e.preventDefault();eraseCell();}
+  else if(e.key==='p'||e.key==='P'){e.preventDefault();pencilMode=!pencilMode;updateNumpadStyle();}
+  else if((e.ctrlKey||e.metaKey)&&e.key==='z'){e.preventDefault();e.shiftKey?doRedo():doUndo();}
+  else if((e.ctrlKey||e.metaKey)&&e.key==='y'){e.preventDefault();doRedo();}
+  else if(e.key==='ArrowRight'&&selected>=0){e.preventDefault();selected=Math.min(80,selected+1);renderAll();}
+  else if(e.key==='ArrowLeft'&&selected>=0){e.preventDefault();selected=Math.max(0,selected-1);renderAll();}
+  else if(e.key==='ArrowDown'&&selected>=0){e.preventDefault();selected=Math.min(80,selected+9);renderAll();}
+  else if(e.key==='ArrowUp'&&selected>=0){e.preventDefault();selected=Math.max(0,selected-9);renderAll();}
+});
+
+// Init
+buildGrid();
+buildNumpad();
+updateBestDisplay();
+})();
+</script>
+</body>
+</html>

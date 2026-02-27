@@ -33,12 +33,12 @@ COUNT=$(echo "$MISSING" | wc -l | tr -d ' ')
 echo "⚠️  $COUNT posts missing from D1, syncing..."
 
 # 4) Generate SQL via Python
-python3 - "$POSTS_DIR" "$TMP_SQL" <<'PYEOF' $MISSING
+MISSING_SLUGS="$MISSING" python3 - "$POSTS_DIR" "$TMP_SQL" <<'PYEOF'
 import re, os, sys
 
 posts_dir = sys.argv[1]
 out_path = sys.argv[2]
-missing = sys.stdin.read().strip().split('\n')
+missing = os.environ.get('MISSING_SLUGS', '').strip().split('\n')
 
 stmts = []
 for slug in missing:
@@ -90,7 +90,6 @@ with open(out_path, 'w') as f:
     f.write('\n\n'.join(stmts))
 print(f'\n📦 {len(stmts)} SQL statements → {out_path}')
 PYEOF
-echo "$MISSING" | python3 - "$POSTS_DIR" "$TMP_SQL"
 
 # 5) Execute
 if [ -s "$TMP_SQL" ]; then

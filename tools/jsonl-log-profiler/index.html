@@ -1,0 +1,678 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JSONL 로그 프로파일러</title>
+  <style>
+    :root {
+      --bg: #0a0a1a;
+      --panel: #12122a;
+      --panel-2: #171735;
+      --text: #e8e8ff;
+      --muted: #9aa0c8;
+      --line: #2a2a52;
+      --neon: #00f5d4;
+      --neon-2: #7c4dff;
+      --danger: #ff5d8f;
+      --ok: #49ffa1;
+      --warn: #ffd166;
+      --shadow: 0 0 0 1px rgba(124,77,255,0.3), 0 0 24px rgba(0,245,212,0.08);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: "Pretendard", "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(1200px 600px at 15% -10%, rgba(124,77,255,0.18), transparent 60%),
+                  radial-gradient(1000px 500px at 90% 0%, rgba(0,245,212,0.12), transparent 55%),
+                  var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    .wrap {
+      width: min(1100px, 94vw);
+      margin: 22px auto 36px;
+    }
+
+    .title {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.2rem, 2.7vw, 1.85rem);
+      letter-spacing: 0.3px;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      font-size: 0.93rem;
+      margin-top: 4px;
+    }
+
+    .badge {
+      color: #001514;
+      background: linear-gradient(135deg, var(--neon), #66ffe9);
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-weight: 700;
+      font-size: 0.76rem;
+      box-shadow: 0 0 16px rgba(0,245,212,0.35);
+      white-space: nowrap;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 14px;
+    }
+
+    .card {
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent 35%), var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px;
+      box-shadow: var(--shadow);
+    }
+
+    .card h2 {
+      margin: 0 0 10px;
+      font-size: 1rem;
+      color: #dcddff;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    label {
+      display: block;
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    input[type="number"],
+    input[type="text"],
+    select,
+    textarea {
+      width: 100%;
+      border: 1px solid #33335f;
+      border-radius: 10px;
+      padding: 10px 11px;
+      background: var(--panel-2);
+      color: var(--text);
+      outline: none;
+      transition: border-color .18s ease, box-shadow .18s ease;
+      font: inherit;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--neon);
+      box-shadow: 0 0 0 3px rgba(0,245,212,0.15);
+    }
+
+    textarea {
+      min-height: 260px;
+      resize: vertical;
+      line-height: 1.45;
+      font-size: 0.91rem;
+    }
+
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 10px 0 2px;
+    }
+
+    button {
+      border: 1px solid #34346b;
+      background: #1f1f46;
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: 650;
+      transition: transform .08s ease, border-color .2s ease, background .2s ease;
+    }
+
+    button:hover { border-color: var(--neon-2); }
+    button:active { transform: translateY(1px); }
+
+    .primary {
+      background: linear-gradient(135deg, #00d9bd, #00f5d4);
+      color: #00221c;
+      border-color: transparent;
+      box-shadow: 0 0 14px rgba(0,245,212,0.3);
+    }
+
+    .ghost {
+      background: transparent;
+      border-color: #40407a;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .stat {
+      border: 1px solid #2f2f5a;
+      background: #151535;
+      border-radius: 10px;
+      padding: 10px;
+    }
+
+    .stat .k { color: var(--muted); font-size: 0.79rem; }
+    .stat .v { margin-top: 4px; font-size: 1.05rem; font-weight: 700; }
+
+    .ok { color: var(--ok); }
+    .danger { color: var(--danger); }
+    .warn { color: var(--warn); }
+
+    .table-wrap {
+      overflow: auto;
+      border: 1px solid #2d2d59;
+      border-radius: 10px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 420px;
+      background: #12122e;
+      font-size: 0.86rem;
+    }
+
+    th, td {
+      border-bottom: 1px solid #292953;
+      padding: 8px 9px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: #cfd3ff;
+      background: #191942;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    .pill {
+      display: inline-block;
+      border-radius: 999px;
+      border: 1px solid #3b3b70;
+      background: #1b1b43;
+      padding: 3px 8px;
+      font-size: 0.75rem;
+      color: #d7daff;
+      margin-right: 6px;
+      margin-bottom: 6px;
+    }
+
+    .muted {
+      color: var(--muted);
+      font-size: 0.84rem;
+    }
+
+    .preview {
+      margin-top: 12px;
+      border: 1px solid #2f2f5f;
+      border-radius: 10px;
+      background: #101028;
+      max-height: 250px;
+      overflow: auto;
+      padding: 9px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.78rem;
+      line-height: 1.45;
+      white-space: pre-wrap;
+    }
+
+    .footer-note {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 0.78rem;
+    }
+
+    @media (max-width: 860px) {
+      .grid { grid-template-columns: 1fr; }
+      .controls { grid-template-columns: 1fr; }
+      textarea { min-height: 220px; }
+      .stats { grid-template-columns: 1fr 1fr; }
+    }
+
+    @media (max-width: 520px) {
+      .wrap { width: 95vw; }
+      .stats { grid-template-columns: 1fr; }
+      button { flex: 1 1 auto; }
+      .badge { width: 100%; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="title">
+      <div>
+        <h1>JSONL 로그 프로파일러</h1>
+        <div class="subtitle">JSON Lines 데이터를 빠르게 점검하고, 키/타입/빈도 통계를 확인하세요.</div>
+      </div>
+      <div class="badge">로컬 처리 · 외부 전송 없음</div>
+    </div>
+
+    <div class="grid">
+      <section class="card">
+        <h2>입력</h2>
+        <div class="controls">
+          <div>
+            <label for="sampleLimit">샘플 미리보기 줄 수</label>
+            <input id="sampleLimit" type="number" min="1" max="500" value="20" />
+          </div>
+          <div>
+            <label for="topN">상위 값 개수 (Top N)</label>
+            <input id="topN" type="number" min="1" max="50" value="8" />
+          </div>
+        </div>
+
+        <label for="jsonlInput">JSONL 입력 (한 줄에 JSON 객체 1개)</label>
+        <textarea id="jsonlInput" spellcheck="false" placeholder='예시:
+{"level":"info","service":"api","latency":120,"region":"ap-northeast-2"}
+{"level":"error","service":"worker","latency":430,"region":"ap-northeast-2"}
+{"level":"info","service":"api","latency":98,"region":"us-east-1"}'></textarea>
+
+        <div class="row">
+          <input id="fileInput" type="file" accept=".jsonl,.txt,.log" style="display:none" />
+          <button class="primary" id="analyzeBtn">분석 실행</button>
+          <button id="fileBtn">파일 불러오기</button>
+          <button class="ghost" id="loadDemoBtn">데모 데이터</button>
+          <button class="ghost" id="clearBtn">입력/결과 초기화</button>
+        </div>
+
+        <div class="footer-note">자동 저장: 입력 데이터와 옵션은 브라우저 localStorage에 저장됩니다.</div>
+      </section>
+
+      <section class="card">
+        <h2>요약 결과</h2>
+        <div class="stats" id="stats"></div>
+
+        <label for="fieldSelect">Top 값 확인 필드</label>
+        <select id="fieldSelect">
+          <option value="">분석 후 필드를 선택하세요</option>
+        </select>
+
+        <div id="topValues" style="margin-top:10px"></div>
+
+        <div class="preview" id="previewBox">아직 분석되지 않았습니다.</div>
+      </section>
+    </div>
+
+    <section class="card" style="margin-top:14px">
+      <h2>필드 프로파일</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>필드</th>
+              <th>출현율</th>
+              <th>타입 분포</th>
+              <th>예시 값</th>
+            </tr>
+          </thead>
+          <tbody id="fieldTableBody">
+            <tr><td colspan="4" class="muted">분석 결과가 여기에 표시됩니다.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    (function () {
+      const STORAGE_KEY = 'jsonl-log-profiler-v1';
+      const els = {
+        input: document.getElementById('jsonlInput'),
+        sampleLimit: document.getElementById('sampleLimit'),
+        topN: document.getElementById('topN'),
+        analyzeBtn: document.getElementById('analyzeBtn'),
+        clearBtn: document.getElementById('clearBtn'),
+        fileBtn: document.getElementById('fileBtn'),
+        fileInput: document.getElementById('fileInput'),
+        loadDemoBtn: document.getElementById('loadDemoBtn'),
+        stats: document.getElementById('stats'),
+        fieldTableBody: document.getElementById('fieldTableBody'),
+        fieldSelect: document.getElementById('fieldSelect'),
+        topValues: document.getElementById('topValues'),
+        previewBox: document.getElementById('previewBox')
+      };
+
+      let lastAnalysis = null;
+
+      function saveState() {
+        const data = {
+          jsonl: els.input.value,
+          sampleLimit: els.sampleLimit.value,
+          topN: els.topN.value,
+          field: els.fieldSelect.value
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      }
+
+      function loadState() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return;
+          const data = JSON.parse(raw);
+          if (typeof data.jsonl === 'string') els.input.value = data.jsonl;
+          if (data.sampleLimit) els.sampleLimit.value = data.sampleLimit;
+          if (data.topN) els.topN.value = data.topN;
+        } catch (e) {
+          console.warn('state load failed', e);
+        }
+      }
+
+      function formatPercent(numerator, denominator) {
+        if (!denominator) return '0%';
+        return ((numerator / denominator) * 100).toFixed(1) + '%';
+      }
+
+      function getType(v) {
+        if (v === null) return 'null';
+        if (Array.isArray(v)) return 'array';
+        return typeof v;
+      }
+
+      function stringifyShort(v, max = 48) {
+        let s;
+        try {
+          s = typeof v === 'string' ? v : JSON.stringify(v);
+        } catch {
+          s = String(v);
+        }
+        if (s.length > max) return s.slice(0, max - 1) + '…';
+        return s;
+      }
+
+      function parseJSONL(text) {
+        const lines = text.split(/\r?\n/);
+        const rows = [];
+        const errors = [];
+
+        lines.forEach((line, i) => {
+          const trimmed = line.trim();
+          if (!trimmed) return;
+          try {
+            const obj = JSON.parse(trimmed);
+            if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+              rows.push(obj);
+            } else {
+              errors.push({ line: i + 1, reason: '객체(JSON object) 형태가 아닙니다.' });
+            }
+          } catch (e) {
+            errors.push({ line: i + 1, reason: e.message || '파싱 오류' });
+          }
+        });
+
+        return { rows, errors, lineCount: lines.length };
+      }
+
+      function analyzeRows(rows, errors) {
+        const fieldMap = new Map();
+
+        rows.forEach((row) => {
+          Object.entries(row).forEach(([key, value]) => {
+            if (!fieldMap.has(key)) {
+              fieldMap.set(key, {
+                presentCount: 0,
+                typeCounts: {},
+                samples: [],
+                valueFreq: new Map()
+              });
+            }
+
+            const entry = fieldMap.get(key);
+            entry.presentCount += 1;
+
+            const t = getType(value);
+            entry.typeCounts[t] = (entry.typeCounts[t] || 0) + 1;
+
+            if (entry.samples.length < 3) {
+              entry.samples.push(value);
+            }
+
+            const valKey = stringifyShort(value, 70);
+            entry.valueFreq.set(valKey, (entry.valueFreq.get(valKey) || 0) + 1);
+          });
+        });
+
+        return {
+          totalRows: rows.length,
+          invalidRows: errors.length,
+          fieldMap
+        };
+      }
+
+      function renderStats(result) {
+        const total = result.totalRows + result.invalidRows;
+        const html = [
+          { k: '총 입력 레코드', v: total.toLocaleString(), cls: '' },
+          { k: '유효 JSON 객체', v: result.totalRows.toLocaleString(), cls: 'ok' },
+          { k: '오류 라인', v: result.invalidRows.toLocaleString(), cls: result.invalidRows ? 'danger' : 'ok' },
+          { k: '감지된 필드 수', v: result.fieldMap.size.toLocaleString(), cls: 'warn' }
+        ].map(item => `
+          <div class="stat">
+            <div class="k">${item.k}</div>
+            <div class="v ${item.cls}">${item.v}</div>
+          </div>
+        `).join('');
+
+        els.stats.innerHTML = html;
+      }
+
+      function renderFieldTable(result) {
+        const { fieldMap, totalRows } = result;
+        if (!fieldMap.size) {
+          els.fieldTableBody.innerHTML = '<tr><td colspan="4" class="muted">표시할 필드가 없습니다.</td></tr>';
+          return;
+        }
+
+        const rows = Array.from(fieldMap.entries())
+          .sort((a, b) => b[1].presentCount - a[1].presentCount)
+          .map(([field, data]) => {
+            const typeBadges = Object.entries(data.typeCounts)
+              .sort((a, b) => b[1] - a[1])
+              .map(([type, count]) => `<span class="pill">${type}: ${count}</span>`)
+              .join('');
+
+            const samples = data.samples.map(v => `<div class="muted">${escapeHtml(stringifyShort(v, 120))}</div>`).join('');
+
+            return `
+              <tr>
+                <td><strong>${escapeHtml(field)}</strong></td>
+                <td>${formatPercent(data.presentCount, totalRows)} <span class="muted">(${data.presentCount}/${totalRows})</span></td>
+                <td>${typeBadges || '<span class="muted">-</span>'}</td>
+                <td>${samples || '<span class="muted">-</span>'}</td>
+              </tr>
+            `;
+          })
+          .join('');
+
+        els.fieldTableBody.innerHTML = rows;
+      }
+
+      function renderFieldSelect(result) {
+        const current = els.fieldSelect.value;
+        const fields = Array.from(result.fieldMap.keys()).sort();
+        const options = ['<option value="">필드를 선택하세요</option>']
+          .concat(fields.map(f => `<option value="${escapeAttr(f)}">${escapeHtml(f)}</option>`))
+          .join('');
+        els.fieldSelect.innerHTML = options;
+
+        if (fields.includes(current)) {
+          els.fieldSelect.value = current;
+        } else if (fields.length) {
+          els.fieldSelect.value = fields[0];
+        }
+      }
+
+      function renderTopValues() {
+        if (!lastAnalysis) return;
+        const field = els.fieldSelect.value;
+        if (!field || !lastAnalysis.fieldMap.has(field)) {
+          els.topValues.innerHTML = '<div class="muted">필드를 선택하면 값 빈도를 표시합니다.</div>';
+          return;
+        }
+
+        const topN = clamp(parseInt(els.topN.value, 10) || 8, 1, 50);
+        const freqMap = lastAnalysis.fieldMap.get(field).valueFreq;
+        const items = Array.from(freqMap.entries())
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, topN);
+
+        if (!items.length) {
+          els.topValues.innerHTML = '<div class="muted">빈도 데이터가 없습니다.</div>';
+          return;
+        }
+
+        els.topValues.innerHTML = `
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>값</th><th>빈도</th></tr></thead>
+              <tbody>
+                ${items.map(([v, c]) => `<tr><td>${escapeHtml(v)}</td><td>${c}</td></tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
+        `;
+      }
+
+      function renderPreview(parsed) {
+        const limit = clamp(parseInt(els.sampleLimit.value, 10) || 20, 1, 500);
+        const rows = parsed.rows.slice(0, limit);
+        const lines = rows.map((r, idx) => `${idx + 1}. ${JSON.stringify(r)}`);
+
+        if (parsed.errors.length) {
+          lines.push('');
+          lines.push(`⚠️ 오류 ${parsed.errors.length}건 (최대 5건 표시):`);
+          parsed.errors.slice(0, 5).forEach(err => {
+            lines.push(`- line ${err.line}: ${err.reason}`);
+          });
+        }
+
+        els.previewBox.textContent = lines.length ? lines.join('\n') : '표시할 레코드가 없습니다.';
+      }
+
+      function analyze() {
+        const raw = els.input.value.trim();
+        if (!raw) {
+          alert('JSONL 입력이 비어 있습니다.');
+          return;
+        }
+
+        const parsed = parseJSONL(raw);
+        const result = analyzeRows(parsed.rows, parsed.errors);
+
+        lastAnalysis = result;
+        renderStats(result);
+        renderFieldTable(result);
+        renderFieldSelect(result);
+        renderTopValues();
+        renderPreview(parsed);
+        saveState();
+      }
+
+      function clearAll() {
+        if (!confirm('입력과 저장된 상태를 모두 초기화할까요?')) return;
+        els.input.value = '';
+        els.sampleLimit.value = '20';
+        els.topN.value = '8';
+        els.stats.innerHTML = '';
+        els.fieldTableBody.innerHTML = '<tr><td colspan="4" class="muted">분석 결과가 여기에 표시됩니다.</td></tr>';
+        els.fieldSelect.innerHTML = '<option value="">분석 후 필드를 선택하세요</option>';
+        els.topValues.innerHTML = '';
+        els.previewBox.textContent = '아직 분석되지 않았습니다.';
+        lastAnalysis = null;
+        localStorage.removeItem(STORAGE_KEY);
+      }
+
+      function loadDemo() {
+        const demo = [
+          { ts: '2026-02-28T15:01:10Z', level: 'info', service: 'api', latency: 124, region: 'ap-northeast-2', userId: 101 },
+          { ts: '2026-02-28T15:01:13Z', level: 'warn', service: 'api', latency: 288, region: 'ap-northeast-2', userId: 205 },
+          { ts: '2026-02-28T15:01:15Z', level: 'error', service: 'worker', latency: 431, region: 'us-east-1', retry: true, errCode: 'DB_TIMEOUT' },
+          { ts: '2026-02-28T15:01:17Z', level: 'info', service: 'worker', latency: 98, region: 'ap-northeast-2', retry: false },
+          { ts: '2026-02-28T15:01:18Z', level: 'info', service: 'api', latency: 102, region: 'eu-west-1', userId: 101 },
+          { ts: '2026-02-28T15:01:20Z', level: 'error', service: 'api', latency: 512, region: 'us-east-1', errCode: 'RATE_LIMIT' }
+        ];
+        els.input.value = demo.map(v => JSON.stringify(v)).join('\n');
+        saveState();
+      }
+
+      function handleFile(file) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          els.input.value = String(reader.result || '');
+          saveState();
+        };
+        reader.onerror = () => alert('파일을 읽는 중 오류가 발생했습니다.');
+        reader.readAsText(file, 'utf-8');
+      }
+
+      function clamp(n, min, max) {
+        return Math.max(min, Math.min(max, n));
+      }
+
+      function escapeHtml(str) {
+        return String(str)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+
+      function escapeAttr(str) {
+        return escapeHtml(str).replace(/`/g, '&#96;');
+      }
+
+      // Events
+      els.analyzeBtn.addEventListener('click', analyze);
+      els.clearBtn.addEventListener('click', clearAll);
+      els.fileBtn.addEventListener('click', () => els.fileInput.click());
+      els.fileInput.addEventListener('change', (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (file) handleFile(file);
+        e.target.value = '';
+      });
+      els.loadDemoBtn.addEventListener('click', loadDemo);
+      els.fieldSelect.addEventListener('change', () => {
+        renderTopValues();
+        saveState();
+      });
+      [els.input, els.sampleLimit, els.topN].forEach(el => {
+        el.addEventListener('input', saveState);
+      });
+      els.topN.addEventListener('change', renderTopValues);
+
+      // init
+      loadState();
+      if (els.input.value.trim()) {
+        try { analyze(); } catch (e) { console.error(e); }
+      }
+    })();
+  </script>
+</body>
+</html>

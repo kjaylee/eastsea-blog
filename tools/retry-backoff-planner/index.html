@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>재시도 백오프 플래너 | Retry Backoff Planner</title>
+  <meta name="description" content="API/작업 재시도 지연 전략(고정/선형/지수 + 지터)을 계산하고 타임라인을 시각화하는 도구입니다.">
+  <style>
+    :root {
+      --bg: #0a0a1a;
+      --panel: #13132a;
+      --panel-2: #1a1a37;
+      --text: #f2f4ff;
+      --muted: #a6acd3;
+      --line: #2a2f55;
+      --accent: #7c8cff;
+      --accent-2: #51d0ff;
+      --ok: #3ddc97;
+      --warn: #ffb454;
+      --danger: #ff6b81;
+      --radius: 12px;
+      --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR', sans-serif;
+      background: radial-gradient(circle at top right, #1a1a3b 0%, var(--bg) 50%);
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    .container {
+      width: min(1100px, 94vw);
+      margin: 24px auto 40px;
+      display: grid;
+      gap: 16px;
+    }
+
+    .panel {
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.005));
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 16px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(1.2rem, 2.8vw, 1.8rem);
+      letter-spacing: 0.2px;
+    }
+
+    .sub {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .field {
+      display: grid;
+      gap: 6px;
+    }
+
+    label {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    input, select {
+      width: 100%;
+      border: 1px solid var(--line);
+      background: var(--panel-2);
+      color: var(--text);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 0.95rem;
+    }
+
+    input:focus, select:focus {
+      outline: 2px solid rgba(124, 140, 255, 0.35);
+      border-color: var(--accent);
+    }
+
+    .hint {
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    .inline {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    .inline input[type="checkbox"] {
+      width: auto;
+      accent-color: var(--accent);
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 4px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 14px;
+      cursor: pointer;
+      font-weight: 600;
+      color: #fff;
+      background: linear-gradient(135deg, var(--accent), #5f74ff);
+    }
+
+    button.secondary {
+      background: #2a315f;
+      color: #dfe4ff;
+    }
+
+    button.ghost {
+      background: transparent;
+      border: 1px solid var(--line);
+      color: var(--muted);
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: rgba(255,255,255,0.02);
+      padding: 12px;
+    }
+
+    .card .k {
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    .card .v {
+      margin-top: 4px;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--ok);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .timeline {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .bar-row {
+      display: grid;
+      grid-template-columns: 70px 1fr auto;
+      gap: 10px;
+      align-items: center;
+      font-size: 0.86rem;
+    }
+
+    .bar {
+      width: 100%;
+      height: 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.06);
+      overflow: hidden;
+      border: 1px solid var(--line);
+    }
+
+    .bar > span {
+      display: block;
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    }
+
+    .table-wrap {
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      margin-top: 10px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 620px;
+      font-size: 0.9rem;
+    }
+
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 9px 10px;
+      text-align: left;
+      font-variant-numeric: tabular-nums;
+    }
+
+    th {
+      background: rgba(255,255,255,0.03);
+      color: #d5dcff;
+      font-weight: 650;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    .error {
+      color: var(--danger);
+      font-size: 0.88rem;
+      min-height: 1.2em;
+    }
+
+    .footer-note {
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    @media (max-width: 900px) {
+      .grid, .cards {
+        grid-template-columns: 1fr;
+      }
+
+      .bar-row {
+        grid-template-columns: 54px 1fr auto;
+      }
+    }
+  </style>
+  <script src="/assets/analytics.js"></script>
+</head>
+<body>
+  <main class="container">
+    <section class="panel">
+      <h1>재시도 백오프 플래너 <span style="color:var(--muted);font-weight:500;">(Retry Backoff Planner)</span></h1>
+      <p class="sub">API 호출, 큐 워커, 배치 작업의 재시도 간격을 빠르게 설계하세요. 고정/선형/지수 + 지터 전략을 지원합니다.</p>
+    </section>
+
+    <section class="panel">
+      <div class="grid">
+        <div class="field">
+          <label for="attempts">총 시도 횟수 (Total Attempts)</label>
+          <input id="attempts" type="number" min="1" max="20" step="1" value="6">
+        </div>
+
+        <div class="field">
+          <label for="strategy">전략 (Strategy)</label>
+          <select id="strategy">
+            <option value="fixed">고정 (Fixed)</option>
+            <option value="linear">선형 증가 (Linear)</option>
+            <option value="exponential" selected>지수 증가 (Exponential)</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="baseDelay">기본 지연 ms (Base Delay)</label>
+          <input id="baseDelay" type="number" min="0" step="50" value="500">
+        </div>
+
+        <div class="field">
+          <label for="maxDelay">최대 지연 ms (Max Delay, 0=무제한)</label>
+          <input id="maxDelay" type="number" min="0" step="100" value="8000">
+        </div>
+
+        <div class="field" id="linearStepWrap" hidden>
+          <label for="linearStep">선형 증가량 ms (Linear Step)</label>
+          <input id="linearStep" type="number" min="0" step="50" value="500">
+        </div>
+
+        <div class="field" id="multiplierWrap">
+          <label for="multiplier">지수 배수 (Multiplier)</label>
+          <input id="multiplier" type="number" min="1" step="0.1" value="2">
+        </div>
+
+        <div class="field">
+          <label for="jitter">지터 (Jitter)</label>
+          <select id="jitter">
+            <option value="none">없음 (None)</option>
+            <option value="full">전체 지터 (Full: 0~delay)</option>
+            <option value="equal" selected>균등 지터 (Equal: delay/2~delay)</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="requestMs">요청 처리 시간 ms (Request Time / attempt)</label>
+          <input id="requestMs" type="number" min="0" step="50" value="300">
+        </div>
+      </div>
+
+      <div class="inline">
+        <input id="firstImmediate" type="checkbox" checked>
+        <label for="firstImmediate">첫 시도는 즉시 실행 (First attempt starts immediately)</label>
+      </div>
+
+      <div class="actions">
+        <button id="calculateBtn" type="button">계산하기 (Calculate)</button>
+        <button id="copyBtn" class="secondary" type="button">JSON 복사 (Copy JSON)</button>
+        <button id="resetBtn" class="ghost" type="button">초기화 (Reset)</button>
+      </div>
+      <div class="error" id="errorText" aria-live="polite"></div>
+    </section>
+
+    <section class="panel">
+      <div class="cards" id="summaryCards">
+        <div class="card"><div class="k">총 대기 시간 / Total Wait</div><div class="v" id="sumWait">-</div></div>
+        <div class="card"><div class="k">예상 완료 시간 / Estimated Finish</div><div class="v" id="sumTotal">-</div></div>
+        <div class="card"><div class="k">최대 단일 대기 / Max Single Delay</div><div class="v" id="sumMax">-</div></div>
+      </div>
+
+      <div class="timeline" id="timeline"></div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>시도 / Attempt</th>
+              <th>대기(ms) / Wait</th>
+              <th>대기(사람용) / Wait (Human)</th>
+              <th>시작 누적(ms) / Cumulative Start</th>
+              <th>시작 누적(사람용) / Cumulative Start (Human)</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel footer-note">
+      설정은 브라우저 localStorage에 자동 저장됩니다. (Settings are auto-saved in localStorage.)
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      'use strict';
+
+      const STORAGE_KEY = 'retryBackoffPlannerSettingsV1';
+
+      const els = {
+        attempts: document.getElementById('attempts'),
+        strategy: document.getElementById('strategy'),
+        baseDelay: document.getElementById('baseDelay'),
+        maxDelay: document.getElementById('maxDelay'),
+        linearStep: document.getElementById('linearStep'),
+        multiplier: document.getElementById('multiplier'),
+        jitter: document.getElementById('jitter'),
+        requestMs: document.getElementById('requestMs'),
+        firstImmediate: document.getElementById('firstImmediate'),
+        linearStepWrap: document.getElementById('linearStepWrap'),
+        multiplierWrap: document.getElementById('multiplierWrap'),
+        calculateBtn: document.getElementById('calculateBtn'),
+        copyBtn: document.getElementById('copyBtn'),
+        resetBtn: document.getElementById('resetBtn'),
+        rows: document.getElementById('rows'),
+        timeline: document.getElementById('timeline'),
+        errorText: document.getElementById('errorText'),
+        sumWait: document.getElementById('sumWait'),
+        sumTotal: document.getElementById('sumTotal'),
+        sumMax: document.getElementById('sumMax')
+      };
+
+      const defaults = {
+        attempts: 6,
+        strategy: 'exponential',
+        baseDelay: 500,
+        maxDelay: 8000,
+        linearStep: 500,
+        multiplier: 2,
+        jitter: 'equal',
+        requestMs: 300,
+        firstImmediate: true
+      };
+
+      function safeNumber(value, fallback) {
+        const n = Number(value);
+        return Number.isFinite(n) ? n : fallback;
+      }
+
+      function clamp(n, min, max) {
+        return Math.min(Math.max(n, min), max);
+      }
+
+      function formatMs(ms) {
+        const n = Math.max(0, Math.round(ms));
+        if (n < 1000) return `${n} ms`;
+        const s = n / 1000;
+        if (s < 60) return `${s.toFixed(s < 10 ? 2 : 1)} s`;
+        const m = Math.floor(s / 60);
+        const sec = (s % 60).toFixed(1);
+        if (m < 60) return `${m}m ${sec}s`;
+        const h = Math.floor(m / 60);
+        const min = m % 60;
+        return `${h}h ${min}m`;
+      }
+
+      function getSettings() {
+        return {
+          attempts: clamp(Math.round(safeNumber(els.attempts.value, defaults.attempts)), 1, 20),
+          strategy: ['fixed', 'linear', 'exponential'].includes(els.strategy.value) ? els.strategy.value : defaults.strategy,
+          baseDelay: Math.max(0, safeNumber(els.baseDelay.value, defaults.baseDelay)),
+          maxDelay: Math.max(0, safeNumber(els.maxDelay.value, defaults.maxDelay)),
+          linearStep: Math.max(0, safeNumber(els.linearStep.value, defaults.linearStep)),
+          multiplier: Math.max(1, safeNumber(els.multiplier.value, defaults.multiplier)),
+          jitter: ['none', 'full', 'equal'].includes(els.jitter.value) ? els.jitter.value : defaults.jitter,
+          requestMs: Math.max(0, safeNumber(els.requestMs.value, defaults.requestMs)),
+          firstImmediate: Boolean(els.firstImmediate.checked)
+        };
+      }
+
+      function applySettings(s) {
+        const data = { ...defaults, ...(s || {}) };
+        els.attempts.value = data.attempts;
+        els.strategy.value = data.strategy;
+        els.baseDelay.value = data.baseDelay;
+        els.maxDelay.value = data.maxDelay;
+        els.linearStep.value = data.linearStep;
+        els.multiplier.value = data.multiplier;
+        els.jitter.value = data.jitter;
+        els.requestMs.value = data.requestMs;
+        els.firstImmediate.checked = Boolean(data.firstImmediate);
+      }
+
+      function saveSettings() {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(getSettings()));
+        } catch (_) {}
+      }
+
+      function loadSettings() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return;
+          const parsed = JSON.parse(raw);
+          applySettings(parsed);
+        } catch (_) {}
+      }
+
+      function baseDelayForAttempt(attemptIndex, s) {
+        if (attemptIndex <= 1 && s.firstImmediate) return 0;
+
+        switch (s.strategy) {
+          case 'fixed':
+            return s.baseDelay;
+          case 'linear': {
+            const stepNum = s.firstImmediate ? attemptIndex - 2 : attemptIndex - 1;
+            return s.baseDelay + Math.max(0, stepNum) * s.linearStep;
+          }
+          case 'exponential': {
+            const expNum = s.firstImmediate ? attemptIndex - 2 : attemptIndex - 1;
+            return s.baseDelay * Math.pow(s.multiplier, Math.max(0, expNum));
+          }
+          default:
+            return s.baseDelay;
+        }
+      }
+
+      function applyJitter(delay, jitterType) {
+        if (jitterType === 'none') return delay;
+        if (jitterType === 'full') return delay * 0.5; // expected value for 0~delay
+        if (jitterType === 'equal') return delay * 0.75; // expected value for delay/2~delay
+        return delay;
+      }
+
+      function computePlan(s) {
+        const plan = [];
+        let cumulativeStart = 0;
+
+        for (let attempt = 1; attempt <= s.attempts; attempt += 1) {
+          let delay = baseDelayForAttempt(attempt, s);
+
+          if (s.maxDelay > 0) {
+            delay = Math.min(delay, s.maxDelay);
+          }
+
+          const effectiveDelay = applyJitter(delay, s.jitter);
+
+          plan.push({
+            attempt,
+            waitMs: Math.round(effectiveDelay),
+            cumulativeStartMs: Math.round(cumulativeStart)
+          });
+
+          cumulativeStart += effectiveDelay + s.requestMs;
+        }
+
+        return plan;
+      }
+
+      function render(plan, s) {
+        const maxWait = Math.max(1, ...plan.map(p => p.waitMs));
+        let totalWait = 0;
+
+        els.rows.innerHTML = '';
+        els.timeline.innerHTML = '';
+
+        for (const row of plan) {
+          totalWait += row.waitMs;
+
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>#${row.attempt}</td>
+            <td>${row.waitMs.toLocaleString()}</td>
+            <td>${formatMs(row.waitMs)}</td>
+            <td>${row.cumulativeStartMs.toLocaleString()}</td>
+            <td>${formatMs(row.cumulativeStartMs)}</td>
+          `;
+          els.rows.appendChild(tr);
+
+          const width = (row.waitMs / maxWait) * 100;
+          const line = document.createElement('div');
+          line.className = 'bar-row';
+          line.innerHTML = `
+            <div>A${row.attempt}</div>
+            <div class="bar"><span style="width:${Math.max(2, width).toFixed(2)}%"></span></div>
+            <div>${formatMs(row.waitMs)}</div>
+          `;
+          els.timeline.appendChild(line);
+        }
+
+        const totalRequestTime = s.requestMs * s.attempts;
+        const total = totalWait + totalRequestTime;
+
+        els.sumWait.textContent = formatMs(totalWait);
+        els.sumTotal.textContent = formatMs(total);
+        els.sumMax.textContent = formatMs(maxWait);
+      }
+
+      function validate(s) {
+        if (s.attempts < 1 || s.attempts > 20) {
+          return '총 시도 횟수는 1~20이어야 합니다. (Attempts must be 1~20.)';
+        }
+        if (s.baseDelay < 0 || s.maxDelay < 0 || s.linearStep < 0 || s.requestMs < 0) {
+          return '시간 값은 0 이상이어야 합니다. (Time values must be non-negative.)';
+        }
+        if (s.multiplier < 1) {
+          return '지수 배수는 1 이상이어야 합니다. (Multiplier must be >= 1.)';
+        }
+        return '';
+      }
+
+      function toggleStrategyInputs() {
+        const strategy = els.strategy.value;
+        els.linearStepWrap.hidden = strategy !== 'linear';
+        els.multiplierWrap.hidden = strategy !== 'exponential';
+      }
+
+      function run() {
+        toggleStrategyInputs();
+        const settings = getSettings();
+        const error = validate(settings);
+        els.errorText.textContent = error;
+        if (error) return;
+        const plan = computePlan(settings);
+        render(plan, settings);
+        saveSettings();
+      }
+
+      function resetAll() {
+        applySettings(defaults);
+        saveSettings();
+        run();
+      }
+
+      function copyJSON() {
+        const settings = getSettings();
+        const error = validate(settings);
+        if (error) {
+          els.errorText.textContent = error;
+          return;
+        }
+        const payload = {
+          generatedAt: new Date().toISOString(),
+          settings,
+          plan: computePlan(settings)
+        };
+        const text = JSON.stringify(payload, null, 2);
+        navigator.clipboard.writeText(text)
+          .then(() => {
+            els.errorText.style.color = 'var(--ok)';
+            els.errorText.textContent = 'JSON이 클립보드에 복사되었습니다. (Copied to clipboard.)';
+            window.setTimeout(() => {
+              els.errorText.style.color = 'var(--danger)';
+              els.errorText.textContent = '';
+            }, 1600);
+          })
+          .catch(() => {
+            els.errorText.textContent = '클립보드 복사에 실패했습니다. (Clipboard copy failed.)';
+          });
+      }
+
+      [
+        els.attempts,
+        els.strategy,
+        els.baseDelay,
+        els.maxDelay,
+        els.linearStep,
+        els.multiplier,
+        els.jitter,
+        els.requestMs,
+        els.firstImmediate
+      ].forEach(el => {
+        el.addEventListener('input', run);
+        el.addEventListener('change', run);
+      });
+
+      els.calculateBtn.addEventListener('click', run);
+      els.resetBtn.addEventListener('click', resetAll);
+      els.copyBtn.addEventListener('click', copyJSON);
+
+      loadSettings();
+      toggleStrategyInputs();
+      run();
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,544 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>API Rate Limit Budget Planner</title>
+  <style>
+    :root {
+      --bg: #0a0a1a;
+      --panel: #12122a;
+      --panel-2: #1a1a38;
+      --text: #e9ecff;
+      --muted: #a5aed8;
+      --neon: #39ffb6;
+      --neon-2: #7aa2ff;
+      --danger: #ff5f7a;
+      --warn: #ffd166;
+      --ok: #35f29a;
+      --border: rgba(122, 162, 255, 0.24);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+      background: radial-gradient(circle at 15% 15%, #18183d 0%, var(--bg) 42%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    .wrap {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 20px 16px 36px;
+    }
+
+    .hero {
+      border: 1px solid var(--border);
+      background: linear-gradient(145deg, rgba(57,255,182,.08), rgba(122,162,255,.06));
+      border-radius: 16px;
+      padding: 18px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+      margin-bottom: 14px;
+    }
+
+    h1 {
+      margin: 0 0 6px;
+      font-size: clamp(1.2rem, 3.6vw, 1.8rem);
+      letter-spacing: .2px;
+    }
+
+    .sub {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.45;
+      font-size: .95rem;
+    }
+
+    .grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(12, 1fr);
+    }
+
+    .card {
+      grid-column: span 12;
+      background: linear-gradient(180deg, var(--panel), #101026);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+    }
+
+    .card h2 {
+      margin: 0 0 12px;
+      font-size: 1rem;
+      color: #d6dcff;
+    }
+
+    .fields {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    }
+
+    label {
+      display: block;
+      font-size: .82rem;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    input, select, button {
+      width: 100%;
+      border-radius: 10px;
+      border: 1px solid rgba(122, 162, 255, 0.35);
+      background: var(--panel-2);
+      color: var(--text);
+      padding: 10px 11px;
+      font-size: .95rem;
+      outline: none;
+    }
+
+    input:focus, select:focus {
+      border-color: var(--neon);
+      box-shadow: 0 0 0 2px rgba(57, 255, 182, 0.2);
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+
+    .btn {
+      flex: 1 1 130px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: transform .15s ease, opacity .15s ease;
+    }
+
+    .btn:hover { transform: translateY(-1px); }
+    .btn.primary {
+      background: linear-gradient(120deg, var(--neon), #60ffc7);
+      color: #03130f;
+      border: none;
+    }
+    .btn.ghost {
+      background: transparent;
+      border-color: rgba(122, 162, 255, 0.45);
+      color: var(--muted);
+    }
+
+    .metrics {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    }
+
+    .metric {
+      background: rgba(122, 162, 255, 0.08);
+      border: 1px solid rgba(122, 162, 255, 0.24);
+      border-radius: 12px;
+      padding: 12px;
+    }
+
+    .metric .k {
+      color: var(--muted);
+      font-size: .8rem;
+      margin-bottom: 5px;
+    }
+
+    .metric .v {
+      font-size: 1.2rem;
+      font-weight: 700;
+      letter-spacing: .2px;
+      color: #eff2ff;
+    }
+
+    .meter {
+      margin-top: 8px;
+      width: 100%;
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.08);
+      overflow: hidden;
+    }
+
+    .fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--ok), var(--neon-2));
+      transition: width .25s ease;
+    }
+
+    .note {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: .88rem;
+      line-height: 1.45;
+    }
+
+    .status {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-size: .9rem;
+      line-height: 1.4;
+      border: 1px solid transparent;
+    }
+
+    .status.ok {
+      background: rgba(53, 242, 154, 0.1);
+      border-color: rgba(53, 242, 154, 0.35);
+      color: #baf6d9;
+    }
+
+    .status.warn {
+      background: rgba(255, 209, 102, 0.11);
+      border-color: rgba(255, 209, 102, 0.35);
+      color: #ffe8ad;
+    }
+
+    .status.danger {
+      background: rgba(255, 95, 122, 0.11);
+      border-color: rgba(255, 95, 122, 0.35);
+      color: #ffc3ce;
+    }
+
+    @media (min-width: 840px) {
+      .span-6 { grid-column: span 6; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="hero">
+      <h1>API Rate Limit 예산 플래너</h1>
+      <p class="sub">분/시간/일 한도를 동시에 고려해 안전한 요청 속도를 계산해드립니다. 입력값은 자동 저장(localStorage)되어 다음 접속 시 복원됩니다.</p>
+    </section>
+
+    <section class="grid">
+      <article class="card span-6">
+        <h2>1) API 한도 설정</h2>
+        <div class="fields">
+          <div>
+            <label for="rpm">분당 한도 (RPM)</label>
+            <input id="rpm" type="number" min="1" step="1" />
+          </div>
+          <div>
+            <label for="rph">시간당 한도 (RPH)</label>
+            <input id="rph" type="number" min="1" step="1" />
+          </div>
+          <div>
+            <label for="rpd">일일 한도 (RPD)</label>
+            <input id="rpd" type="number" min="1" step="1" />
+          </div>
+          <div>
+            <label for="workers">동시 작업자 수</label>
+            <input id="workers" type="number" min="1" step="1" />
+          </div>
+          <div>
+            <label for="mode">운영 모드</label>
+            <select id="mode">
+              <option value="safe">보수적 (안정성 우선)</option>
+              <option value="balanced">균형형</option>
+              <option value="aggressive">공격형 (한도 근접)</option>
+            </select>
+          </div>
+          <div>
+            <label for="safety">추가 안전 여유율 (%)</label>
+            <input id="safety" type="number" min="0" max="70" step="1" />
+          </div>
+        </div>
+      </article>
+
+      <article class="card span-6">
+        <h2>2) 현재 사용량 / 윈도우 남은 시간</h2>
+        <div class="fields">
+          <div>
+            <label for="minuteUsed">현재 분 사용량</label>
+            <input id="minuteUsed" type="number" min="0" step="1" />
+          </div>
+          <div>
+            <label for="hourUsed">현재 시간 사용량</label>
+            <input id="hourUsed" type="number" min="0" step="1" />
+          </div>
+          <div>
+            <label for="dayUsed">현재 일 사용량</label>
+            <input id="dayUsed" type="number" min="0" step="1" />
+          </div>
+          <div>
+            <label for="secLeftMin">분 윈도우 남은 초</label>
+            <input id="secLeftMin" type="number" min="1" step="1" />
+          </div>
+          <div>
+            <label for="secLeftHour">시간 윈도우 남은 초</label>
+            <input id="secLeftHour" type="number" min="1" step="1" />
+          </div>
+          <div>
+            <label for="secLeftDay">일 윈도우 남은 초</label>
+            <input id="secLeftDay" type="number" min="1" step="1" />
+          </div>
+        </div>
+        <div class="actions">
+          <button class="btn primary" id="sampleBtn">예시 값 채우기</button>
+          <button class="btn ghost" id="resetBtn">초기화</button>
+        </div>
+      </article>
+
+      <article class="card">
+        <h2>3) 계산 결과</h2>
+        <div class="metrics">
+          <div class="metric">
+            <div class="k">권장 전역 요청 속도</div>
+            <div class="v" id="safeRps">-</div>
+            <div class="note">초당 요청(RPS)</div>
+          </div>
+          <div class="metric">
+            <div class="k">작업자 1개당 속도</div>
+            <div class="v" id="perWorker">-</div>
+            <div class="note">동시 작업자 기준 분배</div>
+          </div>
+          <div class="metric">
+            <div class="k">10초 배치 권장량</div>
+            <div class="v" id="batch10">-</div>
+            <div class="note">한 번에 보낼 요청 수</div>
+          </div>
+          <div class="metric">
+            <div class="k">요청 간 최소 대기(ms)</div>
+            <div class="v" id="delayMs">-</div>
+            <div class="note">스로틀 기준값</div>
+          </div>
+        </div>
+
+        <div class="metrics" style="margin-top:10px">
+          <div class="metric">
+            <div class="k">분 한도 사용률</div>
+            <div class="v" id="uMin">-</div>
+            <div class="meter"><div id="barMin" class="fill"></div></div>
+          </div>
+          <div class="metric">
+            <div class="k">시간 한도 사용률</div>
+            <div class="v" id="uHour">-</div>
+            <div class="meter"><div id="barHour" class="fill"></div></div>
+          </div>
+          <div class="metric">
+            <div class="k">일 한도 사용률</div>
+            <div class="v" id="uDay">-</div>
+            <div class="meter"><div id="barDay" class="fill"></div></div>
+          </div>
+        </div>
+
+        <div id="status" class="status ok">입력값을 기반으로 안전 속도를 계산했습니다.</div>
+        <div class="note" id="note"></div>
+      </article>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = 'api-rate-limit-budget-planner-v1';
+      const modeFactor = {
+        safe: 0.72,
+        balanced: 0.85,
+        aggressive: 0.95
+      };
+
+      const defaults = {
+        rpm: 120,
+        rph: 5000,
+        rpd: 80000,
+        workers: 4,
+        mode: 'balanced',
+        safety: 12,
+        minuteUsed: 30,
+        hourUsed: 1500,
+        dayUsed: 12000,
+        secLeftMin: 30,
+        secLeftHour: 1800,
+        secLeftDay: 36000
+      };
+
+      const ids = [
+        'rpm', 'rph', 'rpd', 'workers', 'mode', 'safety',
+        'minuteUsed', 'hourUsed', 'dayUsed',
+        'secLeftMin', 'secLeftHour', 'secLeftDay'
+      ];
+
+      const el = Object.fromEntries(ids.map(id => [id, document.getElementById(id)]));
+      const out = {
+        safeRps: document.getElementById('safeRps'),
+        perWorker: document.getElementById('perWorker'),
+        batch10: document.getElementById('batch10'),
+        delayMs: document.getElementById('delayMs'),
+        uMin: document.getElementById('uMin'),
+        uHour: document.getElementById('uHour'),
+        uDay: document.getElementById('uDay'),
+        barMin: document.getElementById('barMin'),
+        barHour: document.getElementById('barHour'),
+        barDay: document.getElementById('barDay'),
+        status: document.getElementById('status'),
+        note: document.getElementById('note')
+      };
+
+      function load() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return { ...defaults };
+          return { ...defaults, ...JSON.parse(raw) };
+        } catch {
+          return { ...defaults };
+        }
+      }
+
+      function save(state) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      }
+
+      function num(v, fallback = 0) {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : fallback;
+      }
+
+      function clamp(v, min, max) {
+        return Math.min(max, Math.max(min, v));
+      }
+
+      function pct(used, total) {
+        if (total <= 0) return 0;
+        return clamp((used / total) * 100, 0, 100);
+      }
+
+      function fmt(n, d = 2) {
+        return Number(n).toLocaleString('ko-KR', { maximumFractionDigits: d, minimumFractionDigits: d });
+      }
+
+      function bind(state) {
+        ids.forEach(id => {
+          el[id].value = state[id];
+          el[id].addEventListener('input', recalc);
+          el[id].addEventListener('change', recalc);
+        });
+      }
+
+      function getState() {
+        return {
+          rpm: num(el.rpm.value, defaults.rpm),
+          rph: num(el.rph.value, defaults.rph),
+          rpd: num(el.rpd.value, defaults.rpd),
+          workers: Math.max(1, Math.floor(num(el.workers.value, defaults.workers))),
+          mode: el.mode.value,
+          safety: clamp(num(el.safety.value, defaults.safety), 0, 70),
+          minuteUsed: Math.max(0, num(el.minuteUsed.value, defaults.minuteUsed)),
+          hourUsed: Math.max(0, num(el.hourUsed.value, defaults.hourUsed)),
+          dayUsed: Math.max(0, num(el.dayUsed.value, defaults.dayUsed)),
+          secLeftMin: Math.max(1, num(el.secLeftMin.value, defaults.secLeftMin)),
+          secLeftHour: Math.max(1, num(el.secLeftHour.value, defaults.secLeftHour)),
+          secLeftDay: Math.max(1, num(el.secLeftDay.value, defaults.secLeftDay))
+        };
+      }
+
+      function setStatus(level, text) {
+        out.status.className = 'status ' + level;
+        out.status.textContent = text;
+      }
+
+      function recalc() {
+        const s = getState();
+        save(s);
+
+        const minRemain = Math.max(0, s.rpm - s.minuteUsed);
+        const hourRemain = Math.max(0, s.rph - s.hourUsed);
+        const dayRemain = Math.max(0, s.rpd - s.dayUsed);
+
+        const hardMinRps = minRemain / s.secLeftMin;
+        const hardHourRps = hourRemain / s.secLeftHour;
+        const hardDayRps = dayRemain / s.secLeftDay;
+        const hardCapRps = Math.max(0, Math.min(hardMinRps, hardHourRps, hardDayRps));
+
+        const safetyFactor = 1 - (s.safety / 100);
+        const modeMul = modeFactor[s.mode] ?? 0.85;
+        const recommendedRps = hardCapRps * safetyFactor * modeMul;
+        const perWorkerRps = recommendedRps / s.workers;
+        const batch10 = Math.max(0, Math.floor(recommendedRps * 10));
+        const delayMs = recommendedRps > 0 ? Math.ceil(1000 / recommendedRps) : Infinity;
+
+        const uMin = pct(s.minuteUsed, s.rpm);
+        const uHour = pct(s.hourUsed, s.rph);
+        const uDay = pct(s.dayUsed, s.rpd);
+
+        out.safeRps.textContent = recommendedRps > 0 ? fmt(recommendedRps, 3) : '0.000';
+        out.perWorker.textContent = perWorkerRps > 0 ? fmt(perWorkerRps, 3) : '0.000';
+        out.batch10.textContent = batch10.toLocaleString('ko-KR') + ' req';
+        out.delayMs.textContent = Number.isFinite(delayMs) ? delayMs.toLocaleString('ko-KR') + ' ms' : '중단 필요';
+
+        out.uMin.textContent = fmt(uMin, 1) + '%';
+        out.uHour.textContent = fmt(uHour, 1) + '%';
+        out.uDay.textContent = fmt(uDay, 1) + '%';
+
+        out.barMin.style.width = uMin + '%';
+        out.barHour.style.width = uHour + '%';
+        out.barDay.style.width = uDay + '%';
+
+        const bottlenecks = [];
+        if (hardMinRps <= hardHourRps && hardMinRps <= hardDayRps) bottlenecks.push('분 한도');
+        if (hardHourRps <= hardMinRps && hardHourRps <= hardDayRps) bottlenecks.push('시간 한도');
+        if (hardDayRps <= hardMinRps && hardDayRps <= hardHourRps) bottlenecks.push('일 한도');
+
+        if (dayRemain <= 0 || hourRemain <= 0 || minRemain <= 0) {
+          setStatus('danger', '한도 초과 또는 잔여량 0 구간이 있습니다. 즉시 요청 속도를 낮추거나 윈도우 리셋을 기다리세요.');
+        } else if (recommendedRps < 0.5) {
+          setStatus('warn', '권장 속도가 매우 낮습니다. 큐 처리, 배치 크기 축소, 캐시 적용을 검토하세요.');
+        } else {
+          setStatus('ok', '현재 설정에서 안정적으로 운영 가능한 속도입니다.');
+        }
+
+        const minuteBurn = recommendedRps * s.secLeftMin;
+        const dayHoursLeftAtCurrent = recommendedRps > 0 ? (dayRemain / (recommendedRps * 3600)) : Infinity;
+
+        out.note.innerHTML = [
+          `병목 구간: <strong>${[...new Set(bottlenecks)].join(', ')}</strong>`,
+          `남은 분 윈도우에서 예상 소모량: <strong>${Math.floor(minuteBurn).toLocaleString('ko-KR')} req</strong>`,
+          Number.isFinite(dayHoursLeftAtCurrent)
+            ? `현재 속도 유지 시 일 한도 소진까지 약 <strong>${fmt(dayHoursLeftAtCurrent, 2)}시간</strong>`
+            : '현재 속도가 0이어서 소진 시간 계산이 불가합니다.'
+        ].join(' · ');
+      }
+
+      function applyState(state) {
+        ids.forEach(id => { el[id].value = state[id]; });
+        recalc();
+      }
+
+      document.getElementById('sampleBtn').addEventListener('click', () => {
+        const sample = {
+          rpm: 180,
+          rph: 6000,
+          rpd: 120000,
+          workers: 6,
+          mode: 'balanced',
+          safety: 10,
+          minuteUsed: 54,
+          hourUsed: 1980,
+          dayUsed: 24000,
+          secLeftMin: 24,
+          secLeftHour: 1500,
+          secLeftDay: 28800
+        };
+        applyState(sample);
+      });
+
+      document.getElementById('resetBtn').addEventListener('click', () => {
+        localStorage.removeItem(STORAGE_KEY);
+        applyState({ ...defaults });
+      });
+
+      const state = load();
+      bind(state);
+      recalc();
+    })();
+  </script>
+</body>
+</html>

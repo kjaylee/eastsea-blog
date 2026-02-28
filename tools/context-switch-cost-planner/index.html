@@ -1,0 +1,702 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>컨텍스트 스위치 비용 플래너</title>
+  <style>
+    :root {
+      --bg: #0a0a1a;
+      --card: #13132a;
+      --line: #2b2b55;
+      --text: #e9ecff;
+      --muted: #a8afd8;
+      --neon: #00f5d4;
+      --neon-2: #7c5cff;
+      --danger: #ff4d8b;
+      --warn: #ffcf5a;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 10% -10%, rgba(0, 245, 212, 0.25), transparent 40%),
+        radial-gradient(circle at 100% 0%, rgba(124, 92, 255, 0.2), transparent 30%),
+        var(--bg);
+      min-height: 100vh;
+      padding: 16px;
+    }
+
+    .wrap {
+      max-width: 980px;
+      margin: 0 auto;
+      display: grid;
+      gap: 12px;
+    }
+
+    .hero {
+      background: linear-gradient(140deg, rgba(0,245,212,0.08), rgba(124,92,255,0.12));
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 0 0 1px rgba(0, 245, 212, 0.05), 0 14px 30px rgba(0,0,0,0.35);
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(1.2rem, 3vw, 1.7rem);
+      letter-spacing: -0.01em;
+    }
+
+    .desc { margin: 0; color: var(--muted); font-size: 0.95rem; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+
+    @media (min-width: 880px) {
+      .grid {
+        grid-template-columns: 1.08fr 0.92fr;
+      }
+    }
+
+    .card {
+      background: rgba(19, 19, 42, 0.9);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px;
+    }
+
+    .card h2 {
+      margin: 0 0 10px;
+      font-size: 1.05rem;
+      color: #d9fdff;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .row.cols-2 { grid-template-columns: 1fr 1fr; }
+    .row.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+
+    @media (max-width: 560px) {
+      .row.cols-2, .row.cols-3 { grid-template-columns: 1fr; }
+    }
+
+    label {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--muted);
+      font-size: 0.84rem;
+    }
+
+    input, select, button {
+      width: 100%;
+      border-radius: 10px;
+      border: 1px solid #323265;
+      background: #0f1024;
+      color: var(--text);
+      padding: 10px 11px;
+      font-size: 0.95rem;
+    }
+
+    input:focus, select:focus {
+      outline: none;
+      border-color: var(--neon);
+      box-shadow: 0 0 0 2px rgba(0, 245, 212, 0.18);
+    }
+
+    .btn-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .btn {
+      cursor: pointer;
+      border: 1px solid transparent;
+      font-weight: 600;
+    }
+
+    .btn.primary {
+      background: linear-gradient(135deg, var(--neon), #46ffe3);
+      color: #031012;
+    }
+
+    .btn.secondary {
+      background: linear-gradient(135deg, #8d71ff, #5f8dff);
+      color: #f4f7ff;
+    }
+
+    .btn.ghost {
+      border-color: #3b3f7d;
+      background: #11132a;
+      color: #d4dcff;
+    }
+
+    .btn.danger {
+      border-color: #684062;
+      background: #261726;
+      color: #ffb6d0;
+    }
+
+    .kpi-grid {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    @media (min-width: 580px) {
+      .kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+
+    .kpi {
+      background: #101127;
+      border: 1px solid #2b2f66;
+      border-radius: 10px;
+      padding: 10px;
+    }
+
+    .kpi .label {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .kpi .value {
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+
+    .value.neon { color: var(--neon); }
+    .value.warn { color: var(--warn); }
+
+    .task-list {
+      list-style: none;
+      padding: 0;
+      margin: 10px 0 0;
+      display: grid;
+      gap: 8px;
+      max-height: 360px;
+      overflow: auto;
+    }
+
+    .task-item {
+      border: 1px solid #2f3366;
+      background: #0f1126;
+      border-radius: 10px;
+      padding: 10px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .task-meta {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    .badge {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 0.75rem;
+      border: 1px solid #364091;
+      color: #d6deff;
+      background: #12173a;
+    }
+
+    .task-actions {
+      display: flex;
+      gap: 6px;
+    }
+
+    .task-actions button {
+      width: auto;
+      padding: 6px 9px;
+      font-size: 0.8rem;
+    }
+
+    .schedule {
+      margin-top: 10px;
+      border: 1px solid #2c2f63;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.86rem;
+    }
+
+    th, td {
+      border-bottom: 1px solid #252952;
+      padding: 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: #121639;
+      color: #ccf8ff;
+      font-size: 0.78rem;
+      letter-spacing: 0.02em;
+    }
+
+    tr:last-child td { border-bottom: none; }
+
+    .empty {
+      color: #8c94c4;
+      font-size: 0.9rem;
+      padding: 10px;
+      border: 1px dashed #323972;
+      border-radius: 10px;
+      text-align: center;
+      margin-top: 8px;
+    }
+
+    .note {
+      margin-top: 8px;
+      font-size: 0.82rem;
+      color: #9aa3db;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <h1>컨텍스트 스위치 비용 플래너</h1>
+      <p class="desc">작업 전환으로 새는 시간을 계산하고, 유사한 작업을 묶어 하루 일정을 더 효율적으로 배치해보세요.</p>
+    </section>
+
+    <div class="grid">
+      <section class="card">
+        <h2>작업 입력</h2>
+        <div class="row cols-2">
+          <div>
+            <label for="taskName">작업명</label>
+            <input id="taskName" type="text" placeholder="예: 견적서 작성" />
+          </div>
+          <div>
+            <label for="taskCategory">카테고리</label>
+            <input id="taskCategory" type="text" placeholder="예: 문서, 디자인, 개발" />
+          </div>
+        </div>
+
+        <div class="row cols-3">
+          <div>
+            <label for="taskMinutes">예상 소요(분)</label>
+            <input id="taskMinutes" type="number" min="5" step="5" value="30" />
+          </div>
+          <div>
+            <label for="taskEnergy">에너지 레벨</label>
+            <select id="taskEnergy">
+              <option value="고집중">고집중</option>
+              <option value="중간" selected>중간</option>
+              <option value="가벼움">가벼움</option>
+            </select>
+          </div>
+          <div>
+            <label for="startTime">시작 시각</label>
+            <input id="startTime" type="time" value="09:00" />
+          </div>
+        </div>
+
+        <div class="row cols-2">
+          <div>
+            <label for="switchPenalty">전환 페널티(분/회)</label>
+            <input id="switchPenalty" type="number" min="0" step="1" value="12" />
+          </div>
+          <div>
+            <label for="focusLimit">권장 집중 블록 최대(분)</label>
+            <input id="focusLimit" type="number" min="20" step="5" value="90" />
+          </div>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn primary" id="addTaskBtn">작업 추가</button>
+          <button class="btn secondary" id="optimizeBtn">카테고리별 자동 정렬</button>
+        </div>
+        <div class="btn-row">
+          <button class="btn ghost" id="sampleBtn">샘플 채우기</button>
+          <button class="btn danger" id="clearBtn">전체 초기화</button>
+        </div>
+        <p class="note">입력 데이터는 브라우저에 자동 저장됩니다(localStorage).</p>
+      </section>
+
+      <section class="card">
+        <h2>비용 요약</h2>
+        <div class="kpi-grid" id="kpis"></div>
+        <div id="taskContainer"></div>
+      </section>
+    </div>
+
+    <section class="card">
+      <h2>추천 일정표 (현재 순서 기준)</h2>
+      <div class="schedule">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>시간</th>
+              <th>작업</th>
+              <th>카테고리</th>
+              <th>전환손실</th>
+            </tr>
+          </thead>
+          <tbody id="scheduleBody"></tbody>
+        </table>
+      </div>
+      <p class="note">전환손실은 이전 작업과 카테고리가 달라질 때만 발생합니다.</p>
+    </section>
+  </div>
+
+  <script>
+    (function () {
+      const STORAGE_KEY = 'context-switch-cost-planner-v1';
+
+      const el = {
+        taskName: document.getElementById('taskName'),
+        taskCategory: document.getElementById('taskCategory'),
+        taskMinutes: document.getElementById('taskMinutes'),
+        taskEnergy: document.getElementById('taskEnergy'),
+        startTime: document.getElementById('startTime'),
+        switchPenalty: document.getElementById('switchPenalty'),
+        focusLimit: document.getElementById('focusLimit'),
+        addTaskBtn: document.getElementById('addTaskBtn'),
+        optimizeBtn: document.getElementById('optimizeBtn'),
+        sampleBtn: document.getElementById('sampleBtn'),
+        clearBtn: document.getElementById('clearBtn'),
+        kpis: document.getElementById('kpis'),
+        taskContainer: document.getElementById('taskContainer'),
+        scheduleBody: document.getElementById('scheduleBody')
+      };
+
+      const defaultState = {
+        settings: {
+          switchPenalty: 12,
+          focusLimit: 90,
+          startTime: '09:00'
+        },
+        tasks: []
+      };
+
+      let state = loadState();
+      hydrateSettings();
+      render();
+
+      el.addTaskBtn.addEventListener('click', addTaskFromInput);
+      el.optimizeBtn.addEventListener('click', optimizeOrder);
+      el.sampleBtn.addEventListener('click', fillSample);
+      el.clearBtn.addEventListener('click', clearAll);
+
+      ['switchPenalty', 'focusLimit', 'startTime'].forEach((id) => {
+        el[id].addEventListener('change', () => {
+          state.settings[id] = id === 'startTime' ? el[id].value : toNumber(el[id].value, defaultState.settings[id]);
+          saveState();
+          render();
+        });
+      });
+
+      function loadState() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return structuredClone(defaultState);
+          const parsed = JSON.parse(raw);
+          return {
+            settings: {
+              switchPenalty: toNumber(parsed?.settings?.switchPenalty, 12),
+              focusLimit: toNumber(parsed?.settings?.focusLimit, 90),
+              startTime: parsed?.settings?.startTime || '09:00'
+            },
+            tasks: Array.isArray(parsed?.tasks) ? parsed.tasks : []
+          };
+        } catch {
+          return structuredClone(defaultState);
+        }
+      }
+
+      function saveState() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      }
+
+      function hydrateSettings() {
+        el.switchPenalty.value = state.settings.switchPenalty;
+        el.focusLimit.value = state.settings.focusLimit;
+        el.startTime.value = state.settings.startTime;
+      }
+
+      function addTaskFromInput() {
+        const name = el.taskName.value.trim();
+        const category = el.taskCategory.value.trim() || '기타';
+        const minutes = toNumber(el.taskMinutes.value, 30);
+        const energy = el.taskEnergy.value;
+
+        if (!name) {
+          alert('작업명을 입력해주세요.');
+          el.taskName.focus();
+          return;
+        }
+
+        state.tasks.push({
+          id: cryptoRandomId(),
+          name,
+          category,
+          minutes: Math.max(5, minutes),
+          energy
+        });
+
+        el.taskName.value = '';
+        el.taskCategory.value = '';
+        el.taskMinutes.value = '30';
+        el.taskEnergy.value = '중간';
+
+        saveState();
+        render();
+      }
+
+      function optimizeOrder() {
+        if (state.tasks.length < 2) return;
+
+        const grouped = new Map();
+        state.tasks.forEach((task) => {
+          const key = task.category || '기타';
+          if (!grouped.has(key)) grouped.set(key, []);
+          grouped.get(key).push(task);
+        });
+
+        const next = [];
+        [...grouped.entries()]
+          .sort((a, b) => totalMinutes(b[1]) - totalMinutes(a[1]))
+          .forEach(([_, tasks]) => {
+            tasks.sort((x, y) => y.minutes - x.minutes);
+            next.push(...tasks);
+          });
+
+        state.tasks = next;
+        saveState();
+        render();
+      }
+
+      function fillSample() {
+        state.tasks = [
+          { id: cryptoRandomId(), name: '주간 리포트 작성', category: '문서', minutes: 45, energy: '고집중' },
+          { id: cryptoRandomId(), name: 'UI 시안 피드백', category: '디자인', minutes: 30, energy: '중간' },
+          { id: cryptoRandomId(), name: '버그 수정', category: '개발', minutes: 55, energy: '고집중' },
+          { id: cryptoRandomId(), name: '고객 메일 답변', category: '커뮤니케이션', minutes: 25, energy: '가벼움' },
+          { id: cryptoRandomId(), name: '배포 체크리스트 점검', category: '개발', minutes: 35, energy: '중간' }
+        ];
+        saveState();
+        render();
+      }
+
+      function clearAll() {
+        if (!confirm('작업 목록과 설정을 초기화할까요?')) return;
+        state = structuredClone(defaultState);
+        hydrateSettings();
+        saveState();
+        render();
+      }
+
+      function removeTask(id) {
+        state.tasks = state.tasks.filter((task) => task.id !== id);
+        saveState();
+        render();
+      }
+
+      function moveTask(id, direction) {
+        const i = state.tasks.findIndex((task) => task.id === id);
+        const j = i + direction;
+        if (i < 0 || j < 0 || j >= state.tasks.length) return;
+        [state.tasks[i], state.tasks[j]] = [state.tasks[j], state.tasks[i]];
+        saveState();
+        render();
+      }
+
+      function getMetrics(tasks) {
+        const penalty = toNumber(state.settings.switchPenalty, 12);
+        const base = totalMinutes(tasks);
+        let switches = 0;
+
+        for (let i = 1; i < tasks.length; i++) {
+          if ((tasks[i - 1].category || '기타') !== (tasks[i].category || '기타')) {
+            switches += 1;
+          }
+        }
+
+        const loss = switches * penalty;
+        const total = base + loss;
+        return { base, switches, loss, total };
+      }
+
+      function optimizedLossEstimate(tasks) {
+        if (!tasks.length) return 0;
+        const categories = new Set(tasks.map((task) => task.category || '기타'));
+        const idealSwitches = Math.max(0, categories.size - 1);
+        return idealSwitches * toNumber(state.settings.switchPenalty, 12);
+      }
+
+      function render() {
+        const metrics = getMetrics(state.tasks);
+        const idealLoss = optimizedLossEstimate(state.tasks);
+        const savings = Math.max(0, metrics.loss - idealLoss);
+
+        const overFocus = state.tasks.filter(t => t.minutes > state.settings.focusLimit).length;
+
+        el.kpis.innerHTML = [
+          kpi('순수 작업시간', minutesLabel(metrics.base)),
+          kpi('전환 횟수', metrics.switches + '회', 'warn'),
+          kpi('전환 손실시간', minutesLabel(metrics.loss), 'warn'),
+          kpi('총 예상 소요', minutesLabel(metrics.total), 'neon'),
+          kpi('정렬 시 절감 가능', minutesLabel(savings), 'neon'),
+          kpi('블록 과대 작업', overFocus + '개')
+        ].join('');
+
+        renderTaskList();
+        renderSchedule();
+      }
+
+      function renderTaskList() {
+        if (!state.tasks.length) {
+          el.taskContainer.innerHTML = '<div class="empty">아직 작업이 없습니다. 왼쪽에서 작업을 추가해 주세요.</div>';
+          return;
+        }
+
+        const items = state.tasks.map((task, index) => {
+          return `
+            <li class="task-item">
+              <div>
+                <strong>${escapeHtml(task.name)}</strong>
+                <div class="task-meta">
+                  <span class="badge">${escapeHtml(task.category || '기타')}</span>
+                  <span>${task.minutes}분</span>
+                  <span>${escapeHtml(task.energy)}</span>
+                </div>
+              </div>
+              <div class="task-actions">
+                <button class="btn ghost" data-act="up" data-id="${task.id}" ${index === 0 ? 'disabled' : ''}>↑</button>
+                <button class="btn ghost" data-act="down" data-id="${task.id}" ${index === state.tasks.length - 1 ? 'disabled' : ''}>↓</button>
+                <button class="btn danger" data-act="del" data-id="${task.id}">삭제</button>
+              </div>
+            </li>
+          `;
+        }).join('');
+
+        el.taskContainer.innerHTML = `<ul class="task-list">${items}</ul>`;
+
+        el.taskContainer.querySelectorAll('button[data-act]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const id = btn.getAttribute('data-id');
+            const act = btn.getAttribute('data-act');
+            if (act === 'del') removeTask(id);
+            if (act === 'up') moveTask(id, -1);
+            if (act === 'down') moveTask(id, 1);
+          });
+        });
+      }
+
+      function renderSchedule() {
+        if (!state.tasks.length) {
+          el.scheduleBody.innerHTML = '<tr><td colspan="5" style="color:#8f97c8;">작업을 추가하면 일정표가 생성됩니다.</td></tr>';
+          return;
+        }
+
+        const penalty = toNumber(state.settings.switchPenalty, 12);
+        let cursor = parseTimeToMinutes(state.settings.startTime || '09:00');
+
+        const rows = state.tasks.map((task, index) => {
+          let switchLoss = 0;
+          if (index > 0) {
+            const prev = state.tasks[index - 1];
+            if ((prev.category || '기타') !== (task.category || '기타')) {
+              switchLoss = penalty;
+              cursor += penalty;
+            }
+          }
+
+          const start = cursor;
+          const end = start + task.minutes;
+          cursor = end;
+
+          return `
+            <tr>
+              <td>${index + 1}</td>
+              <td>${formatMinutes(start)} ~ ${formatMinutes(end)}</td>
+              <td>${escapeHtml(task.name)}</td>
+              <td>${escapeHtml(task.category || '기타')}</td>
+              <td>${switchLoss ? '+' + switchLoss + '분' : '-'}</td>
+            </tr>
+          `;
+        }).join('');
+
+        el.scheduleBody.innerHTML = rows;
+      }
+
+      function kpi(label, value, cls = '') {
+        return `<div class="kpi"><div class="label">${label}</div><div class="value ${cls}">${value}</div></div>`;
+      }
+
+      function minutesLabel(v) {
+        const h = Math.floor(v / 60);
+        const m = v % 60;
+        if (h === 0) return `${m}분`;
+        if (m === 0) return `${h}시간`;
+        return `${h}시간 ${m}분`;
+      }
+
+      function totalMinutes(tasks) {
+        return tasks.reduce((sum, task) => sum + toNumber(task.minutes, 0), 0);
+      }
+
+      function toNumber(v, fallback = 0) {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : fallback;
+      }
+
+      function parseTimeToMinutes(timeStr) {
+        const [h, m] = (timeStr || '09:00').split(':').map((v) => Number(v));
+        return (Number.isFinite(h) ? h : 9) * 60 + (Number.isFinite(m) ? m : 0);
+      }
+
+      function formatMinutes(total) {
+        const wrapped = ((total % (24 * 60)) + (24 * 60)) % (24 * 60);
+        const h = String(Math.floor(wrapped / 60)).padStart(2, '0');
+        const m = String(wrapped % 60).padStart(2, '0');
+        return `${h}:${m}`;
+      }
+
+      function cryptoRandomId() {
+        if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+        return `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      }
+
+      function escapeHtml(text) {
+        return String(text)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;');
+      }
+    })();
+  </script>
+</body>
+</html>

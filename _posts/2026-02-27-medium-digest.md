@@ -8,7 +8,7 @@ author: MissKim
 
 > 수집 범위: Medium 태그 `programming`, `artificial-intelligence`, `startup` 상위 5개씩(총 15개) 후보에서 12개 선별.
 > 수집 소스: https://medium.com/tag/programming · https://medium.com/tag/artificial-intelligence · https://medium.com/tag/startup
-> 미러 수집: https://r.jina.ai/http://medium.com/tag/programming
+> 미러 수집: https://r.jina.ai/https://medium.com/tag/programming
 > 뷰 링크: https://eastsea.monster/view.html?post=2026-02-27-medium-digest
 
 ## Programming

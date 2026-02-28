@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HTML Alt Text Auditor | 이미지 alt 속성 점검기</title>
+  <meta name="description" content="붙여넣은 HTML에서 img alt 속성 누락/빈값/길이 경고를 빠르게 점검하고 수정안을 제시하는 HTML Alt Text Auditor" />
+  <style>
+    :root {
+      --bg: #0a0a1a;
+      --panel: #10142a;
+      --panel-2: #131a35;
+      --line: #253058;
+      --text: #e8ecff;
+      --muted: #9ca9d3;
+      --neon: #58f6ff;
+      --neon-2: #a78bfa;
+      --ok: #3ddc97;
+      --warn: #ffd166;
+      --bad: #ff6b8a;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: radial-gradient(circle at top right, rgba(88, 246, 255, 0.07), transparent 40%),
+                  radial-gradient(circle at bottom left, rgba(167, 139, 250, 0.12), transparent 35%),
+                  var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+      line-height: 1.55;
+      padding: 20px;
+    }
+
+    .wrap {
+      max-width: 1080px;
+      margin: 0 auto;
+    }
+
+    .top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 18px;
+    }
+
+    .back {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 14px;
+    }
+
+    .back:hover { color: var(--neon); }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.35rem, 3vw, 1.95rem);
+      letter-spacing: 0.2px;
+      background: linear-gradient(90deg, var(--neon), var(--neon-2));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      margin: 4px 0 0;
+      font-size: 14px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 14px;
+    }
+
+    .card {
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.01)), var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px;
+      box-shadow: 0 0 0 1px rgba(88, 246, 255, 0.03), 0 12px 28px rgba(0, 0, 0, 0.28);
+    }
+
+    .card h2 {
+      margin: 0 0 10px;
+      font-size: 1rem;
+      color: var(--neon);
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 260px;
+      resize: vertical;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 12px;
+      color: var(--text);
+      background: #090f22;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    textarea:focus,
+    button:focus,
+    input:focus {
+      outline: 2px solid rgba(88, 246, 255, 0.35);
+      outline-offset: 1px;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+      align-items: center;
+    }
+
+    button {
+      border: 1px solid transparent;
+      background: #1b2447;
+      color: var(--text);
+      border-radius: 10px;
+      padding: 10px 12px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    button:hover { filter: brightness(1.08); }
+
+    .primary {
+      background: linear-gradient(135deg, var(--neon), #66c8ff);
+      color: #08111e;
+      font-weight: 800;
+    }
+
+    .ghost {
+      border-color: var(--line);
+      background: transparent;
+      color: var(--muted);
+    }
+
+    .toggle {
+      margin-left: auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--muted);
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 8px 10px;
+    }
+
+    .toggle input { accent-color: var(--neon); }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .stat {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px;
+      background: #0d1227;
+    }
+
+    .stat b {
+      display: block;
+      font-size: 1.25rem;
+      margin-bottom: 2px;
+    }
+
+    .stat span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .ok { color: var(--ok); }
+    .warn { color: var(--warn); }
+    .bad { color: var(--bad); }
+
+    .hint {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .table-wrap {
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #0a1125;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 720px;
+      font-size: 13px;
+    }
+
+    th, td {
+      border-bottom: 1px solid #1b2444;
+      padding: 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--muted);
+      font-size: 12px;
+      position: sticky;
+      top: 0;
+      background: #0c1531;
+      z-index: 1;
+    }
+
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      color: #cde6ff;
+      word-break: break-all;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+      border: 1px solid currentColor;
+      white-space: nowrap;
+    }
+
+    .result {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 13px;
+      min-height: 20px;
+    }
+
+    .output {
+      margin-top: 10px;
+      width: 100%;
+      min-height: 180px;
+    }
+
+    @media (max-width: 860px) {
+      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .toggle { margin-left: 0; }
+      .controls { align-items: stretch; }
+    }
+
+    @media (max-width: 560px) {
+      body { padding: 12px; }
+      .card { padding: 12px; }
+      button { width: 100%; }
+      .toggle { width: 100%; justify-content: center; }
+    }
+  </style>
+  <script src="/assets/analytics.js"></script>
+</head>
+<body>
+  <main class="wrap">
+    <div class="top">
+      <a href="/" class="back">← 도구 목록</a>
+      <div>
+        <h1>HTML Alt Text Auditor</h1>
+        <p class="subtitle">img alt 누락/빈값/과도한 길이를 점검하고 자동 수정본을 생성합니다.</p>
+      </div>
+    </div>
+
+    <section class="grid">
+      <article class="card">
+        <h2>1) HTML 입력</h2>
+        <textarea id="htmlInput" placeholder="여기에 HTML을 붙여넣으세요. 예) <img src=\"cat.jpg\">"></textarea>
+
+        <div class="controls">
+          <button class="primary" id="analyzeBtn">점검 실행</button>
+          <button class="ghost" id="sampleBtn">샘플 채우기</button>
+          <button class="ghost" id="clearBtn">입력 지우기</button>
+          <label class="toggle"><input type="checkbox" id="soundToggle" /> 사운드</label>
+        </div>
+
+        <p class="hint">기준: alt 속성 없음(오류), 빈 alt(""; 경고), alt 125자 초과(경고)</p>
+      </article>
+
+      <article class="card">
+        <h2>2) 분석 요약</h2>
+        <div class="stats">
+          <div class="stat"><b id="totalCount">0</b><span>총 이미지</span></div>
+          <div class="stat"><b id="okCount" class="ok">0</b><span>양호</span></div>
+          <div class="stat"><b id="warnCount" class="warn">0</b><span>경고</span></div>
+          <div class="stat"><b id="badCount" class="bad">0</b><span>오류</span></div>
+        </div>
+        <p class="result" id="summaryText">아직 분석하지 않았습니다.</p>
+      </article>
+
+      <article class="card">
+        <h2>3) 상세 결과</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>상태</th>
+                <th>src</th>
+                <th>현재 alt</th>
+                <th>추천 alt</th>
+              </tr>
+            </thead>
+            <tbody id="resultBody">
+              <tr><td colspan="5" style="color: var(--muted);">결과가 여기에 표시됩니다.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="controls">
+          <button class="ghost" id="copyReportBtn">리포트 복사</button>
+          <button class="primary" id="fixBtn">누락 alt 자동 채우기</button>
+        </div>
+      </article>
+
+      <article class="card">
+        <h2>4) 수정된 HTML</h2>
+        <textarea id="fixedOutput" class="output" placeholder="자동 수정 결과가 여기에 생성됩니다." readonly></textarea>
+        <div class="controls">
+          <button class="ghost" id="copyFixedBtn">수정 HTML 복사</button>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = 'html-alt-text-auditor:v1';
+      const htmlInput = document.getElementById('htmlInput');
+      const fixedOutput = document.getElementById('fixedOutput');
+      const resultBody = document.getElementById('resultBody');
+      const summaryText = document.getElementById('summaryText');
+      const soundToggle = document.getElementById('soundToggle');
+
+      const totalCount = document.getElementById('totalCount');
+      const okCount = document.getElementById('okCount');
+      const warnCount = document.getElementById('warnCount');
+      const badCount = document.getElementById('badCount');
+
+      const analyzeBtn = document.getElementById('analyzeBtn');
+      const sampleBtn = document.getElementById('sampleBtn');
+      const clearBtn = document.getElementById('clearBtn');
+      const copyReportBtn = document.getElementById('copyReportBtn');
+      const fixBtn = document.getElementById('fixBtn');
+      const copyFixedBtn = document.getElementById('copyFixedBtn');
+
+      let lastRows = [];
+      let lastPatchedHtml = '';
+      let audioCtx = null;
+      let beepEnabled = true;
+      let saveTimer = null;
+
+      function initAudio() {
+        if (!audioCtx) {
+          const Ctx = window.AudioContext || window.webkitAudioContext;
+          if (!Ctx) return null;
+          audioCtx = new Ctx();
+        }
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        return audioCtx;
+      }
+
+      function beep(kind = 'ok') {
+        if (!beepEnabled) return;
+        const ctx = initAudio();
+        if (!ctx) return;
+
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const now = ctx.currentTime;
+
+        const freq = kind === 'bad' ? 190 : kind === 'warn' ? 420 : 740;
+        osc.type = kind === 'bad' ? 'sawtooth' : 'sine';
+        osc.frequency.setValueAtTime(freq, now);
+
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(0.04, now + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.13);
+      }
+
+      function saveState() {
+        const payload = {
+          html: htmlInput.value,
+          sound: soundToggle.checked,
+          fixed: fixedOutput.value
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+      }
+
+      function debounceSave() {
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(saveState, 150);
+      }
+
+      function restoreState() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return;
+          const saved = JSON.parse(raw);
+          if (saved && typeof saved === 'object') {
+            htmlInput.value = typeof saved.html === 'string' ? saved.html : '';
+            soundToggle.checked = saved.sound !== false;
+            fixedOutput.value = typeof saved.fixed === 'string' ? saved.fixed : '';
+          }
+        } catch (_) {
+          // ignore corrupted state
+        }
+      }
+
+      function escapeHtml(v) {
+        return String(v)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+
+      function normalizeFileName(src) {
+        if (!src) return 'descriptive image';
+        try {
+          const clean = decodeURIComponent(src.split('/').pop().split('?')[0].split('#')[0] || '');
+          const base = clean.replace(/\.[a-zA-Z0-9]+$/, '');
+          const words = base
+            .replace(/[_-]+/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+          if (!words) return 'descriptive image';
+          return words.slice(0, 80);
+        } catch (_) {
+          return 'descriptive image';
+        }
+      }
+
+      function auditAlt(img) {
+        const src = img.getAttribute('src') || '';
+        const hasAlt = img.hasAttribute('alt');
+        const alt = hasAlt ? (img.getAttribute('alt') || '') : null;
+        const suggest = normalizeFileName(src);
+
+        if (!hasAlt) {
+          return { status: 'bad', label: '누락', src, alt: null, suggest, reason: 'alt 속성이 없습니다.' };
+        }
+        if (!alt.trim()) {
+          return { status: 'warn', label: '빈값', src, alt, suggest, reason: 'alt 값이 비어 있습니다.' };
+        }
+        if (alt.trim().length > 125) {
+          return { status: 'warn', label: '길이 경고', src, alt, suggest, reason: 'alt 길이가 125자를 초과했습니다.' };
+        }
+        return { status: 'ok', label: '양호', src, alt, suggest, reason: '' };
+      }
+
+      function renderRows(rows) {
+        if (!rows.length) {
+          resultBody.innerHTML = '<tr><td colspan="5" style="color: var(--muted);">img 태그를 찾지 못했습니다.</td></tr>';
+          return;
+        }
+
+        resultBody.innerHTML = rows.map((row, i) => {
+          const badgeClass = row.status === 'ok' ? 'ok' : row.status === 'warn' ? 'warn' : 'bad';
+          const altText = row.alt === null ? '<em style="color:var(--bad)">없음</em>' : escapeHtml(row.alt || '');
+          return `
+            <tr>
+              <td>${i + 1}</td>
+              <td><span class="badge ${badgeClass}">${row.label}</span></td>
+              <td><code>${escapeHtml(row.src || '(src 없음)')}</code></td>
+              <td>${altText}</td>
+              <td>${escapeHtml(row.suggest)}</td>
+            </tr>
+          `;
+        }).join('');
+      }
+
+      function renderSummary(rows) {
+        const total = rows.length;
+        const ok = rows.filter(r => r.status === 'ok').length;
+        const warn = rows.filter(r => r.status === 'warn').length;
+        const bad = rows.filter(r => r.status === 'bad').length;
+
+        totalCount.textContent = String(total);
+        okCount.textContent = String(ok);
+        warnCount.textContent = String(warn);
+        badCount.textContent = String(bad);
+
+        if (!total) {
+          summaryText.textContent = 'img 태그가 없어 점검할 항목이 없습니다.';
+          return;
+        }
+
+        summaryText.textContent = `총 ${total}개 이미지 중 양호 ${ok}개, 경고 ${warn}개, 오류 ${bad}개`;
+      }
+
+      function analyze() {
+        const input = htmlInput.value.trim();
+        if (!input) {
+          lastRows = [];
+          renderRows(lastRows);
+          renderSummary(lastRows);
+          summaryText.textContent = 'HTML을 먼저 입력해 주세요.';
+          beep('warn');
+          return;
+        }
+
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(input, 'text/html');
+        const images = Array.from(doc.querySelectorAll('img'));
+        const rows = images.map(auditAlt);
+
+        lastRows = rows;
+        renderRows(rows);
+        renderSummary(rows);
+
+        if (rows.some(r => r.status === 'bad')) beep('bad');
+        else if (rows.some(r => r.status === 'warn')) beep('warn');
+        else beep('ok');
+
+        debounceSave();
+      }
+
+      function createPatchedHtml() {
+        const input = htmlInput.value.trim();
+        if (!input) return '';
+
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(input, 'text/html');
+
+        doc.querySelectorAll('img').forEach(img => {
+          if (!img.hasAttribute('alt')) {
+            const src = img.getAttribute('src') || '';
+            img.setAttribute('alt', normalizeFileName(src));
+          }
+        });
+
+        const content = doc.body.innerHTML.trim();
+        return content || doc.documentElement.outerHTML;
+      }
+
+      async function copyText(text, successMsg) {
+        if (!text) {
+          summaryText.textContent = '복사할 내용이 없습니다.';
+          beep('warn');
+          return;
+        }
+        try {
+          await navigator.clipboard.writeText(text);
+          summaryText.textContent = successMsg;
+          beep('ok');
+        } catch (_) {
+          summaryText.textContent = '클립보드 복사에 실패했습니다. 브라우저 권한을 확인해 주세요.';
+          beep('bad');
+        }
+      }
+
+      function buildReport() {
+        if (!lastRows.length) return '';
+
+        const lines = [];
+        lines.push('# HTML Alt Text Audit Report');
+        lines.push('');
+        lines.push(`- Total: ${lastRows.length}`);
+        lines.push(`- OK: ${lastRows.filter(r => r.status === 'ok').length}`);
+        lines.push(`- Warn: ${lastRows.filter(r => r.status === 'warn').length}`);
+        lines.push(`- Bad: ${lastRows.filter(r => r.status === 'bad').length}`);
+        lines.push('');
+        lines.push('| # | Status | src | alt | suggestion |');
+        lines.push('|---|---|---|---|---|');
+
+        lastRows.forEach((r, idx) => {
+          const alt = r.alt === null ? '(missing)' : (r.alt || '(empty)');
+          lines.push(`| ${idx + 1} | ${r.label} | ${r.src || '(none)'} | ${alt} | ${r.suggest} |`);
+        });
+
+        return lines.join('\n');
+      }
+
+      analyzeBtn.addEventListener('click', analyze);
+
+      sampleBtn.addEventListener('click', () => {
+        htmlInput.value = [
+          '<section>',
+          '  <img src="hero-banner.jpg">',
+          '  <img src="icons/search.svg" alt="">',
+          '  <img src="product/red-shoes.png" alt="레드 러닝화 제품 이미지">',
+          '  <img src="promo/super-long.jpg" alt="이 설명은 너무 길어서 스크린리더에서 불필요하게 장황해질 수 있는 예시 문장입니다. 핵심이 아닌 문구를 줄이고 이미지의 목적 중심으로 간결하게 작성하는 것이 좋습니다.">',
+          '</section>'
+        ].join('\n');
+        analyze();
+      });
+
+      clearBtn.addEventListener('click', () => {
+        htmlInput.value = '';
+        fixedOutput.value = '';
+        lastRows = [];
+        renderRows(lastRows);
+        renderSummary(lastRows);
+        summaryText.textContent = '입력을 지웠습니다.';
+        beep('warn');
+        debounceSave();
+      });
+
+      copyReportBtn.addEventListener('click', () => {
+        copyText(buildReport(), '리포트를 클립보드에 복사했습니다.');
+      });
+
+      fixBtn.addEventListener('click', () => {
+        const patched = createPatchedHtml();
+        if (!patched) {
+          summaryText.textContent = '수정할 HTML이 없습니다.';
+          beep('warn');
+          return;
+        }
+        lastPatchedHtml = patched;
+        fixedOutput.value = patched;
+        summaryText.textContent = '누락된 alt를 자동으로 채운 수정본을 생성했습니다.';
+        beep('ok');
+        debounceSave();
+      });
+
+      copyFixedBtn.addEventListener('click', () => {
+        copyText(lastPatchedHtml || fixedOutput.value, '수정된 HTML을 복사했습니다.');
+      });
+
+      soundToggle.addEventListener('change', () => {
+        beepEnabled = soundToggle.checked;
+        if (beepEnabled) beep('ok');
+        debounceSave();
+      });
+
+      htmlInput.addEventListener('input', debounceSave);
+
+      restoreState();
+      beepEnabled = soundToggle.checked;
+      if (htmlInput.value.trim()) analyze();
+      else {
+        renderRows([]);
+        renderSummary([]);
+      }
+    })();
+  </script>
+</body>
+</html>

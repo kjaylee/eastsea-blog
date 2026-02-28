@@ -1,0 +1,983 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0a0a1a" />
+  <title>Tile Flip — 양면 타일 뒤집기 전략</title>
+  <style>
+    :root {
+      --bg: #0a0a1a;
+      --panel: rgba(13, 15, 36, 0.92);
+      --line: rgba(167, 183, 255, 0.25);
+      --text: #ebefff;
+      --muted: #9aa7d6;
+      --cyan: #22f3ff;
+      --magenta: #ff48cc;
+      --good: #85ffb7;
+      --warn: #ffd166;
+      --danger: #ff6b88;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      background: radial-gradient(circle at 20% 0%, #1a1f58 0%, #0a0a1a 56%);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+      min-height: 100%;
+      touch-action: manipulation;
+    }
+
+    body {
+      display: flex;
+      justify-content: center;
+      padding: 10px;
+    }
+
+    .app {
+      width: min(100vw, 900px);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: 0 0 24px rgba(90, 113, 255, 0.22);
+      padding: 12px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.1rem, 4.8vw, 1.58rem);
+      color: #c6d2ff;
+      letter-spacing: 0.02em;
+      text-shadow: 0 0 14px rgba(111, 145, 255, 0.35);
+    }
+
+    .pitch {
+      margin-top: 5px;
+      color: #dde5ff;
+      font-size: 0.87rem;
+    }
+
+    .sub {
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 0.76rem;
+      line-height: 1.45;
+    }
+
+    .hud {
+      margin-top: 10px;
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .stat {
+      min-height: 56px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      background: rgba(6, 8, 22, 0.84);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 2px;
+      padding: 6px 9px;
+    }
+
+    .k {
+      font-size: 0.66rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .v {
+      font-size: 0.99rem;
+      font-weight: 800;
+      color: #eef2ff;
+    }
+
+    .v.cyan { color: var(--cyan); text-shadow: 0 0 10px rgba(34, 243, 255, 0.45); }
+    .v.magenta { color: var(--magenta); text-shadow: 0 0 10px rgba(255, 72, 204, 0.45); }
+    .v.good { color: var(--good); text-shadow: 0 0 10px rgba(133, 255, 183, 0.4); }
+
+    .legend {
+      margin-top: 9px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      color: #d2daff;
+      font-size: 0.74rem;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.17);
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .board-wrap {
+      border-radius: 14px;
+      border: 1px solid rgba(181, 197, 255, 0.35);
+      background: linear-gradient(180deg, rgba(8, 10, 26, 0.95), rgba(7, 8, 20, 0.95));
+      padding: clamp(8px, 2.5vw, 14px);
+      box-shadow: inset 0 0 22px rgba(84, 112, 255, 0.16);
+    }
+
+    .board {
+      width: min(100%, 560px);
+      margin: 0 auto;
+      display: grid;
+      gap: 8px;
+    }
+
+    .tile {
+      aspect-ratio: 1 / 1;
+      border-radius: 11px;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      position: relative;
+      cursor: pointer;
+      box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+      transition: transform 0.08s ease, box-shadow 0.16s ease;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .tile:active { transform: scale(0.97); }
+
+    .tile.cyan {
+      background: radial-gradient(circle at 30% 24%, #8af7ff 0%, #29d8e8 38%, #07798f 100%);
+      box-shadow: 0 0 12px rgba(34, 243, 255, 0.32);
+    }
+
+    .tile.magenta {
+      background: radial-gradient(circle at 30% 24%, #ff9be9 0%, #ff55cf 42%, #8f0e6f 100%);
+      box-shadow: 0 0 12px rgba(255, 72, 204, 0.32);
+    }
+
+    .tile.fixed {
+      border-style: dashed;
+      border-color: rgba(255, 220, 122, 0.9);
+      filter: saturate(0.65);
+      cursor: not-allowed;
+    }
+
+    .tile.diag { box-shadow: 0 0 15px rgba(129, 231, 255, 0.55); }
+    .tile.pulse { box-shadow: 0 0 16px rgba(255, 134, 248, 0.55); }
+
+    .tile .icon {
+      position: absolute;
+      right: 5px;
+      top: 4px;
+      font-size: clamp(0.74rem, 2.6vw, 0.95rem);
+      text-shadow: 0 0 8px rgba(0, 0, 0, 0.6);
+      pointer-events: none;
+    }
+
+    .tile .tone {
+      position: absolute;
+      left: 7px;
+      bottom: 5px;
+      font-size: clamp(0.62rem, 2.1vw, 0.75rem);
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      opacity: 0.82;
+      color: rgba(255, 255, 255, 0.88);
+      pointer-events: none;
+    }
+
+    .status {
+      margin-top: 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      background: rgba(0, 0, 0, 0.32);
+      color: #ecf1ff;
+      text-align: center;
+      font-size: 0.8rem;
+      padding: 8px 10px;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    button {
+      min-height: 44px;
+      border-radius: 10px;
+      border: 1px solid rgba(128, 151, 255, 0.52);
+      background: rgba(98, 125, 255, 0.17);
+      color: #f2f6ff;
+      font-weight: 750;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      opacity: 0.36;
+      cursor: not-allowed;
+    }
+
+    button.ghost {
+      border-color: rgba(255, 255, 255, 0.24);
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    button.warn {
+      border-color: rgba(255, 114, 147, 0.5);
+      background: rgba(255, 114, 147, 0.18);
+    }
+
+    .level-grid {
+      margin-top: 10px;
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 7px;
+    }
+
+    .lv-btn {
+      min-height: 58px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.23);
+      background: rgba(255, 255, 255, 0.07);
+      padding: 4px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 3px;
+      color: #dde5ff;
+      font-size: 0.7rem;
+    }
+
+    .lv-btn.active {
+      border-color: rgba(34, 243, 255, 0.72);
+      box-shadow: 0 0 13px rgba(34, 243, 255, 0.26);
+      color: #bcf8ff;
+    }
+
+    .lv-btn.lock {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+
+    .lv-stars {
+      color: #ffd166;
+      letter-spacing: 0.07em;
+      font-size: 0.68rem;
+      min-height: 1em;
+    }
+
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(3, 4, 14, 0.8);
+      backdrop-filter: blur(2px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 20;
+      padding: 12px;
+    }
+
+    .overlay.show { display: flex; }
+
+    .modal {
+      width: min(94vw, 430px);
+      border-radius: 14px;
+      border: 1px solid rgba(153, 169, 255, 0.5);
+      background: linear-gradient(180deg, rgba(19, 24, 60, 0.96), rgba(9, 11, 28, 0.95));
+      box-shadow: 0 0 30px rgba(105, 129, 255, 0.3);
+      padding: 16px;
+      text-align: center;
+    }
+
+    .modal h2 { margin: 0 0 8px; color: #dbe4ff; }
+    .modal p { margin: 4px 0; color: #dce5ff; }
+    .modal .stars {
+      margin: 10px 0 12px;
+      font-size: 1.18rem;
+      color: #ffd166;
+      letter-spacing: 0.14em;
+      text-shadow: 0 0 12px rgba(255, 209, 102, 0.5);
+    }
+
+    .modal .row {
+      margin-top: 10px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    @media (max-width: 760px) {
+      body { padding: 8px; }
+      .hud { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .level-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .tile { border-radius: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="panel">
+      <h1>Tile Flip — 양면 타일 뒤집기 전략</h1>
+      <p class="pitch">"타일을 뒤집으면 주변도 뒤집힌다 — 모든 타일을 같은 색으로"</p>
+      <p class="sub">기본 반전(자기+상하좌우)에 더해 🔒 고정 · 💫 대각 · 🔄 전파 타일이 점진적으로 등장합니다.</p>
+
+      <div class="hud">
+        <div class="stat"><div class="k">LEVEL</div><div id="statLevel" class="v">-</div></div>
+        <div class="stat"><div class="k">MOVES</div><div id="statMoves" class="v cyan">0</div></div>
+        <div class="stat"><div class="k">OPTIMAL</div><div id="statOptimal" class="v">-</div></div>
+        <div class="stat"><div class="k">BEST</div><div id="statBest" class="v magenta">-</div></div>
+        <div class="stat"><div class="k">PROGRESS</div><div id="statProgress" class="v good">0/12</div></div>
+      </div>
+
+      <div class="legend">
+        <span class="chip">🔷 시안</span>
+        <span class="chip">🟣 마젠타</span>
+        <span class="chip">🔒 고정(반전 불가)</span>
+        <span class="chip">💫 대각(+대각선 반전)</span>
+        <span class="chip">🔄 전파(가로줄 전체 반전)</span>
+      </div>
+    </section>
+
+    <section class="panel board-wrap">
+      <div id="board" class="board" aria-label="타일 보드"></div>
+      <div id="status" class="status">목표: 모든 타일을 같은 색으로 맞추세요.</div>
+    </section>
+
+    <section class="panel">
+      <div class="controls">
+        <button id="prevBtn" class="ghost">◀ 이전 레벨</button>
+        <button id="resetBtn" class="warn">↺ 다시 시작</button>
+        <button id="nextBtn" class="ghost">다음 레벨 ▶</button>
+        <button id="soundBtn">🔊 사운드 ON</button>
+      </div>
+      <div id="levelGrid" class="level-grid" aria-label="레벨 선택"></div>
+    </section>
+  </main>
+
+  <div id="clearOverlay" class="overlay" role="dialog" aria-modal="true" aria-label="레벨 클리어">
+    <div class="modal">
+      <h2>레벨 클리어!</h2>
+      <p id="clearLevelText">레벨 1 완료</p>
+      <p id="clearMoveText">클릭 0회 / 최적 0회</p>
+      <div id="clearStars" class="stars">★★★</div>
+      <div class="row">
+        <button id="replayBtn" class="ghost">다시 플레이</button>
+        <button id="nextLevelBtn">다음 레벨</button>
+      </div>
+      <div class="row">
+        <button id="closeOverlayBtn" class="ghost" style="grid-column:1 / -1;">닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      const STORAGE_KEY = 'tileFlipSaveV1';
+      const TYPE = { NORMAL: 'normal', FIXED: 'fixed', DIAG: 'diag', PULSE: 'pulse' };
+
+      const LEVEL_DEFS = [
+        { name: '입문 1', size: 3, rows: ['101', '110', '001'], optimal: 4 },
+        { name: '입문 2', size: 3, rows: ['011', '110', '100'], optimal: 3 },
+        { name: '대각 도입', size: 3, rows: ['100', '011', '101'], diag: [[0, 0]], optimal: 3 },
+        { name: '고정 장애물', size: 3, rows: ['100', '111', '101'], fixed: [[0, 2]], diag: [[1, 1]], optimal: 4 },
+
+        { name: '확장 5x5', size: 5, rows: ['10101', '10111', '01000', '01011', '11101'], optimal: 5 },
+        { name: '고정 타일', size: 5, rows: ['10010', '00011', '11111', '11110', '10110'], fixed: [[1, 2]], optimal: 8 },
+        { name: '대각 + 고정', size: 5, rows: ['11011', '10110', '00100', '11010', '11111'], fixed: [[3, 2]], diag: [[2, 4]], optimal: 8 },
+        { name: '전파 첫 등장', size: 5, rows: ['01110', '11111', '10010', '00101', '00000'], fixed: [[2, 2], [3, 3]], diag: [[3, 1]], pulse: [[1, 4]], optimal: 8 },
+
+        { name: '6x6 시작', size: 6, rows: ['111001', '011010', '101100', '111001', '111000', '101000'], fixed: [[4, 4]], pulse: [[5, 0]], optimal: 10 },
+        { name: '라인 트릭', size: 6, rows: ['000010', '001010', '001010', '000000', '011000', '010000'], fixed: [[1, 5], [2, 5]], diag: [[0, 5]], pulse: [[2, 2]], optimal: 9 },
+        { name: '혼합 패턴', size: 6, rows: ['101100', '000001', '010010', '010101', '011101', '000010'], fixed: [[5, 2], [0, 1]], diag: [[1, 0], [1, 3]], pulse: [[4, 5]], optimal: 12 },
+        { name: '최종 챌린지', size: 6, rows: ['101000', '011101', '001111', '101001', '100001', '001110'], fixed: [[4, 4], [5, 5], [1, 4]], diag: [[1, 2], [4, 5]], pulse: [[1, 5], [4, 2]], optimal: 11 }
+      ];
+
+      function rcToIndex(r, c, size) {
+        return r * size + c;
+      }
+
+      function makeTypeMap(def) {
+        const total = def.size * def.size;
+        const map = new Array(total).fill(TYPE.NORMAL);
+        const put = (list, type) => {
+          (list || []).forEach(([r, c]) => {
+            const i = rcToIndex(r, c, def.size);
+            if (i >= 0 && i < total) map[i] = type;
+          });
+        };
+        put(def.fixed, TYPE.FIXED);
+        put(def.diag, TYPE.DIAG);
+        put(def.pulse, TYPE.PULSE);
+        put(def.fixed, TYPE.FIXED);
+        return map;
+      }
+
+      function parseRows(def) {
+        const total = def.size * def.size;
+        const board = new Array(total).fill(0);
+        if (!def.rows || def.rows.length !== def.size) {
+          throw new Error(`레벨 ${def.name} rows 길이 오류`);
+        }
+        for (let r = 0; r < def.size; r += 1) {
+          if (def.rows[r].length !== def.size) {
+            throw new Error(`레벨 ${def.name} row 너비 오류`);
+          }
+          for (let c = 0; c < def.size; c += 1) {
+            const ch = def.rows[r][c];
+            board[rcToIndex(r, c, def.size)] = ch === '1' ? 1 : 0;
+          }
+        }
+        return board;
+      }
+
+      const LEVELS = LEVEL_DEFS.map((def, idx) => ({
+        id: idx + 1,
+        ...def,
+        typeMap: makeTypeMap(def),
+        initial: parseRows(def)
+      }));
+
+      function collectTargets(level, index) {
+        if (level.typeMap[index] === TYPE.FIXED) return [];
+
+        const size = level.size;
+        const r = Math.floor(index / size);
+        const c = index % size;
+        const set = new Set();
+
+        const add = (rr, cc) => {
+          if (rr < 0 || rr >= size || cc < 0 || cc >= size) return;
+          const i = rcToIndex(rr, cc, size);
+          if (level.typeMap[i] !== TYPE.FIXED) set.add(i);
+        };
+
+        add(r, c);
+        add(r - 1, c);
+        add(r + 1, c);
+        add(r, c - 1);
+        add(r, c + 1);
+
+        const type = level.typeMap[index];
+        if (type === TYPE.DIAG) {
+          add(r - 1, c - 1);
+          add(r - 1, c + 1);
+          add(r + 1, c - 1);
+          add(r + 1, c + 1);
+        } else if (type === TYPE.PULSE) {
+          for (let cc = 0; cc < size; cc += 1) add(r, cc);
+        }
+
+        return Array.from(set);
+      }
+
+      function applyMove(board, level, index) {
+        const type = level.typeMap[index];
+        if (type === TYPE.FIXED) return { changed: false, special: false };
+        const targets = collectTargets(level, index);
+        if (!targets.length) return { changed: false, special: false };
+        targets.forEach((i) => { board[i] = board[i] ? 0 : 1; });
+        return { changed: true, special: type !== TYPE.NORMAL };
+      }
+
+      function isSolved(board) {
+        if (!board.length) return false;
+        const base = board[0];
+        for (let i = 1; i < board.length; i += 1) {
+          if (board[i] !== base) return false;
+        }
+        return true;
+      }
+
+      function getTargetColors(level) {
+        const fixedIndices = [];
+        for (let i = 0; i < level.typeMap.length; i += 1) {
+          if (level.typeMap[i] === TYPE.FIXED) fixedIndices.push(i);
+        }
+        if (!fixedIndices.length) return [0, 1];
+        const first = level.initial[fixedIndices[0]];
+        for (let i = 1; i < fixedIndices.length; i += 1) {
+          if (level.initial[fixedIndices[i]] !== first) return [];
+        }
+        return [first];
+      }
+
+      function hasBit(row, col) {
+        return ((row >> BigInt(col)) & 1n) === 1n;
+      }
+
+      function minWeightSolve(rowsInput, rhsInput, varCount) {
+        const rows = rowsInput.slice();
+        const rhs = rhsInput.slice();
+        const pivotCols = [];
+        let pivotRow = 0;
+
+        for (let col = 0; col < varCount; col += 1) {
+          let found = -1;
+          for (let r = pivotRow; r < rows.length; r += 1) {
+            if (hasBit(rows[r], col)) {
+              found = r;
+              break;
+            }
+          }
+          if (found === -1) continue;
+
+          [rows[pivotRow], rows[found]] = [rows[found], rows[pivotRow]];
+          [rhs[pivotRow], rhs[found]] = [rhs[found], rhs[pivotRow]];
+
+          for (let r = 0; r < rows.length; r += 1) {
+            if (r !== pivotRow && hasBit(rows[r], col)) {
+              rows[r] = rows[r] ^ rows[pivotRow];
+              rhs[r] = rhs[r] ^ rhs[pivotRow];
+            }
+          }
+
+          pivotCols.push(col);
+          pivotRow += 1;
+          if (pivotRow === rows.length) break;
+        }
+
+        for (let r = pivotRow; r < rows.length; r += 1) {
+          if (rows[r] === 0n && rhs[r] === 1) return Infinity;
+        }
+
+        const pivotSet = new Set(pivotCols);
+        const freeCols = [];
+        for (let c = 0; c < varCount; c += 1) {
+          if (!pivotSet.has(c)) freeCols.push(c);
+        }
+
+        if (freeCols.length > 22) return Infinity;
+
+        const totalMask = 2 ** freeCols.length;
+        let best = Infinity;
+
+        for (let mask = 0; mask < totalMask; mask += 1) {
+          const x = new Array(varCount).fill(0);
+
+          for (let i = 0; i < freeCols.length; i += 1) {
+            x[freeCols[i]] = (mask >> i) & 1;
+          }
+
+          for (let i = 0; i < pivotCols.length; i += 1) {
+            const pc = pivotCols[i];
+            let value = rhs[i];
+            const row = rows[i];
+            for (let j = 0; j < freeCols.length; j += 1) {
+              const fc = freeCols[j];
+              if (hasBit(row, fc)) value ^= x[fc];
+            }
+            x[pc] = value;
+          }
+
+          let weight = 0;
+          for (let i = 0; i < x.length; i += 1) weight += x[i];
+          if (weight < best) best = weight;
+        }
+
+        return best;
+      }
+
+      function solveOptimal(level) {
+        const nonFixedCells = [];
+        for (let i = 0; i < level.typeMap.length; i += 1) {
+          if (level.typeMap[i] !== TYPE.FIXED) nonFixedCells.push(i);
+        }
+
+        const moveCells = nonFixedCells.slice();
+        const effects = moveCells.map((cell) => new Set(collectTargets(level, cell)));
+        const targets = getTargetColors(level);
+
+        let best = Infinity;
+        let targetColor = null;
+
+        targets.forEach((target) => {
+          const rows = [];
+          const rhs = [];
+
+          nonFixedCells.forEach((cell) => {
+            let row = 0n;
+            for (let col = 0; col < moveCells.length; col += 1) {
+              if (effects[col].has(cell)) {
+                row |= (1n << BigInt(col));
+              }
+            }
+            rows.push(row);
+            rhs.push(level.initial[cell] ^ target);
+          });
+
+          const solved = minWeightSolve(rows, rhs, moveCells.length);
+          if (solved < best) {
+            best = solved;
+            targetColor = target;
+          }
+        });
+
+        if (best === Infinity) return { solvable: false, optimal: null, target: null };
+        return { solvable: true, optimal: best, target: targetColor };
+      }
+
+      function validateLevels() {
+        let passed = 0;
+        LEVELS.forEach((level) => {
+          const result = solveOptimal(level);
+          if (!result.solvable) {
+            console.error(`[Tile Flip] 레벨 ${level.id} (${level.name})는 풀이 불가`);
+            return;
+          }
+          if (typeof level.optimal !== 'number' || level.optimal !== result.optimal) {
+            console.warn(`[Tile Flip] 레벨 ${level.id} optimal 보정: ${level.optimal} -> ${result.optimal}`);
+            level.optimal = result.optimal;
+          }
+          passed += 1;
+        });
+        return passed;
+      }
+
+      function starsByMoves(moves, optimal) {
+        if (moves <= optimal) return 3;
+        if (moves <= optimal + 2) return 2;
+        if (moves <= optimal + 5) return 1;
+        return 0;
+      }
+
+      function starsText(stars) {
+        const s = Math.max(0, Math.min(3, stars));
+        return '★'.repeat(s) + '☆'.repeat(3 - s);
+      }
+
+      function loadSave() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return { unlocked: 1, best: {} };
+          const parsed = JSON.parse(raw);
+          const unlocked = Math.max(1, Math.min(LEVELS.length, Number(parsed.unlocked) || 1));
+          const best = parsed.best && typeof parsed.best === 'object' ? parsed.best : {};
+          return { unlocked, best };
+        } catch (_) {
+          return { unlocked: 1, best: {} };
+        }
+      }
+
+      function saveState() {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(save));
+        } catch (_) {
+          // ignore storage failures
+        }
+      }
+
+      const els = {
+        board: document.getElementById('board'),
+        status: document.getElementById('status'),
+        level: document.getElementById('statLevel'),
+        moves: document.getElementById('statMoves'),
+        optimal: document.getElementById('statOptimal'),
+        best: document.getElementById('statBest'),
+        progress: document.getElementById('statProgress'),
+        levelGrid: document.getElementById('levelGrid'),
+        prevBtn: document.getElementById('prevBtn'),
+        resetBtn: document.getElementById('resetBtn'),
+        nextBtn: document.getElementById('nextBtn'),
+        soundBtn: document.getElementById('soundBtn'),
+        clearOverlay: document.getElementById('clearOverlay'),
+        clearLevelText: document.getElementById('clearLevelText'),
+        clearMoveText: document.getElementById('clearMoveText'),
+        clearStars: document.getElementById('clearStars'),
+        replayBtn: document.getElementById('replayBtn'),
+        nextLevelBtn: document.getElementById('nextLevelBtn'),
+        closeOverlayBtn: document.getElementById('closeOverlayBtn')
+      };
+
+      const validatedCount = validateLevels();
+      const save = loadSave();
+
+      let currentLevelIndex = Math.max(0, Math.min(LEVELS.length - 1, save.unlocked - 1));
+      let board = LEVELS[currentLevelIndex].initial.slice();
+      let moves = 0;
+      let cleared = false;
+      let transientTimer = null;
+      let soundEnabled = true;
+      let audioCtx = null;
+
+      function ensureAudioContext() {
+        if (!soundEnabled) return null;
+        if (!audioCtx) {
+          const AC = window.AudioContext || window.webkitAudioContext;
+          if (!AC) return null;
+          audioCtx = new AC();
+        }
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        return audioCtx;
+      }
+
+      function beep(freq, duration, wave, gain, delay = 0) {
+        const ctx = ensureAudioContext();
+        if (!ctx) return;
+        const now = ctx.currentTime + delay;
+
+        const osc = ctx.createOscillator();
+        const amp = ctx.createGain();
+        osc.type = wave || 'sine';
+        osc.frequency.setValueAtTime(freq, now);
+
+        amp.gain.setValueAtTime(0.0001, now);
+        amp.gain.exponentialRampToValueAtTime(gain, now + 0.01);
+        amp.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+        osc.connect(amp);
+        amp.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + duration + 0.02);
+      }
+
+      function playFlip() {
+        beep(360, 0.08, 'square', 0.028);
+        beep(540, 0.06, 'triangle', 0.018, 0.03);
+      }
+
+      function playSpecial() {
+        beep(260, 0.1, 'sawtooth', 0.03);
+        beep(620, 0.1, 'triangle', 0.022, 0.02);
+      }
+
+      function playClear() {
+        beep(392, 0.18, 'triangle', 0.03);
+        beep(523, 0.2, 'triangle', 0.028, 0.05);
+        beep(659, 0.22, 'triangle', 0.026, 0.1);
+      }
+
+      function setStatus(message, timeoutMs = 0) {
+        if (transientTimer) {
+          clearTimeout(transientTimer);
+          transientTimer = null;
+        }
+        els.status.textContent = message;
+        if (timeoutMs > 0) {
+          transientTimer = setTimeout(() => {
+            transientTimer = null;
+            renderStatus();
+          }, timeoutMs);
+        }
+      }
+
+      function renderStatus() {
+        if (cleared) {
+          els.status.textContent = '클리어! 다음 레벨로 이동하거나 기록을 갱신해보세요.';
+        } else {
+          els.status.textContent = `목표: 모든 타일을 같은 색으로 통일 (${validatedCount}/${LEVELS.length} 레벨 사전 검증)`;
+        }
+      }
+
+      function renderBoard() {
+        const level = LEVELS[currentLevelIndex];
+        els.board.style.gridTemplateColumns = `repeat(${level.size}, minmax(0, 1fr))`;
+        els.board.innerHTML = '';
+
+        board.forEach((value, index) => {
+          const btn = document.createElement('button');
+          btn.className = `tile ${value ? 'magenta' : 'cyan'} ${level.typeMap[index]}`;
+          btn.type = 'button';
+          btn.dataset.index = String(index);
+          btn.setAttribute('aria-label', `타일 ${Math.floor(index / level.size) + 1}-${(index % level.size) + 1}`);
+
+          const tone = document.createElement('span');
+          tone.className = 'tone';
+          tone.textContent = value ? 'M' : 'C';
+          btn.appendChild(tone);
+
+          if (level.typeMap[index] !== TYPE.NORMAL) {
+            const icon = document.createElement('span');
+            icon.className = 'icon';
+            icon.textContent = level.typeMap[index] === TYPE.FIXED ? '🔒' : (level.typeMap[index] === TYPE.DIAG ? '💫' : '🔄');
+            btn.appendChild(icon);
+          }
+
+          btn.addEventListener('click', () => handleTileClick(index));
+          els.board.appendChild(btn);
+        });
+      }
+
+      function renderHud() {
+        const level = LEVELS[currentLevelIndex];
+        const best = save.best[level.id];
+
+        els.level.textContent = `Lv.${level.id}/${LEVELS.length} · ${level.size}x${level.size}`;
+        els.moves.textContent = String(moves);
+        els.optimal.textContent = String(level.optimal);
+        els.best.textContent = typeof best === 'number' ? `${best} (${starsText(starsByMoves(best, level.optimal))})` : '-';
+        els.progress.textContent = `${save.unlocked}/${LEVELS.length}`;
+      }
+
+      function renderLevelGrid() {
+        els.levelGrid.innerHTML = '';
+        LEVELS.forEach((level, idx) => {
+          const locked = idx + 1 > save.unlocked;
+          const best = save.best[level.id];
+          const stars = typeof best === 'number' ? starsText(starsByMoves(best, level.optimal)) : '---';
+
+          const btn = document.createElement('button');
+          btn.className = `lv-btn ${idx === currentLevelIndex ? 'active' : ''} ${locked ? 'lock' : ''}`;
+          btn.type = 'button';
+          btn.disabled = locked;
+
+          btn.innerHTML = `
+            <strong>L${level.id}</strong>
+            <span>${level.size}x${level.size}</span>
+            <span class="lv-stars">${locked ? '잠금' : stars}</span>
+          `;
+
+          btn.addEventListener('click', () => {
+            if (locked) return;
+            startLevel(idx, false);
+          });
+          els.levelGrid.appendChild(btn);
+        });
+      }
+
+      function renderAll() {
+        renderBoard();
+        renderHud();
+        renderLevelGrid();
+        renderStatus();
+      }
+
+      function hideOverlay() {
+        els.clearOverlay.classList.remove('show');
+      }
+
+      function showClearOverlay() {
+        const level = LEVELS[currentLevelIndex];
+        const stars = starsByMoves(moves, level.optimal);
+
+        els.clearLevelText.textContent = `레벨 ${level.id} (${level.name}) 완료`;
+        els.clearMoveText.textContent = `클릭 ${moves}회 / 최적 ${level.optimal}회`;
+        els.clearStars.textContent = starsText(stars);
+        els.nextLevelBtn.textContent = currentLevelIndex < LEVELS.length - 1 ? '다음 레벨' : '처음부터 다시';
+        els.clearOverlay.classList.add('show');
+      }
+
+      function onLevelClear() {
+        const level = LEVELS[currentLevelIndex];
+        const prevBest = save.best[level.id];
+
+        if (typeof prevBest !== 'number' || moves < prevBest) {
+          save.best[level.id] = moves;
+          setStatus('최고 기록 갱신!', 1200);
+        } else {
+          setStatus('클리어 완료! 더 적은 클릭으로 별을 올려보세요.', 1400);
+        }
+
+        if (save.unlocked < LEVELS.length && currentLevelIndex + 2 > save.unlocked) {
+          save.unlocked = currentLevelIndex + 2;
+        }
+
+        saveState();
+        playClear();
+        cleared = true;
+        renderHud();
+        renderLevelGrid();
+        showClearOverlay();
+      }
+
+      function handleTileClick(index) {
+        if (cleared) return;
+
+        const level = LEVELS[currentLevelIndex];
+        if (level.typeMap[index] === TYPE.FIXED) {
+          setStatus('🔒 고정 타일은 반전되지 않습니다.', 1100);
+          return;
+        }
+
+        const result = applyMove(board, level, index);
+        if (!result.changed) return;
+
+        moves += 1;
+        if (result.special) playSpecial(); else playFlip();
+
+        renderBoard();
+        renderHud();
+
+        if (isSolved(board)) {
+          onLevelClear();
+        }
+      }
+
+      function startLevel(index, resetOnly) {
+        const level = LEVELS[index];
+        currentLevelIndex = index;
+        board = level.initial.slice();
+        moves = 0;
+        cleared = false;
+        hideOverlay();
+
+        if (!resetOnly) {
+          setStatus(`레벨 ${level.id}: ${level.name}`, 900);
+        }
+
+        renderAll();
+      }
+
+      els.prevBtn.addEventListener('click', () => {
+        if (currentLevelIndex <= 0) return;
+        startLevel(currentLevelIndex - 1, false);
+      });
+
+      els.nextBtn.addEventListener('click', () => {
+        if (currentLevelIndex >= LEVELS.length - 1) return;
+        if (currentLevelIndex + 2 > save.unlocked) {
+          setStatus('먼저 현재 레벨을 클리어해 잠금을 해제하세요.', 1200);
+          return;
+        }
+        startLevel(currentLevelIndex + 1, false);
+      });
+
+      els.resetBtn.addEventListener('click', () => {
+        startLevel(currentLevelIndex, true);
+      });
+
+      els.soundBtn.addEventListener('click', () => {
+        soundEnabled = !soundEnabled;
+        els.soundBtn.textContent = soundEnabled ? '🔊 사운드 ON' : '🔈 사운드 OFF';
+        if (soundEnabled) playFlip();
+      });
+
+      els.replayBtn.addEventListener('click', () => {
+        startLevel(currentLevelIndex, true);
+      });
+
+      els.nextLevelBtn.addEventListener('click', () => {
+        if (currentLevelIndex < LEVELS.length - 1) {
+          const nextIndex = Math.min(currentLevelIndex + 1, save.unlocked - 1);
+          startLevel(nextIndex, false);
+        } else {
+          startLevel(0, false);
+        }
+      });
+
+      els.closeOverlayBtn.addEventListener('click', hideOverlay);
+      els.clearOverlay.addEventListener('click', (e) => {
+        if (e.target === els.clearOverlay) hideOverlay();
+      });
+
+      startLevel(currentLevelIndex, false);
+    })();
+  </script>
+</body>
+</html>

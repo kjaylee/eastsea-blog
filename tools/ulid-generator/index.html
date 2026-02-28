@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ULID Generator | 정렬 가능한 고유 ID 생성기</title>
+  <meta name="description" content="ULID를 단건/다건으로 생성하고, 타임스탬프를 즉시 해석하는 네온 다크 테마 유틸리티" />
+  <style>
+    :root {
+      --bg: #0a0a1a;
+      --panel: #12122b;
+      --panel-2: #1a1a3a;
+      --text: #e8f0ff;
+      --muted: #9fb0d1;
+      --neon: #00f5ff;
+      --neon-2: #8b5cf6;
+      --ok: #22c55e;
+      --danger: #ff5d8f;
+      --border: rgba(0, 245, 255, 0.25);
+      --shadow: 0 0 24px rgba(0, 245, 255, 0.18);
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+      background:
+        radial-gradient(1200px 800px at 10% -20%, rgba(139, 92, 246, 0.25), transparent 60%),
+        radial-gradient(1200px 800px at 100% 0%, rgba(0, 245, 255, 0.16), transparent 55%),
+        var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .wrap {
+      max-width: 980px;
+      margin: 0 auto;
+    }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text);
+      text-decoration: none;
+      background: rgba(18, 18, 43, 0.85);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 10px 14px;
+      box-shadow: var(--shadow);
+      margin-bottom: 16px;
+    }
+
+    h1 {
+      margin: 8px 0 4px;
+      font-size: clamp(1.5rem, 3.6vw, 2.3rem);
+      letter-spacing: 0.02em;
+      text-shadow: 0 0 14px rgba(0, 245, 255, 0.4);
+    }
+
+    .sub {
+      color: var(--muted);
+      margin-bottom: 18px;
+    }
+
+    .grid {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: 1fr;
+    }
+
+    .card {
+      background: linear-gradient(180deg, rgba(26, 26, 58, 0.95), rgba(18, 18, 43, 0.95));
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      box-shadow: var(--shadow);
+    }
+
+    .row {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: 1fr;
+      margin-bottom: 12px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 0.92rem;
+      color: var(--muted);
+    }
+
+    input[type="number"],
+    input[type="text"],
+    textarea {
+      width: 100%;
+      background: #0f0f24;
+      color: var(--text);
+      border: 1px solid rgba(0, 245, 255, 0.35);
+      border-radius: 12px;
+      padding: 12px;
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    input:focus,
+    textarea:focus {
+      border-color: var(--neon);
+      box-shadow: 0 0 0 3px rgba(0, 245, 255, 0.15);
+    }
+
+    textarea {
+      min-height: 180px;
+      resize: vertical;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    }
+
+    .btns {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 12px;
+      padding: 11px 14px;
+      font-weight: 700;
+      cursor: pointer;
+      color: #051018;
+      background: linear-gradient(135deg, var(--neon), #67f8ff 55%, #9cfaff);
+      box-shadow: 0 0 18px rgba(0, 245, 255, 0.35);
+    }
+
+    button.alt {
+      color: var(--text);
+      background: linear-gradient(135deg, #2a2158, #3a2b75);
+      box-shadow: 0 0 14px rgba(139, 92, 246, 0.35);
+    }
+
+    button.ghost {
+      color: var(--text);
+      background: #181839;
+      border: 1px solid rgba(0, 245, 255, 0.25);
+      box-shadow: none;
+    }
+
+    .status {
+      margin-top: 8px;
+      font-size: 0.9rem;
+      color: var(--muted);
+      min-height: 1.3em;
+    }
+
+    .status.ok { color: var(--ok); }
+    .status.err { color: var(--danger); }
+
+    .meta {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      margin-top: 12px;
+    }
+
+    .pill {
+      background: #0f0f24;
+      border: 1px solid rgba(0, 245, 255, 0.25);
+      border-radius: 12px;
+      padding: 10px;
+    }
+
+    .pill strong {
+      display: block;
+      color: var(--muted);
+      font-size: 0.82rem;
+      margin-bottom: 4px;
+      font-weight: 600;
+    }
+
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; word-break: break-all; }
+
+    @media (min-width: 800px) {
+      .grid { grid-template-columns: 1.2fr 1fr; }
+      .row { grid-template-columns: 170px 1fr; align-items: end; }
+      .row label { margin: 0; }
+    }
+
+    @media (max-width: 640px) {
+      body { padding: 14px; }
+      .meta { grid-template-columns: 1fr; }
+      .btns button { flex: 1 1 100%; }
+    }
+  </style>
+
+  <!-- GA4 -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-TVJ4W0GQNG"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-TVJ4W0GQNG');
+  </script>
+
+  <!-- Microsoft Clarity -->
+  <script>
+    (function(c,l,a,r,i,t,y){
+      c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+      t=l.createElement(r);t.async=1;t.src='https://www.clarity.ms/tag/'+i;
+      y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+    })(window, document, 'clarity', 'script', 'vmms1upl1l');
+  </script>
+</head>
+<body>
+  <main class="wrap">
+    <a class="back-link" href="../">← 도구 목록으로</a>
+    <h1>ULID Generator</h1>
+    <p class="sub">정렬 가능한 26자 고유 ID 생성 + 타임스탬프 해석기</p>
+
+    <section class="grid" aria-label="ULID 도구">
+      <article class="card">
+        <div class="row">
+          <label for="count">생성 개수 (1~200)</label>
+          <input id="count" type="number" min="1" max="200" value="10" inputmode="numeric" />
+        </div>
+
+        <div class="btns">
+          <button id="genBtn" type="button">ULID 생성</button>
+          <button id="copyBtn" class="alt" type="button">결과 복사</button>
+          <button id="clearBtn" class="ghost" type="button">지우기</button>
+        </div>
+
+        <div class="status" id="genStatus" aria-live="polite"></div>
+
+        <label for="output" style="margin-top:10px;">생성 결과</label>
+        <textarea id="output" placeholder="여기에 ULID가 줄바꿈으로 출력됩니다."></textarea>
+      </article>
+
+      <article class="card">
+        <label for="decodeInput">ULID 분석</label>
+        <input id="decodeInput" type="text" maxlength="26" placeholder="예: 01JX2NMQB7D8M8K9Y3H3S5TQF2" />
+
+        <div class="btns" style="margin-top:10px;">
+          <button id="decodeBtn" type="button">타임스탬프 해석</button>
+          <button id="sampleBtn" class="ghost" type="button">샘플 넣기</button>
+        </div>
+
+        <div class="status" id="decodeStatus" aria-live="polite"></div>
+
+        <div class="meta" id="meta">
+          <div class="pill"><strong>Unix ms</strong><div class="mono" id="unixMs">-</div></div>
+          <div class="pill"><strong>Unix sec</strong><div class="mono" id="unixSec">-</div></div>
+          <div class="pill"><strong>UTC ISO</strong><div class="mono" id="iso">-</div></div>
+          <div class="pill"><strong>Local Time</strong><div class="mono" id="local">-</div></div>
+          <div class="pill" style="grid-column: 1 / -1;"><strong>Random Part (16 chars)</strong><div class="mono" id="randomPart">-</div></div>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      'use strict';
+
+      var ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+      var MAP = Object.create(null);
+      for (var i = 0; i < ALPHABET.length; i++) MAP[ALPHABET[i]] = i;
+
+      var lastTime = -1;
+      var lastRandom = null;
+
+      function encodeTime(ms) {
+        var out = '';
+        for (var i = 0; i < 10; i++) {
+          out = ALPHABET[ms % 32] + out;
+          ms = Math.floor(ms / 32);
+        }
+        return out;
+      }
+
+      function randomBase32Array(length) {
+        var bytes = new Uint8Array(length);
+        crypto.getRandomValues(bytes);
+        var arr = new Array(length);
+        for (var i = 0; i < length; i++) arr[i] = bytes[i] & 31;
+        return arr;
+      }
+
+      function incrementBase32(arr) {
+        for (var i = arr.length - 1; i >= 0; i--) {
+          if (arr[i] < 31) {
+            arr[i] += 1;
+            return arr;
+          }
+          arr[i] = 0;
+        }
+        return randomBase32Array(arr.length);
+      }
+
+      function generateULID() {
+        var now = Date.now();
+
+        if (now === lastTime && lastRandom) {
+          lastRandom = incrementBase32(lastRandom.slice());
+        } else {
+          lastTime = now;
+          lastRandom = randomBase32Array(16);
+        }
+
+        var randPart = '';
+        for (var i = 0; i < 16; i++) randPart += ALPHABET[lastRandom[i]];
+        return encodeTime(now) + randPart;
+      }
+
+      function parseTime(ulid) {
+        var upper = ulid.toUpperCase();
+        if (!/^[0-9A-HJKMNP-TV-Z]{26}$/.test(upper)) {
+          throw new Error('ULID 형식이 올바르지 않습니다. (26자 Crockford Base32)');
+        }
+
+        var ts = 0;
+        for (var i = 0; i < 10; i++) {
+          var val = MAP[upper[i]];
+          if (val === undefined) throw new Error('잘못된 문자: ' + upper[i]);
+          ts = ts * 32 + val;
+        }
+        return { ts: ts, normalized: upper, randomPart: upper.slice(10) };
+      }
+
+      function setStatus(el, msg, type) {
+        el.textContent = msg || '';
+        el.className = 'status' + (type ? ' ' + type : '');
+      }
+
+      var countEl = document.getElementById('count');
+      var outputEl = document.getElementById('output');
+      var genStatusEl = document.getElementById('genStatus');
+      var decodeInputEl = document.getElementById('decodeInput');
+      var decodeStatusEl = document.getElementById('decodeStatus');
+
+      document.getElementById('genBtn').addEventListener('click', function () {
+        var count = Number(countEl.value);
+        if (!Number.isInteger(count) || count < 1 || count > 200) {
+          setStatus(genStatusEl, '생성 개수는 1~200 사이의 정수여야 합니다.', 'err');
+          return;
+        }
+
+        var lines = [];
+        for (var i = 0; i < count; i++) lines.push(generateULID());
+        outputEl.value = lines.join('\n');
+        setStatus(genStatusEl, count + '개의 ULID를 생성했습니다.', 'ok');
+      });
+
+      document.getElementById('copyBtn').addEventListener('click', async function () {
+        if (!outputEl.value.trim()) {
+          setStatus(genStatusEl, '복사할 결과가 없습니다.', 'err');
+          return;
+        }
+        try {
+          await navigator.clipboard.writeText(outputEl.value);
+          setStatus(genStatusEl, '클립보드에 복사했습니다.', 'ok');
+        } catch (e) {
+          setStatus(genStatusEl, '복사에 실패했습니다. 수동 복사를 시도해주세요.', 'err');
+        }
+      });
+
+      document.getElementById('clearBtn').addEventListener('click', function () {
+        outputEl.value = '';
+        setStatus(genStatusEl, '결과를 지웠습니다.', '');
+      });
+
+      function renderMeta(info) {
+        document.getElementById('unixMs').textContent = String(info.ts);
+        document.getElementById('unixSec').textContent = String(Math.floor(info.ts / 1000));
+        document.getElementById('iso').textContent = new Date(info.ts).toISOString();
+        document.getElementById('local').textContent = new Date(info.ts).toLocaleString();
+        document.getElementById('randomPart').textContent = info.randomPart;
+      }
+
+      document.getElementById('decodeBtn').addEventListener('click', function () {
+        var raw = decodeInputEl.value.trim();
+        if (!raw) {
+          setStatus(decodeStatusEl, '분석할 ULID를 입력해주세요.', 'err');
+          return;
+        }
+
+        try {
+          var info = parseTime(raw);
+          decodeInputEl.value = info.normalized;
+          renderMeta(info);
+          setStatus(decodeStatusEl, 'ULID를 성공적으로 해석했습니다.', 'ok');
+        } catch (e) {
+          setStatus(decodeStatusEl, e.message, 'err');
+        }
+      });
+
+      document.getElementById('sampleBtn').addEventListener('click', function () {
+        var sample = generateULID();
+        decodeInputEl.value = sample;
+        var info = parseTime(sample);
+        renderMeta(info);
+        setStatus(decodeStatusEl, '샘플 ULID를 넣고 해석했습니다.', 'ok');
+      });
+    })();
+  </script>
+</body>
+</html>

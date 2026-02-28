@@ -1,0 +1,1645 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0a0a1a" />
+  <title>Hue Shift — 색상 파장 퍼즐</title>
+  <style>
+    :root {
+      --bg: #0a0a1a;
+      --panel: rgba(16, 20, 45, 0.92);
+      --line: rgba(0, 255, 255, 0.22);
+      --text: #ecf3ff;
+      --muted: #9db0dc;
+      --cyan: #45efff;
+      --pink: #ff5ed2;
+      --green: #59ff9f;
+      --yellow: #ffd966;
+      --danger: #ff6b84;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      min-height: 100%;
+      background: radial-gradient(circle at 20% 0%, #1a1a46 0%, var(--bg) 56%);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR', sans-serif;
+    }
+
+    body {
+      display: flex;
+      justify-content: center;
+      padding: 10px;
+      touch-action: manipulation;
+    }
+
+    .app {
+      width: min(100vw, 1040px);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .title {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--panel);
+      padding: 10px 12px;
+      box-shadow: 0 0 22px rgba(0, 255, 255, 0.16);
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: flex-end;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.02rem, 4.3vw, 1.4rem);
+      color: var(--cyan);
+      text-shadow: 0 0 12px rgba(69, 239, 255, 0.55);
+      letter-spacing: 0.02em;
+    }
+
+    .pitch { font-size: 0.82rem; color: #cde4ff; margin-top: 2px; }
+    .mini { font-size: 0.74rem; color: var(--muted); }
+
+    .hud {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .card {
+      background: rgba(14, 18, 42, 0.94);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      min-height: 58px;
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 2px;
+    }
+
+    .k {
+      font-size: 0.66rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .v { font-size: 1rem; font-weight: 700; }
+    .cyan { color: var(--cyan); text-shadow: 0 0 10px rgba(69, 239, 255, 0.55); }
+    .green { color: var(--green); }
+
+    .actions, .tools {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    button, select {
+      border: 1px solid rgba(69, 239, 255, 0.38);
+      background: rgba(69, 239, 255, 0.1);
+      color: #def8ff;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      min-height: 40px;
+      padding: 8px;
+      outline: none;
+    }
+
+    button:active { transform: translateY(1px); }
+
+    button.secondary {
+      border-color: rgba(255, 255, 255, 0.24);
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    button.warn {
+      border-color: rgba(255, 107, 132, 0.5);
+      background: rgba(255, 107, 132, 0.12);
+      color: #ffd7df;
+    }
+
+    .canvas-wrap {
+      position: relative;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: #060613;
+      overflow: hidden;
+      box-shadow: 0 0 30px rgba(0, 255, 255, 0.16);
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      aspect-ratio: 1000 / 620;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      background: transparent;
+    }
+
+    .tip {
+      margin: 0;
+      padding: 0 4px;
+      min-height: 22px;
+      font-size: 0.84rem;
+      color: #c5d8ff;
+    }
+
+    .toast {
+      position: absolute;
+      left: 50%;
+      top: 12px;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.58);
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      color: #f7fbff;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      padding: 6px 12px;
+      max-width: calc(100% - 20px);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      overflow: hidden;
+      opacity: 0;
+      transition: opacity 0.2s;
+      pointer-events: none;
+      z-index: 8;
+    }
+
+    .toast.show { opacity: 1; }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(5, 7, 18, 0.78);
+      backdrop-filter: blur(2px);
+      padding: 12px;
+      z-index: 9;
+    }
+
+    .overlay.show { display: flex; }
+
+    .result {
+      width: min(92vw, 460px);
+      border-radius: 14px;
+      border: 1px solid rgba(69, 239, 255, 0.4);
+      background: linear-gradient(180deg, rgba(16, 22, 55, 0.95), rgba(8, 10, 26, 0.95));
+      box-shadow: 0 0 20px rgba(69, 239, 255, 0.2);
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .result h2 {
+      margin: 0;
+      color: var(--cyan);
+      text-shadow: 0 0 10px rgba(69, 239, 255, 0.44);
+    }
+
+    .result p { margin: 0; color: #d6e7ff; font-size: 0.9rem; }
+
+    .result-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    @media (max-width: 860px) {
+      .hud { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .actions, .tools { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .mini { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="title">
+      <div>
+        <h1>Hue Shift · 색상 파장 퍼즐</h1>
+        <div class="pitch">"색을 섞고 파장을 맞춰 빛의 퍼즐을 풀어라"</div>
+      </div>
+      <div class="mini">조작: 블록 드래그 이동/회전 · R 회전 · 방향키 이동 · 터치 지원</div>
+    </div>
+
+    <div class="hud">
+      <div class="card"><div class="k">레벨</div><div id="levelText" class="v cyan">1 / 8</div></div>
+      <div class="card"><div class="k">진행도</div><div id="progressText" class="v">1 / 8</div></div>
+      <div class="card"><div class="k">선택 블록</div><div id="selectedText" class="v">없음</div></div>
+      <div class="card"><div class="k">상태</div><div id="statusText" class="v green">조준 중</div></div>
+    </div>
+
+    <div class="actions">
+      <button id="prevBtn" class="secondary">이전 레벨</button>
+      <button id="restartBtn" class="secondary">레벨 리셋</button>
+      <button id="nextBtn" class="secondary">다음 레벨</button>
+      <select id="levelSelect" aria-label="레벨 선택"></select>
+    </div>
+
+    <div class="tools">
+      <button id="addMirrorBtn">+ 거울</button>
+      <button id="addPrismBtn">+ 프리즘</button>
+      <button id="addFilterBtn">+ 필터</button>
+      <button id="cycleFilterBtn" class="secondary">필터 색상 변경</button>
+      <button id="rotateBtn" class="secondary">R 회전</button>
+      <button id="deleteBtn" class="warn">선택 삭제</button>
+      <button id="hintBtn" class="secondary">힌트</button>
+      <button id="clearSaveBtn" class="warn">진행도 초기화</button>
+    </div>
+
+    <div class="canvas-wrap">
+      <canvas id="game" width="1000" height="620"></canvas>
+      <div id="toast" class="toast"></div>
+      <div id="overlay" class="overlay">
+        <div class="result">
+          <h2>스펙트럼 동기화 완료!</h2>
+          <p id="resultText">다음 레벨이 해금되었습니다.</p>
+          <div class="result-row">
+            <button id="stayBtn" class="secondary">현재 레벨 유지</button>
+            <button id="goNextBtn">다음 레벨 ▶</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p id="tip" class="tip">거울과 프리즘을 배치해 타겟에 목표 색을 정확히 전달하세요.</p>
+  </div>
+
+  <script>
+    (() => {
+      'use strict';
+
+      const canvas = document.getElementById('game');
+      const ctx = canvas.getContext('2d');
+      const W = canvas.width;
+      const H = canvas.height;
+      const STORAGE_KEY = 'hue-shift-progress-v1';
+      const EPS = 0.0001;
+      const MAX_STEPS = 12;
+      const MAX_RAYS = 140;
+
+      const UI = {
+        levelText: document.getElementById('levelText'),
+        progressText: document.getElementById('progressText'),
+        selectedText: document.getElementById('selectedText'),
+        statusText: document.getElementById('statusText'),
+        tip: document.getElementById('tip'),
+        toast: document.getElementById('toast'),
+        overlay: document.getElementById('overlay'),
+        resultText: document.getElementById('resultText'),
+        levelSelect: document.getElementById('levelSelect')
+      };
+
+      const FILTER_PRESETS = [
+        { name: 'R', mask: [1, 0, 0], glow: [1, 0.2, 0.2] },
+        { name: 'G', mask: [0, 1, 0], glow: [0.2, 1, 0.2] },
+        { name: 'B', mask: [0, 0, 1], glow: [0.3, 0.5, 1] },
+        { name: 'C', mask: [0, 1, 1], glow: [0.2, 1, 1] },
+        { name: 'M', mask: [1, 0, 1], glow: [1, 0.3, 1] },
+        { name: 'Y', mask: [1, 1, 0], glow: [1, 1, 0.25] },
+        { name: 'W', mask: [1, 1, 1], glow: [1, 1, 1] }
+      ];
+
+      const LEVELS = [
+        {
+          name: 'L1 단색 반사',
+          hint: '빨간 광선을 거울 한 장으로 위쪽 타겟에 반사하세요.',
+          toolbox: { mirror: 1, prism: 0, filter: 0 },
+          sources: [
+            { x: 90, y: 520, angle: -12, color: [1, 0, 0] }
+          ],
+          targets: [
+            { x: 850, y: 120, r: 34, color: [1, 0, 0], tolerance: 0.26 }
+          ],
+          startBlocks: [
+            { type: 'mirror', x: 500, y: 380, angle: -30, length: 190 }
+          ],
+          fixedBlocks: []
+        },
+        {
+          name: 'L2 단색 더블 반사',
+          hint: '두 거울로 파란 광선을 코너처럼 꺾어 목표 지점으로 보내세요.',
+          toolbox: { mirror: 2, prism: 0, filter: 0 },
+          sources: [
+            { x: 100, y: 560, angle: -6, color: [0, 0, 1] }
+          ],
+          targets: [
+            { x: 900, y: 90, r: 34, color: [0, 0, 1], tolerance: 0.25 }
+          ],
+          startBlocks: [
+            { type: 'mirror', x: 360, y: 500, angle: -42, length: 170 },
+            { type: 'mirror', x: 710, y: 260, angle: 43, length: 170 }
+          ],
+          fixedBlocks: []
+        },
+        {
+          name: 'L3 2색 혼합',
+          hint: '빨강+파랑이 만나는 위치를 타겟에 맞추면 보라색이 됩니다.',
+          toolbox: { mirror: 2, prism: 1, filter: 0 },
+          sources: [
+            { x: 80, y: 300, angle: 0, color: [1, 0, 0] },
+            { x: 520, y: 40, angle: 90, color: [0, 0, 1] }
+          ],
+          targets: [
+            { x: 780, y: 300, r: 36, color: [1, 0, 1], tolerance: 0.3 }
+          ],
+          startBlocks: [
+            { type: 'mirror', x: 520, y: 300, angle: 48, length: 180 },
+            { type: 'prism', x: 650, y: 220, angle: 10, size: 90 }
+          ],
+          fixedBlocks: []
+        },
+        {
+          name: 'L4 2색 교차',
+          hint: '빨강+초록을 모아 노란 타겟을 활성화하세요.',
+          toolbox: { mirror: 2, prism: 1, filter: 0 },
+          sources: [
+            { x: 100, y: 520, angle: -18, color: [1, 0, 0] },
+            { x: 120, y: 300, angle: 0, color: [0, 1, 0] }
+          ],
+          targets: [
+            { x: 860, y: 300, r: 36, color: [1, 1, 0], tolerance: 0.31 }
+          ],
+          startBlocks: [
+            { type: 'mirror', x: 470, y: 410, angle: -32, length: 170 },
+            { type: 'prism', x: 640, y: 260, angle: -12, size: 92 }
+          ],
+          fixedBlocks: []
+        },
+        {
+          name: 'L5 3색 혼합 + 필터',
+          hint: 'RGB를 모아 흰빛을 만들고, 필터를 통과시켜 시안 타겟을 맞추세요.',
+          toolbox: { mirror: 2, prism: 1, filter: 1 },
+          sources: [
+            { x: 90, y: 300, angle: 0, color: [1, 0, 0] },
+            { x: 500, y: 40, angle: 90, color: [0, 1, 0] },
+            { x: 520, y: 580, angle: -90, color: [0, 0, 1] }
+          ],
+          targets: [
+            { x: 880, y: 190, r: 34, color: [0, 1, 1], tolerance: 0.34 }
+          ],
+          startBlocks: [
+            { type: 'mirror', x: 500, y: 310, angle: 43, length: 160 },
+            { type: 'prism', x: 640, y: 300, angle: 4, size: 94 },
+            { type: 'filter', x: 760, y: 250, angle: 0, width: 95, height: 42, filterIndex: 3 }
+          ],
+          fixedBlocks: [
+            { type: 'filter', x: 820, y: 200, angle: 0, width: 86, height: 36, filterIndex: 3, fixed: true }
+          ]
+        },
+        {
+          name: 'L6 3색 분기 + 필터',
+          hint: '프리즘으로 빛을 분기해 두 타겟(노랑/마젠타)을 동시에 채우세요.',
+          toolbox: { mirror: 2, prism: 2, filter: 1 },
+          sources: [
+            { x: 100, y: 340, angle: -6, color: [1, 0, 0] },
+            { x: 120, y: 150, angle: 8, color: [0, 1, 0] },
+            { x: 130, y: 540, angle: -10, color: [0, 0, 1] }
+          ],
+          targets: [
+            { x: 880, y: 170, r: 32, color: [1, 1, 0], tolerance: 0.35 },
+            { x: 880, y: 460, r: 32, color: [1, 0, 1], tolerance: 0.35 }
+          ],
+          startBlocks: [
+            { type: 'prism', x: 420, y: 330, angle: -5, size: 92 },
+            { type: 'mirror', x: 640, y: 220, angle: 30, length: 160 },
+            { type: 'mirror', x: 650, y: 430, angle: -30, length: 160 },
+            { type: 'filter', x: 760, y: 320, angle: 0, width: 90, height: 40, filterIndex: 6 }
+          ],
+          fixedBlocks: [
+            { type: 'filter', x: 815, y: 175, angle: 0, width: 82, height: 34, filterIndex: 5, fixed: true },
+            { type: 'filter', x: 815, y: 460, angle: 0, width: 82, height: 34, filterIndex: 4, fixed: true }
+          ]
+        },
+        {
+          name: 'L7 이동 광원',
+          hint: '움직이는 광원이 타겟 창을 통과할 타이밍에 경로를 맞추세요.',
+          toolbox: { mirror: 3, prism: 1, filter: 1 },
+          sources: [
+            { x: 80, y: 300, angle: 0, color: [1, 0, 0], motion: { type: 'vertical', amp: 90, speed: 0.0016, phase: 0.2 } },
+            { x: 500, y: 60, angle: 90, color: [0, 1, 0], motion: { type: 'horizontal', amp: 120, speed: 0.0012, phase: 1.1 } },
+            { x: 520, y: 560, angle: -90, color: [0, 0, 1] }
+          ],
+          targets: [
+            { x: 880, y: 310, r: 36, color: [1, 1, 1], tolerance: 0.38 }
+          ],
+          startBlocks: [
+            { type: 'mirror', x: 350, y: 290, angle: 45, length: 170 },
+            { type: 'prism', x: 560, y: 300, angle: 0, size: 96 },
+            { type: 'mirror', x: 730, y: 300, angle: -45, length: 170 }
+          ],
+          fixedBlocks: []
+        },
+        {
+          name: 'L8 이동 광원 + 복합',
+          hint: '복합 반사/굴절/필터를 동시에 맞춰 모든 타겟을 켜세요.',
+          toolbox: { mirror: 4, prism: 2, filter: 2 },
+          sources: [
+            { x: 80, y: 160, angle: 8, color: [1, 0, 0], motion: { type: 'vertical', amp: 70, speed: 0.0018, phase: 0.3 } },
+            { x: 100, y: 320, angle: -2, color: [0, 1, 0], motion: { type: 'vertical', amp: 50, speed: 0.0013, phase: 2.2 } },
+            { x: 90, y: 520, angle: -10, color: [0, 0, 1], motion: { type: 'vertical', amp: 80, speed: 0.0015, phase: 4.5 } }
+          ],
+          targets: [
+            { x: 860, y: 130, r: 30, color: [1, 1, 0], tolerance: 0.38 },
+            { x: 900, y: 320, r: 30, color: [0, 1, 1], tolerance: 0.38 },
+            { x: 860, y: 510, r: 30, color: [1, 0, 1], tolerance: 0.38 }
+          ],
+          startBlocks: [
+            { type: 'prism', x: 360, y: 170, angle: 2, size: 90 },
+            { type: 'prism', x: 370, y: 500, angle: -4, size: 90 },
+            { type: 'mirror', x: 590, y: 130, angle: 28, length: 150 },
+            { type: 'mirror', x: 640, y: 320, angle: 0, length: 160 },
+            { type: 'mirror', x: 600, y: 510, angle: -28, length: 150 },
+            { type: 'filter', x: 760, y: 320, angle: 0, width: 92, height: 40, filterIndex: 6 }
+          ],
+          fixedBlocks: [
+            { type: 'filter', x: 815, y: 130, angle: 0, width: 82, height: 34, filterIndex: 5, fixed: true },
+            { type: 'filter', x: 845, y: 320, angle: 0, width: 82, height: 34, filterIndex: 3, fixed: true },
+            { type: 'filter', x: 815, y: 510, angle: 0, width: 82, height: 34, filterIndex: 4, fixed: true }
+          ]
+        }
+      ];
+
+      const state = {
+        level: 0,
+        unlocked: 1,
+        selectedId: null,
+        blocks: [],
+        fixedBlocks: [],
+        drag: null,
+        toastTimer: null,
+        levelSolved: false,
+        solveHoldMs: 0,
+        lastFrame: performance.now(),
+        rays: [],
+        targetStates: [],
+        mixPoints: [],
+        particles: [],
+        audioArmed: false,
+        audioCtx: null,
+        audioCooldown: { reflect: 0, mix: 0 }
+      };
+
+      let idSeq = 1;
+
+      function loadProgress() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return { unlocked: 1 };
+          const parsed = JSON.parse(raw);
+          return { unlocked: Math.max(1, Math.min(LEVELS.length, Number(parsed.unlocked) || 1)) };
+        } catch {
+          return { unlocked: 1 };
+        }
+      }
+
+      function saveProgress() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ unlocked: state.unlocked }));
+      }
+
+      function resetProgress() {
+        localStorage.removeItem(STORAGE_KEY);
+        state.unlocked = 1;
+        if (state.level > 0) state.level = 0;
+        loadLevel(state.level);
+        showToast('진행도를 초기화했습니다.');
+      }
+
+      function clone(obj) {
+        return JSON.parse(JSON.stringify(obj));
+      }
+
+      function angleToVec(deg) {
+        const r = deg * Math.PI / 180;
+        return { x: Math.cos(r), y: Math.sin(r) };
+      }
+
+      function norm(v) {
+        const m = Math.hypot(v.x, v.y) || 1;
+        return { x: v.x / m, y: v.y / m };
+      }
+
+      function dot(a, b) { return a.x * b.x + a.y * b.y; }
+      function cross(ax, ay, bx, by) { return ax * by - ay * bx; }
+      function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
+      function rotateVec(v, rad) {
+        const c = Math.cos(rad);
+        const s = Math.sin(rad);
+        return { x: v.x * c - v.y * s, y: v.x * s + v.y * c };
+      }
+
+      function colorToCss(c, alpha = 1) {
+        return 'rgba(' + Math.round(clamp(c[0], 0, 1) * 255) + ',' + Math.round(clamp(c[1], 0, 1) * 255) + ',' + Math.round(clamp(c[2], 0, 1) * 255) + ',' + alpha + ')';
+      }
+
+      function colorName(c) {
+        const key = c.map(v => v > 0.6 ? 1 : 0).join('');
+        const map = {
+          '100': '빨강',
+          '010': '초록',
+          '001': '파랑',
+          '110': '노랑',
+          '101': '마젠타',
+          '011': '시안',
+          '111': '흰빛',
+          '000': '암흑'
+        };
+        return map[key] || '혼합';
+      }
+
+      function colorDistance(a, b) {
+        const dr = a[0] - b[0];
+        const dg = a[1] - b[1];
+        const db = a[2] - b[2];
+        return Math.sqrt((dr * dr + dg * dg + db * db) / 3);
+      }
+
+      function getBlockById(id) {
+        return state.blocks.find(b => b.id === id) || state.fixedBlocks.find(b => b.id === id) || null;
+      }
+
+      function selectedBlock() {
+        if (state.selectedId == null) return null;
+        return state.blocks.find(b => b.id === state.selectedId) || null;
+      }
+
+      function createBlock(raw, fixed = false) {
+        const b = clone(raw);
+        b.id = idSeq++;
+        b.fixed = !!fixed;
+        if (b.type === 'mirror') {
+          b.length = b.length || 180;
+        } else if (b.type === 'prism') {
+          b.size = b.size || 90;
+        } else if (b.type === 'filter') {
+          b.width = b.width || 90;
+          b.height = b.height || 40;
+          b.filterIndex = b.filterIndex == null ? 0 : b.filterIndex % FILTER_PRESETS.length;
+        }
+        b.angle = b.angle || 0;
+        return b;
+      }
+
+      function loadLevel(index) {
+        state.level = clamp(index, 0, LEVELS.length - 1);
+        state.levelSolved = false;
+        state.solveHoldMs = 0;
+        state.selectedId = null;
+        state.overlayVisible = false;
+        UI.overlay.classList.remove('show');
+
+        const level = LEVELS[state.level];
+        state.blocks = level.startBlocks.map(b => createBlock(b, false));
+        state.fixedBlocks = level.fixedBlocks.map(b => createBlock(b, true));
+
+        updateLevelSelect();
+        syncHUD();
+        showToast(level.name + ' 로드');
+      }
+
+      function updateLevelSelect() {
+        UI.levelSelect.innerHTML = '';
+        for (let i = 0; i < LEVELS.length; i++) {
+          const opt = document.createElement('option');
+          const lock = i + 1 > state.unlocked ? ' 🔒' : '';
+          opt.value = String(i);
+          opt.textContent = 'L' + (i + 1) + ' · ' + LEVELS[i].name + lock;
+          opt.disabled = i + 1 > state.unlocked;
+          if (i === state.level) opt.selected = true;
+          UI.levelSelect.appendChild(opt);
+        }
+      }
+
+      function syncHUD() {
+        const level = LEVELS[state.level];
+        UI.levelText.textContent = (state.level + 1) + ' / ' + LEVELS.length;
+        UI.progressText.textContent = state.unlocked + ' / ' + LEVELS.length;
+        UI.tip.textContent = level.hint;
+
+        const sb = selectedBlock();
+        if (!sb) UI.selectedText.textContent = '없음';
+        else {
+          const typeName = sb.type === 'mirror' ? '거울' : sb.type === 'prism' ? '프리즘' : '필터';
+          if (sb.type === 'filter') {
+            UI.selectedText.textContent = typeName + ' (' + FILTER_PRESETS[sb.filterIndex].name + ')';
+          } else {
+            UI.selectedText.textContent = typeName;
+          }
+        }
+
+        UI.statusText.textContent = state.levelSolved ? '클리어!' : '조준 중';
+        UI.statusText.className = 'v ' + (state.levelSolved ? 'cyan' : 'green');
+      }
+
+      function showToast(msg) {
+        UI.toast.textContent = msg;
+        UI.toast.classList.add('show');
+        if (state.toastTimer) clearTimeout(state.toastTimer);
+        state.toastTimer = setTimeout(() => UI.toast.classList.remove('show'), 1400);
+      }
+
+      function pointFromEvent(e) {
+        const rect = canvas.getBoundingClientRect();
+        const x = ((e.clientX - rect.left) / rect.width) * W;
+        const y = ((e.clientY - rect.top) / rect.height) * H;
+        return { x, y };
+      }
+
+      function mirrorEndpoints(b) {
+        const dir = angleToVec(b.angle);
+        const half = b.length * 0.5;
+        return {
+          a: { x: b.x - dir.x * half, y: b.y - dir.y * half },
+          c: { x: b.x + dir.x * half, y: b.y + dir.y * half }
+        };
+      }
+
+      function prismVertices(b) {
+        const size = b.size;
+        const r = size * 0.62;
+        const base = [
+          { x: 0, y: -r },
+          { x: -size * 0.55, y: size * 0.45 },
+          { x: size * 0.55, y: size * 0.45 }
+        ];
+        const rad = b.angle * Math.PI / 180;
+        return base.map(p => {
+          const rp = rotateVec(p, rad);
+          return { x: b.x + rp.x, y: b.y + rp.y };
+        });
+      }
+
+      function filterVertices(b) {
+        const hw = b.width * 0.5;
+        const hh = b.height * 0.5;
+        const base = [
+          { x: -hw, y: -hh },
+          { x: hw, y: -hh },
+          { x: hw, y: hh },
+          { x: -hw, y: hh }
+        ];
+        const rad = b.angle * Math.PI / 180;
+        return base.map(p => {
+          const rp = rotateVec(p, rad);
+          return { x: b.x + rp.x, y: b.y + rp.y };
+        });
+      }
+
+      function polyEdges(verts) {
+        const edges = [];
+        for (let i = 0; i < verts.length; i++) {
+          const j = (i + 1) % verts.length;
+          edges.push({ a: verts[i], b: verts[j] });
+        }
+        return edges;
+      }
+
+      function pointInPolygon(p, verts) {
+        let inside = false;
+        for (let i = 0, j = verts.length - 1; i < verts.length; j = i++) {
+          const xi = verts[i].x, yi = verts[i].y;
+          const xj = verts[j].x, yj = verts[j].y;
+          const hit = ((yi > p.y) !== (yj > p.y)) && (p.x < (xj - xi) * (p.y - yi) / ((yj - yi) || 1e-6) + xi);
+          if (hit) inside = !inside;
+        }
+        return inside;
+      }
+
+      function distPointToSegment(p, a, b) {
+        const abx = b.x - a.x;
+        const aby = b.y - a.y;
+        const apx = p.x - a.x;
+        const apy = p.y - a.y;
+        const den = abx * abx + aby * aby || 1;
+        const t = clamp((apx * abx + apy * aby) / den, 0, 1);
+        const qx = a.x + abx * t;
+        const qy = a.y + aby * t;
+        return Math.hypot(p.x - qx, p.y - qy);
+      }
+
+      function rotateHandlePoint(b) {
+        if (b.type === 'mirror') {
+          return mirrorEndpoints(b).c;
+        }
+        if (b.type === 'prism') {
+          const verts = prismVertices(b);
+          return verts[0];
+        }
+        const verts = filterVertices(b);
+        return verts[1];
+      }
+
+      function hitTestBlock(p, b) {
+        const h = rotateHandlePoint(b);
+        if (Math.hypot(p.x - h.x, p.y - h.y) <= 18) {
+          return { hit: true, mode: 'rotate' };
+        }
+
+        if (b.type === 'mirror') {
+          const ep = mirrorEndpoints(b);
+          if (distPointToSegment(p, ep.a, ep.c) <= 14) return { hit: true, mode: 'move' };
+          return { hit: false };
+        }
+
+        if (b.type === 'prism') {
+          if (pointInPolygon(p, prismVertices(b))) return { hit: true, mode: 'move' };
+          return { hit: false };
+        }
+
+        if (pointInPolygon(p, filterVertices(b))) return { hit: true, mode: 'move' };
+        return { hit: false };
+      }
+
+      function pickBlock(p) {
+        const all = [...state.blocks, ...state.fixedBlocks];
+        for (let i = all.length - 1; i >= 0; i--) {
+          const b = all[i];
+          const r = hitTestBlock(p, b);
+          if (r.hit) return { block: b, mode: r.mode };
+        }
+        return null;
+      }
+
+      function armAudio() {
+        if (state.audioArmed) return;
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        state.audioCtx = new AC();
+        state.audioArmed = true;
+      }
+
+      function playTone(freq, dur, type, gain, when = 0) {
+        if (!state.audioArmed || !state.audioCtx) return;
+        const t0 = state.audioCtx.currentTime + when;
+        const osc = state.audioCtx.createOscillator();
+        const g = state.audioCtx.createGain();
+        osc.type = type || 'sine';
+        osc.frequency.value = freq;
+        g.gain.setValueAtTime((gain || 0.03), t0);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+        osc.connect(g).connect(state.audioCtx.destination);
+        osc.start(t0);
+        osc.stop(t0 + dur + 0.01);
+      }
+
+      function sfx(name) {
+        if (!state.audioArmed) return;
+        if (name === 'place') {
+          playTone(520, 0.07, 'triangle', 0.04);
+        } else if (name === 'reflect') {
+          playTone(880, 0.04, 'square', 0.02);
+        } else if (name === 'mix') {
+          playTone(420, 0.09, 'sine', 0.025);
+          playTone(630, 0.08, 'triangle', 0.02, 0.02);
+        } else if (name === 'clear') {
+          playTone(523.25, 0.12, 'triangle', 0.04);
+          playTone(659.25, 0.14, 'triangle', 0.035, 0.08);
+          playTone(783.99, 0.18, 'triangle', 0.03, 0.16);
+        }
+      }
+
+      function raySegIntersection(ray, a, b) {
+        const px = ray.x, py = ray.y, rx = ray.dx, ry = ray.dy;
+        const qx = a.x, qy = a.y, sx = b.x - a.x, sy = b.y - a.y;
+        const rxs = cross(rx, ry, sx, sy);
+        if (Math.abs(rxs) < 1e-7) return null;
+
+        const qpx = qx - px;
+        const qpy = qy - py;
+        const t = cross(qpx, qpy, sx, sy) / rxs;
+        const u = cross(qpx, qpy, rx, ry) / rxs;
+        if (t > EPS && u >= -EPS && u <= 1 + EPS) {
+          return { t, x: px + rx * t, y: py + ry * t };
+        }
+        return null;
+      }
+
+      function rayBoundsIntersection(ray) {
+        const ts = [];
+        if (Math.abs(ray.dx) > EPS) {
+          const t1 = (0 - ray.x) / ray.dx;
+          const t2 = (W - ray.x) / ray.dx;
+          if (t1 > EPS) ts.push(t1);
+          if (t2 > EPS) ts.push(t2);
+        }
+        if (Math.abs(ray.dy) > EPS) {
+          const t3 = (0 - ray.y) / ray.dy;
+          const t4 = (H - ray.y) / ray.dy;
+          if (t3 > EPS) ts.push(t3);
+          if (t4 > EPS) ts.push(t4);
+        }
+        let best = Infinity;
+        for (const t of ts) {
+          const x = ray.x + ray.dx * t;
+          const y = ray.y + ray.dy * t;
+          if (x >= -0.1 && x <= W + 0.1 && y >= -0.1 && y <= H + 0.1) {
+            best = Math.min(best, t);
+          }
+        }
+        return best < Infinity ? best : 1200;
+      }
+
+      function getBlockEdges(b) {
+        if (b.type === 'mirror') {
+          const ep = mirrorEndpoints(b);
+          return [{ a: ep.a, b: ep.c, type: 'mirrorEdge' }];
+        }
+        if (b.type === 'prism') {
+          return polyEdges(prismVertices(b));
+        }
+        return polyEdges(filterVertices(b));
+      }
+
+      function edgeNormal(edge, incoming) {
+        const ex = edge.b.x - edge.a.x;
+        const ey = edge.b.y - edge.a.y;
+        let n = norm({ x: -ey, y: ex });
+        if (dot(incoming, n) > 0) n = { x: -n.x, y: -n.y };
+        return n;
+      }
+
+      function reflect(dir, n) {
+        const d = dot(dir, n);
+        return norm({ x: dir.x - 2 * d * n.x, y: dir.y - 2 * d * n.y });
+      }
+
+      function refract(dir, n, etaRatio) {
+        const cosi = -clamp(dot(dir, n), -1, 1);
+        const k = 1 - etaRatio * etaRatio * (1 - cosi * cosi);
+        if (k < 0) return null;
+        const out = {
+          x: etaRatio * dir.x + (etaRatio * cosi - Math.sqrt(k)) * n.x,
+          y: etaRatio * dir.y + (etaRatio * cosi - Math.sqrt(k)) * n.y
+        };
+        return norm(out);
+      }
+
+      function traceRays(now) {
+        const level = LEVELS[state.level];
+        const allBlocks = [...state.blocks, ...state.fixedBlocks];
+        const segments = [];
+        const queue = [];
+        let reflectHit = false;
+
+        level.sources.forEach((s, sourceId) => {
+          const pos = sourcePosition(s, now);
+          const d = angleToVec(s.angle);
+          queue.push({
+            x: pos.x,
+            y: pos.y,
+            dx: d.x,
+            dy: d.y,
+            color: s.color.slice(),
+            intensity: 1,
+            depth: 0,
+            sourceId
+          });
+        });
+
+        let guard = 0;
+        while (queue.length && guard < MAX_RAYS) {
+          guard++;
+          const ray = queue.shift();
+          if (!ray || ray.intensity < 0.045 || ray.depth > MAX_STEPS) continue;
+
+          let nearest = null;
+
+          for (const block of allBlocks) {
+            const edges = getBlockEdges(block);
+            for (const edge of edges) {
+              const hit = raySegIntersection(ray, edge.a, edge.b);
+              if (!hit) continue;
+              if (!nearest || hit.t < nearest.t) {
+                nearest = {
+                  t: hit.t,
+                  x: hit.x,
+                  y: hit.y,
+                  block,
+                  edge
+                };
+              }
+            }
+          }
+
+          const tBound = rayBoundsIntersection(ray);
+          if (!nearest || tBound < nearest.t) {
+            const end = { x: ray.x + ray.dx * tBound, y: ray.y + ray.dy * tBound };
+            segments.push({ x1: ray.x, y1: ray.y, x2: end.x, y2: end.y, color: ray.color.slice(), intensity: ray.intensity, sourceId: ray.sourceId });
+            continue;
+          }
+
+          const hx = nearest.x;
+          const hy = nearest.y;
+          segments.push({ x1: ray.x, y1: ray.y, x2: hx, y2: hy, color: ray.color.slice(), intensity: ray.intensity, sourceId: ray.sourceId });
+
+          const block = nearest.block;
+          const n = edgeNormal(nearest.edge, { x: ray.dx, y: ray.dy });
+
+          if (block.type === 'mirror') {
+            const out = reflect({ x: ray.dx, y: ray.dy }, n);
+            queue.push({
+              x: hx + out.x * 0.2,
+              y: hy + out.y * 0.2,
+              dx: out.x,
+              dy: out.y,
+              color: ray.color.slice(),
+              intensity: ray.intensity * 0.9,
+              depth: ray.depth + 1,
+              sourceId: ray.sourceId
+            });
+            reflectHit = true;
+          } else if (block.type === 'prism') {
+            const refr = refract({ x: ray.dx, y: ray.dy }, n, 0.76) || rotateVec({ x: ray.dx, y: ray.dy }, 0.28);
+            const reflected = reflect({ x: ray.dx, y: ray.dy }, n);
+            const split = rotateVec(refr, 0.06);
+
+            queue.push({
+              x: hx + refr.x * 0.2,
+              y: hy + refr.y * 0.2,
+              dx: refr.x,
+              dy: refr.y,
+              color: ray.color.slice(),
+              intensity: ray.intensity * 0.62,
+              depth: ray.depth + 1,
+              sourceId: ray.sourceId
+            });
+            queue.push({
+              x: hx + split.x * 0.2,
+              y: hy + split.y * 0.2,
+              dx: split.x,
+              dy: split.y,
+              color: ray.color.slice(),
+              intensity: ray.intensity * 0.22,
+              depth: ray.depth + 1,
+              sourceId: ray.sourceId
+            });
+            queue.push({
+              x: hx + reflected.x * 0.2,
+              y: hy + reflected.y * 0.2,
+              dx: reflected.x,
+              dy: reflected.y,
+              color: ray.color.slice(),
+              intensity: ray.intensity * 0.2,
+              depth: ray.depth + 1,
+              sourceId: ray.sourceId
+            });
+            reflectHit = true;
+          } else if (block.type === 'filter') {
+            const preset = FILTER_PRESETS[block.filterIndex % FILTER_PRESETS.length];
+            const c = [
+              ray.color[0] * preset.mask[0],
+              ray.color[1] * preset.mask[1],
+              ray.color[2] * preset.mask[2]
+            ];
+            if (c[0] + c[1] + c[2] < 0.02) continue;
+            queue.push({
+              x: hx + ray.dx * 0.2,
+              y: hy + ray.dy * 0.2,
+              dx: ray.dx,
+              dy: ray.dy,
+              color: c,
+              intensity: ray.intensity * 0.9,
+              depth: ray.depth + 1,
+              sourceId: ray.sourceId
+            });
+          }
+        }
+
+        const mixPoints = computeMixPoints(segments);
+        if (reflectHit && now > state.audioCooldown.reflect) {
+          sfx('reflect');
+          state.audioCooldown.reflect = now + 180;
+        }
+        if (mixPoints.length > 0 && now > state.audioCooldown.mix) {
+          sfx('mix');
+          state.audioCooldown.mix = now + 330;
+        }
+
+        return { segments, mixPoints };
+      }
+
+      function sourcePosition(source, now) {
+        if (!source.motion) return { x: source.x, y: source.y };
+        const m = source.motion;
+        const t = now * m.speed + (m.phase || 0);
+        if (m.type === 'horizontal') {
+          return { x: source.x + Math.sin(t) * m.amp, y: source.y };
+        }
+        if (m.type === 'vertical') {
+          return { x: source.x, y: source.y + Math.sin(t) * m.amp };
+        }
+        return { x: source.x + Math.sin(t) * m.amp, y: source.y + Math.cos(t) * m.amp };
+      }
+
+      function segIntersection(s1, s2) {
+        const x1 = s1.x1, y1 = s1.y1, x2 = s1.x2, y2 = s1.y2;
+        const x3 = s2.x1, y3 = s2.y1, x4 = s2.x2, y4 = s2.y2;
+        const den = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+        if (Math.abs(den) < 1e-7) return null;
+        const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / den;
+        const u = ((x1 - x3) * (y1 - y2) - (y1 - y3) * (x1 - x2)) / den;
+        if (t > 0.03 && t < 0.97 && u > 0.03 && u < 0.97) {
+          return { x: x1 + t * (x2 - x1), y: y1 + t * (y2 - y1) };
+        }
+        return null;
+      }
+
+      function computeMixPoints(segments) {
+        const points = [];
+        const max = 16;
+        for (let i = 0; i < segments.length; i++) {
+          for (let j = i + 1; j < segments.length; j++) {
+            const a = segments[i], b = segments[j];
+            if (a.sourceId === b.sourceId) continue;
+            const p = segIntersection(a, b);
+            if (!p) continue;
+            const c = [
+              clamp(a.color[0] * a.intensity + b.color[0] * b.intensity, 0, 1),
+              clamp(a.color[1] * a.intensity + b.color[1] * b.intensity, 0, 1),
+              clamp(a.color[2] * a.intensity + b.color[2] * b.intensity, 0, 1)
+            ];
+            points.push({ x: p.x, y: p.y, color: c });
+            if (points.length >= max) return points;
+          }
+        }
+        return points;
+      }
+
+      function evaluateTargets(segments) {
+        const level = LEVELS[state.level];
+        const out = [];
+        for (const t of level.targets) {
+          const accum = [0, 0, 0];
+          for (const seg of segments) {
+            const d = distPointToSegment({ x: t.x, y: t.y }, { x: seg.x1, y: seg.y1 }, { x: seg.x2, y: seg.y2 });
+            if (d <= t.r + 7) {
+              const gain = (1 - d / (t.r + 7)) * seg.intensity * 1.05;
+              accum[0] += seg.color[0] * gain;
+              accum[1] += seg.color[1] * gain;
+              accum[2] += seg.color[2] * gain;
+            }
+          }
+          accum[0] = clamp(accum[0], 0, 1.2);
+          accum[1] = clamp(accum[1], 0, 1.2);
+          accum[2] = clamp(accum[2], 0, 1.2);
+
+          const dist = colorDistance([
+            clamp(accum[0], 0, 1),
+            clamp(accum[1], 0, 1),
+            clamp(accum[2], 0, 1)
+          ], t.color);
+          out.push({
+            target: t,
+            accum,
+            active: dist <= t.tolerance,
+            dist
+          });
+        }
+        return out;
+      }
+
+      function spawnMixParticles(dt) {
+        for (const p of state.mixPoints) {
+          if (Math.random() < 0.26) {
+            state.particles.push({
+              x: p.x + (Math.random() - 0.5) * 10,
+              y: p.y + (Math.random() - 0.5) * 10,
+              vx: (Math.random() - 0.5) * 0.8,
+              vy: -0.35 - Math.random() * 0.7,
+              life: 260 + Math.random() * 220,
+              ttl: 260 + Math.random() * 220,
+              color: p.color.slice()
+            });
+          }
+        }
+        if (state.particles.length > 280) {
+          state.particles.splice(0, state.particles.length - 280);
+        }
+
+        for (let i = state.particles.length - 1; i >= 0; i--) {
+          const it = state.particles[i];
+          it.x += it.vx * (dt * 0.06);
+          it.y += it.vy * (dt * 0.06);
+          it.life -= dt;
+          if (it.life <= 0) state.particles.splice(i, 1);
+        }
+      }
+
+      function checkClear(dt) {
+        if (state.levelSolved) return;
+        const allOn = state.targetStates.length > 0 && state.targetStates.every(t => t.active);
+        if (allOn) {
+          state.solveHoldMs += dt;
+          if (state.solveHoldMs >= 420) {
+            state.levelSolved = true;
+            const before = state.unlocked;
+            state.unlocked = Math.max(state.unlocked, state.level + 2);
+            state.unlocked = Math.min(state.unlocked, LEVELS.length);
+            if (state.unlocked !== before) saveProgress();
+            UI.resultText.textContent = (state.level + 1) + '단계 클리어! ' + (state.level + 2 <= LEVELS.length ? (state.level + 2) + '단계 해금' : '모든 스테이지 완료');
+            UI.overlay.classList.add('show');
+            sfx('clear');
+            showToast('클리어! 스펙트럼 정렬 완료');
+            syncHUD();
+            updateLevelSelect();
+          }
+        } else {
+          state.solveHoldMs = 0;
+        }
+      }
+
+      function draw() {
+        ctx.clearRect(0, 0, W, H);
+
+        const bgGrad = ctx.createRadialGradient(W * 0.5, H * 0.4, 80, W * 0.5, H * 0.5, Math.max(W, H) * 0.65);
+        bgGrad.addColorStop(0, 'rgba(32, 34, 80, 0.35)');
+        bgGrad.addColorStop(1, 'rgba(10, 10, 26, 1)');
+        ctx.fillStyle = bgGrad;
+        ctx.fillRect(0, 0, W, H);
+
+        drawGrid();
+        drawTargets();
+        drawBlocks(state.fixedBlocks, true);
+        drawBlocks(state.blocks, false);
+        drawSources();
+        drawRays();
+        drawMixParticles();
+
+        if (state.drag && state.drag.mode === 'move') {
+          const b = getBlockById(state.drag.id);
+          if (b && !b.fixed) {
+            ctx.save();
+            ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+            ctx.setLineDash([6, 5]);
+            ctx.strokeRect(b.x - 24, b.y - 24, 48, 48);
+            ctx.restore();
+          }
+        }
+      }
+
+      function drawGrid() {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(86, 126, 200, 0.16)';
+        ctx.lineWidth = 1;
+        for (let x = 0; x <= W; x += 40) {
+          ctx.beginPath();
+          ctx.moveTo(x + 0.5, 0);
+          ctx.lineTo(x + 0.5, H);
+          ctx.stroke();
+        }
+        for (let y = 0; y <= H; y += 40) {
+          ctx.beginPath();
+          ctx.moveTo(0, y + 0.5);
+          ctx.lineTo(W, y + 0.5);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      function drawSources() {
+        const level = LEVELS[state.level];
+        const now = performance.now();
+        level.sources.forEach(s => {
+          const p = sourcePosition(s, now);
+          const col = colorToCss(s.color, 1);
+          const glow = colorToCss(s.color, 0.22);
+          ctx.save();
+          ctx.fillStyle = glow;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 26, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = col;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 9, 0, Math.PI * 2);
+          ctx.fill();
+
+          const d = angleToVec(s.angle);
+          ctx.strokeStyle = colorToCss(s.color, 0.9);
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(p.x + d.x * 22, p.y + d.y * 22);
+          ctx.stroke();
+          ctx.restore();
+        });
+      }
+
+      function drawTargetCore(t, accum, active, pulse) {
+        const expected = colorToCss(t.color, 0.95);
+        const curr = colorToCss([clamp(accum[0], 0, 1), clamp(accum[1], 0, 1), clamp(accum[2], 0, 1)], 0.95);
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(t.x, t.y, t.r + 12 + pulse, 0, Math.PI * 2);
+        ctx.fillStyle = active ? colorToCss(t.color, 0.18) : 'rgba(255,255,255,0.06)';
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(t.x, t.y, t.r, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(5, 8, 20, 0.95)';
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = expected;
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(t.x, t.y, t.r * 0.56, 0, Math.PI * 2);
+        ctx.fillStyle = curr;
+        ctx.fill();
+
+        ctx.font = '12px sans-serif';
+        ctx.fillStyle = '#dcebff';
+        ctx.textAlign = 'center';
+        ctx.fillText(colorName(t.color), t.x, t.y + t.r + 16);
+        ctx.restore();
+      }
+
+      function drawTargets() {
+        const now = performance.now();
+        const pulse = (Math.sin(now * 0.008) + 1) * 2;
+        state.targetStates.forEach(ts => drawTargetCore(ts.target, ts.accum, ts.active, ts.active ? pulse : 0));
+      }
+
+      function drawBlocks(blocks, fixed) {
+        for (const b of blocks) {
+          if (b.type === 'mirror') drawMirror(b, fixed);
+          else if (b.type === 'prism') drawPrism(b, fixed);
+          else drawFilter(b, fixed);
+        }
+      }
+
+      function drawMirror(b, fixed) {
+        const ep = mirrorEndpoints(b);
+        const selected = b.id === state.selectedId;
+        ctx.save();
+        ctx.lineWidth = 7;
+        ctx.strokeStyle = fixed ? 'rgba(255,240,190,0.82)' : 'rgba(197, 242, 255, 0.95)';
+        ctx.shadowBlur = selected ? 14 : 10;
+        ctx.shadowColor = selected ? 'rgba(255,255,255,0.8)' : 'rgba(80,220,255,0.65)';
+        ctx.beginPath();
+        ctx.moveTo(ep.a.x, ep.a.y);
+        ctx.lineTo(ep.c.x, ep.c.y);
+        ctx.stroke();
+
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        ctx.beginPath();
+        ctx.arc(ep.c.x, ep.c.y, 4, 0, Math.PI * 2);
+        ctx.fill();
+        if (selected) {
+          ctx.strokeStyle = 'rgba(255,255,255,0.65)';
+          ctx.lineWidth = 1.4;
+          ctx.strokeRect(b.x - 18, b.y - 18, 36, 36);
+        }
+        ctx.restore();
+      }
+
+      function drawPrism(b, fixed) {
+        const verts = prismVertices(b);
+        const selected = b.id === state.selectedId;
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(verts[0].x, verts[0].y);
+        for (let i = 1; i < verts.length; i++) ctx.lineTo(verts[i].x, verts[i].y);
+        ctx.closePath();
+
+        const grad = ctx.createLinearGradient(verts[0].x, verts[0].y, verts[2].x, verts[2].y);
+        grad.addColorStop(0, fixed ? 'rgba(255,235,170,0.22)' : 'rgba(120, 190, 255, 0.22)');
+        grad.addColorStop(1, fixed ? 'rgba(255,180,140,0.2)' : 'rgba(255, 130, 220, 0.16)');
+        ctx.fillStyle = grad;
+        ctx.fill();
+
+        ctx.lineWidth = selected ? 2.6 : 2;
+        ctx.strokeStyle = fixed ? 'rgba(255,230,180,0.95)' : 'rgba(188, 235, 255, 0.95)';
+        ctx.shadowBlur = selected ? 14 : 8;
+        ctx.shadowColor = 'rgba(150, 220, 255, 0.55)';
+        ctx.stroke();
+
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        ctx.beginPath();
+        ctx.arc(verts[0].x, verts[0].y, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      function drawFilter(b, fixed) {
+        const verts = filterVertices(b);
+        const selected = b.id === state.selectedId;
+        const preset = FILTER_PRESETS[b.filterIndex % FILTER_PRESETS.length];
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(verts[0].x, verts[0].y);
+        for (let i = 1; i < verts.length; i++) ctx.lineTo(verts[i].x, verts[i].y);
+        ctx.closePath();
+
+        ctx.fillStyle = colorToCss(preset.glow, fixed ? 0.25 : 0.18);
+        ctx.fill();
+        ctx.lineWidth = selected ? 2.6 : 1.8;
+        ctx.strokeStyle = colorToCss(preset.glow, 0.92);
+        ctx.shadowBlur = selected ? 12 : 7;
+        ctx.shadowColor = colorToCss(preset.glow, 0.66);
+        ctx.stroke();
+
+        ctx.shadowBlur = 0;
+        ctx.font = 'bold 12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#f2f8ff';
+        ctx.fillText(preset.name, b.x, b.y);
+
+        const h = rotateHandlePoint(b);
+        ctx.beginPath();
+        ctx.arc(h.x, h.y, 4, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255,255,255,0.85)';
+        ctx.fill();
+        ctx.restore();
+      }
+
+      function drawRays() {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        for (const seg of state.rays) {
+          const alpha = clamp(0.22 + seg.intensity * 0.5, 0.14, 0.78);
+          const c = [
+            clamp(seg.color[0] * seg.intensity * 1.2, 0, 1),
+            clamp(seg.color[1] * seg.intensity * 1.2, 0, 1),
+            clamp(seg.color[2] * seg.intensity * 1.2, 0, 1)
+          ];
+
+          ctx.strokeStyle = colorToCss(c, alpha * 0.3);
+          ctx.lineWidth = 12;
+          ctx.beginPath();
+          ctx.moveTo(seg.x1, seg.y1);
+          ctx.lineTo(seg.x2, seg.y2);
+          ctx.stroke();
+
+          ctx.strokeStyle = colorToCss(c, alpha * 0.72);
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.moveTo(seg.x1, seg.y1);
+          ctx.lineTo(seg.x2, seg.y2);
+          ctx.stroke();
+
+          ctx.strokeStyle = colorToCss(c, alpha);
+          ctx.lineWidth = 1.7;
+          ctx.beginPath();
+          ctx.moveTo(seg.x1, seg.y1);
+          ctx.lineTo(seg.x2, seg.y2);
+          ctx.stroke();
+        }
+
+        for (const m of state.mixPoints) {
+          ctx.fillStyle = colorToCss(m.color, 0.78);
+          ctx.beginPath();
+          ctx.arc(m.x, m.y, 2.4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.restore();
+      }
+
+      function drawMixParticles() {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        for (const p of state.particles) {
+          const a = clamp(p.life / p.ttl, 0, 1);
+          ctx.fillStyle = colorToCss(p.color, a * 0.64);
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 1.8 + (1 - a) * 1.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
+      function countBlocks(type) {
+        return state.blocks.filter(b => b.type === type).length;
+      }
+
+      function canAdd(type) {
+        const tb = LEVELS[state.level].toolbox[type] || 0;
+        return countBlocks(type) < tb;
+      }
+
+      function addBlock(type) {
+        if (!canAdd(type)) {
+          showToast(typeLabel(type) + ' 슬롯이 가득 찼습니다.');
+          return;
+        }
+        const center = { x: W * 0.5 + (Math.random() - 0.5) * 40, y: H * 0.5 + (Math.random() - 0.5) * 40 };
+        let b;
+        if (type === 'mirror') {
+          b = createBlock({ type, x: center.x, y: center.y, angle: 0, length: 170 }, false);
+        } else if (type === 'prism') {
+          b = createBlock({ type, x: center.x, y: center.y, angle: 0, size: 90 }, false);
+        } else {
+          b = createBlock({ type, x: center.x, y: center.y, angle: 0, width: 90, height: 40, filterIndex: 0 }, false);
+        }
+        state.blocks.push(b);
+        state.selectedId = b.id;
+        sfx('place');
+        showToast(typeLabel(type) + ' 추가');
+        syncHUD();
+      }
+
+      function typeLabel(type) {
+        return type === 'mirror' ? '거울' : type === 'prism' ? '프리즘' : '필터';
+      }
+
+      function rotateSelected(step = 15) {
+        const b = selectedBlock();
+        if (!b) {
+          showToast('회전할 블록을 선택하세요.');
+          return;
+        }
+        b.angle = (b.angle + step) % 360;
+        sfx('place');
+      }
+
+      function moveSelected(dx, dy) {
+        const b = selectedBlock();
+        if (!b) return;
+        b.x = clamp(b.x + dx, 20, W - 20);
+        b.y = clamp(b.y + dy, 20, H - 20);
+      }
+
+      function cycleSelectedFilter() {
+        const b = selectedBlock();
+        if (!b || b.type !== 'filter') {
+          showToast('필터 블록을 선택하세요.');
+          return;
+        }
+        b.filterIndex = (b.filterIndex + 1) % FILTER_PRESETS.length;
+        sfx('place');
+        syncHUD();
+      }
+
+      function deleteSelected() {
+        const id = state.selectedId;
+        if (id == null) return;
+        const idx = state.blocks.findIndex(b => b.id === id);
+        if (idx < 0) return;
+        state.blocks.splice(idx, 1);
+        state.selectedId = null;
+        showToast('블록 삭제');
+        syncHUD();
+      }
+
+      function onPointerDown(e) {
+        armAudio();
+        if (state.audioCtx && state.audioCtx.state === 'suspended') state.audioCtx.resume();
+        const p = pointFromEvent(e);
+        const hit = pickBlock(p);
+        if (hit) {
+          state.selectedId = hit.block.id;
+          if (!hit.block.fixed) {
+            state.drag = {
+              id: hit.block.id,
+              mode: hit.mode,
+              ox: p.x - hit.block.x,
+              oy: p.y - hit.block.y
+            };
+          } else {
+            state.drag = null;
+          }
+          syncHUD();
+        } else {
+          state.selectedId = null;
+          state.drag = null;
+          syncHUD();
+        }
+        canvas.setPointerCapture?.(e.pointerId);
+      }
+
+      function onPointerMove(e) {
+        if (!state.drag) return;
+        const b = getBlockById(state.drag.id);
+        if (!b || b.fixed) return;
+        const p = pointFromEvent(e);
+        if (state.drag.mode === 'move') {
+          b.x = clamp(p.x - state.drag.ox, 18, W - 18);
+          b.y = clamp(p.y - state.drag.oy, 18, H - 18);
+        } else {
+          b.angle = Math.atan2(p.y - b.y, p.x - b.x) * 180 / Math.PI;
+        }
+      }
+
+      function onPointerUp(e) {
+        if (state.drag) sfx('place');
+        state.drag = null;
+        canvas.releasePointerCapture?.(e.pointerId);
+      }
+
+      function onKeyDown(e) {
+        armAudio();
+        const k = e.key;
+        if (k === 'r' || k === 'R') {
+          e.preventDefault();
+          rotateSelected(15);
+          return;
+        }
+        if (k === 'Delete' || k === 'Backspace') {
+          deleteSelected();
+          return;
+        }
+        if (k === 'ArrowUp') { e.preventDefault(); moveSelected(0, -8); }
+        else if (k === 'ArrowDown') { e.preventDefault(); moveSelected(0, 8); }
+        else if (k === 'ArrowLeft') { e.preventDefault(); moveSelected(-8, 0); }
+        else if (k === 'ArrowRight') { e.preventDefault(); moveSelected(8, 0); }
+      }
+
+      function bindUI() {
+        document.getElementById('prevBtn').addEventListener('click', () => {
+          const next = Math.max(0, state.level - 1);
+          loadLevel(next);
+        });
+
+        document.getElementById('nextBtn').addEventListener('click', () => {
+          const maxIndex = Math.max(0, state.unlocked - 1);
+          const next = Math.min(maxIndex, state.level + 1);
+          loadLevel(next);
+        });
+
+        document.getElementById('restartBtn').addEventListener('click', () => {
+          loadLevel(state.level);
+        });
+
+        UI.levelSelect.addEventListener('change', (e) => {
+          const i = Number(e.target.value);
+          if (i + 1 > state.unlocked) {
+            showToast('아직 잠금 해제되지 않았습니다.');
+            updateLevelSelect();
+            return;
+          }
+          loadLevel(i);
+        });
+
+        document.getElementById('addMirrorBtn').addEventListener('click', () => addBlock('mirror'));
+        document.getElementById('addPrismBtn').addEventListener('click', () => addBlock('prism'));
+        document.getElementById('addFilterBtn').addEventListener('click', () => addBlock('filter'));
+        document.getElementById('cycleFilterBtn').addEventListener('click', cycleSelectedFilter);
+        document.getElementById('rotateBtn').addEventListener('click', () => rotateSelected(15));
+        document.getElementById('deleteBtn').addEventListener('click', deleteSelected);
+        document.getElementById('hintBtn').addEventListener('click', () => showToast(LEVELS[state.level].hint));
+        document.getElementById('clearSaveBtn').addEventListener('click', resetProgress);
+
+        document.getElementById('stayBtn').addEventListener('click', () => UI.overlay.classList.remove('show'));
+        document.getElementById('goNextBtn').addEventListener('click', () => {
+          UI.overlay.classList.remove('show');
+          if (state.level < LEVELS.length - 1 && state.level + 1 < state.unlocked) {
+            loadLevel(state.level + 1);
+          }
+        });
+
+        canvas.addEventListener('pointerdown', onPointerDown);
+        canvas.addEventListener('pointermove', onPointerMove);
+        canvas.addEventListener('pointerup', onPointerUp);
+        canvas.addEventListener('pointercancel', onPointerUp);
+
+        window.addEventListener('keydown', onKeyDown);
+      }
+
+      function frame(now) {
+        const dt = Math.min(50, now - state.lastFrame);
+        state.lastFrame = now;
+
+        const traced = traceRays(now);
+        state.rays = traced.segments;
+        state.mixPoints = traced.mixPoints;
+        state.targetStates = evaluateTargets(state.rays);
+
+        spawnMixParticles(dt);
+        checkClear(dt);
+        syncHUD();
+        draw();
+        requestAnimationFrame(frame);
+      }
+
+      function init() {
+        const progress = loadProgress();
+        state.unlocked = progress.unlocked;
+        bindUI();
+        loadLevel(0);
+        requestAnimationFrame(frame);
+      }
+
+      init();
+    })();
+  </script>
+</body>
+</html>

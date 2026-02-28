@@ -1,5 +1,6 @@
 # Eastsea Games Index (Markdown)
 
+- [Rhythm Forge — 리듬 대장간](./rhythm-forge/) — 좌우에서 접근하는 비트 노트를 D/F/J/K로 판정해 무기를 단조하고, 특수 노트(강타·연타·담금질)로 품질 ★을 끌어올리는 네온 리듬 단조 게임.
 - [Shrink Escape — 크기 변환 퍼즐 플랫포머](./shrink-escape/) — 소/중/대 3단계 크기 전환으로 틈새·바람·약한 바닥·무게 스위치를 돌파하는 네온 퍼즐 플랫포머.
 - [Signal Chain — 신호 전파 타이밍 퍼즐](./signal-chain/) — 노드를 드래그로 연결하고 게이트·스플리터·딜레이어 타이밍을 맞춰 모든 타겟에 신호를 전파하는 네온 로직 퍼즐.
 - [Orbital Sling — 중력 슬링샷 퍼즐](./orbital-sling/) — 여러 중력 우물을 연속 스윙바이해 목표 별에 도달하는 네온 우주 궤도 퍼즐.

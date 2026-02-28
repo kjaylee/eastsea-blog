@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Echo Runner — 시간 분신 협동 러너</title>
+<style>
+:root{
+  --bg:#0a0a1a;
+  --panel:#11142a;
+  --cyan:#36f4ff;
+  --pink:#ff4fd8;
+  --lime:#7dffb3;
+  --warn:#ff6f6f;
+  --text:#e8f2ff;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:'Pretendard','Noto Sans KR',system-ui,-apple-system,sans-serif;}
+body{min-height:100vh;display:flex;justify-content:center;align-items:flex-start;overflow-x:hidden;touch-action:manipulation;}
+.app{width:min(980px,100vw);padding:10px 12px 130px;}
+.title{margin:4px 0 2px;font-size:clamp(20px,4.8vw,30px);font-weight:800;letter-spacing:.3px;color:var(--cyan);text-shadow:0 0 18px rgba(54,244,255,.6);}
+.subtitle{margin:0 0 10px;font-size:13px;color:#9db8ff;}
+.hud{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:10px;}
+.card{background:linear-gradient(180deg,rgba(16,20,44,.94),rgba(8,11,26,.92));border:1px solid rgba(54,244,255,.34);border-radius:12px;padding:8px 10px;box-shadow:0 0 14px rgba(54,244,255,.15) inset;}
+.card .k{font-size:11px;color:#95a9da;display:block;}
+.card .v{font-size:14px;font-weight:700;color:#eff8ff;}
+.canvas-wrap{position:relative;border:1px solid rgba(54,244,255,.45);border-radius:14px;overflow:hidden;box-shadow:0 0 26px rgba(54,244,255,.22), 0 0 60px rgba(138,39,255,.16) inset;background:#080b1c;}
+#game{display:block;width:100%;height:auto;background:#07091a;}
+#message{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);padding:8px 14px;border-radius:999px;border:1px solid rgba(125,255,179,.45);background:rgba(9,20,24,.82);color:#cbffe2;font-size:13px;white-space:nowrap;box-shadow:0 0 18px rgba(125,255,179,.28);opacity:0;pointer-events:none;transition:opacity .2s;}
+#message.show{opacity:1;}
+.controls{display:flex;gap:8px;margin:10px 0 4px;flex-wrap:wrap;}
+button{border:1px solid rgba(54,244,255,.5);background:#101731;color:var(--text);padding:8px 11px;border-radius:10px;font-weight:700;font-size:13px;}
+button:active{transform:translateY(1px);}
+button.primary{background:linear-gradient(180deg,#153850,#0f2238);color:#d9f9ff;}
+button.warn{border-color:rgba(255,111,111,.55);color:#ffd3d3;}
+button:disabled{opacity:.4;filter:saturate(.3);}
+.levels{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-top:8px;}
+.level-btn{padding:9px 6px;font-size:12px;line-height:1.2;background:#0e1530;border:1px solid rgba(170,180,255,.25);border-radius:10px;color:#d8e3ff;}
+.level-btn.active{border-color:rgba(54,244,255,.8);box-shadow:0 0 15px rgba(54,244,255,.32);color:#f0fdff;}
+.level-btn.locked{opacity:.33;}
+.legend{margin-top:9px;font-size:12px;color:#9fb0df;line-height:1.45;}
+.touch{position:fixed;left:0;right:0;bottom:0;padding:10px 12px calc(10px + env(safe-area-inset-bottom));display:flex;justify-content:space-between;gap:12px;background:linear-gradient(180deg,rgba(10,10,26,0),rgba(10,10,26,.88) 22%,rgba(10,10,26,.97));}
+.touch .pad{display:flex;gap:10px;}
+.tbtn{width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:900;border:1px solid rgba(54,244,255,.45);background:rgba(18,29,54,.82);color:#ddf7ff;box-shadow:0 0 18px rgba(54,244,255,.26);user-select:none;}
+.tbtn.jump{border-color:rgba(255,79,216,.54);box-shadow:0 0 20px rgba(255,79,216,.33);}
+@media (min-width:820px){
+  .touch{max-width:980px;margin:0 auto;left:50%;transform:translateX(-50%);}
+}
+</style>
+</head>
+<body>
+  <div class="app">
+    <h1 class="title">Echo Runner</h1>
+    <p class="subtitle">과거의 나와 협동하는 플랫포머 · 실패하면 에코가 리셋됩니다.</p>
+
+    <section class="hud">
+      <div class="card"><span class="k">레벨</span><span class="v" id="hudLevel">1</span></div>
+      <div class="card"><span class="k">런</span><span class="v" id="hudRun">1</span></div>
+      <div class="card"><span class="k">에코</span><span class="v" id="hudEcho">0/0</span></div>
+      <div class="card"><span class="k">남은 시간</span><span class="v" id="hudTime">0.0s</span></div>
+    </section>
+
+    <div class="canvas-wrap">
+      <canvas id="game" width="960" height="540" aria-label="Echo Runner 게임 캔버스"></canvas>
+      <div id="message"></div>
+    </div>
+
+    <div class="controls">
+      <button id="btnResetRun" class="warn">실패 리셋 (에코 초기화)</button>
+      <button id="btnRestartLevel">레벨 다시 시작</button>
+      <button id="btnNext" class="primary" disabled>다음 레벨 ▶</button>
+    </div>
+
+    <div id="levelButtons" class="levels"></div>
+    <p id="hint" class="legend"></p>
+  </div>
+
+  <div class="touch" id="touchControls">
+    <div class="pad">
+      <div class="tbtn" data-btn="left">◀</div>
+      <div class="tbtn" data-btn="right">▶</div>
+    </div>
+    <div class="pad">
+      <div class="tbtn jump" data-btn="jump">⤒</div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  'use strict';
+
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width;
+  const H = canvas.height;
+  const SAVE_KEY = 'echoRunnerProgressV1';
+  const GRAVITY = 1500;
+  const MOVE = 280;
+  const JUMP = 570;
+  const MAX_ECHO = 3;
+
+  const ui = {
+    level: document.getElementById('hudLevel'),
+    run: document.getElementById('hudRun'),
+    echo: document.getElementById('hudEcho'),
+    time: document.getElementById('hudTime'),
+    hint: document.getElementById('hint'),
+    msg: document.getElementById('message'),
+    btnResetRun: document.getElementById('btnResetRun'),
+    btnRestartLevel: document.getElementById('btnRestartLevel'),
+    btnNext: document.getElementById('btnNext'),
+    levelButtons: document.getElementById('levelButtons')
+  };
+
+  const LEVELS = [
+    {
+      id: 1,
+      name: '튜토리얼',
+      req: 0,
+      time: 30,
+      width: 1240,
+      start: {x: 72, y: 420},
+      anchor: {x: 640, y: 432, w: 34, h: 34},
+      exit: {x: 1030, y: 405, w: 62, h: 92},
+      door: {x: 970, y: 350, w: 24, h: 150, needs: ['s1']},
+      switches: [{id: 's1', x: 350, y: 472, w: 44, h: 14, mode: 'toggle'}],
+      platforms: [
+        {x: 0, y: 500, w: 1240, h: 40},
+        {x: 150, y: 430, w: 190, h: 20},
+        {x: 450, y: 390, w: 170, h: 20},
+        {x: 700, y: 360, w: 190, h: 20}
+      ],
+      hazards: [],
+      hint: 'L1: 스위치를 밟아 문을 열고 출구로 이동하세요. (에코 없음)'
+    },
+    {
+      id: 2,
+      name: '협동 입문',
+      req: 1,
+      time: 28,
+      width: 1420,
+      start: {x: 70, y: 420},
+      anchor: {x: 820, y: 428, w: 34, h: 34},
+      exit: {x: 1228, y: 408, w: 64, h: 88},
+      door: {x: 1170, y: 330, w: 24, h: 170, needs: ['s1']},
+      switches: [{id: 's1', x: 265, y: 472, w: 44, h: 14, mode: 'hold'}],
+      platforms: [
+        {x: 0, y: 500, w: 1420, h: 40},
+        {x: 160, y: 430, w: 220, h: 20},
+        {x: 500, y: 390, w: 220, h: 20},
+        {x: 860, y: 352, w: 200, h: 20}
+      ],
+      hazards: [],
+      hint: 'L2: 1런에서 스위치 위에 잠시 서 있다가 앵커(◇)를 밟으세요. 2런에서 에코가 스위치를 눌러줄 때 출구로 통과!'
+    },
+    {
+      id: 3,
+      name: '타이밍 퍼즐',
+      req: 2,
+      time: 30,
+      width: 1540,
+      start: {x: 70, y: 420},
+      anchor: {x: 980, y: 430, w: 34, h: 34},
+      exit: {x: 1336, y: 408, w: 64, h: 88},
+      door: {x: 1274, y: 320, w: 24, h: 180, needs: ['s1','s2']},
+      switches: [
+        {id: 's1', x: 248, y: 472, w: 44, h: 14, mode: 'hold'},
+        {id: 's2', x: 748, y: 472, w: 44, h: 14, mode: 'hold'}
+      ],
+      platforms: [
+        {x: 0, y: 500, w: 1540, h: 40},
+        {x: 170, y: 435, w: 170, h: 20},
+        {x: 420, y: 395, w: 160, h: 20},
+        {x: 650, y: 360, w: 180, h: 20},
+        {x: 920, y: 335, w: 220, h: 20}
+      ],
+      hazards: [
+        {type:'move', x:1100, y:450, w:95, h:10, axis:'y', range:95, speed:1.8, phase:0}
+      ],
+      hint: 'L3: 서로 다른 스위치 두 개를 에코 2명이 담당해야 문이 열립니다. (레이저 타이밍 주의)'
+    },
+    {
+      id: 4,
+      name: '함정 회피',
+      req: 3,
+      time: 33,
+      width: 1660,
+      start: {x: 72, y: 420},
+      anchor: {x: 1140, y: 430, w: 34, h: 34},
+      exit: {x: 1455, y: 402, w: 64, h: 94},
+      door: {x: 1390, y: 312, w: 24, h: 188, needs: ['s1','s2','s3']},
+      switches: [
+        {id:'s1', x:230, y:472, w:44, h:14, mode:'hold'},
+        {id:'s2', x:622, y:472, w:44, h:14, mode:'hold'},
+        {id:'s3', x:972, y:472, w:44, h:14, mode:'hold'}
+      ],
+      platforms: [
+        {x: 0, y: 500, w: 1660, h: 40},
+        {x: 170, y: 430, w: 180, h: 20},
+        {x: 420, y: 396, w: 160, h: 20},
+        {x: 760, y: 358, w: 190, h: 20},
+        {x: 1060, y: 338, w: 200, h: 20}
+      ],
+      hazards: [
+        {type:'spike', x:510, y:486, w:90, h:14},
+        {type:'spike', x:840, y:486, w:90, h:14},
+        {type:'move', x:1210, y:450, w:100, h:10, axis:'x', range:120, speed:2.2, phase:1.2}
+      ],
+      hint: 'L4: 에코 3명 동시 협동 + 함정 회피. 실패하면 에코 전체 리셋됩니다.'
+    },
+    {
+      id: 5,
+      name: '보스 복합 퍼즐',
+      req: 3,
+      time: 36,
+      width: 1860,
+      start: {x: 74, y: 420},
+      anchor: {x: 1420, y: 432, w: 34, h: 34},
+      exit: {x: 1710, y: 398, w: 68, h: 98},
+      door: {x: 1642, y: 300, w: 24, h: 200, needs:['s1','s2','s3']},
+      switches: [
+        {id:'s1', x:224, y:472, w:44, h:14, mode:'hold'},
+        {id:'s2', x:748, y:430, w:44, h:14, mode:'hold'},
+        {id:'s3', x:1268, y:472, w:44, h:14, mode:'hold'}
+      ],
+      platforms: [
+        {x: 0, y: 500, w: 1860, h: 40},
+        {x: 210, y:432, w:170, h:20},
+        {x: 560, y:390, w:220, h:20},
+        {x: 920, y:350, w:180, h:20},
+        {x: 1180, y:410, w:180, h:20},
+        {x: 1460, y:340, w:170, h:20}
+      ],
+      hazards: [
+        {type:'spike', x:460, y:486, w:90, h:14},
+        {type:'spike', x:1090, y:486, w:90, h:14},
+        {type:'move', x:970, y:456, w:110, h:10, axis:'x', range:170, speed:2.5, phase:0.4},
+        {type:'move', x:1520, y:448, w:90, h:10, axis:'y', range:110, speed:2.0, phase:2.2}
+      ],
+      hint: 'L5: 최종전 — 에코 3명 + 함정 2종. 앵커로 에코를 모은 뒤 완성된 루프로 문을 돌파하세요.'
+    }
+  ];
+
+  let unlocked = loadProgress();
+  let levelIndex = 0;
+  let mode = 'play';
+  let level = LEVELS[0];
+  let player;
+  let camX = 0;
+  let runFrame = 0;
+  let runNumber = 1;
+  let runRecord = [];
+  let echoes = [];
+  let switchState = {};
+  let doorOpen = false;
+  let lastSwitchMap = {};
+  let timer = level.time;
+  let jumpQueued = false;
+  let msgTimer = 0;
+  let lastTs = 0;
+
+  const input = {left:false,right:false,jump:false};
+
+  const audio = {
+    ctx: null,
+    ensure(){
+      if(!this.ctx){
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if(Ctx) this.ctx = new Ctx();
+      }
+      if(this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+    },
+    tone(freq=440, dur=0.1, type='sine', vol=0.08){
+      if(!this.ctx) return;
+      const t = this.ctx.currentTime;
+      const o = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      o.type = type;
+      o.frequency.value = freq;
+      g.gain.value = vol;
+      o.connect(g); g.connect(this.ctx.destination);
+      g.gain.setValueAtTime(vol, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.start(t); o.stop(t + dur);
+    },
+    jump(){ this.tone(370, 0.11, 'square', 0.07); },
+    sw(){ this.tone(620, 0.08, 'triangle', 0.06); },
+    save(){ this.tone(490, 0.13, 'sine', 0.07); this.tone(700, 0.12, 'sine', 0.05); },
+    clear(){ this.tone(520,0.12,'triangle',0.08); this.tone(780,0.12,'triangle',0.08); this.tone(1040,0.14,'triangle',0.07); }
+  };
+
+  function loadProgress(){
+    try{
+      const raw = JSON.parse(localStorage.getItem(SAVE_KEY) || '{}');
+      return Math.max(1, Math.min(5, Number(raw.unlocked || 1)));
+    }catch(_){ return 1; }
+  }
+
+  function saveProgress(v){
+    localStorage.setItem(SAVE_KEY, JSON.stringify({unlocked:v, updatedAt:Date.now()}));
+  }
+
+  function spawnPlayer(){
+    player = {
+      x: level.start.x,
+      y: level.start.y,
+      w: 30,
+      h: 38,
+      vx: 0,
+      vy: 0,
+      onGround: false
+    };
+  }
+
+  function initSwitches(){
+    switchState = {};
+    lastSwitchMap = {};
+    for(const s of level.switches){
+      switchState[s.id] = false;
+      lastSwitchMap[s.id] = false;
+    }
+  }
+
+  function startLevel(idx){
+    levelIndex = idx;
+    level = LEVELS[levelIndex];
+    echoes = [];
+    runNumber = 1;
+    mode = 'play';
+    timer = level.time;
+    runFrame = 0;
+    runRecord = [];
+    initSwitches();
+    spawnPlayer();
+    ui.hint.textContent = `${level.name}: ${level.hint}`;
+    ui.btnNext.disabled = true;
+    flash(`레벨 ${level.id} 시작`);
+    refreshLevelButtons();
+  }
+
+  function restartRun(keepEchoes, reason){
+    if(!keepEchoes){
+      echoes = [];
+      runNumber = 1;
+    }else{
+      runNumber += 1;
+    }
+    timer = level.time;
+    runFrame = 0;
+    runRecord = [];
+    initSwitches();
+    spawnPlayer();
+    if(reason) flash(reason);
+  }
+
+  function flash(t){
+    ui.msg.textContent = t;
+    ui.msg.classList.add('show');
+    msgTimer = 2.0;
+  }
+
+  function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+  function overlap(a,b){
+    return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+  }
+
+  function getHazardRect(h, t){
+    if(h.type === 'spike') return h;
+    const d = Math.sin(t * h.speed + h.phase) * h.range;
+    if(h.axis === 'x') return {x:h.x + d, y:h.y, w:h.w, h:h.h};
+    return {x:h.x, y:h.y + d, w:h.w, h:h.h};
+  }
+
+  function getEchoActors(){
+    const actors = [];
+    const f = runFrame;
+    for(let i=0;i<echoes.length;i++){
+      const rec = echoes[i];
+      if(!rec || !rec.length) continue;
+      const p = rec[Math.min(f, rec.length - 1)];
+      actors.push({x:p.x, y:p.y, w:30, h:38, action:p.action, i});
+    }
+    return actors;
+  }
+
+  function updateSwitches(echoActors){
+    const actors = [{x:player.x,y:player.y,w:player.w,h:player.h}, ...echoActors];
+    for(const s of level.switches){
+      const pad = {x:s.x, y:s.y, w:s.w, h:s.h};
+      const hit = actors.some(a => overlap(a,pad));
+      if(s.mode === 'toggle'){
+        if(hit) switchState[s.id] = true;
+      }else{
+        switchState[s.id] = hit;
+      }
+      if(switchState[s.id] && !lastSwitchMap[s.id]) audio.sw();
+      lastSwitchMap[s.id] = !!switchState[s.id];
+    }
+    doorOpen = level.door.needs.every(id => switchState[id]);
+  }
+
+  function collideX(solids){
+    for(const s of solids){
+      if(overlap(player, s)){
+        if(player.vx > 0) player.x = s.x - player.w;
+        else if(player.vx < 0) player.x = s.x + s.w;
+      }
+    }
+  }
+
+  function collideY(solids){
+    player.onGround = false;
+    for(const s of solids){
+      if(overlap(player, s)){
+        if(player.vy > 0){
+          player.y = s.y - player.h;
+          player.vy = 0;
+          player.onGround = true;
+        }else if(player.vy < 0){
+          player.y = s.y + s.h;
+          player.vy = 0;
+        }
+      }
+    }
+  }
+
+  function update(dt, tSec){
+    if(mode !== 'play') return;
+
+    timer -= dt;
+    if(timer <= 0){
+      restartRun(false, '시간 붕괴! 에코 리셋');
+      return;
+    }
+
+    const echoActors = getEchoActors();
+    updateSwitches(echoActors);
+
+    const solids = level.platforms.slice();
+    if(!doorOpen) solids.push(level.door);
+
+    const dir = (input.left ? -1 : 0) + (input.right ? 1 : 0);
+    player.vx = dir * MOVE;
+
+    if(jumpQueued && player.onGround){
+      player.vy = -JUMP;
+      player.onGround = false;
+      audio.jump();
+    }
+    jumpQueued = false;
+
+    player.x += player.vx * dt;
+    player.x = clamp(player.x, 0, level.width - player.w);
+    collideX(solids);
+
+    player.vy += GRAVITY * dt;
+    player.y += player.vy * dt;
+    collideY(solids);
+
+    if(player.y > H + 120){
+      restartRun(false, '추락! 에코 리셋');
+      return;
+    }
+
+    for(const h of level.hazards){
+      if(overlap(player, getHazardRect(h, tSec))){
+        restartRun(false, '함정 피격! 에코 리셋');
+        return;
+      }
+    }
+
+    const anchor = level.anchor;
+    if(overlap(player, anchor)){
+      if(echoes.length < Math.min(level.req, MAX_ECHO)){
+        echoes.push(runRecord.slice());
+        audio.save();
+        restartRun(true, `에코 저장 ${echoes.length}/${level.req}`);
+        return;
+      }
+      flash('필요한 에코는 모두 저장됨! 문으로 탈출하세요.');
+    }
+
+    if(overlap(player, level.exit)){
+      if(doorOpen && echoes.length >= level.req){
+        mode = 'cleared';
+        audio.clear();
+        if(unlocked < Math.min(5, level.id + 1)){
+          unlocked = Math.min(5, level.id + 1);
+          saveProgress(unlocked);
+          refreshLevelButtons();
+        }
+        ui.btnNext.disabled = level.id >= 5;
+        flash(level.id === 5 ? '🎉 Echo Runner 정복 완료!' : `레벨 ${level.id} 클리어!`);
+        return;
+      }
+      if(!doorOpen) flash('문이 잠겨 있습니다. 모든 스위치를 동시에 활성화하세요.');
+    }
+
+    const actionBits = (input.left ? 1 : 0) | (input.right ? 2 : 0) | (input.jump ? 4 : 0);
+    runRecord.push({x:+player.x.toFixed(1), y:+player.y.toFixed(1), action:actionBits});
+    if(runRecord.length > 2400) runRecord.shift();
+
+    runFrame += 1;
+    camX = clamp(player.x - W * 0.42, 0, Math.max(0, level.width - W));
+  }
+
+  function drawNeonRect(x,y,w,h,color,alpha=1){
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = color;
+    ctx.fillRect(x,y,w,h);
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 14;
+    ctx.strokeStyle = color;
+    ctx.strokeRect(x+0.5,y+0.5,w-1,h-1);
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+  }
+
+  function draw(tSec){
+    ctx.clearRect(0,0,W,H);
+
+    const g = ctx.createLinearGradient(0,0,0,H);
+    g.addColorStop(0,'#0a0a1a');
+    g.addColorStop(1,'#070a1f');
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,W,H);
+
+    ctx.save();
+    ctx.translate(-camX,0);
+
+    // Grid
+    ctx.strokeStyle = 'rgba(60,120,255,0.09)';
+    ctx.lineWidth = 1;
+    for(let x=0;x<level.width;x+=80){
+      ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
+    }
+    for(let y=0;y<H;y+=60){
+      ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(level.width,y); ctx.stroke();
+    }
+
+    // Platforms
+    for(const p of level.platforms) drawNeonRect(p.x,p.y,p.w,p.h,'#173e8f',0.85);
+
+    // Hazards
+    for(const h of level.hazards){
+      const hr = getHazardRect(h,tSec);
+      drawNeonRect(hr.x,hr.y,hr.w,hr.h,'#ff5f6d',0.95);
+      if(h.type === 'spike'){
+        ctx.fillStyle='#ffd4da';
+        for(let i=0;i<hr.w;i+=14){
+          ctx.beginPath();
+          ctx.moveTo(hr.x+i,hr.y+hr.h);
+          ctx.lineTo(hr.x+i+7,hr.y);
+          ctx.lineTo(hr.x+i+14,hr.y+hr.h);
+          ctx.closePath();
+          ctx.fill();
+        }
+      }
+    }
+
+    // Anchor
+    drawNeonRect(level.anchor.x, level.anchor.y, level.anchor.w, level.anchor.h, '#8a6bff', 0.9);
+    ctx.fillStyle='rgba(240,220,255,.95)';
+    ctx.fillText('◇', level.anchor.x + 11, level.anchor.y + 23);
+
+    // Switches
+    for(const s of level.switches){
+      const active = !!switchState[s.id];
+      drawNeonRect(s.x,s.y,s.w,s.h, active ? '#36f4ff' : '#ff4fd8', active ? 0.95 : 0.68);
+      ctx.fillStyle = active ? '#dffcff' : '#ffc7f2';
+      ctx.font='12px sans-serif';
+      ctx.fillText(s.id.toUpperCase(), s.x + 9, s.y - 4);
+    }
+
+    // Door + Exit
+    drawNeonRect(level.door.x, level.door.y, level.door.w, level.door.h, doorOpen ? '#7dffb3' : '#ff6f6f', 0.88);
+    drawNeonRect(level.exit.x, level.exit.y, level.exit.w, level.exit.h, '#69e4ff', 0.24);
+    ctx.strokeStyle = '#8ff2ff';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(level.exit.x, level.exit.y, level.exit.w, level.exit.h);
+
+    // Echoes
+    const echoActors = getEchoActors();
+    for(const e of echoActors){
+      const hue = 180 + e.i * 32;
+      ctx.fillStyle = `hsla(${hue}, 95%, 70%, 0.35)`;
+      ctx.fillRect(e.x, e.y, e.w, e.h);
+      ctx.strokeStyle = `hsla(${hue}, 95%, 70%, 0.75)`;
+      ctx.strokeRect(e.x + 0.5, e.y + 0.5, e.w - 1, e.h - 1);
+    }
+
+    // Player
+    drawNeonRect(player.x, player.y, player.w, player.h, '#f3fcff', 1);
+    ctx.fillStyle = '#071427';
+    ctx.fillRect(player.x + 7, player.y + 10, 6, 6);
+    ctx.fillRect(player.x + 17, player.y + 10, 6, 6);
+
+    ctx.restore();
+
+    if(mode === 'cleared'){
+      ctx.fillStyle='rgba(4,8,22,.62)';
+      ctx.fillRect(0,0,W,H);
+      ctx.textAlign='center';
+      ctx.fillStyle='#8ff7d2';
+      ctx.font='700 44px sans-serif';
+      ctx.fillText('LEVEL CLEAR', W/2, H/2 - 8);
+      ctx.fillStyle='#d8e8ff';
+      ctx.font='500 20px sans-serif';
+      ctx.fillText('다음 레벨로 이동하거나, 같은 레벨을 다시 플레이하세요.', W/2, H/2 + 34);
+      ctx.textAlign='start';
+    }
+  }
+
+  function renderHUD(){
+    ui.level.textContent = `${level.id} · ${level.name}`;
+    ui.run.textContent = `${runNumber}`;
+    ui.echo.textContent = `${echoes.length}/${level.req}`;
+    ui.time.textContent = `${Math.max(0,timer).toFixed(1)}s`;
+    if(msgTimer > 0){
+      msgTimer -= 1/60;
+      if(msgTimer <= 0) ui.msg.classList.remove('show');
+    }
+  }
+
+  function refreshLevelButtons(){
+    ui.levelButtons.innerHTML = '';
+    for(let i=0;i<LEVELS.length;i++){
+      const lv = LEVELS[i];
+      const b = document.createElement('button');
+      b.className = 'level-btn';
+      if(i === levelIndex) b.classList.add('active');
+      const locked = lv.id > unlocked;
+      if(locked) b.classList.add('locked');
+      b.disabled = locked;
+      b.textContent = `L${lv.id} ${lv.req ? `에코${lv.req}` : '튜토'}`;
+      b.addEventListener('click', () => {
+        audio.ensure();
+        startLevel(i);
+      });
+      ui.levelButtons.appendChild(b);
+    }
+  }
+
+  function frame(ts){
+    if(!lastTs) lastTs = ts;
+    const dt = Math.min(0.033, (ts - lastTs) / 1000);
+    lastTs = ts;
+
+    update(dt, ts / 1000);
+    draw(ts / 1000);
+    renderHUD();
+
+    requestAnimationFrame(frame);
+  }
+
+  // Keyboard
+  window.addEventListener('keydown', (e) => {
+    if(['ArrowLeft','a','A'].includes(e.key)) input.left = true;
+    if(['ArrowRight','d','D'].includes(e.key)) input.right = true;
+    if(['ArrowUp','w','W',' '].includes(e.key)){
+      input.jump = true;
+      jumpQueued = true;
+      e.preventDefault();
+    }
+    if(e.key === 'r' || e.key === 'R') restartRun(false, '수동 리셋: 에코 초기화');
+  });
+
+  window.addEventListener('keyup', (e) => {
+    if(['ArrowLeft','a','A'].includes(e.key)) input.left = false;
+    if(['ArrowRight','d','D'].includes(e.key)) input.right = false;
+    if(['ArrowUp','w','W',' '].includes(e.key)) input.jump = false;
+  });
+
+  function bindTouchButton(el, key){
+    const on = (ev) => {
+      audio.ensure();
+      input[key] = true;
+      if(key === 'jump') jumpQueued = true;
+      ev.preventDefault();
+    };
+    const off = (ev) => {
+      input[key] = false;
+      ev.preventDefault();
+    };
+    el.addEventListener('pointerdown', on, {passive:false});
+    el.addEventListener('pointerup', off, {passive:false});
+    el.addEventListener('pointercancel', off, {passive:false});
+    el.addEventListener('pointerleave', off, {passive:false});
+  }
+
+  document.querySelectorAll('.tbtn').forEach((el) => bindTouchButton(el, el.dataset.btn));
+
+  // Buttons
+  ui.btnResetRun.addEventListener('click', () => {
+    audio.ensure();
+    restartRun(false, '에코 수동 리셋 완료');
+  });
+
+  ui.btnRestartLevel.addEventListener('click', () => {
+    audio.ensure();
+    startLevel(levelIndex);
+  });
+
+  ui.btnNext.addEventListener('click', () => {
+    audio.ensure();
+    if(levelIndex < LEVELS.length - 1){
+      const next = clamp(levelIndex + 1, 0, unlocked - 1);
+      startLevel(next);
+    }
+  });
+
+  // First interaction unlock audio
+  window.addEventListener('pointerdown', () => audio.ensure(), {once:true});
+
+  startLevel(0);
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

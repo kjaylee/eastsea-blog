@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Dual Mind — 양손 분할 동시 조작 액션</title>
+<style>
+:root{
+  --bg:#0a0a1a;
+  --panel:#13132a;
+  --cyan:#36f4ff;
+  --blue:#58a6ff;
+  --red:#ff5b7f;
+  --magenta:#ff3ed1;
+  --gold:#ffd36b;
+  --text:#e8f2ff;
+  --muted:#94a8d8;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:"Pretendard","Noto Sans KR",system-ui,-apple-system,sans-serif}
+body{display:flex;justify-content:center;min-height:100vh;overflow-x:hidden}
+.app{width:min(1024px,100vw);padding:10px 12px 120px}
+h1{margin:4px 0 3px;font-size:clamp(22px,5.2vw,34px);line-height:1.05;font-weight:900;color:var(--cyan);text-shadow:0 0 20px rgba(54,244,255,.6)}
+.sub{margin:0 0 10px;font-size:13px;color:#a9bfff}
+.hud{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-bottom:10px}
+.card{background:linear-gradient(180deg,rgba(20,24,52,.92),rgba(10,12,30,.94));border:1px solid rgba(94,145,255,.35);border-radius:12px;padding:8px 10px;box-shadow:0 0 14px rgba(54,244,255,.12) inset}
+.k{display:block;font-size:11px;color:var(--muted)}
+.v{font-size:14px;font-weight:800}
+.stage{position:relative;border:1px solid rgba(54,244,255,.45);border-radius:14px;overflow:hidden;box-shadow:0 0 28px rgba(54,244,255,.2),0 0 72px rgba(255,62,209,.11) inset;background:#060818}
+#game{display:block;width:100%;height:auto;touch-action:none}
+#toast{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);padding:8px 14px;border-radius:999px;font-size:13px;white-space:nowrap;border:1px solid rgba(255,255,255,.22);background:rgba(6,8,24,.82);opacity:0;transition:opacity .2s;pointer-events:none}
+#toast.show{opacity:1}
+.controls{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 0}
+button{border:1px solid rgba(96,171,255,.5);background:#101835;color:#e7f3ff;padding:8px 11px;border-radius:10px;font-weight:800;font-size:13px;cursor:pointer}
+button:active{transform:translateY(1px)}
+button.primary{background:linear-gradient(180deg,#17395d,#0f2340)}
+button.warn{border-color:rgba(255,91,127,.58);color:#ffd6e0}
+.levels{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:10px}
+.level-btn{font-size:12px;line-height:1.25;padding:9px 6px;border-radius:10px;background:#0f1630;border:1px solid rgba(140,166,255,.25);color:#dce8ff}
+.level-btn.active{border-color:rgba(54,244,255,.85);box-shadow:0 0 15px rgba(54,244,255,.35)}
+.level-btn.locked{opacity:.35;filter:saturate(.25)}
+.legend{margin-top:10px;font-size:12px;line-height:1.5;color:#9eb3e3}
+.touch-guide{position:fixed;left:0;right:0;bottom:0;padding:8px 12px calc(10px + env(safe-area-inset-bottom));background:linear-gradient(180deg,rgba(10,10,26,0),rgba(10,10,26,.9) 28%,rgba(10,10,26,.98));display:flex;justify-content:center;font-size:12px;color:#a8bcf1}
+@media (max-width:860px){
+  .hud{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .levels{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>Dual Mind</h1>
+  <p class="sub">"양손으로 두 캐릭터를 동시에 조작하는 협동 퍼즐 액션" · A(왼쪽), L(오른쪽), 터치는 화면 좌/우</p>
+
+  <section class="hud">
+    <div class="card"><span class="k">현재 레벨</span><span class="v" id="hudLevel">1</span></div>
+    <div class="card"><span class="k">상태</span><span class="v" id="hudState">대기</span></div>
+    <div class="card"><span class="k">이번 기록</span><span class="v" id="hudTime">0.00초</span></div>
+    <div class="card"><span class="k">베스트</span><span class="v" id="hudBest">-</span></div>
+    <div class="card"><span class="k">진행도</span><span class="v" id="hudProgress">1 / 8</span></div>
+  </section>
+
+  <div class="stage">
+    <canvas id="game" width="1000" height="560" aria-label="Dual Mind 게임 캔버스"></canvas>
+    <div id="toast"></div>
+  </div>
+
+  <div class="controls">
+    <button id="btnRestart" class="warn">레벨 재시작</button>
+    <button id="btnPrev">◀ 이전 레벨</button>
+    <button id="btnNext" class="primary">다음 레벨 ▶</button>
+  </div>
+
+  <div id="levelButtons" class="levels"></div>
+  <p id="hint" class="legend"></p>
+</div>
+<div class="touch-guide">멀티터치 지원: 왼쪽/오른쪽을 동시에 탭해 두 캐릭터를 함께 점프시키세요.</div>
+
+<script>
+(() => {
+  'use strict';
+
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width;
+  const H = canvas.height;
+  const HALF = W / 2;
+  const GROUND_Y = 470;
+  const PLAYER_R = 16;
+  const GRAVITY = 1800;
+  const JUMP_V = 650;
+  const SAVE_KEY = 'dualMindProgressV1';
+
+  const ui = {
+    level: document.getElementById('hudLevel'),
+    state: document.getElementById('hudState'),
+    time: document.getElementById('hudTime'),
+    best: document.getElementById('hudBest'),
+    progress: document.getElementById('hudProgress'),
+    hint: document.getElementById('hint'),
+    toast: document.getElementById('toast'),
+    buttons: document.getElementById('levelButtons'),
+    btnRestart: document.getElementById('btnRestart'),
+    btnPrev: document.getElementById('btnPrev'),
+    btnNext: document.getElementById('btnNext')
+  };
+
+  const mkSpikes = (arr, h = 50, w = 34) => arr.map(x => ({x, w, h}));
+
+  const LEVELS = [
+    {
+      id: 1,
+      name: '분할 감각 워밍업',
+      speed: 220,
+      syncWindow: 0.55,
+      syncX: 980,
+      doorX: 1120,
+      goalX: 1270,
+      left: mkSpikes([250, 430, 620, 810]),
+      right: mkSpikes([]),
+      hint: 'L1-2는 한쪽만 장애물입니다. 먼저 한 손 감각부터 익히세요.'
+    },
+    {
+      id: 2,
+      name: '오른손 워밍업',
+      speed: 225,
+      syncWindow: 0.52,
+      syncX: 1000,
+      doorX: 1140,
+      goalX: 1290,
+      left: mkSpikes([]),
+      right: mkSpikes([260, 450, 640, 830]),
+      hint: '오른쪽 장애물만 피하면서 동기화 지점까지 맞춰 진입하세요.'
+    },
+    {
+      id: 3,
+      name: '대칭 타이밍',
+      speed: 235,
+      syncWindow: 0.45,
+      syncX: 1110,
+      doorX: 1250,
+      goalX: 1410,
+      left: mkSpikes([290, 500, 710, 920]),
+      right: mkSpikes([290, 500, 710, 920]),
+      hint: 'L3-4는 좌/우 동일 타이밍 장애물입니다. 양손을 같은 리듬으로!' 
+    },
+    {
+      id: 4,
+      name: '대칭 밀도 상승',
+      speed: 250,
+      syncWindow: 0.38,
+      syncX: 1200,
+      doorX: 1345,
+      goalX: 1510,
+      left: mkSpikes([250, 430, 610, 790, 970, 1150]),
+      right: mkSpikes([250, 430, 610, 790, 970, 1150]),
+      hint: '동일 패턴이지만 간격이 줄었습니다. 점프 타이밍을 너무 길게 끌지 마세요.'
+    },
+    {
+      id: 5,
+      name: '엇갈린 뇌 분리 I',
+      speed: 260,
+      syncWindow: 0.34,
+      syncX: 1290,
+      doorX: 1435,
+      goalX: 1610,
+      left: mkSpikes([250, 450, 650, 850, 1050, 1250]),
+      right: mkSpikes([340, 540, 740, 940, 1140, 1340]),
+      hint: 'L5-6는 좌/우 장애물이 어긋납니다. 한 손씩 독립적으로 판단하세요.'
+    },
+    {
+      id: 6,
+      name: '엇갈린 뇌 분리 II',
+      speed: 275,
+      syncWindow: 0.3,
+      syncX: 1380,
+      doorX: 1530,
+      goalX: 1710,
+      left: mkSpikes([280, 470, 660, 850, 1040, 1230, 1420]),
+      right: mkSpikes([350, 530, 710, 890, 1070, 1250, 1430]),
+      hint: '엇박 구간이 길어졌습니다. 좌/우를 따로 듣는 느낌으로 플레이하세요.'
+    },
+    {
+      id: 7,
+      name: '동시 도착 퍼즐',
+      speed: 285,
+      syncWindow: 0.24,
+      syncX: 1470,
+      doorX: 1625,
+      goalX: 1810,
+      left: mkSpikes([280, 530, 760, 1020, 1270, 1510]),
+      right: mkSpikes([350, 580, 810, 1060, 1310, 1550]),
+      hint: 'L7: 엇갈린 장애물 + 동시 도착 퍼즐. 센서 통과 오차를 0.24초 내로 맞추세요.'
+    },
+    {
+      id: 8,
+      name: '속도 변조 피날레',
+      speed: 250,
+      speedZones: [
+        {x: 0, speed: 250},
+        {x: 550, speed: 310},
+        {x: 980, speed: 240},
+        {x: 1400, speed: 330},
+        {x: 1780, speed: 270}
+      ],
+      syncWindow: 0.2,
+      syncX: 1850,
+      doorX: 2020,
+      goalX: 2220,
+      left: mkSpikes([260, 430, 620, 810, 980, 1160, 1340, 1540, 1730, 1940]),
+      right: mkSpikes([320, 500, 680, 860, 1040, 1220, 1400, 1600, 1810, 1990]),
+      hint: 'L8: 속도 구간이 바뀌며 복합 패턴이 이어집니다. 마지막 동기화 문까지 집중하세요.'
+    }
+  ];
+
+  const save = loadSave();
+  let levelIndex = Math.max(0, Math.min((save.unlocked || 1) - 1, LEVELS.length - 1));
+  let unlocked = Math.max(1, Math.min(save.unlocked || 1, LEVELS.length));
+  const bestTimes = save.bestTimes || {};
+
+  const state = {
+    mode: 'play',
+    elapsed: 0,
+    doorOpen: false,
+    leftSyncTime: null,
+    rightSyncTime: null,
+    restartAt: 0,
+    clearAt: 0,
+    jumpQueue: {left: false, right: false},
+    player: {
+      left: {x: 80, y: GROUND_Y - PLAYER_R, vy: 0, onGround: true},
+      right: {x: 80, y: GROUND_Y - PLAYER_R, vy: 0, onGround: true}
+    }
+  };
+
+  let lastTs = 0;
+  let toastTimer = 0;
+  let audioCtx = null;
+
+  function loadSave(){
+    try{
+      const raw = localStorage.getItem(SAVE_KEY);
+      if(!raw) return {unlocked:1,bestTimes:{}};
+      const data = JSON.parse(raw);
+      return {
+        unlocked: Number.isFinite(data.unlocked) ? data.unlocked : 1,
+        bestTimes: data.bestTimes && typeof data.bestTimes === 'object' ? data.bestTimes : {}
+      };
+    }catch{
+      return {unlocked:1,bestTimes:{}};
+    }
+  }
+
+  function persist(){
+    localStorage.setItem(SAVE_KEY, JSON.stringify({unlocked, bestTimes}));
+  }
+
+  function ensureAudio(){
+    if(!audioCtx){
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if(AC) audioCtx = new AC();
+    }
+    if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+  }
+
+  function tone(type, f1, f2, dur, vol){
+    if(!audioCtx) return;
+    const t = audioCtx.currentTime;
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(f1, t);
+    if(f2 != null) o.frequency.exponentialRampToValueAtTime(Math.max(30,f2), t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(audioCtx.destination);
+    o.start(t);
+    o.stop(t + dur + 0.02);
+  }
+
+  const sfx = {
+    jump(){ tone('triangle', 440, 620, 0.09, 0.05); },
+    hit(){ tone('sawtooth', 180, 70, 0.22, 0.06); },
+    clear(){ tone('triangle', 520, 920, 0.25, 0.07); setTimeout(()=>tone('triangle',760,1200,0.2,0.05),90); },
+    door(){ tone('sine', 280, 560, 0.2, 0.05); }
+  };
+
+  function currentLevel(){ return LEVELS[levelIndex]; }
+
+  function resetLevel(){
+    state.mode = 'play';
+    state.elapsed = 0;
+    state.doorOpen = false;
+    state.leftSyncTime = null;
+    state.rightSyncTime = null;
+    state.restartAt = 0;
+    state.clearAt = 0;
+    state.jumpQueue.left = false;
+    state.jumpQueue.right = false;
+    for(const side of ['left','right']){
+      const p = state.player[side];
+      p.x = 80;
+      p.y = GROUND_Y - PLAYER_R;
+      p.vy = 0;
+      p.onGround = true;
+    }
+    flash(`레벨 ${currentLevel().id} 시작`);
+    refreshUI();
+  }
+
+  function requestJump(side){
+    ensureAudio();
+    state.jumpQueue[side] = true;
+  }
+
+  function sideFromClientX(clientX){
+    const rect = canvas.getBoundingClientRect();
+    return (clientX - rect.left) < rect.width / 2 ? 'left' : 'right';
+  }
+
+  canvas.addEventListener('pointerdown', (e) => {
+    requestJump(sideFromClientX(e.clientX));
+    e.preventDefault();
+  });
+
+  canvas.addEventListener('touchstart', (e) => {
+    ensureAudio();
+    const rect = canvas.getBoundingClientRect();
+    for(const t of e.changedTouches){
+      const x = t.clientX - rect.left;
+      requestJump(x < rect.width / 2 ? 'left' : 'right');
+    }
+    e.preventDefault();
+  }, {passive:false});
+
+  window.addEventListener('keydown', (e) => {
+    const k = e.key.toLowerCase();
+    if(k === 'a'){ requestJump('left'); e.preventDefault(); }
+    else if(k === 'l'){ requestJump('right'); e.preventDefault(); }
+    else if(k === 'r'){ resetLevel(); e.preventDefault(); }
+  });
+
+  ui.btnRestart.addEventListener('click', () => { ensureAudio(); resetLevel(); });
+  ui.btnPrev.addEventListener('click', () => {
+    ensureAudio();
+    if(levelIndex > 0){ levelIndex--; resetLevel(); renderLevelButtons(); }
+  });
+  ui.btnNext.addEventListener('click', () => {
+    ensureAudio();
+    if(levelIndex < unlocked - 1 && levelIndex < LEVELS.length - 1){ levelIndex++; resetLevel(); renderLevelButtons(); }
+  });
+
+  function renderLevelButtons(){
+    ui.buttons.innerHTML = '';
+    LEVELS.forEach((lv, idx) => {
+      const btn = document.createElement('button');
+      const locked = idx + 1 > unlocked;
+      const best = bestTimes[lv.id] ? `${bestTimes[lv.id].toFixed(2)}s` : '-';
+      btn.className = `level-btn${idx === levelIndex ? ' active' : ''}${locked ? ' locked' : ''}`;
+      btn.textContent = `L${lv.id} · ${best}`;
+      btn.disabled = locked;
+      btn.addEventListener('click', () => {
+        ensureAudio();
+        levelIndex = idx;
+        resetLevel();
+        renderLevelButtons();
+      });
+      ui.buttons.appendChild(btn);
+    });
+  }
+
+  function flash(msg, ms = 1300){
+    ui.toast.textContent = msg;
+    ui.toast.classList.add('show');
+    toastTimer = performance.now() + ms;
+  }
+
+  function getSpeed(lv, x){
+    if(!lv.speedZones) return lv.speed;
+    let s = lv.speedZones[0].speed;
+    for(const zone of lv.speedZones){
+      if(x >= zone.x) s = zone.speed;
+      else break;
+    }
+    return s;
+  }
+
+  function updateSide(side, dt){
+    const lv = currentLevel();
+    const p = state.player[side];
+
+    if(state.jumpQueue[side] && p.onGround){
+      p.vy = -JUMP_V;
+      p.onGround = false;
+      sfx.jump();
+    }
+    state.jumpQueue[side] = false;
+
+    p.x += getSpeed(lv, p.x) * dt;
+    p.vy += GRAVITY * dt;
+    p.y += p.vy * dt;
+
+    if(p.y >= GROUND_Y - PLAYER_R){
+      p.y = GROUND_Y - PLAYER_R;
+      p.vy = 0;
+      p.onGround = true;
+    }
+
+    const obs = lv[side];
+    for(const o of obs){
+      const rx = o.x;
+      const ry = GROUND_Y - o.h;
+      if(circleRectHit(p.x, p.y, PLAYER_R, rx, ry, o.w, o.h)){
+        fail('충돌! 장애물에 부딪혔습니다.');
+        return;
+      }
+    }
+
+    if(!state.doorOpen && p.x + PLAYER_R > lv.doorX && p.x - PLAYER_R < lv.doorX + 26){
+      fail('문이 닫혀 있습니다. 동시 도착으로 열어주세요.');
+      return;
+    }
+  }
+
+  function circleRectHit(cx, cy, r, rx, ry, rw, rh){
+    const nx = Math.max(rx, Math.min(cx, rx + rw));
+    const ny = Math.max(ry, Math.min(cy, ry + rh));
+    const dx = cx - nx;
+    const dy = cy - ny;
+    return dx * dx + dy * dy <= r * r;
+  }
+
+  function checkSyncAndClear(){
+    const lv = currentLevel();
+    if(!state.doorOpen){
+      if(state.leftSyncTime == null && state.player.left.x >= lv.syncX){ state.leftSyncTime = state.elapsed; }
+      if(state.rightSyncTime == null && state.player.right.x >= lv.syncX){ state.rightSyncTime = state.elapsed; }
+
+      if(state.leftSyncTime != null && state.rightSyncTime != null){
+        const diff = Math.abs(state.leftSyncTime - state.rightSyncTime);
+        if(diff <= lv.syncWindow){
+          state.doorOpen = true;
+          sfx.door();
+          flash(`동기화 성공 (${diff.toFixed(2)}초)! 문이 열렸습니다.`);
+        }else{
+          fail(`동기화 실패 (${diff.toFixed(2)}초 차이). 더 동시에 도착하세요.`);
+          return;
+        }
+      }
+    }
+
+    if(state.doorOpen && state.player.left.x >= lv.goalX && state.player.right.x >= lv.goalX){
+      clearLevel();
+    }
+  }
+
+  function fail(message){
+    if(state.mode !== 'play') return;
+    state.mode = 'fail';
+    state.restartAt = performance.now() + 900;
+    ui.state.textContent = '실패';
+    sfx.hit();
+    flash(message, 1000);
+  }
+
+  function clearLevel(){
+    if(state.mode !== 'play') return;
+    state.mode = 'clear';
+    state.clearAt = performance.now() + 1200;
+    const lv = currentLevel();
+    const t = state.elapsed;
+    const prevBest = bestTimes[lv.id];
+    if(prevBest == null || t < prevBest){
+      bestTimes[lv.id] = Number(t.toFixed(3));
+    }
+    if(unlocked < lv.id + 1) unlocked = Math.min(LEVELS.length, lv.id + 1);
+    persist();
+    sfx.clear();
+    flash(`클리어! 기록 ${t.toFixed(2)}초`, 1500);
+    renderLevelButtons();
+    refreshUI();
+  }
+
+  function refreshUI(){
+    const lv = currentLevel();
+    ui.level.textContent = `${lv.id} / 8 · ${lv.name}`;
+    ui.time.textContent = `${state.elapsed.toFixed(2)}초`;
+    ui.best.textContent = bestTimes[lv.id] ? `${bestTimes[lv.id].toFixed(2)}초` : '-';
+    ui.progress.textContent = `${unlocked} / 8`;
+    ui.hint.textContent = `${lv.hint}  |  협동 조건: sync 지점(◇) 동시 도달 후 문(금색) 통과`;
+
+    if(state.mode === 'play') ui.state.textContent = state.doorOpen ? '문 열림' : '진행 중';
+    else if(state.mode === 'clear') ui.state.textContent = '클리어';
+    else if(state.mode === 'fail') ui.state.textContent = '자동 재시작';
+
+    ui.btnPrev.disabled = levelIndex <= 0;
+    ui.btnNext.disabled = !(levelIndex < unlocked - 1 && levelIndex < LEVELS.length - 1);
+  }
+
+  function worldToScreenX(side, worldX){
+    const p = state.player[side];
+    const laneX = side === 'left' ? 0 : HALF;
+    const camX = Math.max(0, p.x - 140);
+    return laneX + (worldX - camX);
+  }
+
+  function drawLane(side){
+    const lv = currentLevel();
+    const laneX = side === 'left' ? 0 : HALF;
+    const laneW = HALF;
+    const isLeft = side === 'left';
+
+    const grad = ctx.createLinearGradient(laneX, 0, laneX + laneW, H);
+    if(isLeft){
+      grad.addColorStop(0, '#081628');
+      grad.addColorStop(1, '#0b0a1a');
+    }else{
+      grad.addColorStop(0, '#1a0a18');
+      grad.addColorStop(1, '#220d18');
+    }
+    ctx.fillStyle = grad;
+    ctx.fillRect(laneX, 0, laneW, H);
+
+    for(let i=0;i<26;i++){
+      const t = (i * 137 + state.elapsed * 35) % laneW;
+      const x = laneX + t;
+      const y = (i * 73) % (GROUND_Y - 20);
+      ctx.globalAlpha = 0.24;
+      ctx.fillStyle = isLeft ? '#3ad8ff' : '#ff5ba3';
+      ctx.fillRect(x, y, 2, 2);
+    }
+    ctx.globalAlpha = 1;
+
+    ctx.strokeStyle = isLeft ? 'rgba(58,216,255,.55)' : 'rgba(255,91,127,.55)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(laneX, GROUND_Y + 0.5);
+    ctx.lineTo(laneX + laneW, GROUND_Y + 0.5);
+    ctx.stroke();
+
+    const spikes = lv[side];
+    for(const o of spikes){
+      const sx = worldToScreenX(side, o.x);
+      if(sx < laneX - 40 || sx > laneX + laneW + 40) continue;
+      drawSpike(sx, GROUND_Y, o.w, o.h, isLeft ? '#56e6ff' : '#ff5f89');
+    }
+
+    const syncX = worldToScreenX(side, lv.syncX);
+    if(syncX > laneX - 60 && syncX < laneX + laneW + 60){
+      ctx.save();
+      ctx.shadowBlur = 16;
+      ctx.shadowColor = '#ffffff';
+      ctx.strokeStyle = 'rgba(255,255,255,.85)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(syncX, GROUND_Y - 56);
+      ctx.lineTo(syncX + 12, GROUND_Y - 44);
+      ctx.lineTo(syncX, GROUND_Y - 32);
+      ctx.lineTo(syncX - 12, GROUND_Y - 44);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    const doorX = worldToScreenX(side, lv.doorX);
+    if(doorX > laneX - 40 && doorX < laneX + laneW + 40){
+      ctx.save();
+      ctx.shadowBlur = 22;
+      ctx.shadowColor = state.doorOpen ? '#ffd36b' : '#ff6b6b';
+      ctx.fillStyle = state.doorOpen ? 'rgba(255,211,107,.25)' : 'rgba(255,90,120,.38)';
+      ctx.fillRect(doorX, GROUND_Y - 120, 26, 120);
+      ctx.strokeStyle = state.doorOpen ? '#ffd36b' : '#ff6b6b';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(doorX, GROUND_Y - 120, 26, 120);
+      ctx.restore();
+    }
+
+    const goalX = worldToScreenX(side, lv.goalX);
+    if(goalX > laneX - 60 && goalX < laneX + laneW + 60){
+      ctx.save();
+      ctx.shadowBlur = 18;
+      ctx.shadowColor = '#ffd36b';
+      ctx.strokeStyle = '#ffd36b';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(goalX + 18, GROUND_Y - 56, 26, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    const p = state.player[side];
+    const px = worldToScreenX(side, p.x);
+    const py = p.y;
+    drawPlayer(px, py, isLeft ? '#58b5ff' : '#ff5b7f');
+
+    ctx.fillStyle = isLeft ? '#79dfff' : '#ff89bd';
+    ctx.font = '12px system-ui, sans-serif';
+    ctx.fillText(isLeft ? 'BLUE (A / 왼쪽터치)' : 'RED (L / 오른쪽터치)', laneX + 10, 22);
+  }
+
+  function drawSpike(x, gy, w, h, color){
+    const teeth = Math.max(2, Math.floor(w / 10));
+    const tw = w / teeth;
+    ctx.save();
+    ctx.shadowBlur = 14;
+    ctx.shadowColor = color;
+    ctx.fillStyle = color;
+    for(let i=0;i<teeth;i++){
+      const sx = x + i * tw;
+      ctx.beginPath();
+      ctx.moveTo(sx, gy);
+      ctx.lineTo(sx + tw * 0.5, gy - h);
+      ctx.lineTo(sx + tw, gy);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawPlayer(x, y, color){
+    ctx.save();
+    ctx.shadowBlur = 16;
+    ctx.shadowColor = color;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(x, y, PLAYER_R, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(x - 5, y - 3, 3, 0, Math.PI * 2);
+    ctx.arc(x + 5, y - 3, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#0a0a1a';
+    ctx.beginPath();
+    ctx.arc(x - 5, y - 3, 1.4, 0, Math.PI * 2);
+    ctx.arc(x + 5, y - 3, 1.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawDivider(){
+    ctx.save();
+    ctx.shadowBlur = 24;
+    ctx.shadowColor = '#fff';
+    ctx.fillStyle = 'rgba(255,255,255,.92)';
+    ctx.fillRect(HALF - 1.5, 0, 3, H);
+    ctx.restore();
+  }
+
+  function draw(){
+    ctx.clearRect(0, 0, W, H);
+    drawLane('left');
+    drawLane('right');
+    drawDivider();
+
+    const lv = currentLevel();
+    ctx.fillStyle = '#eaf3ff';
+    ctx.font = '12px system-ui, sans-serif';
+    const ls = state.leftSyncTime == null ? '-' : state.leftSyncTime.toFixed(2);
+    const rs = state.rightSyncTime == null ? '-' : state.rightSyncTime.toFixed(2);
+    ctx.fillText(`SYNC L:${ls} / R:${rs} | 허용 ${lv.syncWindow.toFixed(2)}s`, 14, H - 12);
+
+    if(performance.now() > toastTimer) ui.toast.classList.remove('show');
+  }
+
+  function tick(ts){
+    if(!lastTs) lastTs = ts;
+    const dt = Math.min(0.033, (ts - lastTs) / 1000);
+    lastTs = ts;
+
+    if(state.mode === 'play'){
+      state.elapsed += dt;
+      updateSide('left', dt);
+      updateSide('right', dt);
+      checkSyncAndClear();
+    }else if(state.mode === 'fail'){
+      if(performance.now() >= state.restartAt) resetLevel();
+    }else if(state.mode === 'clear'){
+      if(performance.now() >= state.clearAt){
+        if(levelIndex < unlocked - 1 && levelIndex < LEVELS.length - 1){
+          levelIndex += 1;
+        }
+        resetLevel();
+        renderLevelButtons();
+      }
+    }
+
+    refreshUI();
+    draw();
+    requestAnimationFrame(tick);
+  }
+
+  renderLevelButtons();
+  resetLevel();
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>대기전력 전기요금 계산기 | Standby Power Cost Calculator</title>
+  <meta name="description" content="가전 대기전력(W)과 전기요금 단가를 입력해 월/연간 낭비 요금과 멀티탭 차단 절감액을 계산합니다." />
+  <style>
+    :root {
+      --bg: #0a0a1a;
+      --bg2: #141432;
+      --panel: #111129;
+      --panel-soft: #1b1b3f;
+      --line: #30306b;
+      --text: #eef1ff;
+      --muted: #9ca4cf;
+      --cyan: #39ddff;
+      --violet: #b875ff;
+      --green: #3effc4;
+      --orange: #ffbf66;
+      --danger: #ff6f95;
+      --shadow: 0 0 0 1px rgba(57, 221, 255, 0.2), 0 0 28px rgba(57, 221, 255, 0.12);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+      color: var(--text);
+      background: radial-gradient(circle at 5% 0%, #171744 0%, var(--bg) 44%), var(--bg);
+      min-height: 100vh;
+      padding: 18px 14px 40px;
+      line-height: 1.5;
+    }
+
+    .wrap {
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      gap: 10px;
+    }
+
+    .back-link,
+    .chip-btn {
+      text-decoration: none;
+      border: 1px solid var(--line);
+      background: rgba(17, 17, 41, 0.78);
+      color: var(--muted);
+      padding: 9px 12px;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    h1 {
+      margin: 6px 0 8px;
+      font-size: clamp(1.5rem, 4.2vw, 2.1rem);
+      text-shadow: 0 0 16px rgba(57, 221, 255, 0.34);
+      letter-spacing: 0.01em;
+    }
+
+    .subtitle {
+      margin: 0 0 16px;
+      color: var(--muted);
+      font-size: 0.94rem;
+    }
+
+    .card {
+      background: linear-gradient(180deg, rgba(17, 17, 41, 0.95), rgba(10, 10, 26, 0.95));
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 14px;
+      box-shadow: var(--shadow);
+      margin-bottom: 12px;
+    }
+
+    .card h2 {
+      margin: 0 0 10px;
+      font-size: 1.03rem;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .field label {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--muted);
+      font-size: 0.84rem;
+      font-weight: 700;
+    }
+
+    input,
+    button {
+      width: 100%;
+      min-height: 44px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: var(--panel-soft);
+      color: var(--text);
+      font-size: 1rem;
+      padding: 10px 12px;
+    }
+
+    input:focus,
+    button:focus {
+      outline: 2px solid var(--cyan);
+      outline-offset: 1px;
+      border-color: var(--cyan);
+    }
+
+    .actions {
+      margin-top: 12px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .primary {
+      border: none;
+      background: linear-gradient(135deg, rgba(57, 221, 255, 0.98), rgba(184, 117, 255, 0.96));
+      color: #060611;
+      font-weight: 900;
+    }
+
+    .secondary {
+      background: rgba(184, 117, 255, 0.17);
+      color: #ebddff;
+      border-color: rgba(184, 117, 255, 0.45);
+      font-weight: 700;
+    }
+
+    .ghost {
+      background: rgba(156, 164, 207, 0.1);
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .error {
+      min-height: 1.3em;
+      margin-top: 8px;
+      color: var(--danger);
+      font-size: 0.86rem;
+    }
+
+    .result-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 9px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: rgba(24, 24, 58, 0.7);
+      padding: 11px;
+      min-height: 94px;
+    }
+
+    .metric .label {
+      display: block;
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .metric .value {
+      display: block;
+      font-size: clamp(0.96rem, 3.5vw, 1.2rem);
+      font-weight: 800;
+      color: var(--cyan);
+      word-break: keep-all;
+    }
+
+    .metric .value.green { color: #9dffe4; }
+    .metric .value.violet { color: #e2c9ff; }
+    .metric .value.orange { color: #ffd799; }
+
+    .tips {
+      margin-top: 10px;
+      border: 1px dashed rgba(62, 255, 196, 0.4);
+      border-radius: 12px;
+      background: rgba(62, 255, 196, 0.08);
+      padding: 10px;
+      font-size: 0.88rem;
+      color: #c8ffef;
+    }
+
+    .history-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .history-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .history-item {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: rgba(20, 20, 46, 0.8);
+      padding: 10px;
+    }
+
+    .history-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 10px;
+      margin-bottom: 6px;
+    }
+
+    .history-title {
+      font-weight: 800;
+      color: #dce3ff;
+      font-size: 0.94rem;
+    }
+
+    .history-date {
+      color: var(--muted);
+      font-size: 0.78rem;
+    }
+
+    .history-meta {
+      color: #b8c1ee;
+      font-size: 0.84rem;
+      display: grid;
+      gap: 2px;
+    }
+
+    .history-cost {
+      margin-top: 7px;
+      color: #8fffe0;
+      font-weight: 800;
+      font-size: 0.9rem;
+    }
+
+    .empty {
+      color: var(--muted);
+      font-size: 0.9rem;
+      border: 1px dashed var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      text-align: center;
+    }
+
+    .foot-note {
+      color: var(--muted);
+      font-size: 0.8rem;
+      margin-top: 8px;
+    }
+
+    @media (max-width: 860px) {
+      .result-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 680px) {
+      .grid,
+      .actions,
+      .result-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .topbar {
+        flex-wrap: wrap;
+      }
+    }
+  </style>
+  <script src="/assets/analytics.js"></script>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <a class="back-link" href="../">← 도구 목록으로</a>
+      <button id="load-last-btn" class="chip-btn" type="button">최근 계산값 불러오기</button>
+    </div>
+
+    <h1>🔌 대기전력 전기요금 계산기</h1>
+    <p class="subtitle">TV·셋톱박스·전자레인지 등 꺼져 있어도 먹는 전력 비용을 월/연간으로 계산하고, 멀티탭 차단 절감액까지 확인하세요.</p>
+
+    <section class="card">
+      <h2>입력값</h2>
+      <div class="grid">
+        <div class="field">
+          <label for="device">기기 이름</label>
+          <input id="device" type="text" placeholder="예: 거실 TV" maxlength="40" />
+        </div>
+        <div class="field">
+          <label for="watts">대기전력 (W)</label>
+          <input id="watts" type="number" min="0" step="0.1" placeholder="예: 5.2" inputmode="decimal" />
+        </div>
+        <div class="field">
+          <label for="hours">하루 대기 시간 (시간)</label>
+          <input id="hours" type="number" min="0" max="24" step="0.5" value="24" inputmode="decimal" />
+        </div>
+        <div class="field">
+          <label for="qty">기기 개수</label>
+          <input id="qty" type="number" min="1" step="1" value="1" inputmode="numeric" />
+        </div>
+        <div class="field">
+          <label for="rate">전기요금 단가 (원/kWh)</label>
+          <input id="rate" type="number" min="1" step="1" value="140" inputmode="numeric" />
+        </div>
+        <div class="field">
+          <label for="cutHours">하루 차단 시간 (절약 시나리오)</label>
+          <input id="cutHours" type="number" min="0" max="24" step="0.5" value="8" inputmode="decimal" />
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="calc-btn" class="primary" type="button">계산하기</button>
+        <button id="save-default-btn" class="secondary" type="button">기본값 저장</button>
+        <button id="reset-btn" class="ghost" type="button">초기화</button>
+      </div>
+
+      <p id="error" class="error" aria-live="polite"></p>
+    </section>
+
+    <section class="card" aria-live="polite">
+      <h2>계산 결과</h2>
+      <div class="result-grid">
+        <div class="metric">
+          <span class="label">월 사용량</span>
+          <span id="monthly-kwh" class="value">-</span>
+        </div>
+        <div class="metric">
+          <span class="label">월 낭비 요금</span>
+          <span id="monthly-cost" class="value orange">-</span>
+        </div>
+        <div class="metric">
+          <span class="label">연간 낭비 요금</span>
+          <span id="yearly-cost" class="value violet">-</span>
+        </div>
+        <div class="metric">
+          <span class="label">연간 절감 가능액</span>
+          <span id="yearly-saving" class="value green">-</span>
+        </div>
+      </div>
+      <div id="tips" class="tips" hidden></div>
+      <p class="foot-note">※ 본 계산은 단순 추정치입니다. 실제 요금은 누진제/기본요금/계절요금에 따라 달라질 수 있습니다.</p>
+    </section>
+
+    <section class="card">
+      <div class="history-head">
+        <h2>최근 계산 이력</h2>
+        <button id="clear-history-btn" class="ghost" type="button">이력 지우기</button>
+      </div>
+      <div id="history" class="history-list"></div>
+    </section>
+  </div>
+
+  <script>
+    (function () {
+      const STORAGE_KEY = 'standbyPowerCostCalculator.v1';
+      const MAX_HISTORY = 20;
+
+      const els = {
+        device: document.getElementById('device'),
+        watts: document.getElementById('watts'),
+        hours: document.getElementById('hours'),
+        qty: document.getElementById('qty'),
+        rate: document.getElementById('rate'),
+        cutHours: document.getElementById('cutHours'),
+        error: document.getElementById('error'),
+        monthlyKwh: document.getElementById('monthly-kwh'),
+        monthlyCost: document.getElementById('monthly-cost'),
+        yearlyCost: document.getElementById('yearly-cost'),
+        yearlySaving: document.getElementById('yearly-saving'),
+        tips: document.getElementById('tips'),
+        history: document.getElementById('history'),
+        calcBtn: document.getElementById('calc-btn'),
+        saveDefaultBtn: document.getElementById('save-default-btn'),
+        resetBtn: document.getElementById('reset-btn'),
+        clearHistoryBtn: document.getElementById('clear-history-btn'),
+        loadLastBtn: document.getElementById('load-last-btn')
+      };
+
+      const state = {
+        defaults: {
+          hours: 24,
+          qty: 1,
+          rate: 140,
+          cutHours: 8,
+          device: ''
+        },
+        history: []
+      };
+
+      function loadState() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return;
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === 'object') {
+            if (parsed.defaults && typeof parsed.defaults === 'object') {
+              state.defaults = { ...state.defaults, ...parsed.defaults };
+            }
+            if (Array.isArray(parsed.history)) {
+              state.history = parsed.history.slice(0, MAX_HISTORY);
+            }
+          }
+        } catch (error) {
+          console.error('로컬 저장소 로딩 실패:', error);
+        }
+      }
+
+      function saveState() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      }
+
+      function applyDefaults() {
+        els.device.value = state.defaults.device || '';
+        els.hours.value = Number.isFinite(+state.defaults.hours) ? state.defaults.hours : 24;
+        els.qty.value = Number.isFinite(+state.defaults.qty) ? state.defaults.qty : 1;
+        els.rate.value = Number.isFinite(+state.defaults.rate) ? state.defaults.rate : 140;
+        els.cutHours.value = Number.isFinite(+state.defaults.cutHours) ? state.defaults.cutHours : 8;
+      }
+
+      function formatNumber(value, digits) {
+        return Number(value).toLocaleString('ko-KR', {
+          minimumFractionDigits: digits,
+          maximumFractionDigits: digits
+        });
+      }
+
+      function formatWon(value) {
+        return Math.round(value).toLocaleString('ko-KR') + '원';
+      }
+
+      function setError(message) {
+        els.error.textContent = message || '';
+      }
+
+      function readInputs() {
+        const device = els.device.value.trim();
+        const watts = parseFloat(els.watts.value);
+        const hours = parseFloat(els.hours.value);
+        const qty = parseInt(els.qty.value, 10);
+        const rate = parseFloat(els.rate.value);
+        const cutHours = parseFloat(els.cutHours.value);
+
+        if (!Number.isFinite(watts) || watts <= 0) {
+          throw new Error('대기전력(W)은 0보다 큰 숫자로 입력해주세요.');
+        }
+        if (!Number.isFinite(hours) || hours < 0 || hours > 24) {
+          throw new Error('하루 대기 시간은 0~24시간 범위로 입력해주세요.');
+        }
+        if (!Number.isInteger(qty) || qty < 1) {
+          throw new Error('기기 개수는 1개 이상 정수로 입력해주세요.');
+        }
+        if (!Number.isFinite(rate) || rate <= 0) {
+          throw new Error('전기요금 단가는 0보다 크게 입력해주세요.');
+        }
+        if (!Number.isFinite(cutHours) || cutHours < 0 || cutHours > 24) {
+          throw new Error('하루 차단 시간은 0~24시간 범위로 입력해주세요.');
+        }
+
+        return {
+          device: device || '이름 없는 기기',
+          watts,
+          hours,
+          qty,
+          rate,
+          cutHours
+        };
+      }
+
+      function calculate(data) {
+        const standbyHoursPerMonth = data.hours * 30;
+        const monthlyKwh = (data.watts * standbyHoursPerMonth * data.qty) / 1000;
+        const monthlyCost = monthlyKwh * data.rate;
+        const yearlyCost = monthlyCost * 12;
+
+        const cutAppliedHours = Math.min(data.cutHours, data.hours);
+        const monthlySavedKwh = (data.watts * cutAppliedHours * 30 * data.qty) / 1000;
+        const yearlySaving = monthlySavedKwh * data.rate * 12;
+
+        return {
+          monthlyKwh,
+          monthlyCost,
+          yearlyCost,
+          yearlySaving,
+          monthlySavedKwh
+        };
+      }
+
+      function renderResult(result, input) {
+        els.monthlyKwh.textContent = formatNumber(result.monthlyKwh, 2) + ' kWh';
+        els.monthlyCost.textContent = formatWon(result.monthlyCost);
+        els.yearlyCost.textContent = formatWon(result.yearlyCost);
+        els.yearlySaving.textContent = formatWon(result.yearlySaving);
+
+        els.tips.hidden = false;
+        els.tips.textContent = `${input.device} ${input.qty}대 기준, 하루 ${formatNumber(input.cutHours, 1)}시간 차단 시 월 약 ${formatNumber(result.monthlySavedKwh, 2)}kWh를 아끼고 연 ${formatWon(result.yearlySaving)} 절감할 수 있어요.`;
+      }
+
+      function addHistory(input, result) {
+        state.history.unshift({
+          createdAt: Date.now(),
+          input,
+          result
+        });
+        state.history = state.history.slice(0, MAX_HISTORY);
+        saveState();
+        renderHistory();
+      }
+
+      function renderHistory() {
+        if (!state.history.length) {
+          els.history.innerHTML = '<p class="empty">아직 저장된 계산 이력이 없습니다.</p>';
+          return;
+        }
+
+        els.history.innerHTML = state.history.map((item) => {
+          const date = new Date(item.createdAt).toLocaleString('ko-KR', {
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit'
+          });
+
+          return `
+            <article class="history-item">
+              <div class="history-top">
+                <span class="history-title">${escapeHtml(item.input.device)}</span>
+                <span class="history-date">${date}</span>
+              </div>
+              <div class="history-meta">
+                <span>대기전력 ${formatNumber(item.input.watts, 1)}W · 하루 ${formatNumber(item.input.hours, 1)}시간 · ${item.input.qty}대</span>
+                <span>요금 단가 ${formatWon(item.input.rate)} / kWh</span>
+              </div>
+              <div class="history-cost">월 ${formatWon(item.result.monthlyCost)} · 연 ${formatWon(item.result.yearlyCost)}</div>
+            </article>
+          `;
+        }).join('');
+      }
+
+      function escapeHtml(value) {
+        return String(value)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+
+      function saveDefaults() {
+        state.defaults = {
+          device: els.device.value.trim(),
+          hours: parseFloat(els.hours.value) || 24,
+          qty: parseInt(els.qty.value, 10) || 1,
+          rate: parseFloat(els.rate.value) || 140,
+          cutHours: parseFloat(els.cutHours.value) || 8
+        };
+        saveState();
+        setError('기본값을 저장했습니다.');
+      }
+
+      function resetInputs() {
+        els.device.value = '';
+        els.watts.value = '';
+        els.hours.value = 24;
+        els.qty.value = 1;
+        els.rate.value = 140;
+        els.cutHours.value = 8;
+        els.monthlyKwh.textContent = '-';
+        els.monthlyCost.textContent = '-';
+        els.yearlyCost.textContent = '-';
+        els.yearlySaving.textContent = '-';
+        els.tips.hidden = true;
+        els.tips.textContent = '';
+        setError('');
+      }
+
+      function loadLastRecord() {
+        if (!state.history.length) {
+          setError('불러올 최근 계산 이력이 없습니다.');
+          return;
+        }
+
+        const last = state.history[0].input;
+        els.device.value = last.device || '';
+        els.watts.value = last.watts;
+        els.hours.value = last.hours;
+        els.qty.value = last.qty;
+        els.rate.value = last.rate;
+        els.cutHours.value = last.cutHours;
+        setError('최근 계산값을 불러왔습니다.');
+      }
+
+      function runCalculation() {
+        try {
+          setError('');
+          const input = readInputs();
+          const result = calculate(input);
+          renderResult(result, input);
+          addHistory(input, result);
+        } catch (error) {
+          setError(error.message || '계산 중 오류가 발생했습니다.');
+        }
+      }
+
+      function clearHistory() {
+        if (!state.history.length) {
+          setError('삭제할 이력이 없습니다.');
+          return;
+        }
+
+        state.history = [];
+        saveState();
+        renderHistory();
+        setError('이력을 모두 삭제했습니다.');
+      }
+
+      els.calcBtn.addEventListener('click', runCalculation);
+      els.saveDefaultBtn.addEventListener('click', saveDefaults);
+      els.resetBtn.addEventListener('click', resetInputs);
+      els.clearHistoryBtn.addEventListener('click', clearHistory);
+      els.loadLastBtn.addEventListener('click', loadLastRecord);
+
+      [els.watts, els.hours, els.qty, els.rate, els.cutHours].forEach((input) => {
+        input.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter') runCalculation();
+        });
+      });
+
+      loadState();
+      applyDefaults();
+      renderHistory();
+    })();
+  </script>
+</body>
+</html>

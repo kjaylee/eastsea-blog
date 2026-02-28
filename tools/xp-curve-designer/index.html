@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RPG 성장 곡선 설계기</title>
+  <style>
+    :root {
+      --bg: #0a0a1a;
+      --card: #12142b;
+      --line: #2a2d55;
+      --text: #e9ecff;
+      --sub: #a8afd8;
+      --neon1: #00f5ff;
+      --neon2: #a855f7;
+      --neon3: #39ff94;
+      --danger: #ff5a8a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR', sans-serif;
+      background: radial-gradient(circle at top right, rgba(168,85,247,.12), transparent 35%), var(--bg);
+      color: var(--text);
+    }
+    .wrap {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 20px;
+      display: grid;
+      gap: 16px;
+    }
+    .title {
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: linear-gradient(135deg, rgba(0,245,255,.08), rgba(168,85,247,.08));
+      box-shadow: 0 0 30px rgba(0,245,255,.08) inset;
+    }
+    .title h1 {
+      margin: 0 0 8px;
+      font-size: clamp(1.25rem, 2.5vw, 1.9rem);
+      color: var(--neon1);
+      letter-spacing: .2px;
+    }
+    .title p { margin: 0; color: var(--sub); }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px;
+      background: var(--card);
+    }
+    .card h2 {
+      margin: 0 0 12px;
+      font-size: 1rem;
+      color: var(--neon2);
+    }
+
+    .form {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    label {
+      display: grid;
+      gap: 6px;
+      font-size: .88rem;
+      color: var(--sub);
+    }
+    input, select, button {
+      width: 100%;
+      border: 1px solid #3a3e74;
+      background: #0e1022;
+      color: var(--text);
+      border-radius: 10px;
+      padding: 10px 11px;
+      font-size: .95rem;
+      outline: none;
+    }
+    input:focus, select:focus {
+      border-color: var(--neon1);
+      box-shadow: 0 0 0 2px rgba(0,245,255,.2);
+    }
+    .btns {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 10px;
+    }
+    button {
+      cursor: pointer;
+      background: linear-gradient(135deg, #16203f, #18204d);
+    }
+    button:hover { filter: brightness(1.08); }
+    .primary { border-color: #207a89; color: var(--neon1); }
+    .accent { border-color: #7f3cd5; color: #d8c2ff; }
+    .danger { border-color: #8a2f56; color: #ff9abc; }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+    .kpi {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px;
+      background: rgba(10,12,34,.7);
+    }
+    .kpi b {
+      display: block;
+      font-size: .8rem;
+      color: var(--sub);
+      margin-bottom: 6px;
+      font-weight: 600;
+    }
+    .kpi span {
+      color: var(--neon3);
+      font-weight: 700;
+      font-size: 1.02rem;
+      word-break: keep-all;
+    }
+
+    canvas {
+      width: 100%;
+      height: 260px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #0b0d20;
+      display: block;
+    }
+
+    .table-wrap {
+      max-height: 360px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .88rem;
+    }
+    th, td {
+      padding: 8px 10px;
+      border-bottom: 1px solid #25294f;
+      text-align: right;
+      white-space: nowrap;
+    }
+    th:first-child, td:first-child { text-align: center; }
+    th {
+      position: sticky;
+      top: 0;
+      background: #121838;
+      color: #bfefff;
+      z-index: 1;
+    }
+    tr:nth-child(even) td { background: rgba(255,255,255,.02); }
+
+    .hint { color: var(--sub); font-size: .82rem; margin-top: 8px; }
+
+    @media (max-width: 860px) {
+      .grid { grid-template-columns: 1fr; }
+      .summary { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 520px) {
+      .wrap { padding: 12px; }
+      .form { grid-template-columns: 1fr; }
+      .btns { grid-template-columns: 1fr; }
+      canvas { height: 220px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="title">
+      <h1>RPG 성장 곡선 설계기</h1>
+      <p>레벨별 필요 경험치(XP)와 누적 XP를 실시간으로 시뮬레이션하고 CSV로 복사하세요.</p>
+    </section>
+
+    <section class="grid">
+      <article class="card">
+        <h2>설정</h2>
+        <div class="form" id="form">
+          <label>최대 레벨
+            <input id="maxLevel" type="number" min="2" max="500" value="50" />
+          </label>
+          <label>기준 경험치 (레벨2)
+            <input id="baseXp" type="number" min="1" step="1" value="100" />
+          </label>
+          <label>성장식
+            <select id="curveType">
+              <option value="linear">선형 증가</option>
+              <option value="exponential">지수 증가</option>
+              <option value="sqrt">완만 증가(제곱근)</option>
+              <option value="custom">커스텀(거듭제곱)</option>
+            </select>
+          </label>
+          <label>성장률 (%)
+            <input id="growthRate" type="number" min="0" step="0.1" value="12" />
+          </label>
+          <label>커스텀 지수 (custom 전용)
+            <input id="customPower" type="number" min="0.2" max="4" step="0.1" value="1.5" />
+          </label>
+          <label>반올림 단위
+            <input id="roundUnit" type="number" min="1" step="1" value="10" />
+          </label>
+          <label>일일 획득 XP (예상 일수)
+            <input id="dailyXp" type="number" min="0" step="1" value="500" />
+          </label>
+        </div>
+        <div class="btns">
+          <button class="primary" id="copyCsvBtn">CSV 복사</button>
+          <button class="accent" id="recalcBtn">다시 계산</button>
+          <button class="danger" id="resetBtn">초기화</button>
+        </div>
+        <p class="hint" id="status">자동 저장: 활성화됨</p>
+      </article>
+
+      <article class="card">
+        <h2>요약</h2>
+        <div class="summary">
+          <div class="kpi"><b>총 누적 XP</b><span id="sumXp">-</span></div>
+          <div class="kpi"><b>레벨업 평균 XP</b><span id="avgXp">-</span></div>
+          <div class="kpi"><b>최대 레벨 예상 일수</b><span id="daysToMax">-</span></div>
+        </div>
+        <p class="hint">그래프: <span style="color:var(--neon1)">필요 XP</span> · <span style="color:#ff8ef5">누적 XP</span></p>
+        <canvas id="chart" width="900" height="260" aria-label="XP 그래프"></canvas>
+      </article>
+    </section>
+
+    <section class="card">
+      <h2>레벨별 데이터</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>레벨</th>
+              <th>필요 XP</th>
+              <th>누적 XP</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const KEY = 'xpCurveDesignerState.v1';
+      const ids = ['maxLevel','baseXp','curveType','growthRate','customPower','roundUnit','dailyXp'];
+      const el = Object.fromEntries(ids.map(id => [id, document.getElementById(id)]));
+      const rowsEl = document.getElementById('rows');
+      const sumXpEl = document.getElementById('sumXp');
+      const avgXpEl = document.getElementById('avgXp');
+      const daysToMaxEl = document.getElementById('daysToMax');
+      const statusEl = document.getElementById('status');
+      const chart = document.getElementById('chart');
+      const ctx = chart.getContext('2d');
+
+      const nf = new Intl.NumberFormat('ko-KR');
+      let model = [];
+
+      function load() {
+        try {
+          const saved = JSON.parse(localStorage.getItem(KEY) || '{}');
+          for (const id of ids) {
+            if (saved[id] != null) el[id].value = saved[id];
+          }
+        } catch (_) {}
+      }
+
+      function save() {
+        const data = {};
+        for (const id of ids) data[id] = el[id].value;
+        localStorage.setItem(KEY, JSON.stringify(data));
+        statusEl.textContent = '자동 저장 완료: ' + new Date().toLocaleTimeString('ko-KR');
+      }
+
+      function num(v, d = 0) {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : d;
+      }
+
+      function roundTo(v, unit) {
+        const u = Math.max(1, Math.floor(unit));
+        return Math.max(0, Math.round(v / u) * u);
+      }
+
+      function xpForLevel(level, cfg) {
+        if (level <= 1) return 0;
+        const n = level - 1;
+        const g = Math.max(0, cfg.growthRate) / 100;
+        let raw = cfg.baseXp;
+
+        switch (cfg.curveType) {
+          case 'linear':
+            raw = cfg.baseXp * (1 + (n - 1) * g);
+            break;
+          case 'exponential':
+            raw = cfg.baseXp * Math.pow(1 + g, n - 1);
+            break;
+          case 'sqrt':
+            raw = cfg.baseXp * (1 + Math.sqrt(Math.max(0, n - 1)) * g * 3);
+            break;
+          case 'custom': {
+            const p = Math.min(4, Math.max(0.2, cfg.customPower));
+            raw = cfg.baseXp * Math.pow(n, p) * Math.max(0.2, 1 + g * 0.5);
+            break;
+          }
+          default:
+            raw = cfg.baseXp;
+        }
+        return roundTo(raw, cfg.roundUnit);
+      }
+
+      function calc() {
+        const cfg = {
+          maxLevel: Math.min(500, Math.max(2, Math.floor(num(el.maxLevel.value, 50)))),
+          baseXp: Math.max(1, Math.floor(num(el.baseXp.value, 100))),
+          curveType: el.curveType.value,
+          growthRate: num(el.growthRate.value, 12),
+          customPower: num(el.customPower.value, 1.5),
+          roundUnit: Math.max(1, Math.floor(num(el.roundUnit.value, 10))),
+          dailyXp: Math.max(0, Math.floor(num(el.dailyXp.value, 500)))
+        };
+
+        model = [];
+        let cumulative = 0;
+        for (let lv = 1; lv <= cfg.maxLevel; lv++) {
+          const req = xpForLevel(lv, cfg);
+          cumulative += req;
+          model.push({ lv, req, cumulative });
+        }
+
+        renderTable();
+        renderSummary(cfg);
+        drawChart();
+      }
+
+      function renderTable() {
+        rowsEl.innerHTML = model.map(({ lv, req, cumulative }) => `
+          <tr>
+            <td>${lv}</td>
+            <td>${nf.format(req)}</td>
+            <td>${nf.format(cumulative)}</td>
+          </tr>
+        `).join('');
+      }
+
+      function renderSummary(cfg) {
+        const total = model.at(-1)?.cumulative || 0;
+        const avg = model.length > 1 ? Math.round(total / (model.length - 1)) : 0;
+        const days = cfg.dailyXp > 0 ? (total / cfg.dailyXp).toFixed(1) + '일' : '일일 XP 입력 필요';
+
+        sumXpEl.textContent = nf.format(total);
+        avgXpEl.textContent = nf.format(avg);
+        daysToMaxEl.textContent = days;
+      }
+
+      function fitCanvas() {
+        const ratio = window.devicePixelRatio || 1;
+        const cssW = chart.clientWidth || 900;
+        const cssH = chart.clientHeight || 260;
+        chart.width = Math.floor(cssW * ratio);
+        chart.height = Math.floor(cssH * ratio);
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      }
+
+      function drawLine(data, maxY, color, pad, w, h) {
+        if (!data.length) return;
+        ctx.beginPath();
+        data.forEach((v, i) => {
+          const x = pad + (w - pad * 2) * (i / Math.max(1, data.length - 1));
+          const y = h - pad - (h - pad * 2) * (v / (maxY || 1));
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 8;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
+
+      function drawChart() {
+        fitCanvas();
+        const w = chart.clientWidth;
+        const h = chart.clientHeight;
+        const pad = 26;
+
+        ctx.clearRect(0, 0, w, h);
+        ctx.fillStyle = '#0b0d20';
+        ctx.fillRect(0, 0, w, h);
+
+        ctx.strokeStyle = '#2a2d55';
+        ctx.lineWidth = 1;
+        for (let i = 0; i <= 4; i++) {
+          const y = pad + (h - pad * 2) * (i / 4);
+          ctx.beginPath();
+          ctx.moveTo(pad, y);
+          ctx.lineTo(w - pad, y);
+          ctx.stroke();
+        }
+
+        const req = model.map(m => m.req);
+        const cum = model.map(m => m.cumulative);
+        const maxY = Math.max(1, ...req, ...cum);
+
+        drawLine(req, maxY, '#00f5ff', pad, w, h);
+        drawLine(cum, maxY, '#ff8ef5', pad, w, h);
+      }
+
+      async function copyCsv() {
+        const header = '레벨,필요XP,누적XP';
+        const lines = model.map(m => `${m.lv},${m.req},${m.cumulative}`);
+        const csv = [header, ...lines].join('\n');
+
+        try {
+          await navigator.clipboard.writeText(csv);
+          statusEl.textContent = 'CSV 복사 완료';
+        } catch (_) {
+          const ta = document.createElement('textarea');
+          ta.value = csv;
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          ta.remove();
+          statusEl.textContent = 'CSV 복사 완료(대체 모드)';
+        }
+      }
+
+      function reset() {
+        const defaults = {
+          maxLevel: 50,
+          baseXp: 100,
+          curveType: 'linear',
+          growthRate: 12,
+          customPower: 1.5,
+          roundUnit: 10,
+          dailyXp: 500
+        };
+        for (const id of ids) el[id].value = defaults[id];
+        localStorage.removeItem(KEY);
+        calc();
+        statusEl.textContent = '초기화 완료';
+      }
+
+      for (const id of ids) {
+        el[id].addEventListener('input', () => { save(); calc(); });
+        el[id].addEventListener('change', () => { save(); calc(); });
+      }
+
+      document.getElementById('copyCsvBtn').addEventListener('click', copyCsv);
+      document.getElementById('recalcBtn').addEventListener('click', calc);
+      document.getElementById('resetBtn').addEventListener('click', reset);
+      window.addEventListener('resize', drawChart);
+
+      load();
+      calc();
+    })();
+  </script>
+</body>
+</html>

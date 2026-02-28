@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>여행 짐 체크리스트 플래너 | Travel Packing Planner</title>
+  <meta name="description" content="여행 기간·유형·날씨를 반영해 짐 목록을 자동 생성하고 체크 진행률과 이력을 저장하는 여행 짐 체크리스트 플래너" />
+  <style>
+    :root {
+      --bg: #0a0a1a;
+      --bg-glow: #161638;
+      --panel: #13132e;
+      --panel-soft: #1b1b3f;
+      --line: #303067;
+      --text: #eef1ff;
+      --muted: #9fa8d4;
+      --cyan: #2bd9ff;
+      --violet: #b978ff;
+      --green: #44f0bf;
+      --orange: #ffbf5d;
+      --danger: #ff6d93;
+      --shadow: 0 0 0 1px rgba(43,217,255,0.16), 0 0 22px rgba(43,217,255,0.09);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+      background: radial-gradient(circle at 0% 0%, var(--bg-glow), var(--bg) 48%);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.5;
+      padding: 20px 14px 42px;
+    }
+
+    .wrap { max-width: 940px; margin: 0 auto; }
+
+    .top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      gap: 10px;
+    }
+
+    .back {
+      color: var(--muted);
+      text-decoration: none;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 9px 12px;
+      background: rgba(19,19,46,0.78);
+      font-weight: 700;
+      font-size: 0.9rem;
+    }
+
+    h1 {
+      margin: 10px 0 8px;
+      font-size: clamp(1.45rem, 4.4vw, 2.1rem);
+      text-shadow: 0 0 16px rgba(43,217,255,0.35);
+    }
+
+    .sub {
+      margin: 0 0 16px;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .card {
+      background: linear-gradient(180deg, rgba(19,19,46,0.97), rgba(10,10,28,0.96));
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 14px;
+      margin-bottom: 12px;
+      box-shadow: var(--shadow);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .field label {
+      display: block;
+      color: var(--muted);
+      margin-bottom: 6px;
+      font-size: 0.84rem;
+      font-weight: 700;
+    }
+
+    input, select, button {
+      width: 100%;
+      min-height: 43px;
+      border-radius: 11px;
+      border: 1px solid var(--line);
+      background: var(--panel-soft);
+      color: var(--text);
+      font-size: 0.97rem;
+      padding: 10px 12px;
+    }
+
+    input:focus, select:focus, button:focus {
+      outline: 2px solid var(--cyan);
+      outline-offset: 1px;
+      border-color: var(--cyan);
+    }
+
+    .actions {
+      margin-top: 10px;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .primary {
+      background: linear-gradient(135deg, rgba(43,217,255,0.95), rgba(185,120,255,0.95));
+      color: #04040f;
+      border: none;
+      font-weight: 800;
+    }
+
+    .secondary {
+      background: rgba(185,120,255,0.15);
+      border-color: rgba(185,120,255,0.45);
+      color: #efe1ff;
+      font-weight: 700;
+    }
+
+    .ghost {
+      background: rgba(159,168,212,0.08);
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .danger {
+      background: rgba(255,109,147,0.14);
+      color: #ffc2d5;
+      border-color: rgba(255,109,147,0.5);
+      font-weight: 700;
+    }
+
+    .inline-add {
+      display: grid;
+      grid-template-columns: 1.4fr 0.7fr 0.55fr 0.55fr;
+      gap: 8px;
+      align-items: end;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: rgba(27,27,63,0.74);
+      padding: 10px;
+      min-height: 84px;
+    }
+
+    .metric .label {
+      display: block;
+      color: var(--muted);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+    }
+
+    .metric .value {
+      font-size: clamp(1rem, 3.6vw, 1.35rem);
+      font-weight: 800;
+      color: var(--cyan);
+      word-break: keep-all;
+    }
+
+    .metric .value.green { color: #9dffd7; }
+    .metric .value.violet { color: #dfc2ff; }
+    .metric .value.orange { color: #ffd796; }
+
+    .checklist {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .item {
+      display: grid;
+      grid-template-columns: auto 1fr auto auto;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: rgba(17,17,43,0.78);
+      padding: 9px 10px;
+    }
+
+    .item.done {
+      border-color: rgba(68,240,191,0.5);
+      background: rgba(68,240,191,0.07);
+    }
+
+    .item-name {
+      font-size: 0.93rem;
+      font-weight: 620;
+    }
+
+    .item.done .item-name {
+      text-decoration: line-through;
+      color: #9dcfbf;
+    }
+
+    .badge {
+      border: 1px solid rgba(43,217,255,0.3);
+      border-radius: 999px;
+      padding: 4px 9px;
+      color: #b9f4ff;
+      font-size: 0.78rem;
+      white-space: nowrap;
+    }
+
+    .mini {
+      min-height: 34px;
+      width: auto;
+      padding: 6px 8px;
+      font-size: 0.78rem;
+      border-radius: 9px;
+    }
+
+    .history {
+      display: grid;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .history-item {
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: rgba(20,20,49,0.75);
+      padding: 10px;
+    }
+
+    .history-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 6px;
+    }
+
+    .history-title {
+      font-size: 0.92rem;
+      font-weight: 700;
+    }
+
+    .history-meta {
+      color: var(--muted);
+      font-size: 0.8rem;
+      margin-bottom: 8px;
+    }
+
+    .history-actions {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .empty {
+      color: var(--muted);
+      font-size: 0.9rem;
+      border: 1px dashed rgba(159,168,212,0.35);
+      border-radius: 10px;
+      padding: 12px;
+      text-align: center;
+    }
+
+    .error {
+      color: var(--danger);
+      min-height: 1.25em;
+      margin-top: 8px;
+      font-size: 0.84rem;
+      font-weight: 600;
+    }
+
+    .hint {
+      color: var(--muted);
+      font-size: 0.82rem;
+      margin-top: 7px;
+    }
+
+    @media (max-width: 860px) {
+      .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .inline-add { grid-template-columns: 1fr 0.7fr 0.55fr; }
+      .inline-add .add-button-wrap { grid-column: span 3; }
+      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .item { grid-template-columns: auto 1fr auto; }
+      .item .mini { grid-column: 3; }
+    }
+
+    @media (max-width: 520px) {
+      body { padding: 16px 10px 34px; }
+      .grid { grid-template-columns: 1fr; }
+      .actions { grid-template-columns: 1fr; }
+      .inline-add { grid-template-columns: 1fr; }
+      .inline-add .add-button-wrap { grid-column: auto; }
+      .stats { grid-template-columns: 1fr 1fr; }
+      .item { grid-template-columns: auto 1fr; }
+      .item .badge { grid-column: 2; justify-self: start; }
+      .item .mini { grid-column: 2; justify-self: start; }
+    }
+  </style>
+  <script src="/assets/analytics.js"></script>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <a class="back" href="/tools/">← 도구 목록</a>
+    </div>
+
+    <h1>🧳 여행 짐 체크리스트 플래너</h1>
+    <p class="sub">기간·유형·날씨에 맞춘 추천 짐 목록을 만들고, 체크 진행률과 최근 여행 이력을 저장하세요.</p>
+
+    <section class="card">
+      <div class="grid">
+        <div class="field">
+          <label for="tripName">여행 이름</label>
+          <input id="tripName" type="text" placeholder="예: 3월 부산 출장" />
+        </div>
+        <div class="field">
+          <label for="days">여행 일수</label>
+          <input id="days" type="number" min="1" max="60" value="3" />
+        </div>
+        <div class="field">
+          <label for="tripType">여행 유형</label>
+          <select id="tripType">
+            <option value="general">일반 여행</option>
+            <option value="business">출장</option>
+            <option value="camping">캠핑/야외</option>
+            <option value="family">가족여행</option>
+            <option value="international">해외여행</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="weather">날씨</label>
+          <select id="weather">
+            <option value="mild">온화함</option>
+            <option value="hot">더움</option>
+            <option value="cold">추움</option>
+            <option value="rainy">비 예보</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="generateBtn" class="primary">추천 목록 생성</button>
+        <button id="savePlanBtn" class="secondary">현재 목록 저장</button>
+        <button id="saveSettingsBtn" class="ghost">입력값 저장</button>
+        <button id="clearAllBtn" class="danger">체크 초기화</button>
+      </div>
+      <p id="error" class="error"></p>
+      <p class="hint">※ 입력값/체크리스트/저장 이력은 이 브라우저의 localStorage에 저장됩니다.</p>
+    </section>
+
+    <section class="card">
+      <h2 style="margin:0 0 10px; font-size:1.02rem;">빠른 항목 추가</h2>
+      <div class="inline-add">
+        <div class="field">
+          <label for="customName">항목명</label>
+          <input id="customName" type="text" placeholder="예: 보조배터리" />
+        </div>
+        <div class="field">
+          <label for="customCategory">카테고리</label>
+          <select id="customCategory">
+            <option value="필수">필수</option>
+            <option value="의류">의류</option>
+            <option value="전자기기">전자기기</option>
+            <option value="세면/위생">세면/위생</option>
+            <option value="서류">서류</option>
+            <option value="기타">기타</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="customQty">수량</label>
+          <input id="customQty" type="number" min="1" max="30" value="1" />
+        </div>
+        <div class="add-button-wrap">
+          <label style="visibility:hidden;">추가</label>
+          <button id="addCustomBtn" class="primary">항목 추가</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2 style="margin:0 0 10px; font-size:1.02rem;">진행 현황</h2>
+      <div class="stats">
+        <div class="metric"><span class="label">총 항목</span><span id="totalCount" class="value">0</span></div>
+        <div class="metric"><span class="label">완료</span><span id="doneCount" class="value green">0</span></div>
+        <div class="metric"><span class="label">남음</span><span id="remainCount" class="value orange">0</span></div>
+        <div class="metric"><span class="label">진행률</span><span id="progressRate" class="value violet">0%</span></div>
+      </div>
+
+      <div id="checklist" class="checklist"></div>
+      <div id="emptyChecklist" class="empty" style="display:none; margin-top:10px;">아직 체크리스트가 없습니다. “추천 목록 생성”을 눌러 시작하세요.</div>
+    </section>
+
+    <section class="card">
+      <h2 style="margin:0 0 8px; font-size:1.02rem;">최근 저장 이력 (최대 10개)</h2>
+      <div id="history" class="history"></div>
+    </section>
+  </div>
+
+  <script>
+    (function () {
+      const KEYS = {
+        settings: 'travelPackingPlanner.settings.v1',
+        items: 'travelPackingPlanner.items.v1',
+        history: 'travelPackingPlanner.history.v1'
+      };
+
+      const PRESET = [
+        { name: '휴대폰', category: '필수', qty: () => 1 },
+        { name: '지갑/카드', category: '필수', qty: () => 1 },
+        { name: '상비약', category: '필수', qty: () => 1 },
+        { name: '충전기', category: '전자기기', qty: () => 1 },
+        { name: '속옷', category: '의류', qty: d => clamp(Math.max(2, d), 2, 14) },
+        { name: '양말', category: '의류', qty: d => clamp(Math.max(2, d), 2, 14) },
+        { name: '상의', category: '의류', qty: d => clamp(Math.ceil(d * 0.7) + 1, 2, 12) },
+        { name: '하의', category: '의류', qty: d => clamp(Math.ceil(d * 0.4) + 1, 1, 8) },
+        { name: '잠옷', category: '의류', qty: d => (d >= 2 ? 1 : 0) },
+        { name: '세면도구', category: '세면/위생', qty: () => 1 },
+        { name: '칫솔/치약', category: '세면/위생', qty: () => 1 },
+        { name: '보조배터리', category: '전자기기', qty: () => 1 }
+      ];
+
+      const TYPE_EXTRAS = {
+        business: [
+          { name: '노트북', category: '전자기기', qty: 1 },
+          { name: '명함', category: '서류', qty: 1 },
+          { name: '업무용 복장', category: '의류', qty: 1 }
+        ],
+        camping: [
+          { name: '랜턴', category: '필수', qty: 1 },
+          { name: '휴대용 버너', category: '기타', qty: 1 },
+          { name: '방수 매트', category: '기타', qty: 1 }
+        ],
+        family: [
+          { name: '물티슈', category: '세면/위생', qty: 2 },
+          { name: '간식', category: '기타', qty: 2 }
+        ],
+        international: [
+          { name: '여권', category: '서류', qty: 1 },
+          { name: 'e-티켓/예약내역', category: '서류', qty: 1 },
+          { name: '멀티 어댑터', category: '전자기기', qty: 1 }
+        ],
+        general: []
+      };
+
+      const WEATHER_EXTRAS = {
+        hot: [
+          { name: '선크림', category: '세면/위생', qty: 1 },
+          { name: '얇은 모자', category: '의류', qty: 1 }
+        ],
+        cold: [
+          { name: '두꺼운 외투', category: '의류', qty: 1 },
+          { name: '핫팩', category: '필수', qty: 3 },
+          { name: '보습 제품', category: '세면/위생', qty: 1 }
+        ],
+        rainy: [
+          { name: '우산', category: '필수', qty: 1 },
+          { name: '방수 파우치', category: '기타', qty: 1 },
+          { name: '여벌 신발', category: '의류', qty: 1 }
+        ],
+        mild: []
+      };
+
+      const state = {
+        settings: {
+          tripName: '',
+          days: 3,
+          tripType: 'general',
+          weather: 'mild'
+        },
+        items: [],
+        history: []
+      };
+
+      const el = {
+        tripName: document.getElementById('tripName'),
+        days: document.getElementById('days'),
+        tripType: document.getElementById('tripType'),
+        weather: document.getElementById('weather'),
+        generateBtn: document.getElementById('generateBtn'),
+        savePlanBtn: document.getElementById('savePlanBtn'),
+        saveSettingsBtn: document.getElementById('saveSettingsBtn'),
+        clearAllBtn: document.getElementById('clearAllBtn'),
+        customName: document.getElementById('customName'),
+        customCategory: document.getElementById('customCategory'),
+        customQty: document.getElementById('customQty'),
+        addCustomBtn: document.getElementById('addCustomBtn'),
+        checklist: document.getElementById('checklist'),
+        emptyChecklist: document.getElementById('emptyChecklist'),
+        totalCount: document.getElementById('totalCount'),
+        doneCount: document.getElementById('doneCount'),
+        remainCount: document.getElementById('remainCount'),
+        progressRate: document.getElementById('progressRate'),
+        history: document.getElementById('history'),
+        error: document.getElementById('error')
+      };
+
+      function clamp(n, min, max) {
+        return Math.min(Math.max(n, min), max);
+      }
+
+      function uid() {
+        return `${Date.now()}-${Math.random().toString(16).slice(2, 9)}`;
+      }
+
+      function setError(msg) {
+        el.error.textContent = msg || '';
+      }
+
+      function load() {
+        try {
+          const savedSettings = JSON.parse(localStorage.getItem(KEYS.settings) || 'null');
+          const savedItems = JSON.parse(localStorage.getItem(KEYS.items) || 'null');
+          const savedHistory = JSON.parse(localStorage.getItem(KEYS.history) || 'null');
+
+          if (savedSettings && typeof savedSettings === 'object') {
+            state.settings = Object.assign({}, state.settings, savedSettings);
+          }
+          if (Array.isArray(savedItems)) {
+            state.items = savedItems;
+          }
+          if (Array.isArray(savedHistory)) {
+            state.history = savedHistory.slice(0, 10);
+          }
+        } catch (e) {
+          console.warn('localStorage load error:', e);
+        }
+      }
+
+      function saveSettings() {
+        state.settings = readSettingsFromInput();
+        localStorage.setItem(KEYS.settings, JSON.stringify(state.settings));
+      }
+
+      function saveItems() {
+        localStorage.setItem(KEYS.items, JSON.stringify(state.items));
+      }
+
+      function saveHistory() {
+        localStorage.setItem(KEYS.history, JSON.stringify(state.history.slice(0, 10)));
+      }
+
+      function readSettingsFromInput() {
+        return {
+          tripName: (el.tripName.value || '').trim(),
+          days: clamp(Number(el.days.value) || 1, 1, 60),
+          tripType: el.tripType.value,
+          weather: el.weather.value
+        };
+      }
+
+      function fillInputsFromSettings() {
+        el.tripName.value = state.settings.tripName || '';
+        el.days.value = state.settings.days;
+        el.tripType.value = state.settings.tripType;
+        el.weather.value = state.settings.weather;
+      }
+
+      function makeRecommendedItems(settings) {
+        const items = [];
+
+        PRESET.forEach(p => {
+          const qty = typeof p.qty === 'function' ? p.qty(settings.days) : p.qty;
+          if (qty > 0) {
+            items.push({
+              id: uid(),
+              name: p.name,
+              category: p.category,
+              qty,
+              done: false
+            });
+          }
+        });
+
+        (TYPE_EXTRAS[settings.tripType] || []).forEach(extra => {
+          items.push({ id: uid(), name: extra.name, category: extra.category, qty: extra.qty, done: false });
+        });
+
+        (WEATHER_EXTRAS[settings.weather] || []).forEach(extra => {
+          items.push({ id: uid(), name: extra.name, category: extra.category, qty: extra.qty, done: false });
+        });
+
+        const merged = [];
+        const map = new Map();
+
+        items.forEach(item => {
+          const key = `${item.name}__${item.category}`;
+          if (!map.has(key)) {
+            map.set(key, { ...item });
+            merged.push(map.get(key));
+          } else {
+            map.get(key).qty += item.qty;
+          }
+        });
+
+        return merged;
+      }
+
+      function addCustomItem() {
+        setError('');
+        const name = (el.customName.value || '').trim();
+        const category = el.customCategory.value;
+        const qty = clamp(Number(el.customQty.value) || 1, 1, 30);
+
+        if (!name) {
+          setError('추가할 항목명을 입력해 주세요.');
+          return;
+        }
+
+        state.items.push({ id: uid(), name, category, qty, done: false });
+        el.customName.value = '';
+        el.customQty.value = '1';
+        saveItems();
+        renderChecklist();
+      }
+
+      function renderChecklist() {
+        el.checklist.innerHTML = '';
+
+        if (!state.items.length) {
+          el.emptyChecklist.style.display = 'block';
+        } else {
+          el.emptyChecklist.style.display = 'none';
+        }
+
+        state.items.forEach(item => {
+          const row = document.createElement('div');
+          row.className = `item${item.done ? ' done' : ''}`;
+
+          const check = document.createElement('input');
+          check.type = 'checkbox';
+          check.checked = !!item.done;
+          check.setAttribute('aria-label', `${item.name} 완료 체크`);
+          check.addEventListener('change', () => {
+            item.done = check.checked;
+            saveItems();
+            renderChecklist();
+          });
+
+          const name = document.createElement('div');
+          name.className = 'item-name';
+          name.textContent = `${item.name} (${item.category})`;
+
+          const qty = document.createElement('span');
+          qty.className = 'badge';
+          qty.textContent = `수량 ${item.qty}`;
+
+          const del = document.createElement('button');
+          del.className = 'mini danger';
+          del.textContent = '삭제';
+          del.addEventListener('click', () => {
+            state.items = state.items.filter(v => v.id !== item.id);
+            saveItems();
+            renderChecklist();
+          });
+
+          row.append(check, name, qty, del);
+          el.checklist.appendChild(row);
+        });
+
+        renderStats();
+      }
+
+      function renderStats() {
+        const total = state.items.length;
+        const done = state.items.filter(i => i.done).length;
+        const remain = total - done;
+        const rate = total ? Math.round((done / total) * 100) : 0;
+
+        el.totalCount.textContent = String(total);
+        el.doneCount.textContent = String(done);
+        el.remainCount.textContent = String(remain);
+        el.progressRate.textContent = `${rate}%`;
+      }
+
+      function renderHistory() {
+        el.history.innerHTML = '';
+
+        if (!state.history.length) {
+          const empty = document.createElement('div');
+          empty.className = 'empty';
+          empty.textContent = '저장된 이력이 없습니다. 체크리스트를 만든 뒤 “현재 목록 저장”을 눌러 보세요.';
+          el.history.appendChild(empty);
+          return;
+        }
+
+        state.history.forEach(entry => {
+          const box = document.createElement('div');
+          box.className = 'history-item';
+
+          const head = document.createElement('div');
+          head.className = 'history-head';
+          const title = document.createElement('div');
+          title.className = 'history-title';
+          title.textContent = entry.tripName || '이름 없는 여행';
+
+          const percent = document.createElement('span');
+          percent.className = 'badge';
+          percent.textContent = `${entry.progress}% 완료`;
+
+          head.append(title, percent);
+
+          const meta = document.createElement('div');
+          meta.className = 'history-meta';
+          meta.textContent = `${entry.savedAtText} · ${entry.days}일 · ${tripTypeLabel(entry.tripType)} · ${weatherLabel(entry.weather)} · ${entry.items.length}개 항목`;
+
+          const actions = document.createElement('div');
+          actions.className = 'history-actions';
+
+          const restoreBtn = document.createElement('button');
+          restoreBtn.className = 'mini secondary';
+          restoreBtn.textContent = '불러오기';
+          restoreBtn.addEventListener('click', () => restoreHistory(entry.id));
+
+          const deleteBtn = document.createElement('button');
+          deleteBtn.className = 'mini danger';
+          deleteBtn.textContent = '삭제';
+          deleteBtn.addEventListener('click', () => deleteHistory(entry.id));
+
+          actions.append(restoreBtn, deleteBtn);
+
+          box.append(head, meta, actions);
+          el.history.appendChild(box);
+        });
+      }
+
+      function tripTypeLabel(type) {
+        const map = {
+          general: '일반 여행',
+          business: '출장',
+          camping: '캠핑/야외',
+          family: '가족여행',
+          international: '해외여행'
+        };
+        return map[type] || type;
+      }
+
+      function weatherLabel(weather) {
+        const map = { mild: '온화함', hot: '더움', cold: '추움', rainy: '비 예보' };
+        return map[weather] || weather;
+      }
+
+      function restoreHistory(id) {
+        const found = state.history.find(v => v.id === id);
+        if (!found) return;
+
+        state.settings = {
+          tripName: found.tripName,
+          days: found.days,
+          tripType: found.tripType,
+          weather: found.weather
+        };
+        state.items = JSON.parse(JSON.stringify(found.items || []));
+
+        fillInputsFromSettings();
+        saveSettings();
+        saveItems();
+        renderChecklist();
+        setError('저장 이력을 불러왔습니다.');
+      }
+
+      function deleteHistory(id) {
+        state.history = state.history.filter(v => v.id !== id);
+        saveHistory();
+        renderHistory();
+      }
+
+      function saveCurrentPlanToHistory() {
+        setError('');
+
+        if (!state.items.length) {
+          setError('저장할 체크리스트가 없습니다. 먼저 추천 목록을 생성해 주세요.');
+          return;
+        }
+
+        const s = readSettingsFromInput();
+        const done = state.items.filter(i => i.done).length;
+        const progress = state.items.length ? Math.round((done / state.items.length) * 100) : 0;
+
+        const now = new Date();
+        const payload = {
+          id: uid(),
+          tripName: s.tripName || '이름 없는 여행',
+          days: s.days,
+          tripType: s.tripType,
+          weather: s.weather,
+          items: JSON.parse(JSON.stringify(state.items)),
+          progress,
+          savedAt: now.toISOString(),
+          savedAtText: now.toLocaleString('ko-KR')
+        };
+
+        state.history.unshift(payload);
+        state.history = state.history.slice(0, 10);
+        saveHistory();
+        renderHistory();
+        setError('현재 목록을 저장했습니다.');
+      }
+
+      function generateChecklist() {
+        setError('');
+
+        const s = readSettingsFromInput();
+        if (!s.days || s.days < 1) {
+          setError('여행 일수는 1일 이상이어야 합니다.');
+          return;
+        }
+
+        state.settings = s;
+        state.items = makeRecommendedItems(s);
+
+        saveSettings();
+        saveItems();
+        renderChecklist();
+      }
+
+      function clearChecks() {
+        state.items = state.items.map(v => ({ ...v, done: false }));
+        saveItems();
+        renderChecklist();
+      }
+
+      function bind() {
+        el.generateBtn.addEventListener('click', generateChecklist);
+        el.savePlanBtn.addEventListener('click', saveCurrentPlanToHistory);
+        el.saveSettingsBtn.addEventListener('click', () => {
+          saveSettings();
+          setError('입력값을 저장했습니다.');
+        });
+        el.clearAllBtn.addEventListener('click', clearChecks);
+        el.addCustomBtn.addEventListener('click', addCustomItem);
+
+        [el.tripName, el.days, el.tripType, el.weather].forEach(input => {
+          input.addEventListener('change', saveSettings);
+        });
+      }
+
+      load();
+      fillInputsFromSettings();
+      bind();
+      renderChecklist();
+      renderHistory();
+
+      if (!state.items.length) {
+        state.items = makeRecommendedItems(state.settings);
+        saveItems();
+        renderChecklist();
+      }
+    })();
+  </script>
+</body>
+</html>

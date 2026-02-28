@@ -1,0 +1,1224 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Signal Chain — 신호 전파 타이밍 퍼즐</title>
+  <meta name="theme-color" content="#0a0a1a" />
+  <style>
+    :root {
+      --bg: #0a0a1a;
+      --panel: rgba(14, 16, 40, 0.92);
+      --line: rgba(0, 255, 255, 0.26);
+      --text: #e6ecff;
+      --muted: #95a0c8;
+      --cyan: #00f5ff;
+      --gold: #ffd76a;
+      --ok: #42ffb8;
+      --warn: #ff7cb7;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      min-height: 100%;
+      background: radial-gradient(circle at 20% -10%, #17174a 0%, #0d1030 36%, var(--bg) 68%);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+    }
+
+    body {
+      display: flex;
+      justify-content: center;
+      padding: 10px;
+    }
+
+    .app {
+      width: min(980px, 100%);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .title {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      padding: 10px 12px;
+      box-shadow: 0 0 24px rgba(0, 255, 255, 0.16);
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.05rem, 4.1vw, 1.42rem);
+      color: var(--cyan);
+      text-shadow: 0 0 11px rgba(0, 245, 255, 0.46);
+      letter-spacing: 0.03em;
+    }
+
+    .pitch { font-size: 0.78rem; color: #cae8ff; }
+    .mini { font-size: 0.76rem; color: #b5c3f5; }
+
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .stat {
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 10px;
+      background: rgba(10, 12, 31, 0.88);
+      padding: 8px 10px;
+      min-height: 56px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 2px;
+    }
+
+    .k {
+      font-size: 0.66rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .v { font-size: 1rem; font-weight: 700; }
+    .v.cyan { color: var(--cyan); text-shadow: 0 0 8px rgba(0,245,255,.42); }
+    .v.gold { color: var(--gold); text-shadow: 0 0 8px rgba(255,215,106,.4); }
+
+    .level-strip {
+      display: grid;
+      grid-template-columns: repeat(10, minmax(0,1fr));
+      gap: 6px;
+    }
+
+    .level-btn {
+      border: 1px solid rgba(255,255,255,0.2);
+      background: rgba(255,255,255,0.04);
+      color: #d9ddff;
+      border-radius: 8px;
+      padding: 7px 2px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      cursor: pointer;
+      min-height: 36px;
+    }
+
+    .level-btn.active {
+      border-color: rgba(0,255,255,0.7);
+      box-shadow: 0 0 10px rgba(0,255,255,0.25);
+      color: #abfcff;
+      background: rgba(0,255,255,0.09);
+    }
+
+    .level-btn.lock {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+
+    .canvas-wrap {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #070713;
+      overflow: hidden;
+      position: relative;
+      box-shadow: 0 0 28px rgba(0,255,255,0.14);
+    }
+
+    canvas {
+      width: 100%;
+      aspect-ratio: 1000 / 620;
+      display: block;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      background: transparent;
+    }
+
+    .hint {
+      position: absolute;
+      left: 10px;
+      right: 10px;
+      bottom: 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(0,0,0,0.5);
+      color: #d8deff;
+      font-size: 0.76rem;
+      padding: 6px 10px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0,1fr));
+      gap: 8px;
+    }
+
+    button {
+      border: 1px solid rgba(0,255,255,0.36);
+      border-radius: 10px;
+      padding: 10px 8px;
+      background: rgba(0,255,255,0.08);
+      color: #d7faff;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      opacity: 0.42;
+      cursor: not-allowed;
+    }
+
+    .tip {
+      margin: 0;
+      min-height: 22px;
+      font-size: 0.82rem;
+      color: #ccd6ff;
+      padding: 0 2px;
+    }
+
+    .tip.warn { color: var(--warn); }
+    .tip.ok { color: var(--ok); }
+
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(4, 4, 14, 0.82);
+      backdrop-filter: blur(2px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      z-index: 20;
+    }
+
+    .overlay.show { display: flex; }
+
+    .card {
+      width: min(92vw, 520px);
+      border-radius: 14px;
+      border: 1px solid rgba(0,255,255,0.35);
+      background: linear-gradient(180deg, rgba(16,20,50,0.96), rgba(7,8,24,0.95));
+      box-shadow: 0 0 28px rgba(0,255,255,0.2);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .card h2 {
+      margin: 0;
+      color: var(--cyan);
+      font-size: 1.2rem;
+    }
+
+    .small { font-size: 0.84rem; color: #c0cdfa; }
+
+    .row { display: flex; gap: 8px; }
+    .row button { flex: 1; }
+
+    @media (max-width: 820px) {
+      .hud { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .level-strip { grid-template-columns: repeat(5, minmax(0,1fr)); }
+      .controls { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="title">
+      <div>
+        <h1>Signal Chain · 신호 전파 타이밍 퍼즐</h1>
+        <div class="pitch">"노드를 연결하고 타이밍 맞춰 신호를 전파하는 퍼즐"</div>
+      </div>
+      <div class="mini">드래그: 와이어 연결 · 시작 노드 탭: 신호 발사 · R: 배선 초기화</div>
+    </div>
+
+    <div class="hud">
+      <div class="stat"><div class="k">레벨</div><div id="levelValue" class="v cyan">1 / 10</div></div>
+      <div class="stat"><div class="k">타겟</div><div id="targetValue" class="v gold">0 / 0</div></div>
+      <div class="stat"><div class="k">배선</div><div id="wireValue" class="v">0 / 0</div></div>
+      <div class="stat"><div class="k">진행도</div><div id="progressValue" class="v cyan">1 / 10</div></div>
+    </div>
+
+    <div id="levelStrip" class="level-strip" aria-label="레벨 선택"></div>
+
+    <div class="canvas-wrap">
+      <canvas id="gameCanvas" width="1000" height="620"></canvas>
+      <div class="hint" id="hintText">노드에서 노드로 드래그해 와이어를 만들고, 시작 노드를 탭해 신호를 보내세요.</div>
+    </div>
+
+    <div class="controls">
+      <button id="prevBtn">◀ 이전</button>
+      <button id="launchBtn">⚡ 신호 발사</button>
+      <button id="resetBtn">⟳ 배선 초기화</button>
+      <button id="nextBtn">다음 ▶</button>
+    </div>
+
+    <p id="tipText" class="tip">레벨 1부터 시작하세요.</p>
+  </div>
+
+  <div id="clearOverlay" class="overlay" role="dialog" aria-modal="true">
+    <div class="card">
+      <h2>레벨 클리어</h2>
+      <div id="clearSummary" class="small">모든 타겟 노드에 신호가 도달했습니다.</div>
+      <div class="row">
+        <button id="retryBtn">다시 플레이</button>
+        <button id="nextLevelBtn">다음 레벨</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  (() => {
+    const STORAGE_KEY = 'signal-chain-progress-v1';
+    const DESIGN_W = 1000;
+    const DESIGN_H = 620;
+
+    const levels = [
+      {
+        name: 'L1 기본 연결',
+        hint: '시작(S)에서 두 타겟(★)으로 가지를 나눠 연결하세요.',
+        maxWires: 4,
+        startNode: 'S',
+        allowedEdges: [
+          ['S','A'], ['S','B'], ['A','T1'], ['B','T2'], ['A','B'], ['B','A']
+        ],
+        nodes: [
+          { id:'S', x:130, y:310, type:'start', delay:0 },
+          { id:'A', x:340, y:220, type:'normal', delay:140 },
+          { id:'B', x:340, y:400, type:'normal', delay:160 },
+          { id:'T1', x:610, y:220, type:'target', delay:150 },
+          { id:'T2', x:610, y:400, type:'target', delay:150 }
+        ]
+      },
+      {
+        name: 'L2 기본 연결',
+        hint: '중간 노드를 거쳐 3개의 타겟에 신호를 분배하세요.',
+        maxWires: 6,
+        startNode: 'S',
+        allowedEdges: [
+          ['S','A'], ['S','B'], ['A','C'], ['B','C'], ['A','T1'], ['B','T2'], ['C','T3'], ['C','T2']
+        ],
+        nodes: [
+          { id:'S', x:120, y:310, type:'start', delay:0 },
+          { id:'A', x:310, y:180, type:'normal', delay:120 },
+          { id:'B', x:310, y:440, type:'normal', delay:180 },
+          { id:'C', x:520, y:310, type:'normal', delay:140 },
+          { id:'T1', x:760, y:160, type:'target', delay:130 },
+          { id:'T2', x:760, y:310, type:'target', delay:150 },
+          { id:'T3', x:760, y:460, type:'target', delay:130 }
+        ]
+      },
+      {
+        name: 'L3 기본 연결',
+        hint: '교차 경로를 조합해 모든 ★를 활성화하세요.',
+        maxWires: 7,
+        startNode: 'S',
+        allowedEdges: [
+          ['S','A'], ['S','B'], ['A','C'], ['B','D'], ['C','T1'], ['D','T2'], ['A','D'], ['B','C'], ['C','T2'], ['D','T1']
+        ],
+        nodes: [
+          { id:'S', x:130, y:310, type:'start', delay:0 },
+          { id:'A', x:290, y:180, type:'normal', delay:120 },
+          { id:'B', x:290, y:440, type:'normal', delay:120 },
+          { id:'C', x:520, y:220, type:'normal', delay:170 },
+          { id:'D', x:520, y:400, type:'normal', delay:170 },
+          { id:'T1', x:770, y:210, type:'target', delay:150 },
+          { id:'T2', x:770, y:410, type:'target', delay:150 }
+        ]
+      },
+      {
+        name: 'L4 게이트 도입',
+        hint: '게이트(◎)는 2개 신호가 거의 동시에 도착해야 열립니다.',
+        maxWires: 5,
+        startNode: 'S',
+        allowedEdges: [
+          ['S','A'], ['S','B'], ['A','G'], ['B','G'], ['G','T'], ['A','B']
+        ],
+        nodes: [
+          { id:'S', x:120, y:310, type:'start', delay:0 },
+          { id:'A', x:320, y:210, type:'normal', delay:130 },
+          { id:'B', x:320, y:410, type:'normal', delay:130 },
+          { id:'G', x:560, y:310, type:'gate', delay:90, need:2, windowMs:260 },
+          { id:'T', x:790, y:310, type:'target', delay:130 }
+        ]
+      },
+      {
+        name: 'L5 게이트 확장',
+        hint: '게이트를 열면서 직접 타겟도 챙겨야 합니다.',
+        maxWires: 7,
+        startNode: 'S',
+        allowedEdges: [
+          ['S','A'], ['S','B'], ['A','G'], ['B','G'], ['G','T1'], ['A','T2'], ['B','T2'], ['G','T2']
+        ],
+        nodes: [
+          { id:'S', x:120, y:310, type:'start', delay:0 },
+          { id:'A', x:300, y:200, type:'normal', delay:120 },
+          { id:'B', x:300, y:420, type:'normal', delay:180 },
+          { id:'G', x:560, y:310, type:'gate', delay:80, need:2, windowMs:250 },
+          { id:'T1', x:780, y:240, type:'target', delay:140 },
+          { id:'T2', x:780, y:390, type:'target', delay:140 }
+        ]
+      },
+      {
+        name: 'L6 게이트 타이밍',
+        hint: '게이트 동기화를 위해 우회 경로를 활용하세요.',
+        maxWires: 8,
+        startNode: 'S',
+        allowedEdges: [
+          ['S','A'], ['S','B'], ['A','C'], ['C','G'], ['A','G'], ['B','G'], ['G','T1'], ['B','T2'], ['G','T2']
+        ],
+        nodes: [
+          { id:'S', x:110, y:310, type:'start', delay:0 },
+          { id:'A', x:260, y:180, type:'normal', delay:90 },
+          { id:'B', x:260, y:440, type:'normal', delay:260 },
+          { id:'C', x:450, y:180, type:'normal', delay:210 },
+          { id:'G', x:590, y:310, type:'gate', delay:80, need:2, windowMs:220 },
+          { id:'T1', x:810, y:230, type:'target', delay:130 },
+          { id:'T2', x:810, y:400, type:'target', delay:130 }
+        ]
+      },
+      {
+        name: 'L7 딜레이어',
+        hint: '딜레이어(⏱)로 느린 타이밍을 맞춰 게이트를 여세요.',
+        maxWires: 7,
+        startNode: 'S',
+        allowedEdges: [
+          ['S','A'], ['S','D'], ['A','G'], ['D','B'], ['B','G'], ['G','T1'], ['A','T2'], ['D','T2']
+        ],
+        nodes: [
+          { id:'S', x:120, y:310, type:'start', delay:0 },
+          { id:'A', x:300, y:200, type:'normal', delay:90 },
+          { id:'D', x:300, y:420, type:'delay', delay:80, extraDelayMs:700 },
+          { id:'B', x:500, y:420, type:'normal', delay:120 },
+          { id:'G', x:560, y:260, type:'gate', delay:80, need:2, windowMs:240 },
+          { id:'T1', x:800, y:250, type:'target', delay:130 },
+          { id:'T2', x:800, y:420, type:'target', delay:130 }
+        ]
+      },
+      {
+        name: 'L8 딜레이 타이밍',
+        hint: '둘 이상의 딜레이를 조합해 동시 도착 구간을 만드세요.',
+        maxWires: 8,
+        startNode: 'S',
+        allowedEdges: [
+          ['S','A'], ['S','D1'], ['D1','B'], ['A','D2'], ['D2','G'], ['B','G'], ['G','T1'], ['G','T2'], ['A','T2']
+        ],
+        nodes: [
+          { id:'S', x:100, y:310, type:'start', delay:0 },
+          { id:'A', x:260, y:190, type:'normal', delay:100 },
+          { id:'D1', x:260, y:430, type:'delay', delay:60, extraDelayMs:600 },
+          { id:'B', x:460, y:430, type:'normal', delay:120 },
+          { id:'D2', x:460, y:190, type:'delay', delay:60, extraDelayMs:500 },
+          { id:'G', x:620, y:310, type:'gate', delay:70, need:2, windowMs:210 },
+          { id:'T1', x:840, y:240, type:'target', delay:130 },
+          { id:'T2', x:840, y:390, type:'target', delay:130 }
+        ]
+      },
+      {
+        name: 'L9 복합 네트워크',
+        hint: '스플리터(△) + 게이트(◎) + 딜레이(⏱)를 한 번에 운용하세요.',
+        maxWires: 10,
+        startNode: 'S',
+        allowedEdges: [
+          ['S','SP'], ['SP','A'], ['SP','D'], ['D','B'], ['A','G1'], ['B','G1'], ['G1','T1'],
+          ['SP','C'], ['C','G2'], ['D','G2'], ['G2','T2'], ['G2','T3'], ['G1','T3']
+        ],
+        nodes: [
+          { id:'S', x:90, y:310, type:'start', delay:0 },
+          { id:'SP', x:250, y:310, type:'splitter', delay:70 },
+          { id:'A', x:410, y:170, type:'normal', delay:120 },
+          { id:'D', x:410, y:450, type:'delay', delay:70, extraDelayMs:640 },
+          { id:'B', x:560, y:450, type:'normal', delay:90 },
+          { id:'C', x:560, y:170, type:'normal', delay:200 },
+          { id:'G1', x:640, y:320, type:'gate', delay:70, need:2, windowMs:220 },
+          { id:'G2', x:730, y:170, type:'gate', delay:70, need:2, windowMs:230 },
+          { id:'T1', x:880, y:360, type:'target', delay:120 },
+          { id:'T2', x:910, y:150, type:'target', delay:120 },
+          { id:'T3', x:900, y:470, type:'target', delay:120 }
+        ]
+      },
+      {
+        name: 'L10 복합 마스터',
+        hint: '최종 레벨: 분기-지연-게이트를 조합해 모든 ★를 점등하세요.',
+        maxWires: 12,
+        startNode: 'S',
+        allowedEdges: [
+          ['S','SP'], ['SP','A'], ['SP','B'], ['SP','D1'], ['A','G1'], ['B','G1'], ['D1','C'],
+          ['C','G2'], ['B','D2'], ['D2','G2'], ['G1','T1'], ['G2','T2'], ['G1','M'], ['G2','M'], ['M','T3'], ['M','T4']
+        ],
+        nodes: [
+          { id:'S', x:80, y:310, type:'start', delay:0 },
+          { id:'SP', x:220, y:310, type:'splitter', delay:80 },
+          { id:'A', x:360, y:160, type:'normal', delay:110 },
+          { id:'B', x:360, y:330, type:'normal', delay:140 },
+          { id:'D1', x:360, y:500, type:'delay', delay:70, extraDelayMs:700 },
+          { id:'C', x:530, y:500, type:'normal', delay:90 },
+          { id:'D2', x:530, y:330, type:'delay', delay:70, extraDelayMs:500 },
+          { id:'G1', x:570, y:170, type:'gate', delay:70, need:2, windowMs:220 },
+          { id:'G2', x:690, y:360, type:'gate', delay:70, need:2, windowMs:220 },
+          { id:'M', x:780, y:250, type:'gate', delay:70, need:2, windowMs:240 },
+          { id:'T1', x:860, y:120, type:'target', delay:120 },
+          { id:'T2', x:910, y:360, type:'target', delay:120 },
+          { id:'T3', x:890, y:510, type:'target', delay:120 },
+          { id:'T4', x:950, y:220, type:'target', delay:120 }
+        ]
+      }
+    ];
+
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const levelValue = document.getElementById('levelValue');
+    const targetValue = document.getElementById('targetValue');
+    const wireValue = document.getElementById('wireValue');
+    const progressValue = document.getElementById('progressValue');
+    const hintText = document.getElementById('hintText');
+    const tipText = document.getElementById('tipText');
+    const levelStrip = document.getElementById('levelStrip');
+    const clearOverlay = document.getElementById('clearOverlay');
+    const clearSummary = document.getElementById('clearSummary');
+
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const launchBtn = document.getElementById('launchBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const retryBtn = document.getElementById('retryBtn');
+    const nextLevelBtn = document.getElementById('nextLevelBtn');
+
+    let dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    let currentLevel = 0;
+    let unlocked = loadProgress();
+    let nodes = [];
+    let nodeMap = new Map();
+    let targets = [];
+    let edges = [];
+    let pulses = [];
+    let ripples = [];
+    let activeNodes = new Set();
+    let gateState = new Map();
+    let running = false;
+    let cleared = false;
+    let runStart = 0;
+
+    const drag = {
+      active: false,
+      fromId: null,
+      x: 0,
+      y: 0,
+      moved: false,
+      startX: 0,
+      startY: 0
+    };
+
+    const audio = {
+      ctx: null,
+      master: null
+    };
+
+    function loadProgress() {
+      const saved = Number(localStorage.getItem(STORAGE_KEY) || '1');
+      if (!Number.isFinite(saved)) return 1;
+      return Math.max(1, Math.min(10, Math.floor(saved)));
+    }
+
+    function saveProgress(v) {
+      localStorage.setItem(STORAGE_KEY, String(Math.max(1, Math.min(10, v))));
+    }
+
+    function ensureAudio() {
+      if (!audio.ctx) {
+        audio.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        audio.master = audio.ctx.createGain();
+        audio.master.gain.value = 0.16;
+        audio.master.connect(audio.ctx.destination);
+      }
+      if (audio.ctx.state === 'suspended') {
+        audio.ctx.resume().catch(() => {});
+      }
+    }
+
+    function beep({ freq = 440, type = 'sine', attack = 0.002, decay = 0.14, gain = 0.16, when = 0 }) {
+      if (!audio.ctx || !audio.master) return;
+      const t0 = audio.ctx.currentTime + when;
+      const osc = audio.ctx.createOscillator();
+      const g = audio.ctx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, t0);
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(gain, t0 + attack);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + decay);
+      osc.connect(g).connect(audio.master);
+      osc.start(t0);
+      osc.stop(t0 + decay + 0.02);
+    }
+
+    function sfxConnect() {
+      beep({ freq: 560, type: 'square', gain: 0.09, decay: 0.08 });
+      beep({ freq: 820, type: 'triangle', gain: 0.06, decay: 0.1, when: 0.015 });
+    }
+
+    function sfxPulse() {
+      beep({ freq: 300, type: 'sawtooth', gain: 0.08, decay: 0.09 });
+      beep({ freq: 520, type: 'triangle', gain: 0.06, decay: 0.1, when: 0.02 });
+    }
+
+    function sfxGate() {
+      beep({ freq: 660, type: 'square', gain: 0.09, decay: 0.12 });
+      beep({ freq: 980, type: 'square', gain: 0.08, decay: 0.11, when: 0.05 });
+    }
+
+    function sfxClear() {
+      [520, 660, 820, 1040].forEach((f, i) => {
+        beep({ freq: f, type: 'triangle', gain: 0.09, decay: 0.16, when: i * 0.05 });
+      });
+    }
+
+    function notify(text, cls = '') {
+      tipText.textContent = text;
+      tipText.className = cls ? `tip ${cls}` : 'tip';
+    }
+
+    function keyPair(a, b) {
+      return `${a}->${b}`;
+    }
+
+    function edgeExists(from, to) {
+      return edges.some(e => e.from === from && e.to === to);
+    }
+
+    function isAllowedEdge(from, to) {
+      const allowed = levels[currentLevel].allowedEdges;
+      return allowed.some(([a, b]) => a === from && b === to);
+    }
+
+    function addOrRemoveEdge(from, to) {
+      if (from === to) return;
+      if (running) {
+        notify('실행 중에는 배선을 변경할 수 없습니다. 재발사 또는 초기화를 눌러주세요.', 'warn');
+        return;
+      }
+
+      if (!isAllowedEdge(from, to)) {
+        notify('이 레벨에서 허용되지 않는 연결입니다. 힌트를 확인해주세요.', 'warn');
+        return;
+      }
+
+      const idx = edges.findIndex(e => e.from === from && e.to === to);
+      if (idx >= 0) {
+        edges.splice(idx, 1);
+        notify('배선을 제거했습니다.');
+        updateHud();
+        return;
+      }
+
+      if (edges.length >= levels[currentLevel].maxWires) {
+        notify(`배선 제한 초과: 최대 ${levels[currentLevel].maxWires}개`, 'warn');
+        return;
+      }
+
+      edges.push({ from, to });
+      sfxConnect();
+      updateHud();
+      notify(`배선 연결: ${from} → ${to}`, 'ok');
+    }
+
+    function resizeCanvas() {
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = Math.round(DESIGN_W * dpr);
+      canvas.height = Math.round(DESIGN_H * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      if (!rect.width || !rect.height) return;
+      render(performance.now());
+    }
+
+    function screenToWorld(clientX, clientY) {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: ((clientX - rect.left) / rect.width) * DESIGN_W,
+        y: ((clientY - rect.top) / rect.height) * DESIGN_H
+      };
+    }
+
+    function getNodeRadius(node) {
+      if (node.type === 'start') return 27;
+      if (node.type === 'gate') return 24;
+      if (node.type === 'target') return 24;
+      return 22;
+    }
+
+    function findNodeAt(x, y) {
+      for (let i = nodes.length - 1; i >= 0; i--) {
+        const n = nodes[i];
+        const r = getNodeRadius(n) + 10;
+        const dx = x - n.x;
+        const dy = y - n.y;
+        if (dx * dx + dy * dy <= r * r) return n;
+      }
+      return null;
+    }
+
+    function clearRunState() {
+      pulses.length = 0;
+      ripples.length = 0;
+      activeNodes.clear();
+      gateState.clear();
+      running = false;
+      cleared = false;
+    }
+
+    function resetWires() {
+      clearRunState();
+      edges.length = 0;
+      updateHud();
+      notify('배선을 초기화했습니다. 다시 연결해보세요.', 'warn');
+    }
+
+    function relaunchSignals() {
+      const level = levels[currentLevel];
+      if (!edges.length) {
+        notify('먼저 와이어를 연결해주세요.', 'warn');
+        return;
+      }
+      clearRunState();
+      running = true;
+      runStart = performance.now();
+      const start = nodeMap.get(level.startNode);
+      activateNode(start.id, runStart, null, true);
+      propagateFrom(start.id, runStart, 0);
+      sfxPulse();
+      notify('신호 발사! 게이트 타이밍을 확인하세요.');
+    }
+
+    function activateNode(nodeId, at, fromId, isOrigin = false) {
+      const node = nodeMap.get(nodeId);
+      if (!node) return false;
+
+      if (node.type !== 'gate' && activeNodes.has(nodeId)) return false;
+      if (node.type !== 'gate') activeNodes.add(nodeId);
+
+      ripples.push({ x: node.x, y: node.y, t0: at, color: node.type === 'target' ? '#ffd76a' : '#00f5ff' });
+
+      if (node.type === 'target') {
+        const activeTargets = targets.filter(t => activeNodes.has(t.id)).length;
+        targetValue.textContent = `${activeTargets} / ${targets.length}`;
+        if (activeTargets === targets.length && !cleared) {
+          onLevelClear(at);
+        }
+      }
+
+      if (!isOrigin) sfxPulse();
+      return true;
+    }
+
+    function propagateFrom(fromId, now, bonusDelay = 0) {
+      const fromNode = nodeMap.get(fromId);
+      if (!fromNode) return;
+
+      const outgoing = edges.filter(e => e.from === fromId);
+      for (const edge of outgoing) {
+        const toNode = nodeMap.get(edge.to);
+        if (!toNode) continue;
+
+        if (toNode.type !== 'gate' && activeNodes.has(toNode.id)) continue;
+
+        const dist = Math.hypot(toNode.x - fromNode.x, toNode.y - fromNode.y);
+        const travel = dist * 1.35;
+        const arrive = now + travel + (toNode.delay || 0) + bonusDelay;
+        pulses.push({
+          from: fromId,
+          to: toNode.id,
+          start: now,
+          arrive,
+          done: false
+        });
+      }
+    }
+
+    function onSignalArrive(toId, time, fromId) {
+      const node = nodeMap.get(toId);
+      if (!node) return;
+
+      if (node.type === 'gate') {
+        const need = node.need || 2;
+        const windowMs = node.windowMs || 220;
+        const s = gateState.get(toId) || { opened: false, arrivals: [] };
+        if (s.opened) return;
+
+        s.arrivals.push({ t: time, from: fromId });
+        s.arrivals = s.arrivals.filter(hit => time - hit.t <= windowMs);
+
+        const uniq = new Set(s.arrivals.map(hit => hit.from));
+        if (uniq.size >= need) {
+          s.opened = true;
+          gateState.set(toId, s);
+          activeNodes.add(toId);
+          ripples.push({ x: node.x, y: node.y, t0: time, color: '#9dffe6' });
+          sfxGate();
+          propagateFrom(toId, time, 0);
+        } else {
+          gateState.set(toId, s);
+        }
+        return;
+      }
+
+      const justActivated = activateNode(toId, time, fromId);
+      if (!justActivated) return;
+
+      if (node.type === 'delay') {
+        propagateFrom(toId, time, node.extraDelayMs || 650);
+      } else {
+        propagateFrom(toId, time, 0);
+      }
+    }
+
+    function onLevelClear(at) {
+      cleared = true;
+      running = false;
+      const sec = ((at - runStart) / 1000).toFixed(2);
+      clearSummary.textContent = `모든 타겟 노드 점등 완료 · ${sec}초 · 배선 ${edges.length}/${levels[currentLevel].maxWires}`;
+      clearOverlay.classList.add('show');
+      sfxClear();
+      notify('클리어! 다음 레벨이 잠금 해제되었습니다.', 'ok');
+
+      const reached = currentLevel + 2;
+      if (reached > unlocked) {
+        unlocked = Math.min(10, reached);
+        saveProgress(unlocked);
+        renderLevelButtons();
+      }
+      updateHud();
+    }
+
+    function updateHud() {
+      levelValue.textContent = `${currentLevel + 1} / 10`;
+      const activeTargets = targets.filter(t => activeNodes.has(t.id)).length;
+      targetValue.textContent = `${activeTargets} / ${targets.length}`;
+      wireValue.textContent = `${edges.length} / ${levels[currentLevel].maxWires}`;
+      progressValue.textContent = `${unlocked} / 10`;
+
+      prevBtn.disabled = currentLevel <= 0;
+      nextBtn.disabled = currentLevel >= unlocked - 1 || currentLevel >= 9;
+    }
+
+    function loadLevel(index) {
+      currentLevel = Math.max(0, Math.min(9, index));
+      const level = levels[currentLevel];
+      nodes = level.nodes.map(n => ({ ...n }));
+      nodeMap = new Map(nodes.map(n => [n.id, n]));
+      targets = nodes.filter(n => n.type === 'target');
+      edges = [];
+      clearRunState();
+      hintText.textContent = `${level.name} · ${level.hint}`;
+      notify(`${level.name}: 드래그로 배선 후 시작 노드를 탭하세요.`);
+      clearOverlay.classList.remove('show');
+      updateHud();
+      renderLevelButtons();
+    }
+
+    function renderLevelButtons() {
+      levelStrip.innerHTML = '';
+      for (let i = 0; i < 10; i++) {
+        const b = document.createElement('button');
+        b.className = 'level-btn';
+        b.textContent = `L${i + 1}`;
+        const isLocked = i > unlocked - 1;
+        if (isLocked) {
+          b.classList.add('lock');
+          b.disabled = true;
+        }
+        if (i === currentLevel) b.classList.add('active');
+        b.addEventListener('click', () => {
+          ensureAudio();
+          loadLevel(i);
+        });
+        levelStrip.appendChild(b);
+      }
+    }
+
+    function drawGrid(now) {
+      ctx.clearRect(0, 0, DESIGN_W, DESIGN_H);
+      const grad = ctx.createLinearGradient(0, 0, 0, DESIGN_H);
+      grad.addColorStop(0, '#0b0c1e');
+      grad.addColorStop(1, '#060611');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, DESIGN_W, DESIGN_H);
+
+      ctx.save();
+      ctx.globalAlpha = 0.16;
+      ctx.strokeStyle = '#16344f';
+      ctx.lineWidth = 1;
+      const step = 50;
+      for (let x = 0; x <= DESIGN_W; x += step) {
+        ctx.beginPath();
+        ctx.moveTo(x + 0.5, 0);
+        ctx.lineTo(x + 0.5, DESIGN_H);
+        ctx.stroke();
+      }
+      for (let y = 0; y <= DESIGN_H; y += step) {
+        ctx.beginPath();
+        ctx.moveTo(0, y + 0.5);
+        ctx.lineTo(DESIGN_W, y + 0.5);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      const alpha = 0.12 + Math.sin(now * 0.0016) * 0.03;
+      ctx.save();
+      ctx.strokeStyle = `rgba(0,245,255,${alpha})`;
+      ctx.lineWidth = 1.2;
+      ctx.setLineDash([6, 8]);
+      for (const [a, b] of levels[currentLevel].allowedEdges) {
+        const na = nodeMap.get(a);
+        const nb = nodeMap.get(b);
+        if (!na || !nb) continue;
+        ctx.beginPath();
+        ctx.moveTo(na.x, na.y);
+        ctx.lineTo(nb.x, nb.y);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    function drawWire(from, to, glow = false) {
+      const a = nodeMap.get(from);
+      const b = nodeMap.get(to);
+      if (!a || !b) return;
+
+      const grad = ctx.createLinearGradient(a.x, a.y, b.x, b.y);
+      grad.addColorStop(0, glow ? '#8ffbff' : '#2bc6d4');
+      grad.addColorStop(1, glow ? '#43ffe3' : '#24aab8');
+
+      ctx.save();
+      ctx.lineWidth = glow ? 5 : 3;
+      ctx.strokeStyle = grad;
+      ctx.shadowBlur = glow ? 14 : 7;
+      ctx.shadowColor = glow ? 'rgba(64,255,232,.9)' : 'rgba(0,245,255,.45)';
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+
+      const ang = Math.atan2(b.y - a.y, b.x - a.x);
+      const ax = b.x - Math.cos(ang) * 16;
+      const ay = b.y - Math.sin(ang) * 16;
+      ctx.fillStyle = glow ? '#a8fff2' : '#35ced9';
+      ctx.beginPath();
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(ax - Math.cos(ang - 0.45) * 8, ay - Math.sin(ang - 0.45) * 8);
+      ctx.lineTo(ax - Math.cos(ang + 0.45) * 8, ay - Math.sin(ang + 0.45) * 8);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function drawNode(node, now) {
+      const r = getNodeRadius(node);
+      const active = activeNodes.has(node.id) || (node.type === 'gate' && (gateState.get(node.id)?.opened));
+
+      ctx.save();
+      if (active) {
+        ctx.shadowBlur = 18;
+        ctx.shadowColor = node.type === 'target' ? 'rgba(255,215,106,.9)' : 'rgba(0,245,255,.86)';
+      }
+
+      let fill = '#8b93b7';
+      let stroke = '#606a8f';
+      if (node.type === 'target') {
+        fill = active ? '#ffd76a' : '#c0a562';
+        stroke = '#ffe7a6';
+      } else if (active) {
+        fill = '#70f8ff';
+        stroke = '#d4ffff';
+      }
+
+      ctx.fillStyle = fill;
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = 2;
+
+      if (node.type === 'splitter') {
+        const pulse = 1 + Math.sin(now * 0.004 + node.x * 0.01) * 0.06;
+        ctx.beginPath();
+        ctx.moveTo(node.x, node.y - r * 1.1 * pulse);
+        ctx.lineTo(node.x + r * 1.1 * pulse, node.y + r * 0.95 * pulse);
+        ctx.lineTo(node.x - r * 1.1 * pulse, node.y + r * 0.95 * pulse);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      } else {
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+
+      if (node.type === 'gate') {
+        ctx.strokeStyle = active ? '#9dffe6' : '#8ea6d8';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, r - 7, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      if (node.type === 'delay') {
+        ctx.strokeStyle = '#0a1830';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, r - 6, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(node.x, node.y);
+        ctx.lineTo(node.x, node.y - 7);
+        ctx.moveTo(node.x, node.y);
+        ctx.lineTo(node.x + 6, node.y + 3);
+        ctx.stroke();
+      }
+
+      if (node.type === 'start') {
+        ctx.fillStyle = '#0f1f33';
+        ctx.beginPath();
+        ctx.moveTo(node.x - 6, node.y - 9);
+        ctx.lineTo(node.x + 11, node.y);
+        ctx.lineTo(node.x - 6, node.y + 9);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      if (node.type === 'target') {
+        ctx.fillStyle = '#513f00';
+        ctx.font = 'bold 16px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('★', node.x, node.y + 1);
+      }
+
+      ctx.fillStyle = '#e9eeff';
+      ctx.font = 'bold 12px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const marker = node.type === 'gate' ? '◎' : node.type === 'splitter' ? '△' : node.type === 'delay' ? '⏱' : node.id;
+      ctx.fillText(marker, node.x, node.y + (node.type === 'target' ? 20 : 0));
+
+      ctx.restore();
+    }
+
+    function drawPulses(now) {
+      for (const pulse of pulses) {
+        if (now < pulse.start) continue;
+        const span = Math.max(1, pulse.arrive - pulse.start);
+        const t = Math.max(0, Math.min(1, (now - pulse.start) / span));
+        const a = nodeMap.get(pulse.from);
+        const b = nodeMap.get(pulse.to);
+        if (!a || !b) continue;
+
+        const x = a.x + (b.x - a.x) * t;
+        const y = a.y + (b.y - a.y) * t;
+
+        ctx.save();
+        ctx.fillStyle = '#92fbff';
+        ctx.shadowBlur = 16;
+        ctx.shadowColor = 'rgba(146,251,255,.95)';
+        ctx.beginPath();
+        ctx.arc(x, y, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      ripples = ripples.filter(r => now - r.t0 < 420);
+      for (const r of ripples) {
+        const p = (now - r.t0) / 420;
+        const rad = 8 + p * 22;
+        const alpha = 0.5 * (1 - p);
+        if (alpha <= 0) continue;
+        ctx.save();
+        ctx.strokeStyle = hexToRgba(r.color, alpha);
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(r.x, r.y, rad, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    function hexToRgba(hex, alpha) {
+      const c = hex.replace('#', '');
+      const bigint = parseInt(c, 16);
+      const r = (bigint >> 16) & 255;
+      const g = (bigint >> 8) & 255;
+      const b = bigint & 255;
+      return `rgba(${r},${g},${b},${alpha})`;
+    }
+
+    function updateSimulation(now) {
+      for (const pulse of pulses) {
+        if (!pulse.done && now >= pulse.arrive) {
+          pulse.done = true;
+          onSignalArrive(pulse.to, pulse.arrive, pulse.from);
+        }
+      }
+
+      pulses = pulses.filter(p => !p.done || now - p.arrive < 250);
+
+      if (running && pulses.length === 0 && !cleared) {
+        running = false;
+        notify('신호가 소멸했습니다. 배선을 조정하고 다시 발사하세요.', 'warn');
+      }
+    }
+
+    function render(now) {
+      drawGrid(now);
+
+      for (const edge of edges) {
+        const hot = pulses.some(p => p.from === edge.from && p.to === edge.to && now >= p.start && now <= p.arrive);
+        drawWire(edge.from, edge.to, hot);
+      }
+
+      if (drag.active && drag.fromId) {
+        const from = nodeMap.get(drag.fromId);
+        if (from) {
+          ctx.save();
+          ctx.strokeStyle = 'rgba(0,245,255,0.65)';
+          ctx.lineWidth = 2.5;
+          ctx.setLineDash([7, 6]);
+          ctx.beginPath();
+          ctx.moveTo(from.x, from.y);
+          ctx.lineTo(drag.x, drag.y);
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+
+      drawPulses(now);
+
+      for (const node of nodes) drawNode(node, now);
+    }
+
+    function loop(now) {
+      updateSimulation(now);
+      render(now);
+      requestAnimationFrame(loop);
+    }
+
+    function handlePointerDown(e) {
+      ensureAudio();
+      const p = screenToWorld(e.clientX, e.clientY);
+      const n = findNodeAt(p.x, p.y);
+      if (!n) return;
+
+      drag.active = true;
+      drag.fromId = n.id;
+      drag.x = p.x;
+      drag.y = p.y;
+      drag.startX = p.x;
+      drag.startY = p.y;
+      drag.moved = false;
+      canvas.setPointerCapture(e.pointerId);
+    }
+
+    function handlePointerMove(e) {
+      if (!drag.active) return;
+      const p = screenToWorld(e.clientX, e.clientY);
+      drag.x = p.x;
+      drag.y = p.y;
+      const dist = Math.hypot(p.x - drag.startX, p.y - drag.startY);
+      if (dist > 8) drag.moved = true;
+    }
+
+    function handlePointerUp(e) {
+      if (!drag.active) return;
+      const p = screenToWorld(e.clientX, e.clientY);
+      const from = nodeMap.get(drag.fromId);
+      const to = findNodeAt(p.x, p.y);
+
+      if (!drag.moved && from && from.type === 'start') {
+        relaunchSignals();
+      } else if (from && to && from.id !== to.id) {
+        addOrRemoveEdge(from.id, to.id);
+      }
+
+      drag.active = false;
+      drag.fromId = null;
+      drag.moved = false;
+      canvas.releasePointerCapture(e.pointerId);
+    }
+
+    function bindEvents() {
+      window.addEventListener('resize', resizeCanvas);
+      canvas.addEventListener('pointerdown', handlePointerDown);
+      canvas.addEventListener('pointermove', handlePointerMove);
+      canvas.addEventListener('pointerup', handlePointerUp);
+      canvas.addEventListener('pointercancel', handlePointerUp);
+
+      prevBtn.addEventListener('click', () => {
+        ensureAudio();
+        if (currentLevel > 0) loadLevel(currentLevel - 1);
+      });
+
+      nextBtn.addEventListener('click', () => {
+        ensureAudio();
+        if (currentLevel < unlocked - 1 && currentLevel < 9) loadLevel(currentLevel + 1);
+      });
+
+      launchBtn.addEventListener('click', () => {
+        ensureAudio();
+        relaunchSignals();
+      });
+
+      resetBtn.addEventListener('click', () => {
+        ensureAudio();
+        resetWires();
+      });
+
+      retryBtn.addEventListener('click', () => {
+        clearOverlay.classList.remove('show');
+        clearRunState();
+        notify('배선은 유지됩니다. 다시 발사해 기록을 단축해보세요.');
+        updateHud();
+      });
+
+      nextLevelBtn.addEventListener('click', () => {
+        clearOverlay.classList.remove('show');
+        if (currentLevel < 9) {
+          const next = Math.min(9, currentLevel + 1);
+          if (next <= unlocked - 1) loadLevel(next);
+        }
+      });
+
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'r' || e.key === 'R') {
+          e.preventDefault();
+          resetWires();
+        }
+        if (e.key === ' ') {
+          e.preventDefault();
+          relaunchSignals();
+        }
+      });
+    }
+
+    function init() {
+      bindEvents();
+      loadLevel(Math.max(0, unlocked - 1));
+      resizeCanvas();
+      requestAnimationFrame(loop);
+    }
+
+    init();
+  })();
+  </script>
+</body>
+</html>

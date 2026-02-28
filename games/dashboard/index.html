@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Game Ratings Dashboard — eastsea.xyz</title>
+<style>
+  :root {
+    --bg: #0d0d1a;
+    --card: #151528;
+    --border: #252545;
+    --text: #e0e0e0;
+    --dim: #666;
+    --accent: #6366f1;
+    --gold: #fbbf24;
+    --green: #4ade80;
+    --red: #f87171;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 20px;
+  }
+  .header {
+    text-align: center;
+    padding: 30px 0 20px;
+  }
+  .header h1 {
+    font-size: 24px;
+    font-weight: 700;
+    background: linear-gradient(135deg, #6366f1, #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .header .sub {
+    color: var(--dim);
+    font-size: 13px;
+    margin-top: 6px;
+  }
+
+  /* Summary cards */
+  .summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    max-width: 900px;
+    margin: 20px auto;
+  }
+  .stat-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    text-align: center;
+  }
+  .stat-card .value {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--gold);
+  }
+  .stat-card .label {
+    font-size: 12px;
+    color: var(--dim);
+    margin-top: 4px;
+  }
+
+  /* Daily trend chart */
+  .chart-section {
+    max-width: 900px;
+    margin: 24px auto;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .chart-section h2 {
+    font-size: 15px;
+    color: var(--dim);
+    margin-bottom: 12px;
+  }
+  canvas { width: 100%; height: 120px; display: block; }
+
+  /* Games table */
+  .table-wrap {
+    max-width: 900px;
+    margin: 24px auto;
+    overflow-x: auto;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--card);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  th, td {
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    white-space: nowrap;
+  }
+  th {
+    background: #1a1a35;
+    color: var(--dim);
+    font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+  }
+  th:hover { color: var(--text); }
+  th .sort-arrow { font-size: 10px; margin-left: 4px; }
+  tr:hover td { background: rgba(99,102,241,.06); }
+  .game-name {
+    color: var(--accent);
+    cursor: pointer;
+    font-weight: 500;
+  }
+  .game-name:hover { text-decoration: underline; }
+  .star-bar {
+    display: inline-block;
+    height: 8px;
+    background: var(--gold);
+    border-radius: 4px;
+    vertical-align: middle;
+    min-width: 2px;
+  }
+  .bar-bg {
+    display: inline-block;
+    width: 80px;
+    height: 8px;
+    background: #222;
+    border-radius: 4px;
+    vertical-align: middle;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Detail panel */
+  .detail-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,.7);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn .2s;
+  }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  .detail-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px;
+    max-width: 480px;
+    width: 92%;
+    max-height: 85vh;
+    overflow-y: auto;
+    position: relative;
+  }
+  .detail-card h2 {
+    font-size: 18px;
+    margin-bottom: 4px;
+  }
+  .detail-card .meta {
+    color: var(--dim);
+    font-size: 12px;
+    margin-bottom: 16px;
+  }
+  .detail-close {
+    position: absolute;
+    top: 12px; right: 16px;
+    background: none; border: none;
+    color: var(--dim); font-size: 20px;
+    cursor: pointer;
+  }
+  .detail-close:hover { color: #fff; }
+  .dist-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 4px 0;
+    font-size: 13px;
+  }
+  .dist-label { width: 20px; text-align: right; color: var(--dim); }
+  .dist-bar-wrap { flex: 1; height: 18px; background: #1a1a2e; border-radius: 4px; overflow: hidden; }
+  .dist-bar { height: 100%; background: var(--gold); border-radius: 4px; transition: width .3s; }
+  .dist-count { width: 30px; text-align: right; color: var(--dim); font-size: 12px; }
+  canvas.detail-chart { width: 100%; height: 100px; margin-top: 16px; }
+
+  .loading {
+    text-align: center;
+    padding: 60px;
+    color: var(--dim);
+  }
+  .error { color: var(--red); text-align: center; padding: 40px; }
+
+  @media (max-width: 600px) {
+    body { padding: 12px; }
+    .summary { grid-template-columns: repeat(2, 1fr); }
+    th, td { padding: 8px 10px; font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🎮 Game Ratings Dashboard</h1>
+  <div class="sub">games.eastsea.xyz — Rating Analytics</div>
+</div>
+
+<div class="summary" id="summary">
+  <div class="stat-card"><div class="value" id="s-games">—</div><div class="label">Games</div></div>
+  <div class="stat-card"><div class="value" id="s-ratings">—</div><div class="label">Total Ratings</div></div>
+  <div class="stat-card"><div class="value" id="s-users">—</div><div class="label">Unique Users</div></div>
+  <div class="stat-card"><div class="value" id="s-avg">—</div><div class="label">Global Average</div></div>
+</div>
+
+<div class="chart-section">
+  <h2>📈 Daily Ratings (Last 30 Days)</h2>
+  <canvas id="daily-chart" height="120"></canvas>
+</div>
+
+<div class="table-wrap">
+  <table id="games-table">
+    <thead>
+      <tr>
+        <th data-sort="game_id">Game <span class="sort-arrow"></span></th>
+        <th data-sort="average_rating">Avg ★ <span class="sort-arrow">▼</span></th>
+        <th data-sort="total_ratings">Votes <span class="sort-arrow"></span></th>
+        <th data-sort="verified_count">Verified <span class="sort-arrow"></span></th>
+        <th>Distribution</th>
+        <th data-sort="last_rating">Last <span class="sort-arrow"></span></th>
+      </tr>
+    </thead>
+    <tbody id="games-body">
+      <tr><td colspan="6" class="loading">Loading...</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  var API = 'https://rating-api.k-jaylee.workers.dev';
+  var data = null;
+  var sortKey = 'average_rating';
+  var sortDir = -1; // -1 = desc
+
+  // ── Fetch dashboard data ─────────────────────────────
+  function load() {
+    fetch(API + '/api/dashboard')
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (d.error) throw new Error(d.error);
+        data = d;
+        renderSummary(d.summary);
+        renderDailyChart(d.daily_trend);
+        renderTable(d.games);
+      })
+      .catch(function(e) {
+        document.getElementById('games-body').innerHTML =
+          '<tr><td colspan="6" class="error">Failed to load: ' + e.message + '</td></tr>';
+      });
+  }
+
+  // ── Summary cards ────────────────────────────────────
+  function renderSummary(s) {
+    document.getElementById('s-games').textContent = s.total_games || 0;
+    document.getElementById('s-ratings').textContent = s.total_ratings || 0;
+    document.getElementById('s-users').textContent = s.unique_users || 0;
+    document.getElementById('s-avg').textContent = s.global_average ? Number(s.global_average).toFixed(1) + ' ★' : '—';
+  }
+
+  // ── Daily chart (canvas) ─────────────────────────────
+  function renderDailyChart(trend) {
+    var canvas = document.getElementById('daily-chart');
+    var ctx = canvas.getContext('2d');
+    var dpr = window.devicePixelRatio || 1;
+    var rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = 120 * dpr;
+    ctx.scale(dpr, dpr);
+
+    var W = rect.width;
+    var H = 120;
+    var pad = { top: 10, right: 10, bottom: 24, left: 30 };
+    var chartW = W - pad.left - pad.right;
+    var chartH = H - pad.top - pad.bottom;
+
+    if (!trend || trend.length === 0) {
+      ctx.fillStyle = '#444';
+      ctx.font = '13px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('No data yet', W / 2, H / 2);
+      return;
+    }
+
+    var maxVal = Math.max.apply(null, trend.map(function(d) { return d.count; }));
+    if (maxVal === 0) maxVal = 1;
+
+    // Bars
+    var barW = Math.max(4, (chartW / trend.length) - 2);
+    trend.forEach(function(d, i) {
+      var x = pad.left + (i / trend.length) * chartW + 1;
+      var barH = (d.count / maxVal) * chartH;
+      var y = pad.top + chartH - barH;
+
+      ctx.fillStyle = '#6366f1';
+      ctx.beginPath();
+      ctx.roundRect(x, y, barW, barH, 2);
+      ctx.fill();
+
+      // Date label (every few)
+      if (i % Math.max(1, Math.floor(trend.length / 6)) === 0) {
+        ctx.fillStyle = '#555';
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(d.day.slice(5), x + barW / 2, H - 4);
+      }
+    });
+
+    // Y axis
+    ctx.fillStyle = '#444';
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(maxVal, pad.left - 4, pad.top + 10);
+    ctx.fillText('0', pad.left - 4, pad.top + chartH);
+  }
+
+  // ── Games table ──────────────────────────────────────
+  function renderTable(games) {
+    var sorted = games.slice().sort(function(a, b) {
+      var av = a[sortKey] || 0, bv = b[sortKey] || 0;
+      if (typeof av === 'string') return sortDir * av.localeCompare(bv);
+      return sortDir * (av - bv);
+    });
+
+    var html = '';
+    sorted.forEach(function(g) {
+      var maxDist = Math.max(g.r1 || 0, g.r2 || 0, g.r3 || 0, g.r4 || 0, g.r5 || 0, 1);
+      var distHTML = '';
+      for (var s = 5; s >= 1; s--) {
+        var val = g['r' + s] || 0;
+        var pct = (val / maxDist) * 100;
+        distHTML += '<span title="' + s + '★: ' + val + '" style="display:inline-block;width:14px;height:' + Math.max(2, pct * 0.18) + 'px;background:' + (s >= 4 ? 'var(--gold)' : s === 3 ? '#888' : 'var(--red)') + ';border-radius:1px;margin:0 1px;vertical-align:bottom"></span>';
+      }
+
+      var avgColor = g.average_rating >= 4 ? 'var(--green)' : g.average_rating >= 3 ? 'var(--gold)' : 'var(--red)';
+      var lastDate = g.last_rating ? g.last_rating.slice(0, 10) : '—';
+
+      html += '<tr>' +
+        '<td><span class="game-name" data-game="' + g.game_id + '">' + formatName(g.game_id) + '</span></td>' +
+        '<td style="color:' + avgColor + ';font-weight:600">' + Number(g.average_rating || 0).toFixed(1) + '</td>' +
+        '<td>' + (g.total_ratings || 0) + '</td>' +
+        '<td>' + (g.verified_count || 0) + '</td>' +
+        '<td>' + distHTML + '</td>' +
+        '<td style="color:var(--dim);font-size:12px">' + lastDate + '</td>' +
+        '</tr>';
+    });
+
+    document.getElementById('games-body').innerHTML = html || '<tr><td colspan="6" class="loading">No games yet</td></tr>';
+
+    // Click handlers
+    document.querySelectorAll('.game-name').forEach(function(el) {
+      el.addEventListener('click', function() { showDetail(el.dataset.game); });
+    });
+  }
+
+  // ── Sort headers ─────────────────────────────────────
+  document.querySelectorAll('th[data-sort]').forEach(function(th) {
+    th.addEventListener('click', function() {
+      var key = th.dataset.sort;
+      if (sortKey === key) {
+        sortDir *= -1;
+      } else {
+        sortKey = key;
+        sortDir = -1;
+      }
+      // Update arrows
+      document.querySelectorAll('th .sort-arrow').forEach(function(a) { a.textContent = ''; });
+      th.querySelector('.sort-arrow').textContent = sortDir === -1 ? '▼' : '▲';
+      if (data) renderTable(data.games);
+    });
+  });
+
+  // ── Detail panel ─────────────────────────────────────
+  function showDetail(gameId) {
+    fetch(API + '/api/dashboard/' + gameId)
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (d.error) throw new Error(d.error);
+        renderDetail(d);
+      })
+      .catch(function(e) {
+        alert('Failed: ' + e.message);
+      });
+  }
+
+  function renderDetail(d) {
+    var overlay = document.createElement('div');
+    overlay.className = 'detail-overlay';
+
+    var dist = d.distribution || {};
+    var maxDist = Math.max(dist[1] || 0, dist[2] || 0, dist[3] || 0, dist[4] || 0, dist[5] || 0, 1);
+
+    var distHTML = '';
+    for (var s = 5; s >= 1; s--) {
+      var val = dist[s] || 0;
+      var pct = (val / maxDist) * 100;
+      distHTML += '<div class="dist-row">' +
+        '<span class="dist-label">' + s + '★</span>' +
+        '<div class="dist-bar-wrap"><div class="dist-bar" style="width:' + pct + '%"></div></div>' +
+        '<span class="dist-count">' + val + '</span></div>';
+    }
+
+    var card = document.createElement('div');
+    card.className = 'detail-card';
+    card.innerHTML =
+      '<button class="detail-close" id="detail-close">✕</button>' +
+      '<h2>' + formatName(d.game_id) + '</h2>' +
+      '<div class="meta">★ ' + Number(d.average_rating || 0).toFixed(1) + ' · ' + (d.total_ratings || 0) + ' votes · ' + (d.verified_count || 0) + ' verified</div>' +
+      '<h3 style="font-size:13px;color:var(--dim);margin-bottom:8px">Rating Distribution</h3>' +
+      distHTML +
+      '<h3 style="font-size:13px;color:var(--dim);margin-top:16px;margin-bottom:8px">Daily Trend</h3>' +
+      '<canvas class="detail-chart" id="detail-daily" height="100"></canvas>' +
+      (d.recent_ratings && d.recent_ratings.length > 0 ?
+        '<h3 style="font-size:13px;color:var(--dim);margin-top:16px;margin-bottom:8px">Recent Activity</h3>' +
+        '<div style="font-size:12px;color:var(--dim)">' +
+        d.recent_ratings.slice(0, 8).map(function(r) {
+          return '★'.repeat(r.rating) + '☆'.repeat(5 - r.rating) + ' <span style="color:#444">' +
+            (r.updated_at || '').slice(0, 16) + (r.turnstile_verified ? ' ✓' : '') + '</span>';
+        }).join('<br>') + '</div>' : '') +
+      '<div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border);font-size:11px;color:#444">' +
+      'First: ' + (d.first_rating || '—') + ' · Last: ' + (d.last_rating || '—') +
+      ' · <a href="https://games.eastsea.xyz/' + d.game_id + '/" target="_blank" style="color:var(--accent)">Play →</a></div>';
+
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+
+    // Close handlers
+    document.getElementById('detail-close').addEventListener('click', function() { overlay.remove(); });
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+
+    // Render detail daily chart
+    setTimeout(function() {
+      renderDetailChart(d.daily_trend || []);
+    }, 50);
+  }
+
+  function renderDetailChart(trend) {
+    var canvas = document.getElementById('detail-daily');
+    if (!canvas) return;
+    var ctx = canvas.getContext('2d');
+    var dpr = window.devicePixelRatio || 1;
+    var rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = 100 * dpr;
+    ctx.scale(dpr, dpr);
+    var W = rect.width, H = 100;
+
+    if (!trend.length) {
+      ctx.fillStyle = '#333';
+      ctx.font = '12px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('No recent data', W / 2, H / 2);
+      return;
+    }
+
+    var pad = { top: 8, right: 8, bottom: 20, left: 24 };
+    var cW = W - pad.left - pad.right;
+    var cH = H - pad.top - pad.bottom;
+    var maxVal = Math.max.apply(null, trend.map(function(d) { return d.count; }));
+    if (maxVal === 0) maxVal = 1;
+
+    var barW = Math.max(3, (cW / trend.length) - 2);
+    trend.forEach(function(d, i) {
+      var x = pad.left + (i / trend.length) * cW + 1;
+      var barH = (d.count / maxVal) * cH;
+      ctx.fillStyle = '#a78bfa';
+      ctx.beginPath();
+      ctx.roundRect(x, pad.top + cH - barH, barW, barH, 2);
+      ctx.fill();
+
+      if (i % Math.max(1, Math.floor(trend.length / 5)) === 0) {
+        ctx.fillStyle = '#444';
+        ctx.font = '9px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(d.day.slice(5), x + barW / 2, H - 4);
+      }
+    });
+  }
+
+  function formatName(slug) {
+    return slug.replace(/-/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+  }
+
+  // ── Init ─────────────────────────────────────────────
+  load();
+
+  // Auto-refresh every 60s
+  setInterval(load, 60000);
+})();
+</script>
+</body>
+</html>

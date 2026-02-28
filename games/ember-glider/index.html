@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+  <title>Ember Glider</title>
+  <meta name="description" content="Flip gravity between top and bottom rails, dodge blockers, and unleash Ember Burst in this one-touch endless runner." />
+  <meta name="keywords" content="html5 game,canvas runner,gravity flip,mobile touch,telegram mini app" />
+  <meta property="og:title" content="Ember Glider" />
+  <meta property="og:description" content="One-touch gravity runner with upgrades, ember dash, and persistent progression." />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="/games/ember-glider/cover.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Ember Glider" />
+  <meta name="twitter:description" content="Flip lanes, avoid blockers, and push your best distance." />
+  <link rel="manifest" href="/games/manifest.json" />
+  <script type="application/ld+json">
+  {
+    "@context":"https://schema.org",
+    "@type":"VideoGame",
+    "name":"Ember Glider",
+    "genre":["Arcade","Runner"],
+    "applicationCategory":"Game",
+    "operatingSystem":"Any",
+    "inLanguage":["ko","en"],
+    "url":"https://eastsea.games/games/ember-glider/"
+  }
+  </script>
+  <style>
+    :root{
+      --bg0:#050a18;
+      --bg1:#0f1f47;
+      --bg2:#1f3770;
+      --panel:rgba(7,13,32,.84);
+      --line:rgba(130,185,255,.35);
+      --text:#ecf4ff;
+      --cyan:#78f6ff;
+      --mint:#8dffd7;
+      --warn:#ff9a8c;
+      --gold:#ffda8b;
+    }
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;}
+    html,body{margin:0;width:100%;height:100%;overflow:hidden;background:radial-gradient(circle at 50% 10%, #1b3c7e 0%, #060b1a 58%);color:var(--text);font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Noto Sans KR',sans-serif;}
+    body{touch-action:none;}
+    #game{position:fixed;inset:0;width:100%;height:100%;display:block;background:linear-gradient(180deg,var(--bg2),var(--bg0));}
+    #hud{
+      position:fixed;left:10px;right:10px;top:max(10px,env(safe-area-inset-top));
+      display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;
+      background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:9px 11px;
+      backdrop-filter:blur(8px);z-index:30;opacity:0;pointer-events:none;transform:translateY(-8px);
+      transition:opacity .2s ease,transform .2s ease;font-size:12px;font-weight:700;
+    }
+    #hud.show{opacity:1;transform:translateY(0);}
+    .metric{min-width:58px}
+    .metric b{color:var(--mint)}
+    #controls{
+      position:fixed;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));
+      display:flex;gap:10px;z-index:32;pointer-events:none;
+    }
+    #controls.show{pointer-events:auto;}
+    .ctrl{
+      flex:1;min-height:56px;border-radius:13px;border:1px solid rgba(173,220,255,.35);
+      background:rgba(8,19,44,.82);color:var(--text);font-weight:800;font-size:14px;letter-spacing:.2px;
+    }
+    .ctrl.primary{background:linear-gradient(135deg,#6ec6ff,#85ffe2);color:#04243a;border-color:rgba(141,255,215,.68)}
+    .ctrl.warn{background:linear-gradient(135deg,#ffc08d,#ff8f87);color:#3a1307;border-color:rgba(255,204,153,.6)}
+
+    #overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:40;padding:12px;pointer-events:none;}
+    .panel{
+      width:min(95vw,460px);pointer-events:auto;background:linear-gradient(180deg,rgba(12,24,55,.95),rgba(6,12,28,.94));
+      border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:0 24px 56px rgba(0,0,0,.46);
+    }
+    h1,h2{margin:0 0 8px;line-height:1.15}
+    h1{font-size:clamp(28px,7vw,36px)}
+    h2{font-size:clamp(23px,6vw,30px)}
+    .sub{font-size:14px;line-height:1.4;opacity:.9;margin-bottom:12px}
+    .small{font-size:12px;opacity:.84;line-height:1.4}
+    .row{display:flex;gap:8px;margin-top:10px;}
+    button{
+      min-height:46px;flex:1;border-radius:10px;border:1px solid rgba(255,255,255,.24);
+      background:rgba(17,35,77,.67);color:var(--text);font-size:15px;font-weight:760;padding:10px 14px;cursor:pointer;
+    }
+    button.primary{background:linear-gradient(135deg,#74cbff,#83ffd9);color:#0a2a3f;border-color:rgba(144,255,219,.64)}
+    button.warn{background:linear-gradient(135deg,#ffb48f,#ff8c85);color:#481a10;border-color:rgba(255,194,145,.6)}
+    button:disabled{opacity:.45;cursor:not-allowed}
+
+    #toast{
+      position:fixed;left:50%;transform:translateX(-50%);bottom:calc(78px + env(safe-area-inset-bottom));z-index:50;
+      background:rgba(8,17,40,.86);border:1px solid var(--line);border-radius:999px;padding:7px 12px;
+      font-size:12px;font-weight:800;opacity:0;transition:opacity .2s ease;pointer-events:none;
+    }
+    #toast.show{opacity:1}
+
+    #leaderboard{
+      position:fixed;left:10px;right:10px;bottom:calc(76px + env(safe-area-inset-bottom));z-index:18;
+      background:rgba(8,14,34,.58);border:1px solid rgba(120,180,255,.24);border-radius:9px;padding:5px 8px;
+      font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.84;
+    }
+  </style>
+  <script src="../i18n.js"></script>
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div id="hud">
+    <div class="metric" id="mScore">S 0</div>
+    <div class="metric" id="mBest">B 0</div>
+    <div class="metric" id="mLives">HP 1</div>
+    <div class="metric" id="mPhase">P 0%</div>
+    <div class="metric" id="mStage">ST 1</div>
+  </div>
+
+  <div id="leaderboard" data-lb-slug="ember-glider"></div>
+
+  <div id="controls">
+    <button id="flipBtn" class="ctrl primary"></button>
+    <button id="emberBtn" class="ctrl"></button>
+  </div>
+
+  <div id="toast"></div>
+
+  <div id="overlay">
+    <section class="panel" id="titlePanel">
+      <h1 id="titleTxt"></h1>
+      <div class="sub" id="subTxt"></div>
+      <div class="small" id="metaTxt"></div>
+      <div class="row"><button id="startBtn" class="primary"></button></div>
+      <div class="row"><button id="upgradeBtn"></button></div>
+      <div class="row"><button id="langBtn"></button></div>
+    </section>
+
+    <section class="panel" id="gameoverPanel" style="display:none;">
+      <h2 id="goTitle"></h2>
+      <div class="sub" id="goDesc"></div>
+      <div class="small" id="goMeta"></div>
+      <div class="row">
+        <button id="retryBtn" class="warn"></button>
+        <button id="homeBtn"></button>
+      </div>
+    </section>
+  </div>
+
+  <script src="../shared/sound-manager.js"></script>
+  <script src="../tg-sdk-wrapper.js"></script>
+  <script>
+  (() => {
+    'use strict';
+
+    const GAME_ID = 'ember-glider';
+    const STORAGE_KEY = 'emberGliderSave_v1';
+
+    const I18N = {
+      title: { ko:'엠버 글라이더', en:'Ember Glider' },
+      subtitle: { ko:'탭으로 비행을 뒤집고 장애물을 피하세요. 코어를 모아 Ember Burst를 발동하세요.', en:'Tap to flip gravity, dodge blockers, and collect cores to trigger Ember Burst.' },
+      start: { ko:'런 시작', en:'Start Run' },
+      retry: { ko:'다시 달리기', en:'Retry' },
+      home: { ko:'타이틀', en:'Home' },
+      flip: { ko:'상승 부스터', en:'Flip Gravity' },
+      emberReady: { ko:'펄스 대시', en:'Ember Burst' },
+      emberCharge: { ko:'펄스 충전', en:'Charge Pulse' },
+      emberFired: { ko:'펄스 발동!', en:'Pulse Fired!' },
+      goTitle: { ko:'런 종료', en:'Run Over' },
+      goDesc: { ko:'장애물에 충돌했습니다. 베스트를 갱신해보세요.', en:'You crashed into a blocker. Push for a new best!' },
+      best: { ko:'베스트', en:'Best' },
+      score: { ko:'점수', en:'Score' },
+      stage: { ko:'스테이지', en:'Stage' },
+      lives: { ko:'실드', en:'Shield' },
+      credits: { ko:'크레딧', en:'Credits' },
+      earned: { ko:'획득', en:'Earned' },
+      laneHint: { ko:'화면 어디든 탭해도 상승 부스터', en:'Tap anywhere to flip gravity' },
+      upgradeShield: { ko:'실드 업그레이드', en:'Upgrade Shield' },
+      upgradeMax: { ko:'실드 최대치', en:'Shield Maxed' },
+      upgradeNeed: { ko:'크레딧 부족', en:'Not enough credits' },
+      langLabel: { ko:'언어: 한국어', en:'Language: English' },
+      titleMeta: { ko:'베스트 {best} · 크레딧 {credits} · 실드 Lv.{boost}', en:'Best {best} · Credits {credits} · Shield Lv.{boost}' },
+      gameMeta: { ko:'점수 {score} · 스테이지 {stage} · 획득 {earned}', en:'Score {score} · Stage {stage} · Earned {earned}' }
+    };
+
+    const tg = window.TG && typeof TG.init === 'function' ? window.TG : null;
+    if (tg) tg.init();
+
+    const snd = window.SoundManager ? new SoundManager() : { loadSFX(){}, play(){} };
+    snd.loadSFX('flip', 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEA');
+    snd.loadSFX('hit', 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEA');
+    snd.loadSFX('ember', 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEA');
+
+    const $ = (id) => document.getElementById(id);
+    const canvas = $('game');
+    const ctx = canvas.getContext('2d');
+
+    const hud = $('hud');
+    const controls = $('controls');
+    const titlePanel = $('titlePanel');
+    const gameoverPanel = $('gameoverPanel');
+
+    const startBtn = $('startBtn');
+    const retryBtn = $('retryBtn');
+    const homeBtn = $('homeBtn');
+    const langBtn = $('langBtn');
+    const upgradeBtn = $('upgradeBtn');
+    const flipBtn = $('flipBtn');
+    const emberBtn = $('emberBtn');
+    const toast = $('toast');
+
+    const mScore = $('mScore');
+    const mBest = $('mBest');
+    const mLives = $('mLives');
+    const mPhase = $('mPhase');
+    const mStage = $('mStage');
+
+    const titleTxt = $('titleTxt');
+    const subTxt = $('subTxt');
+    const metaTxt = $('metaTxt');
+    const goTitle = $('goTitle');
+    const goDesc = $('goDesc');
+    const goMeta = $('goMeta');
+
+    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+    const lerp = (a, b, t) => a + (b - a) * t;
+    const rnd = (a, b) => a + Math.random() * (b - a);
+
+    function loadSave() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) throw 0;
+        const p = JSON.parse(raw);
+        return {
+          best: +p.best || 0,
+          credits: +p.credits || 0,
+          lang: p.lang === 'ko' ? 'ko' : 'en',
+          upgrades: { boost: clamp((p.upgrades && +p.upgrades.boost) || 0, 0, 3) }
+        };
+      } catch {
+        return { best: 0, credits: 0, lang: 'ko', upgrades: { boost: 0 } };
+      }
+    }
+
+    const save = loadSave();
+    let lang = save.lang;
+    document.documentElement.lang = lang;
+
+    const _Tbase = window.GameI18n ? GameI18n(I18N) : (k => (I18N[k] && I18N[k].en) || k);
+    const T = (key, vars) => {
+      let text = (I18N[key] && I18N[key][lang]) || _Tbase(key);
+      if (vars) for (const [k, v] of Object.entries(vars)) text = text.replaceAll(`{${k}}`, String(v));
+      return text;
+    };
+
+    let DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    let W = 390;
+    let H = 844;
+    let railTop = 0;
+    let railBottom = 0;
+
+    function resize() {
+      DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+      W = Math.max(320, window.innerWidth);
+      H = Math.max(560, window.innerHeight);
+      canvas.width = Math.floor(W * DPR);
+      canvas.height = Math.floor(H * DPR);
+      canvas.style.width = W + 'px';
+      canvas.style.height = H + 'px';
+      ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+      railTop = H * 0.32;
+      railBottom = H * 0.68;
+    }
+    addEventListener('resize', resize, { passive: true });
+    resize();
+
+    const game = {
+      state: 'title',
+      score: 0,
+      best: save.best,
+      earned: 0,
+      credits: save.credits,
+      stage: 1,
+      speed: 250,
+      phase: 0,
+      lane: 0,
+      obstacles: [],
+      cores: [],
+      particles: [],
+      stars: [],
+      spawnT: 0,
+      coreT: 0,
+      elapsed: 0,
+      startedAt: 0,
+      player: { x: 0, y: 0, r: 16, targetY: 0, lives: 1, inv: 0, flipCd: 0, trail: [] }
+    };
+
+    for (let i = 0; i < 70; i++) {
+      game.stars.push({ x: Math.random() * W, y: Math.random() * H, z: rnd(0.2, 1.0) });
+    }
+
+    function laneY(lane) {
+      return lane === 0 ? railTop : railBottom;
+    }
+
+    function resetRun() {
+      game.state = 'play';
+      game.score = 0;
+      game.earned = 0;
+      game.stage = 1;
+      game.speed = 250;
+      game.phase = 0;
+      game.lane = 0;
+      game.obstacles.length = 0;
+      game.cores.length = 0;
+      game.particles.length = 0;
+      game.spawnT = 0.7;
+      game.coreT = 0.9;
+      game.elapsed = 0;
+      game.startedAt = performance.now();
+
+      game.player.x = W * 0.24;
+      game.player.y = laneY(0);
+      game.player.targetY = laneY(0);
+      game.player.r = Math.max(13, Math.min(18, W * 0.04));
+      game.player.lives = 1 + save.upgrades.boost;
+      game.player.inv = 0;
+      game.player.flipCd = 0;
+      game.player.trail.length = 0;
+
+      hud.classList.add('show');
+      controls.classList.add('show');
+      titlePanel.style.display = 'none';
+      gameoverPanel.style.display = 'none';
+      hideToast();
+      syncText();
+    }
+
+    function showTitle() {
+      game.state = 'title';
+      hud.classList.remove('show');
+      controls.classList.remove('show');
+      titlePanel.style.display = '';
+      gameoverPanel.style.display = 'none';
+      syncText();
+    }
+
+    function gameOver() {
+      game.state = 'gameover';
+      const earned = Math.floor(game.score / 25) + game.stage * 2;
+      game.earned = earned;
+      game.credits += earned;
+      save.credits = game.credits;
+      if (game.score > game.best) {
+        game.best = game.score;
+        save.best = game.best;
+      }
+      persist();
+      if (window.Leaderboard && typeof Leaderboard.submit === 'function') {
+        try { Leaderboard.submit(GAME_ID, 'player', game.score); } catch {}
+      }
+      hud.classList.remove('show');
+      controls.classList.remove('show');
+      titlePanel.style.display = 'none';
+      gameoverPanel.style.display = '';
+      syncText();
+      if (tg) tg.haptic('notification', 'error');
+    }
+
+    function persist() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        best: save.best,
+        credits: save.credits,
+        lang,
+        upgrades: { boost: save.upgrades.boost }
+      }));
+    }
+
+    function boostCost(level) {
+      return 90 + level * 70;
+    }
+
+    function buyShield() {
+      if (save.upgrades.boost >= 3) {
+        flashToast(T('upgradeMax'));
+        return false;
+      }
+      const cost = boostCost(save.upgrades.boost);
+      if (save.credits < cost) {
+        flashToast(T('upgradeNeed'));
+        return false;
+      }
+      save.credits -= cost;
+      game.credits = save.credits;
+      save.upgrades.boost += 1;
+      snd.play('ember', 1.0);
+      if (tg) tg.haptic('impact', 'medium');
+      persist();
+      syncText();
+      return true;
+    }
+
+    function flipGravity() {
+      if (game.state !== 'play') return;
+      if (game.player.flipCd > 0) return;
+      game.lane = 1 - game.lane;
+      game.player.targetY = laneY(game.lane);
+      game.player.flipCd = Math.max(0.12, 0.25 - save.upgrades.boost * 0.03);
+      snd.play('flip', 1.0);
+      if (tg) tg.haptic('impact', 'light');
+      for (let i = 0; i < 12; i++) {
+        game.particles.push({
+          x: game.player.x,
+          y: game.player.y,
+          vx: rnd(-90, 90),
+          vy: rnd(-130, 130),
+          life: rnd(0.2, 0.55),
+          t: 0,
+          c: i % 2 ? '#8dffd7' : '#7ac7ff'
+        });
+      }
+    }
+
+    function firePulse() {
+      if (game.state !== 'play') return false;
+      if (game.phase < 100) {
+        flashToast(T('emberCharge'));
+        return false;
+      }
+      game.phase = 0;
+      game.player.inv = Math.max(game.player.inv, 1.15);
+      let removed = 0;
+      game.obstacles = game.obstacles.filter((o) => {
+        const hit = o.x > game.player.x - 20 && o.x < game.player.x + W * 0.45;
+        if (hit) {
+          removed++;
+          for (let i = 0; i < 8; i++) {
+            game.particles.push({
+              x: o.x,
+              y: o.y + o.h * 0.5,
+              vx: rnd(-120, 140),
+              vy: rnd(-80, 80),
+              life: rnd(0.25, 0.65),
+              t: 0,
+              c: '#ffcf8a'
+            });
+          }
+          return false;
+        }
+        return true;
+      });
+      game.score += removed * 25;
+      snd.play('ember', 1.1);
+      if (tg) tg.haptic('notification', 'success');
+      flashToast(T('emberFired'));
+      return true;
+    }
+
+    function hitPlayer() {
+      if (game.player.inv > 0) return;
+      game.player.lives -= 1;
+      game.player.inv = 1.0;
+      snd.play('hit', 1.0);
+      if (tg) tg.haptic('notification', 'warning');
+      for (let i = 0; i < 20; i++) {
+        game.particles.push({
+          x: game.player.x,
+          y: game.player.y,
+          vx: rnd(-170, 170),
+          vy: rnd(-170, 170),
+          life: rnd(0.2, 0.6),
+          t: 0,
+          c: i % 2 ? '#ff8f90' : '#ffd786'
+        });
+      }
+      if (game.player.lives <= 0) gameOver();
+    }
+
+    function spawnObstacle() {
+      const lane = Math.random() < 0.5 ? 0 : 1;
+      const thick = rnd(30, 54);
+      game.obstacles.push({
+        x: W + rnd(30, 140),
+        y: laneY(lane) - 26,
+        w: thick,
+        h: 52,
+        lane,
+        type: Math.random() < 0.25 ? 'split' : 'block'
+      });
+    }
+
+    function spawnCore() {
+      const lane = Math.random() < 0.5 ? 0 : 1;
+      game.cores.push({
+        x: W + rnd(30, 100),
+        y: laneY(lane),
+        r: 10,
+        lane,
+        ember: rnd(0, Math.PI * 2)
+      });
+    }
+
+    function update(dt) {
+      const p = game.player;
+
+      for (const s of game.stars) {
+        s.x -= (28 + 120 * s.z) * dt;
+        if (s.x < -4) {
+          s.x = W + 4;
+          s.y = Math.random() * H;
+          s.z = rnd(0.2, 1.0);
+        }
+      }
+
+      if (game.state !== 'play') {
+        updateParticles(dt);
+        return;
+      }
+
+      game.elapsed += dt;
+      game.stage = 1 + Math.floor(game.elapsed / 11);
+      game.speed = 250 + game.stage * 24;
+      game.score = Math.floor(game.elapsed * 28 + game.stage * 12);
+
+      p.flipCd = Math.max(0, p.flipCd - dt);
+      p.inv = Math.max(0, p.inv - dt);
+      p.y = lerp(p.y, p.targetY, Math.min(1, dt * 12));
+
+      p.trail.push({ x: p.x, y: p.y, t: 0 });
+      if (p.trail.length > 18) p.trail.shift();
+      for (const tr of p.trail) tr.t += dt;
+
+      game.spawnT -= dt;
+      game.coreT -= dt;
+      if (game.spawnT <= 0) {
+        spawnObstacle();
+        game.spawnT = clamp(1.0 - game.stage * 0.04, 0.35, 1.0) + rnd(-0.07, 0.1);
+      }
+      if (game.coreT <= 0) {
+        spawnCore();
+        game.coreT = clamp(1.4 - game.stage * 0.03, 0.52, 1.4) + rnd(-0.1, 0.15);
+      }
+
+      for (let i = game.obstacles.length - 1; i >= 0; i--) {
+        const o = game.obstacles[i];
+        o.x -= game.speed * dt;
+        if (o.x + o.w < -30) { game.obstacles.splice(i, 1); continue; }
+
+        const hitX = p.x + p.r > o.x && p.x - p.r < o.x + o.w;
+        const hitY = p.y + p.r > o.y && p.y - p.r < o.y + o.h;
+        if (hitX && hitY) {
+          game.obstacles.splice(i, 1);
+          hitPlayer();
+        }
+      }
+
+      for (let i = game.cores.length - 1; i >= 0; i--) {
+        const c = game.cores[i];
+        c.x -= game.speed * dt;
+        c.ember += dt * 8;
+        if (c.x + c.r < -20) { game.cores.splice(i, 1); continue; }
+        const dx = p.x - c.x;
+        const dy = p.y - c.y;
+        if (dx * dx + dy * dy < (p.r + c.r) * (p.r + c.r)) {
+          game.phase = clamp(game.phase + 24, 0, 100);
+          game.score += 12;
+          game.cores.splice(i, 1);
+          for (let k = 0; k < 6; k++) {
+            game.particles.push({ x: c.x, y: c.y, vx: rnd(-60, 110), vy: rnd(-90, 90), life: rnd(0.22, 0.5), t: 0, c: '#8dffd7' });
+          }
+        }
+      }
+
+      if (game.phase >= 100) {
+        emberBtn.classList.add('warn');
+      } else {
+        emberBtn.classList.remove('warn');
+      }
+
+      updateParticles(dt);
+      syncHud();
+    }
+
+    function updateParticles(dt) {
+      for (let i = game.particles.length - 1; i >= 0; i--) {
+        const p = game.particles[i];
+        p.t += dt;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.vx *= 0.98;
+        p.vy *= 0.98;
+        if (p.t >= p.life) game.particles.splice(i, 1);
+      }
+    }
+
+    function drawBackground(t) {
+      const g = ctx.createLinearGradient(0, 0, 0, H);
+      g.addColorStop(0, '#173a79');
+      g.addColorStop(0.42, '#0f1f47');
+      g.addColorStop(1, '#050a18');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+
+      for (const s of game.stars) {
+        ctx.fillStyle = `rgba(170,210,255,${0.25 + s.z * 0.5})`;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, 0.7 + s.z * 1.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      const sway = Math.sin(t * 0.0014) * 8;
+      ctx.strokeStyle = 'rgba(122,198,255,.24)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(0, railTop + sway);
+      ctx.lineTo(W, railTop - sway * 0.4);
+      ctx.moveTo(0, railBottom - sway);
+      ctx.lineTo(W, railBottom + sway * 0.4);
+      ctx.stroke();
+
+      ctx.strokeStyle = 'rgba(121,255,222,.22)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 14; i++) {
+        const x = (i / 14) * W + ((t * 0.03) % (W / 14));
+        ctx.beginPath();
+        ctx.moveTo(x, railTop - 18);
+        ctx.lineTo(x + 18, railTop + 18);
+        ctx.moveTo(x, railBottom - 18);
+        ctx.lineTo(x + 18, railBottom + 18);
+        ctx.stroke();
+      }
+    }
+
+    function drawObstacles() {
+      for (const o of game.obstacles) {
+        const grad = ctx.createLinearGradient(o.x, o.y, o.x + o.w, o.y + o.h);
+        if (o.type === 'split') {
+          grad.addColorStop(0, '#ffd88d');
+          grad.addColorStop(1, '#ff8f86');
+        } else {
+          grad.addColorStop(0, '#83c2ff');
+          grad.addColorStop(1, '#5d7cff');
+        }
+        ctx.fillStyle = grad;
+        const rr = 8;
+        roundRect(ctx, o.x, o.y, o.w, o.h, rr);
+        ctx.fill();
+
+        ctx.strokeStyle = 'rgba(255,255,255,.35)';
+        ctx.lineWidth = 2;
+        roundRect(ctx, o.x + 1, o.y + 1, o.w - 2, o.h - 2, rr - 2);
+        ctx.stroke();
+
+        if (o.type === 'split') {
+          ctx.strokeStyle = 'rgba(70,24,18,.45)';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(o.x + 7, o.y + 8);
+          ctx.lineTo(o.x + o.w - 7, o.y + o.h - 8);
+          ctx.stroke();
+        }
+      }
+    }
+
+    function drawCores(t) {
+      for (const c of game.cores) {
+        const ember = 1 + Math.sin(c.ember + t * 0.006) * 0.22;
+        ctx.fillStyle = 'rgba(141,255,215,.18)';
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, c.r * 1.9 * ember, 0, Math.PI * 2);
+        ctx.fill();
+
+        const rg = ctx.createRadialGradient(c.x - 2, c.y - 2, 2, c.x, c.y, c.r * 1.15);
+        rg.addColorStop(0, '#ffffff');
+        rg.addColorStop(0.4, '#8dffd7');
+        rg.addColorStop(1, '#3cc3c8');
+        ctx.fillStyle = rg;
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, c.r * ember, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    function drawPlayer() {
+      const p = game.player;
+      for (let i = 0; i < p.trail.length; i++) {
+        const tr = p.trail[i];
+        const a = i / p.trail.length;
+        ctx.fillStyle = `rgba(129,220,255,${a * 0.26})`;
+        ctx.beginPath();
+        ctx.arc(tr.x - i * 1.8, tr.y, p.r * (0.55 + a * 0.35), 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      if (p.inv > 0) {
+        ctx.strokeStyle = `rgba(255,221,140,${0.35 + Math.sin(performance.now() * 0.025) * 0.2})`;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r + 8, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      const pg = ctx.createRadialGradient(p.x - 5, p.y - 5, 3, p.x, p.y, p.r * 1.3);
+      pg.addColorStop(0, '#ffffff');
+      pg.addColorStop(0.38, '#82d7ff');
+      pg.addColorStop(1, '#3f5eff');
+      ctx.fillStyle = pg;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,.65)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    function drawParticles() {
+      for (const p of game.particles) {
+        const a = 1 - p.t / p.life;
+        ctx.fillStyle = p.c.replace(')', `,${a})`).startsWith('rgb') ? p.c : `${p.c}`;
+        ctx.globalAlpha = clamp(a, 0, 1);
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 2 + a * 2.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    function roundRect(ct, x, y, w, h, r) {
+      ct.beginPath();
+      ct.moveTo(x + r, y);
+      ct.arcTo(x + w, y, x + w, y + h, r);
+      ct.arcTo(x + w, y + h, x, y + h, r);
+      ct.arcTo(x, y + h, x, y, r);
+      ct.arcTo(x, y, x + w, y, r);
+      ct.closePath();
+    }
+
+    function render(t) {
+      drawBackground(t);
+      drawObstacles();
+      drawCores(t);
+      drawPlayer();
+      drawParticles();
+
+      if (game.state === 'play') {
+        ctx.fillStyle = 'rgba(235,246,255,.9)';
+        ctx.font = '700 12px Inter, sans-serif';
+        ctx.fillText(T('laneHint'), 12, H - 20);
+      }
+    }
+
+    function syncHud() {
+      mScore.textContent = `${T('score')} ${game.score}`;
+      mBest.textContent = `${T('best')} ${game.best}`;
+      mLives.textContent = `${T('lives')} ${game.player.lives}`;
+      mPhase.textContent = `P ${Math.floor(game.phase)}%`;
+      mStage.textContent = `${T('stage')} ${game.stage}`;
+      emberBtn.textContent = game.phase >= 100 ? T('emberReady') : `${T('emberCharge')} ${Math.floor(game.phase)}%`;
+    }
+
+    function syncText() {
+      document.documentElement.lang = lang;
+      titleTxt.textContent = T('title');
+      subTxt.textContent = T('subtitle');
+      startBtn.textContent = T('start');
+      retryBtn.textContent = T('retry');
+      homeBtn.textContent = T('home');
+      flipBtn.textContent = T('flip');
+      goTitle.textContent = T('goTitle');
+      goDesc.textContent = T('goDesc');
+      langBtn.textContent = T('langLabel');
+
+      const cost = save.upgrades.boost >= 3 ? null : boostCost(save.upgrades.boost);
+      upgradeBtn.textContent = save.upgrades.boost >= 3
+        ? `${T('upgradeShield')} (${T('upgradeMax')})`
+        : `${T('upgradeShield')} Lv.${save.upgrades.boost + 1} · ${cost}`;
+
+      metaTxt.textContent = T('titleMeta', {
+        best: save.best,
+        credits: save.credits,
+        boost: save.upgrades.boost
+      });
+
+      goMeta.textContent = T('gameMeta', {
+        score: game.score,
+        stage: game.stage,
+        earned: game.earned
+      });
+
+      syncHud();
+    }
+
+    let toastTimer = null;
+    function flashToast(text) {
+      toast.textContent = text;
+      toast.classList.add('show');
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove('show'), 760);
+    }
+    function hideToast() {
+      toast.classList.remove('show');
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = null;
+    }
+
+    function pointerAction(ev) {
+      if (game.state !== 'play') return;
+      const y = ev.clientY ?? 0;
+      if (y > H * 0.78 && game.phase >= 100) {
+        firePulse();
+      } else {
+        flipGravity();
+      }
+    }
+
+    canvas.addEventListener('pointerdown', pointerAction, { passive: true });
+    flipBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); flipGravity(); });
+    emberBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); firePulse(); });
+
+    startBtn.addEventListener('click', resetRun);
+    retryBtn.addEventListener('click', resetRun);
+    homeBtn.addEventListener('click', showTitle);
+    langBtn.addEventListener('click', () => {
+      lang = lang === 'ko' ? 'en' : 'ko';
+      save.lang = lang;
+      persist();
+      syncText();
+    });
+    upgradeBtn.addEventListener('click', buyShield);
+
+    let last = performance.now();
+    function loop(now) {
+      const dt = clamp((now - last) / 1000, 0, 0.05);
+      last = now;
+      update(dt);
+      render(now);
+      requestAnimationFrame(loop);
+    }
+
+    try {
+      if (window.Leaderboard && typeof Leaderboard.renderBoard === 'function') {
+        Leaderboard.renderBoard('leaderboard');
+      }
+    } catch {}
+
+    showTitle();
+    syncText();
+    requestAnimationFrame(loop);
+
+    window.__emberGlider = {
+      start: resetRun,
+      getState: () => game.state,
+      getLane: () => game.lane,
+      flip: flipGravity,
+      ember: firePulse,
+      forceGameOver: () => { game.player.lives = 1; hitPlayer(); },
+      toggleLang: () => { langBtn.click(); return lang; },
+      getLang: () => lang,
+      addCredits: (n) => { save.credits += n; game.credits = save.credits; persist(); syncText(); },
+      buyShield,
+      getMeta: () => ({
+        score: game.score,
+        best: game.best,
+        credits: save.credits,
+        upgrades: { boost: save.upgrades.boost },
+        state: game.state
+      })
+    };
+  })();
+  </script>
+
+  <script src="/games/cross-promo.js"></script>
+  <script src="../shared/leaderboard.js"></script>
+</body>
+</html>

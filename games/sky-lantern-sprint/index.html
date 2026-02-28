@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+  <title>Sky Lantern Sprint</title>
+  <meta name="description" content="Move your sky lantern across three lanes, dodge storm clouds, collect stars, and trigger Burst Dash in this mobile HTML5 arcade run." />
+  <meta name="keywords" content="html5, canvas game, mobile touch, runner, arcade" />
+  <link rel="manifest" href="/games/manifest.json" />
+  <style>
+    :root{
+      --bg:#060b1b;--bg2:#13254f;--panel:rgba(7,14,32,.86);--line:rgba(125,171,255,.35);
+      --text:#ecf5ff;--mint:#7dffd8;--cyan:#73d9ff;--warn:#ff968f;--gold:#ffd88f;
+    }
+    *{box-sizing:border-box;user-select:none;-webkit-tap-highlight-color:transparent}
+    html,body{margin:0;width:100%;height:100%;overflow:hidden;background:radial-gradient(circle at 50% 10%, #23438a 0%, #07102b 56%, #040812 100%);color:var(--text);font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Noto Sans KR',sans-serif}
+    body{touch-action:none}
+    #game{position:fixed;inset:0;width:100%;height:100%;display:block;background:linear-gradient(180deg,#172d61,#040811)}
+
+    #hud{
+      position:fixed;left:10px;right:10px;top:max(10px,env(safe-area-inset-top));z-index:30;
+      display:flex;gap:8px;flex-wrap:wrap;justify-content:space-between;align-items:center;
+      padding:10px 12px;border-radius:13px;border:1px solid var(--line);background:var(--panel);
+      backdrop-filter:blur(7px);font-size:12px;font-weight:800;opacity:0;transform:translateY(-7px);
+      transition:opacity .2s ease,transform .2s ease;pointer-events:none;
+    }
+    #hud.show{opacity:1;transform:translateY(0)}
+    .metric b{color:var(--mint)}
+
+    #controls{
+      position:fixed;left:10px;right:10px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:31;
+      display:flex;gap:10px;opacity:0;pointer-events:none;transition:opacity .2s ease;
+    }
+    #controls.show{opacity:1;pointer-events:auto}
+    .ctrl{
+      flex:1;min-height:58px;border-radius:13px;border:1px solid rgba(165,213,255,.4);cursor:pointer;
+      background:rgba(8,18,43,.85);color:var(--text);font-size:14px;font-weight:900;letter-spacing:.2px;
+    }
+    .ctrl.primary{background:linear-gradient(135deg,#73c5ff,#7fffd9);color:#07304a;border-color:rgba(141,255,218,.72)}
+    .ctrl.warn{background:linear-gradient(135deg,#ffc391,#ff8f8c);color:#41180f;border-color:rgba(255,200,150,.7)}
+
+    #overlay{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;padding:12px;pointer-events:none}
+    .panel{
+      pointer-events:auto;width:min(95vw,470px);border-radius:16px;border:1px solid var(--line);
+      background:linear-gradient(180deg,rgba(13,24,54,.95),rgba(5,10,24,.94));padding:18px;
+      box-shadow:0 24px 60px rgba(0,0,0,.5)
+    }
+    h1,h2{margin:0 0 9px;line-height:1.15}
+    h1{font-size:clamp(28px,7vw,37px)}
+    h2{font-size:clamp(24px,6vw,31px)}
+    .sub{font-size:14px;line-height:1.45;opacity:.92;margin-bottom:12px}
+    .small{font-size:12px;line-height:1.4;opacity:.84}
+    .row{display:flex;gap:8px;margin-top:10px}
+    button{
+      min-height:46px;flex:1;border-radius:10px;border:1px solid rgba(255,255,255,.25);cursor:pointer;
+      background:rgba(20,38,80,.7);color:var(--text);font-size:15px;font-weight:800;padding:10px 14px
+    }
+    button.primary{background:linear-gradient(135deg,#72c7ff,#82ffd9);color:#09314b;border-color:rgba(147,255,222,.72)}
+    button.warn{background:linear-gradient(135deg,#ffc493,#ff928d);color:#421a0f;border-color:rgba(255,200,149,.7)}
+    button:disabled{opacity:.5;cursor:not-allowed}
+
+    #toast{
+      position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom));z-index:50;
+      font-size:12px;font-weight:900;background:rgba(9,17,41,.9);border:1px solid var(--line);
+      border-radius:999px;padding:7px 12px;opacity:0;transition:opacity .2s ease;pointer-events:none
+    }
+    #toast.show{opacity:1}
+  </style>
+  <script src="../tg-sdk-wrapper.js"></script>
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div id="hud">
+    <div class="metric" id="mScore">S 0</div>
+    <div class="metric" id="mBest">B 0</div>
+    <div class="metric" id="mShield">HP 1</div>
+    <div class="metric" id="mBurst">BURST 0%</div>
+    <div class="metric" id="mCoins">C 0</div>
+  </div>
+
+  <div id="controls">
+    <button id="leftBtn" class="ctrl">◀ LEFT</button>
+    <button id="burstBtn" class="ctrl primary">BURST</button>
+    <button id="rightBtn" class="ctrl">RIGHT ▶</button>
+  </div>
+
+  <div id="overlay">
+    <section class="panel" id="titlePanel">
+      <h1 id="titleTxt"></h1>
+      <div class="sub" id="subTxt"></div>
+      <div class="small" id="metaTxt"></div>
+      <div class="row"><button id="startBtn" class="primary"></button></div>
+      <div class="row"><button id="upgradeBtn"></button></div>
+      <div class="row"><button id="langBtn"></button></div>
+    </section>
+
+    <section class="panel" id="gameoverPanel" style="display:none;">
+      <h2 id="goTitle"></h2>
+      <div class="sub" id="goDesc"></div>
+      <div class="small" id="goMeta"></div>
+      <div class="row">
+        <button id="retryBtn" class="warn"></button>
+        <button id="homeBtn"></button>
+      </div>
+    </section>
+  </div>
+
+  <div id="toast"></div>
+
+  <script>
+  (() => {
+    'use strict';
+
+    const GAME_ID = 'sky-lantern-sprint';
+    const SAVE_KEY = 'skyLanternSprintSave_v1';
+
+    const tg = window.TG && typeof window.TG.init === 'function' ? window.TG : null;
+    if (tg) tg.init();
+
+    const I18N = {
+      title:{ko:'스카이 랜턴 스프린트',en:'Sky Lantern Sprint'},
+      subtitle:{ko:'좌우로 랜턴을 이동해 폭풍 구름을 피하고 별 조각을 모으세요. 에너지가 가득 차면 Burst Dash!',en:'Shift your lantern left/right to dodge storm clouds and collect stars. Fill energy to trigger Burst Dash!'},
+      start:{ko:'비행 시작',en:'Start Flight'},
+      retry:{ko:'다시 비행',en:'Retry'},
+      home:{ko:'타이틀로',en:'Back to Title'},
+      left:{ko:'왼쪽',en:'Left'},
+      right:{ko:'오른쪽',en:'Right'},
+      burst:{ko:'버스트',en:'Burst'},
+      burstReady:{ko:'버스트 준비 완료!',en:'Burst Ready!'},
+      burstOn:{ko:'버스트 돌입!',en:'Burst Activated!'},
+      hit:{ko:'폭풍 충돌!',en:'Storm hit!'},
+      collect:{ko:'별 획득!',en:'Star collected!'},
+      goTitle:{ko:'비행 종료',en:'Flight Over'},
+      goDesc:{ko:'폭풍을 견디지 못했습니다. 코인을 모아 실드를 강화하세요.',en:'The storm got you. Upgrade shield with coins and fly farther.'},
+      score:{ko:'점수',en:'Score'},
+      best:{ko:'베스트',en:'Best'},
+      coins:{ko:'코인',en:'Coins'},
+      earned:{ko:'획득 코인',en:'Earned Coins'},
+      shield:{ko:'실드',en:'Shield'},
+      energy:{ko:'에너지',en:'Energy'},
+      titleMeta:{ko:'베스트 {best} · 코인 {coins} · 실드 Lv.{lv}',en:'Best {best} · Coins {coins} · Shield Lv.{lv}'},
+      gameMeta:{ko:'점수 {score} · 획득 {earned} · 최고 {best}',en:'Score {score} · Earned {earned} · Best {best}'},
+      upgrade:{ko:'실드 업그레이드 ({cost} 코인)',en:'Upgrade Shield ({cost} coins)'},
+      upgradeMax:{ko:'실드 업그레이드 최대',en:'Shield maxed'},
+      notEnough:{ko:'코인이 부족합니다',en:'Not enough coins'},
+      langKo:{ko:'언어: 한국어',en:'Language: Korean'},
+      langEn:{ko:'언어: English',en:'Language: English'}
+    };
+
+    const $ = (id)=>document.getElementById(id);
+    const canvas = $('game');
+    const ctx = canvas.getContext('2d');
+
+    const hud = $('hud');
+    const controls = $('controls');
+    const titlePanel = $('titlePanel');
+    const gameoverPanel = $('gameoverPanel');
+
+    const startBtn = $('startBtn');
+    const upgradeBtn = $('upgradeBtn');
+    const langBtn = $('langBtn');
+    const retryBtn = $('retryBtn');
+    const homeBtn = $('homeBtn');
+
+    const leftBtn = $('leftBtn');
+    const rightBtn = $('rightBtn');
+    const burstBtn = $('burstBtn');
+
+    const titleTxt = $('titleTxt');
+    const subTxt = $('subTxt');
+    const metaTxt = $('metaTxt');
+    const goTitle = $('goTitle');
+    const goDesc = $('goDesc');
+    const goMeta = $('goMeta');
+
+    const mScore = $('mScore');
+    const mBest = $('mBest');
+    const mShield = $('mShield');
+    const mBurst = $('mBurst');
+    const mCoins = $('mCoins');
+
+    const toast = $('toast');
+
+    const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+    const lerp = (a,b,t)=>a+(b-a)*t;
+    const rnd = (a,b)=>a+Math.random()*(b-a);
+
+    function loadSave(){
+      try{
+        const raw = localStorage.getItem(SAVE_KEY);
+        if(!raw) throw new Error('empty');
+        const s = JSON.parse(raw);
+        return {
+          best: Math.max(0, +s.best || 0),
+          coins: Math.max(0, +s.coins || 0),
+          upgradeShield: clamp(+s.upgradeShield || 0, 0, 3),
+          lang: s.lang === 'ko' ? 'ko' : 'en',
+          lastRunScore: Math.max(0, +s.lastRunScore || 0),
+          updatedAt: +s.updatedAt || Date.now()
+        };
+      }catch{
+        return { best:0, coins:0, upgradeShield:0, lang:'ko', lastRunScore:0, updatedAt:Date.now() };
+      }
+    }
+
+    const save = loadSave();
+    let lang = save.lang;
+    document.documentElement.lang = lang;
+
+    const T = (key, vars={}) => {
+      const table = I18N[key];
+      let text = table ? table[lang] : key;
+      if (typeof text !== 'string') text = key;
+      for (const [k,v] of Object.entries(vars)) text = text.replaceAll(`{${k}}`, String(v));
+      return text;
+    };
+
+    function persist(){
+      save.lang = lang;
+      save.updatedAt = Date.now();
+      localStorage.setItem(SAVE_KEY, JSON.stringify(save));
+    }
+
+    let audioCtx = null;
+    function beep(freq=440,dur=0.08,type='sine',vol=0.04){
+      try{
+        audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.type = type; o.frequency.value = freq;
+        g.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+        g.gain.exponentialRampToValueAtTime(vol, audioCtx.currentTime + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
+        o.connect(g); g.connect(audioCtx.destination);
+        o.start(); o.stop(audioCtx.currentTime + dur + 0.02);
+      }catch{}
+    }
+
+    const sprites = {};
+    const spriteSvg = {
+      lantern:`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'>
+        <defs>
+          <linearGradient id='g1' x1='0' x2='0' y1='0' y2='1'><stop offset='0' stop-color='#fff2b4'/><stop offset='1' stop-color='#ff8a5e'/></linearGradient>
+          <linearGradient id='g2' x1='0' x2='0' y1='0' y2='1'><stop offset='0' stop-color='#ffd76b'/><stop offset='1' stop-color='#ff6f4f'/></linearGradient>
+        </defs>
+        <ellipse cx='48' cy='86' rx='18' ry='5' fill='#2b1a27' opacity='.45'/>
+        <path d='M29 30c0-12 9-21 19-21s19 9 19 21v18c0 13-9 23-19 23s-19-10-19-23z' fill='url(#g1)' stroke='#b84c39' stroke-width='3'/>
+        <rect x='37' y='25' width='22' height='6' rx='3' fill='#ffec9d'/>
+        <rect x='35' y='47' width='26' height='6' rx='3' fill='#ffb063'/>
+        <path d='M37 71h22l-3 10H40z' fill='url(#g2)' stroke='#a64031' stroke-width='2'/>
+        <circle cx='48' cy='38' r='5' fill='#fff3c7'/>
+      </svg>`,
+      cloud:`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 90'>
+        <defs><linearGradient id='c1' x1='0' x2='0' y1='0' y2='1'><stop offset='0' stop-color='#d5dcf2'/><stop offset='1' stop-color='#687293'/></linearGradient></defs>
+        <ellipse cx='66' cy='72' rx='44' ry='14' fill='#1f2740' opacity='.45'/>
+        <path d='M26 62c-10 0-18-8-18-17s7-16 17-17c2-12 13-21 27-21 10 0 19 5 24 13 3-1 6-2 9-2 12 0 22 9 22 21 9 1 16 8 16 18 0 10-8 18-19 18z' fill='url(#c1)' stroke='#4b5678' stroke-width='3'/>
+        <polygon points='58,44 71,44 62,61 74,61 48,83 57,64 46,64' fill='#7fd5ff' stroke='#2e76aa' stroke-width='2'/>
+      </svg>`,
+      star:`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 80'>
+        <defs><radialGradient id='s1' cx='50%' cy='45%' r='60%'><stop offset='0' stop-color='#fff6c9'/><stop offset='1' stop-color='#ffbe4f'/></radialGradient></defs>
+        <circle cx='40' cy='40' r='30' fill='#332443' opacity='.28'/>
+        <path d='M40 8l8.8 18 19.9 2.9-14.3 14 3.4 19.8L40 53.5 22.2 62.7l3.4-19.8-14.3-14L31.2 26z' fill='url(#s1)' stroke='#d8881f' stroke-width='3'/>
+      </svg>`
+    };
+
+    function svgToUri(svg){
+      return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg.replace(/\n\s+/g,''));
+    }
+
+    function loadSprites(){
+      return Promise.all(Object.entries(spriteSvg).map(([k,v])=>new Promise((resolve)=>{
+        const img = new Image();
+        img.onload = ()=>{ sprites[k]=img; resolve(); };
+        img.src = svgToUri(v);
+      })));
+    }
+
+    let DPR=1,W=390,H=844;
+    let lanes=[0,0,0];
+
+    function resize(){
+      DPR = clamp(window.devicePixelRatio || 1,1,2);
+      W = Math.max(320, window.innerWidth);
+      H = Math.max(560, window.innerHeight);
+      canvas.width = Math.floor(W*DPR);
+      canvas.height = Math.floor(H*DPR);
+      canvas.style.width = W+'px';
+      canvas.style.height = H+'px';
+      ctx.setTransform(DPR,0,0,DPR,0,0);
+      const spread = Math.min(270, W*0.64);
+      lanes = [W/2-spread/2, W/2, W/2+spread/2];
+    }
+
+    const game = {
+      mode:'title',
+      score:0,
+      best:save.best,
+      coins:save.coins,
+      shields:1,
+      energy:0,
+      elapsed:0,
+      lane:1,
+      laneX:0,
+      y:0,
+      speedMul:1,
+      invuln:0,
+      burst:0,
+      spawnCloud:0,
+      spawnStar:0,
+      obstacles:[],
+      stars:[],
+      particles:[],
+      earned:0,
+      justHit:0,
+      raf:0,
+      lastTs:0
+    };
+
+    function toastMsg(msg){
+      toast.textContent = msg;
+      toast.classList.add('show');
+      clearTimeout(toast._t);
+      toast._t = setTimeout(()=>toast.classList.remove('show'), 850);
+    }
+
+    function enterTitle(){
+      game.mode='title';
+      hud.classList.remove('show');
+      controls.classList.remove('show');
+      titlePanel.style.display='block';
+      gameoverPanel.style.display='none';
+      titleTxt.textContent = T('title');
+      subTxt.textContent = T('subtitle');
+      metaTxt.textContent = T('titleMeta',{best:save.best,coins:save.coins,lv:save.upgradeShield});
+      startBtn.textContent = T('start');
+      retryBtn.textContent = T('retry');
+      homeBtn.textContent = T('home');
+      const cost = 18 + save.upgradeShield*14;
+      upgradeBtn.disabled = save.upgradeShield>=3;
+      upgradeBtn.textContent = save.upgradeShield>=3 ? T('upgradeMax') : T('upgrade',{cost});
+      langBtn.textContent = lang==='ko' ? T('langEn') : T('langKo');
+      leftBtn.textContent = lang==='ko' ? '◀ 왼쪽' : '◀ LEFT';
+      rightBtn.textContent = lang==='ko' ? '오른쪽 ▶' : 'RIGHT ▶';
+      burstBtn.textContent = lang==='ko' ? '버스트' : 'BURST';
+      render(0);
+    }
+
+    function startRun(){
+      game.mode='play';
+      game.score=0;
+      game.shields=1 + save.upgradeShield;
+      game.energy=0;
+      game.elapsed=0;
+      game.lane=1;
+      game.laneX=lanes[1];
+      game.y=H*0.76;
+      game.speedMul=1;
+      game.invuln=0;
+      game.burst=0;
+      game.spawnCloud=0.35;
+      game.spawnStar=0.55;
+      game.obstacles.length=0;
+      game.stars.length=0;
+      game.particles.length=0;
+      game.earned=0;
+      game.justHit=0;
+      titlePanel.style.display='none';
+      gameoverPanel.style.display='none';
+      hud.classList.add('show');
+      controls.classList.add('show');
+      updateHud();
+      beep(520,0.06,'triangle',0.035);
+    }
+
+    function enterGameOver(){
+      game.mode='gameover';
+      hud.classList.remove('show');
+      controls.classList.remove('show');
+      gameoverPanel.style.display='block';
+      titlePanel.style.display='none';
+
+      const finalScore = Math.floor(game.score);
+      save.lastRunScore = finalScore;
+      if(finalScore > save.best) save.best = finalScore;
+      game.best = save.best;
+      game.earned = Math.floor(finalScore/20);
+      save.coins += game.earned;
+      game.coins = save.coins;
+      persist();
+
+      goTitle.textContent = T('goTitle');
+      goDesc.textContent = T('goDesc');
+      goMeta.textContent = T('gameMeta',{score:finalScore,earned:game.earned,best:save.best});
+      retryBtn.textContent = T('retry');
+      homeBtn.textContent = T('home');
+      beep(170,0.16,'square',0.05);
+    }
+
+    function addParticles(x,y,color,count,boost=1){
+      for(let i=0;i<count;i++){
+        const a = rnd(0,Math.PI*2);
+        const v = rnd(40,160)*boost;
+        game.particles.push({
+          x,y,
+          vx:Math.cos(a)*v,
+          vy:Math.sin(a)*v - rnd(0,35),
+          life:rnd(.28,.65),
+          t:0,
+          size:rnd(2,6),
+          color
+        });
+      }
+    }
+
+    function moveLane(dir){
+      if(game.mode!=='play') return;
+      game.lane = clamp(game.lane + dir, 0, 2);
+      beep(460 + game.lane*70, 0.06, 'triangle', 0.03);
+      addParticles(game.laneX, game.y+22, '#9fe8ff', 6, .7);
+    }
+
+    function triggerBurst(){
+      if(game.mode!=='play') return;
+      if(game.energy < 100){
+        toastMsg(T('burstReady'));
+        return;
+      }
+      game.energy = 0;
+      game.burst = 1.2;
+      game.invuln = Math.max(game.invuln, 1.2);
+      addParticles(game.laneX, game.y-14, '#ffe08d', 28, 1.5);
+      beep(780,0.08,'sawtooth',0.04); beep(980,0.12,'triangle',0.03);
+      toastMsg(T('burstOn'));
+    }
+
+    function spawnCloud(){
+      const lane = (Math.random()*3)|0;
+      const size = rnd(64,94);
+      const speed = rnd(145,230) * game.speedMul;
+      game.obstacles.push({lane,y:-size,size,speed,hit:false});
+    }
+
+    function spawnStar(){
+      const lane = (Math.random()*3)|0;
+      const size = rnd(34,50);
+      const speed = rnd(125,190) * game.speedMul;
+      game.stars.push({lane,y:-size,size,speed,got:false});
+    }
+
+    function updatePlay(dt){
+      game.elapsed += dt;
+      const diff = 1 + Math.min(2.1, game.elapsed/24);
+      game.speedMul = diff;
+
+      game.spawnCloud -= dt;
+      game.spawnStar -= dt;
+      if(game.spawnCloud<=0){ game.spawnCloud = rnd(0.45,0.85)/diff; spawnCloud(); }
+      if(game.spawnStar<=0){ game.spawnStar = rnd(0.4,0.72)/Math.sqrt(diff); spawnStar(); }
+
+      game.laneX = lerp(game.laneX, lanes[game.lane], 1 - Math.exp(-dt*16));
+      if(game.invuln>0) game.invuln -= dt;
+      if(game.burst>0) game.burst -= dt;
+
+      const baseScoreRate = 9 + diff*3 + (game.burst>0?8:0);
+      game.score += dt * baseScoreRate;
+
+      for(let i=game.obstacles.length-1;i>=0;i--){
+        const o = game.obstacles[i];
+        o.y += o.speed*dt + (game.burst>0?90*dt:0);
+        const ox = lanes[o.lane];
+        if(Math.abs(ox-game.laneX) < (o.size*0.34 + 22) && Math.abs(o.y-game.y) < (o.size*0.32 + 30) && !o.hit){
+          if(game.invuln<=0){
+            o.hit=true;
+            game.shields--;
+            game.justHit=0.18;
+            game.invuln=0.72;
+            game.energy = Math.max(0, game.energy-28);
+            addParticles(game.laneX, game.y-4, '#ff8f92', 20, 1.2);
+            beep(215,0.1,'square',0.05);
+            toastMsg(T('hit'));
+            if(game.shields<=0){ enterGameOver(); return; }
+          }
+        }
+        if(o.y - o.size > H+40) game.obstacles.splice(i,1);
+      }
+
+      for(let i=game.stars.length-1;i>=0;i--){
+        const s = game.stars[i];
+        s.y += s.speed*dt + (game.burst>0?70*dt:0);
+        const sx = lanes[s.lane];
+        if(Math.abs(sx-game.laneX) < (s.size*0.36 + 20) && Math.abs(s.y-game.y) < (s.size*0.36 + 26) && !s.got){
+          s.got=true;
+          game.score += 35;
+          game.energy = Math.min(100, game.energy + 24);
+          addParticles(sx, s.y, '#ffe08f', 16, 1.1);
+          beep(690,0.06,'triangle',0.03);
+          if(game.energy>=100) toastMsg(T('burstReady'));
+        }
+        if(s.got || s.y - s.size > H+40) game.stars.splice(i,1);
+      }
+
+      for(let i=game.particles.length-1;i>=0;i--){
+        const p = game.particles[i];
+        p.t += dt;
+        p.x += p.vx*dt;
+        p.y += p.vy*dt;
+        p.vy += 160*dt;
+        if(p.t>=p.life) game.particles.splice(i,1);
+      }
+
+      if(game.justHit>0) game.justHit -= dt;
+      updateHud();
+    }
+
+    function updateHud(){
+      mScore.innerHTML = `S <b>${Math.floor(game.score)}</b>`;
+      mBest.innerHTML = `B <b>${save.best}</b>`;
+      mShield.innerHTML = `HP <b>${game.mode==='play'?game.shields:(1+save.upgradeShield)}</b>`;
+      mBurst.innerHTML = `BURST <b>${Math.floor(game.energy)}%</b>`;
+      mCoins.innerHTML = `C <b>${save.coins}</b>`;
+      burstBtn.className = game.energy>=100 ? 'ctrl warn' : 'ctrl primary';
+      burstBtn.textContent = game.energy>=100 ? (lang==='ko'?'버스트!':'BURST!') : (lang==='ko'?'버스트':'BURST');
+    }
+
+    function drawBackground(t){
+      const g = ctx.createLinearGradient(0,0,0,H);
+      g.addColorStop(0,'#1a3470'); g.addColorStop(.62,'#0b1535'); g.addColorStop(1,'#050915');
+      ctx.fillStyle = g;
+      ctx.fillRect(0,0,W,H);
+
+      ctx.globalAlpha = 0.22;
+      for(let i=0;i<3;i++){
+        const y = H*(0.18 + i*0.2);
+        const sway = Math.sin(t*0.0004 + i*1.3)*16;
+        ctx.strokeStyle = 'rgba(140,190,255,.35)';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(0,y+sway); ctx.lineTo(W,y-sway*.6); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+
+      for(let i=0;i<3;i++){
+        const x = lanes[i];
+        ctx.strokeStyle='rgba(130,185,255,.18)';
+        ctx.lineWidth=4;
+        ctx.beginPath(); ctx.moveTo(x,H*0.14); ctx.lineTo(x,H*0.94); ctx.stroke();
+      }
+    }
+
+    function drawSprite(name,x,y,w,h,alpha=1,rot=0){
+      const img = sprites[name];
+      if(!img) return;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(x,y);
+      if(rot) ctx.rotate(rot);
+      ctx.drawImage(img,-w/2,-h/2,w,h);
+      ctx.restore();
+    }
+
+    function drawPlay(t){
+      drawBackground(t);
+
+      for(const o of game.obstacles){
+        drawSprite('cloud', lanes[o.lane], o.y, o.size*1.15, o.size*0.88, 0.95, Math.sin(o.y*0.01)*0.02);
+      }
+      for(const s of game.stars){
+        drawSprite('star', lanes[s.lane], s.y, s.size, s.size, 0.95, t*0.0018);
+      }
+
+      const pulse = 1 + Math.sin(t*0.012)*0.03 + (game.burst>0?0.08:0);
+      const pAlpha = game.invuln>0 ? 0.6 + Math.sin(t*0.03)*0.35 : 1;
+      drawSprite('lantern', game.laneX, game.y, 74*pulse, 74*pulse, pAlpha, Math.sin(t*0.008)*0.04);
+
+      if(game.burst>0){
+        ctx.strokeStyle='rgba(255,223,141,.55)';
+        ctx.lineWidth=8;
+        ctx.beginPath(); ctx.moveTo(game.laneX, game.y+30); ctx.lineTo(game.laneX, H); ctx.stroke();
+      }
+
+      for(const p of game.particles){
+        const a = 1 - p.t/p.life;
+        ctx.globalAlpha = a;
+        ctx.fillStyle = p.color;
+        ctx.beginPath(); ctx.arc(p.x,p.y,p.size*a,0,Math.PI*2); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+
+      if(game.justHit>0){
+        ctx.fillStyle = `rgba(255,95,95,${Math.min(.35,game.justHit*1.8)})`;
+        ctx.fillRect(0,0,W,H);
+      }
+    }
+
+    function drawTitle(t){
+      drawBackground(t);
+      drawSprite('cloud', lanes[0], H*0.38 + Math.sin(t*0.001)*10, 96, 72, .8, -0.06);
+      drawSprite('star', lanes[2], H*0.32 + Math.cos(t*0.0013)*8, 58, 58, .92, t*0.0012);
+      drawSprite('lantern', lanes[1], H*0.64 + Math.sin(t*0.0018)*8, 92, 92, 1, Math.sin(t*0.0015)*0.06);
+    }
+
+    function drawGameOver(t){
+      drawPlay(t);
+      ctx.fillStyle='rgba(3,7,20,.42)';
+      ctx.fillRect(0,0,W,H);
+    }
+
+    function render(ts){
+      const t = ts || performance.now();
+      if(game.mode==='play') drawPlay(t);
+      else if(game.mode==='gameover') drawGameOver(t);
+      else drawTitle(t);
+    }
+
+    function frame(ts){
+      if(!game.lastTs) game.lastTs = ts;
+      const dt = Math.min(0.033,(ts - game.lastTs)/1000);
+      game.lastTs = ts;
+
+      if(game.mode==='play') updatePlay(dt);
+      render(ts);
+      game.raf = requestAnimationFrame(frame);
+    }
+
+    function pointerMove(ev){
+      if(game.mode!=='play') return;
+      const x = ev.clientX;
+      if(x < W*0.34) moveLane(-1);
+      else if(x > W*0.66) moveLane(1);
+      else triggerBurst();
+    }
+
+    function initEvents(){
+      window.addEventListener('resize', resize, {passive:true});
+      canvas.addEventListener('pointerdown', pointerMove);
+      leftBtn.addEventListener('click',()=>moveLane(-1));
+      rightBtn.addEventListener('click',()=>moveLane(1));
+      burstBtn.addEventListener('click',triggerBurst);
+
+      startBtn.addEventListener('click',()=>{ if(audioCtx&&audioCtx.state==='suspended') audioCtx.resume(); startRun(); });
+      retryBtn.addEventListener('click',()=>{ startRun(); });
+      homeBtn.addEventListener('click',()=>{ enterTitle(); });
+
+      langBtn.addEventListener('click',()=>{
+        lang = lang === 'ko' ? 'en' : 'ko';
+        persist();
+        enterTitle();
+      });
+
+      upgradeBtn.addEventListener('click',()=>{
+        if(save.upgradeShield>=3){ toastMsg(T('upgradeMax')); return; }
+        const cost = 18 + save.upgradeShield*14;
+        if(save.coins < cost){ toastMsg(T('notEnough')); return; }
+        save.coins -= cost;
+        save.upgradeShield++;
+        persist();
+        toastMsg(`${T('shield')} +1`);
+        enterTitle();
+      });
+
+      window.addEventListener('keydown',(e)=>{
+        if(e.key==='ArrowLeft' || e.key==='a') moveLane(-1);
+        if(e.key==='ArrowRight' || e.key==='d') moveLane(1);
+        if(e.key===' ' || e.key==='ArrowUp') triggerBurst();
+        if(e.key==='Enter' && game.mode==='title') startRun();
+      });
+    }
+
+    window.__SLS_DEBUG = {
+      start: ()=>startRun(),
+      forceGameOver: ()=>{ game.shields = 0; enterGameOver(); },
+      setSave: (patch)=>{
+        Object.assign(save, patch || {});
+        save.best = Math.max(0, +save.best || 0);
+        save.coins = Math.max(0, +save.coins || 0);
+        save.upgradeShield = clamp(+save.upgradeShield || 0, 0, 3);
+        persist();
+      },
+      getSave: ()=>JSON.parse(localStorage.getItem(SAVE_KEY) || '{}'),
+      getMode: ()=>game.mode
+    };
+
+    async function boot(){
+      resize();
+      await loadSprites();
+      game.best = save.best;
+      game.coins = save.coins;
+      initEvents();
+      enterTitle();
+      game.raf = requestAnimationFrame(frame);
+    }
+
+    boot();
+  })();
+  </script>
+</body>
+</html>

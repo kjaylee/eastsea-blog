@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+  <title>Goalie Glide - 골리 글라이드</title>
+  <meta name="description" content="Swipe the keeper, save curve shots, and trigger Focus time-slow in this arcade goalkeeper challenge." />
+  <meta name="keywords" content="html5 game,sports game,goalkeeper,penalty save,canvas,telegram mini app" />
+  <meta property="og:title" content="Goalie Glide - 골리 글라이드" />
+  <meta property="og:description" content="Defend the goal with touch controls, chain saves, and upgrade your gloves." />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="/games/goalie-glide/cover.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Goalie Glide" />
+  <meta name="twitter:description" content="Fast mobile goalkeeper arcade with upgrades and Focus mode." />
+  <link rel="manifest" href="/games/manifest.json" />
+  <script type="application/ld+json">
+  {
+    "@context":"https://schema.org",
+    "@type":"VideoGame",
+    "name":"Goalie Glide",
+    "genre":["Sports","Arcade"],
+    "applicationCategory":"Game",
+    "operatingSystem":"Any",
+    "inLanguage":["ko","en"],
+    "url":"https://games.eastsea.xyz/goalie-glide/"
+  }
+  </script>
+  <style>
+    :root{
+      --bg0:#04101f;
+      --bg1:#0a1f3d;
+      --bg2:#133c6e;
+      --panel:rgba(7,16,34,.85);
+      --line:rgba(141,211,255,.3);
+      --text:#edf6ff;
+      --mint:#87ffe0;
+      --sky:#7ec8ff;
+      --sun:#ffd08c;
+      --warn:#ff9582;
+      --lime:#b8ff85;
+    }
+    *{box-sizing:border-box;user-select:none;-webkit-tap-highlight-color:transparent;}
+    html,body{margin:0;width:100%;height:100%;overflow:hidden;background:radial-gradient(circle at 50% -10%, #1f5ea4 0%, #07142a 58%);color:var(--text);font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Noto Sans KR',sans-serif;}
+    body{touch-action:none;}
+    #game{position:fixed;inset:0;width:100%;height:100%;display:block;background:linear-gradient(180deg,var(--bg2),var(--bg0));}
+
+    #hud{
+      position:fixed;left:10px;right:10px;top:max(10px,env(safe-area-inset-top));z-index:20;
+      display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:space-between;
+      padding:9px 10px;border-radius:13px;background:var(--panel);border:1px solid var(--line);
+      backdrop-filter:blur(6px);opacity:0;pointer-events:none;transform:translateY(-8px);
+      transition:opacity .18s ease,transform .18s ease;font-size:12px;font-weight:700;
+    }
+    #hud.show{opacity:1;transform:translateY(0)}
+    .metric{min-width:60px}
+    .metric b{color:var(--mint)}
+
+    #controls{
+      position:fixed;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:24;
+      display:flex;gap:10px;pointer-events:none;
+    }
+    #controls.show{pointer-events:auto}
+    .ctrl{
+      min-height:54px;border-radius:12px;border:1px solid rgba(186,223,255,.34);
+      background:rgba(10,24,52,.85);color:var(--text);font-size:14px;font-weight:800;letter-spacing:.2px;
+    }
+    #focusBtn{flex:1}
+    #focusBtn.ready{background:linear-gradient(135deg,#9efcbc,#66f0ff);color:#033548;border-color:rgba(173,255,214,.76)}
+
+    #overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:30;padding:12px;pointer-events:none}
+    .panel{
+      width:min(95vw,460px);padding:18px;border-radius:16px;
+      background:linear-gradient(180deg,rgba(14,32,63,.96),rgba(5,12,26,.95));
+      border:1px solid var(--line);box-shadow:0 22px 50px rgba(0,0,0,.48);
+      pointer-events:auto;
+    }
+    h1,h2{margin:0 0 8px;line-height:1.15}
+    h1{font-size:clamp(29px,7vw,36px)}
+    h2{font-size:clamp(23px,6vw,30px)}
+    .sub{font-size:14px;line-height:1.45;opacity:.92;margin-bottom:10px}
+    .small{font-size:12px;line-height:1.4;opacity:.86}
+    .row{display:flex;gap:8px;margin-top:10px}
+    button{
+      flex:1;min-height:46px;border-radius:10px;border:1px solid rgba(255,255,255,.24);
+      background:rgba(19,39,78,.72);color:var(--text);font-size:15px;font-weight:760;padding:9px 12px;cursor:pointer;
+    }
+    button.primary{background:linear-gradient(135deg,#8dd7ff,#85ffd8);color:#04273b;border-color:rgba(155,255,220,.65)}
+    button.warn{background:linear-gradient(135deg,#ffc091,#ff8f83);color:#42130a;border-color:rgba(255,197,150,.65)}
+
+    #toast{
+      position:fixed;left:50%;transform:translateX(-50%);bottom:calc(74px + env(safe-area-inset-bottom));
+      z-index:50;background:rgba(8,17,36,.88);border:1px solid var(--line);border-radius:999px;padding:7px 12px;
+      font-size:12px;font-weight:800;opacity:0;transition:opacity .2s ease;pointer-events:none;
+    }
+    #toast.show{opacity:1}
+
+    #leaderboard{
+      position:fixed;left:10px;right:10px;bottom:calc(74px + env(safe-area-inset-bottom));z-index:16;
+      background:rgba(7,16,36,.58);border:1px solid rgba(130,195,255,.22);border-radius:9px;padding:5px 8px;
+      font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.86;
+    }
+  </style>
+  <script src="../i18n.js"></script>
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div id="hud">
+    <div class="metric" id="mScore">S 0</div>
+    <div class="metric" id="mBest">B 0</div>
+    <div class="metric" id="mLives">L 3</div>
+    <div class="metric" id="mCombo">C x0</div>
+    <div class="metric" id="mFocus">F 0%</div>
+    <div class="metric" id="mStage">ST 1</div>
+  </div>
+
+  <div id="leaderboard" data-lb-slug="goalie-glide"></div>
+
+  <div id="controls">
+    <button id="focusBtn" class="ctrl"></button>
+  </div>
+
+  <div id="toast"></div>
+
+  <div id="overlay">
+    <section class="panel" id="titlePanel">
+      <h1 id="titleTxt"></h1>
+      <div class="sub" id="subTxt"></div>
+      <div class="small" id="metaTxt"></div>
+      <div class="row"><button id="startBtn" class="primary"></button></div>
+      <div class="row"><button id="upgradeBtn"></button></div>
+      <div class="row"><button id="langBtn"></button></div>
+    </section>
+
+    <section class="panel" id="gameoverPanel" style="display:none">
+      <h2 id="goTitle"></h2>
+      <div class="sub" id="goDesc"></div>
+      <div class="small" id="goMeta"></div>
+      <div class="row">
+        <button id="retryBtn" class="warn"></button>
+        <button id="homeBtn"></button>
+      </div>
+    </section>
+  </div>
+
+  <script src="../shared/sound-manager.js"></script>
+  <script src="../tg-sdk-wrapper.js"></script>
+  <script>
+  (() => {
+    'use strict';
+
+    const GAME_ID = 'goalie-glide';
+    const STORAGE_KEY = 'goalieGlideSave_v1';
+
+    const I18N = {
+      title: { ko:'골리 글라이드', en:'Goalie Glide' },
+      subtitle: { ko:'골키퍼를 좌우로 움직여 슛을 막으세요. 연속 세이브로 Focus를 켜면 시간이 느려집니다.', en:'Move your keeper left/right to save curve shots. Build Focus to slow time.' },
+      start: { ko:'경기 시작', en:'Start Match' },
+      retry: { ko:'다시 도전', en:'Retry' },
+      home: { ko:'타이틀', en:'Home' },
+      score: { ko:'점수', en:'Score' },
+      best: { ko:'베스트', en:'Best' },
+      lives: { ko:'생명', en:'Lives' },
+      combo: { ko:'콤보', en:'Combo' },
+      focus: { ko:'포커스', en:'Focus' },
+      stage: { ko:'스테이지', en:'Stage' },
+      focusBtnReady: { ko:'FOCUS 발동', en:'TRIGGER FOCUS' },
+      focusBtnCharge: { ko:'포커스 충전', en:'Charge Focus' },
+      focusUsed: { ko:'포커스 ON!', en:'Focus ON!' },
+      saveToast: { ko:'슈퍼 세이브!', en:'Super Save!' },
+      missToast: { ko:'실점!', en:'Missed!' },
+      goTitle: { ko:'경기 종료', en:'Match Over' },
+      goDesc: { ko:'집중력을 유지해 더 긴 연속 세이브를 노려보세요.', en:'Stay focused and push for a longer save streak.' },
+      earned: { ko:'획득', en:'Earned' },
+      titleMeta: { ko:'베스트 {best} · 크레딧 {credits} · 글러브 Lv.{glove}', en:'Best {best} · Credits {credits} · Glove Lv.{glove}' },
+      gameMeta: { ko:'점수 {score} · 최고 콤보 x{combo} · 획득 {earned}', en:'Score {score} · Best Combo x{combo} · Earned {earned}' },
+      langLabel: { ko:'언어: 한국어', en:'Language: English' },
+      upgradeGlove: { ko:'글러브 강화', en:'Upgrade Gloves' },
+      upgradeMax: { ko:'최대 레벨', en:'Max Level' },
+      upgradeNeed: { ko:'크레딧 부족', en:'Not enough credits' },
+      hint: { ko:'캔버스를 드래그해 골키퍼 이동', en:'Drag on canvas to move keeper' }
+    };
+
+    const tg = window.TG && typeof window.TG.init === 'function' ? window.TG : null;
+    if (tg) {
+      try { tg.init(); } catch {}
+    }
+
+    const haptic = (kind, style) => {
+      try { if (tg && typeof tg.haptic === 'function') tg.haptic(kind, style); } catch {}
+    };
+
+    const snd = window.SoundManager ? new SoundManager() : { loadSFX() {}, play() {} };
+    try {
+      snd.loadSFX('save', 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEA');
+      snd.loadSFX('miss', 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEA');
+      snd.loadSFX('focus', 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEA');
+    } catch {}
+
+    const $ = (id) => document.getElementById(id);
+    const canvas = $('game');
+    const ctx = canvas.getContext('2d');
+
+    const hud = $('hud');
+    const controls = $('controls');
+    const focusBtn = $('focusBtn');
+
+    const titlePanel = $('titlePanel');
+    const gameoverPanel = $('gameoverPanel');
+    const startBtn = $('startBtn');
+    const retryBtn = $('retryBtn');
+    const homeBtn = $('homeBtn');
+    const langBtn = $('langBtn');
+    const upgradeBtn = $('upgradeBtn');
+
+    const mScore = $('mScore');
+    const mBest = $('mBest');
+    const mLives = $('mLives');
+    const mCombo = $('mCombo');
+    const mFocus = $('mFocus');
+    const mStage = $('mStage');
+
+    const titleTxt = $('titleTxt');
+    const subTxt = $('subTxt');
+    const metaTxt = $('metaTxt');
+    const goTitle = $('goTitle');
+    const goDesc = $('goDesc');
+    const goMeta = $('goMeta');
+    const toast = $('toast');
+
+    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+    const lerp = (a, b, t) => a + (b - a) * t;
+    const rnd = (a, b) => a + Math.random() * (b - a);
+
+    function loadSave() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) throw new Error('empty');
+        const p = JSON.parse(raw);
+        return {
+          best: Number.isFinite(+p.best) ? +p.best : 0,
+          credits: Number.isFinite(+p.credits) ? +p.credits : 0,
+          lang: p.lang === 'ko' ? 'ko' : 'en',
+          upgrades: {
+            glove: clamp((p.upgrades && Number.isFinite(+p.upgrades.glove) ? +p.upgrades.glove : 0), 0, 5)
+          }
+        };
+      } catch {
+        return { best: 0, credits: 0, lang: 'ko', upgrades: { glove: 0 } };
+      }
+    }
+
+    const save = loadSave();
+    let lang = save.lang;
+
+    const baseT = window.GameI18n ? GameI18n(I18N) : (k => (I18N[k] && I18N[k].en) || k);
+    function T(key, vars) {
+      let text = (I18N[key] && I18N[key][lang]) || baseT(key) || key;
+      if (vars) {
+        for (const [k, v] of Object.entries(vars)) {
+          text = text.replace(new RegExp(`\\{${k}\\}`, 'g'), String(v));
+        }
+      }
+      return text;
+    }
+
+    function persist() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        best: save.best,
+        credits: save.credits,
+        lang,
+        upgrades: { glove: save.upgrades.glove }
+      }));
+    }
+
+    let DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    let W = 390;
+    let H = 844;
+    let goalY = 0;
+
+    function resize() {
+      DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+      W = Math.max(320, window.innerWidth);
+      H = Math.max(560, window.innerHeight);
+      canvas.width = Math.floor(W * DPR);
+      canvas.height = Math.floor(H * DPR);
+      canvas.style.width = W + 'px';
+      canvas.style.height = H + 'px';
+      ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+      goalY = H * 0.83;
+    }
+    addEventListener('resize', resize, { passive: true });
+    resize();
+
+    const game = {
+      state: 'title',
+      score: 0,
+      best: save.best,
+      credits: save.credits,
+      earned: 0,
+      lives: 3,
+      combo: 0,
+      comboBest: 0,
+      focus: 0,
+      focusTimer: 0,
+      stage: 1,
+      elapsed: 0,
+      spawnTimer: 0,
+      goalie: { x: W * 0.5, targetX: W * 0.5, y: goalY, w: 96, h: 24, speed: 16 },
+      balls: [],
+      particles: [],
+      crowd: []
+    };
+
+    function resetCrowd() {
+      game.crowd.length = 0;
+      for (let i = 0; i < 56; i++) {
+        game.crowd.push({ x: Math.random() * W, y: H * 0.08 + Math.random() * H * 0.22, r: rnd(1.6, 4.6), a: rnd(0.15, 0.45), tint: Math.random() < 0.5 ? '#83cbff' : '#b7ffd5' });
+      }
+    }
+    resetCrowd();
+
+    function gloveWidth() {
+      return 86 + save.upgrades.glove * 16;
+    }
+
+    function startRun() {
+      game.state = 'play';
+      game.score = 0;
+      game.earned = 0;
+      game.lives = 3;
+      game.combo = 0;
+      game.comboBest = 0;
+      game.focus = 0;
+      game.focusTimer = 0;
+      game.stage = 1;
+      game.elapsed = 0;
+      game.spawnTimer = 0.45;
+      game.goalie.x = W * 0.5;
+      game.goalie.targetX = game.goalie.x;
+      game.goalie.y = goalY;
+      game.goalie.w = gloveWidth();
+      game.goalie.h = Math.max(20, Math.min(30, H * 0.032));
+      game.balls.length = 0;
+      game.particles.length = 0;
+
+      hud.classList.add('show');
+      controls.classList.add('show');
+      titlePanel.style.display = 'none';
+      gameoverPanel.style.display = 'none';
+      hideToast();
+      syncText();
+    }
+
+    function showTitle() {
+      game.state = 'title';
+      hud.classList.remove('show');
+      controls.classList.remove('show');
+      titlePanel.style.display = '';
+      gameoverPanel.style.display = 'none';
+      syncText();
+    }
+
+    function gameOver() {
+      game.state = 'gameover';
+      game.earned = Math.floor(game.score / 18) + game.stage * 2 + Math.floor(game.comboBest * 0.8);
+      game.credits += game.earned;
+      save.credits = game.credits;
+      if (game.score > game.best) {
+        game.best = game.score;
+        save.best = game.best;
+      }
+      persist();
+
+      if (window.Leaderboard && typeof window.Leaderboard.submit === 'function') {
+        try { window.Leaderboard.submit(GAME_ID, 'player', game.score); } catch {}
+      }
+
+      hud.classList.remove('show');
+      controls.classList.remove('show');
+      titlePanel.style.display = 'none';
+      gameoverPanel.style.display = '';
+      syncText();
+      haptic('notification', 'error');
+    }
+
+    function gloveCost(level) {
+      return 70 + level * 55;
+    }
+
+    function buyGlove() {
+      if (save.upgrades.glove >= 5) {
+        flashToast(T('upgradeMax'));
+        return false;
+      }
+      const cost = gloveCost(save.upgrades.glove);
+      if (save.credits < cost) {
+        flashToast(T('upgradeNeed'));
+        return false;
+      }
+      save.credits -= cost;
+      game.credits = save.credits;
+      save.upgrades.glove += 1;
+      persist();
+      syncText();
+      haptic('impact', 'medium');
+      try { snd.play('focus', 1.0); } catch {}
+      return true;
+    }
+
+    function spawnBall() {
+      const stageSpeed = 220 + game.stage * 18;
+      const x = rnd(36, W - 36);
+      const targetX = rnd(32, W - 32);
+      const drift = clamp((targetX - x) * 0.2, -70, 70);
+      game.balls.push({
+        x,
+        y: -22,
+        vx: drift,
+        vy: stageSpeed + rnd(0, 90),
+        curve: rnd(-38, 38),
+        spin: rnd(1.5, 4.8),
+        r: rnd(13, 17),
+        colorA: Math.random() < 0.5 ? '#f5f9ff' : '#fff2d2',
+        colorB: Math.random() < 0.5 ? '#66b8ff' : '#ffb86c'
+      });
+    }
+
+    function particleBurst(x, y, baseColor, n = 10, force = 1) {
+      for (let i = 0; i < n; i++) {
+        game.particles.push({
+          x, y,
+          vx: rnd(-140, 140) * force,
+          vy: rnd(-150, 100) * force,
+          life: rnd(0.2, 0.56),
+          t: 0,
+          color: baseColor,
+          r: rnd(1.8, 4.0)
+        });
+      }
+    }
+
+    function registerSave(ball) {
+      game.combo += 1;
+      game.comboBest = Math.max(game.comboBest, game.combo);
+      const gain = 8 + Math.min(36, game.combo * 2);
+      game.score += gain;
+      game.focus = clamp(game.focus + (10 + Math.min(14, game.combo)), 0, 100);
+      particleBurst(ball.x, goalY - 8, '#91ffd8', 12, 1.1);
+      if (game.combo % 6 === 0) {
+        flashToast(T('saveToast'));
+      }
+      haptic('impact', 'light');
+      try { snd.play('save', 1.0); } catch {}
+    }
+
+    function registerMiss(x) {
+      game.lives -= 1;
+      game.combo = 0;
+      game.focus = Math.max(0, game.focus - 28);
+      particleBurst(x, goalY + 20, '#ff9f93', 16, 1.15);
+      flashToast(T('missToast'));
+      haptic('notification', 'warning');
+      try { snd.play('miss', 1.0); } catch {}
+      if (game.lives <= 0) gameOver();
+    }
+
+    function triggerFocus() {
+      if (game.state !== 'play') return false;
+      if (game.focus < 100 || game.focusTimer > 0) return false;
+      game.focus = 0;
+      game.focusTimer = 3.5;
+      particleBurst(game.goalie.x, game.goalie.y - 8, '#8bd5ff', 20, 1.35);
+      flashToast(T('focusUsed'));
+      haptic('notification', 'success');
+      try { snd.play('focus', 1.0); } catch {}
+      return true;
+    }
+
+    function update(dt) {
+      for (const c of game.crowd) {
+        c.a += dt * rnd(-0.25, 0.25);
+        c.a = clamp(c.a, 0.12, 0.5);
+      }
+
+      if (game.state !== 'play') {
+        updateParticles(dt);
+        return;
+      }
+
+      game.elapsed += dt;
+      game.stage = 1 + Math.floor(game.elapsed / 13);
+      game.goalie.w = gloveWidth();
+      game.goalie.y = goalY;
+
+      if (game.focusTimer > 0) game.focusTimer = Math.max(0, game.focusTimer - dt);
+      const timeScale = game.focusTimer > 0 ? 0.47 : 1;
+
+      game.goalie.x = lerp(game.goalie.x, game.goalie.targetX, clamp(dt * game.goalie.speed, 0, 1));
+      const half = game.goalie.w * 0.5;
+      game.goalie.x = clamp(game.goalie.x, half + 6, W - half - 6);
+
+      game.spawnTimer -= dt * (0.95 + game.stage * 0.06);
+      if (game.spawnTimer <= 0) {
+        spawnBall();
+        game.spawnTimer = clamp(1.05 - game.stage * 0.055, 0.36, 1.05) + rnd(-0.08, 0.13);
+      }
+
+      for (let i = game.balls.length - 1; i >= 0; i--) {
+        const b = game.balls[i];
+        b.y += b.vy * dt * timeScale;
+        b.x += (b.vx + Math.sin((b.y + b.spin * 120) * 0.018) * b.curve) * dt * timeScale;
+
+        if (b.y >= goalY - 6 && b.y <= goalY + 28) {
+          const inX = Math.abs(b.x - game.goalie.x) <= (game.goalie.w * 0.5 + b.r * 0.45);
+          if (inX) {
+            registerSave(b);
+            game.balls.splice(i, 1);
+            continue;
+          }
+        }
+
+        if (b.y > H + 34 || b.x < -60 || b.x > W + 60) {
+          const missX = clamp(b.x, 16, W - 16);
+          game.balls.splice(i, 1);
+          registerMiss(missX);
+          if (game.state === 'gameover') break;
+        }
+      }
+
+      if (game.focus >= 100 && game.focusTimer <= 0) {
+        focusBtn.classList.add('ready');
+      } else {
+        focusBtn.classList.remove('ready');
+      }
+
+      updateParticles(dt);
+      syncHud();
+    }
+
+    function updateParticles(dt) {
+      for (let i = game.particles.length - 1; i >= 0; i--) {
+        const p = game.particles[i];
+        p.t += dt;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.vx *= 0.98;
+        p.vy *= 0.98;
+        if (p.t >= p.life) game.particles.splice(i, 1);
+      }
+    }
+
+    function rr(x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+    }
+
+    function drawBackground(t) {
+      const g = ctx.createLinearGradient(0, 0, 0, H);
+      g.addColorStop(0, '#1d5c9e');
+      g.addColorStop(0.34, '#0d2b55');
+      g.addColorStop(1, '#05101f');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+
+      const horizonY = H * 0.32;
+      ctx.fillStyle = 'rgba(220,245,255,.08)';
+      ctx.fillRect(0, horizonY, W, H - horizonY);
+
+      for (const c of game.crowd) {
+        ctx.fillStyle = c.tint === '#83cbff' ? `rgba(131,203,255,${c.a})` : `rgba(183,255,213,${c.a})`;
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      const netTop = goalY - 74;
+      ctx.strokeStyle = 'rgba(181,226,255,.26)';
+      ctx.lineWidth = 1;
+      for (let x = 8; x < W; x += 20) {
+        ctx.beginPath();
+        ctx.moveTo(x, netTop);
+        ctx.lineTo(x + Math.sin((t * 0.0018) + x * 0.03) * 4, goalY + 18);
+        ctx.stroke();
+      }
+      for (let y = netTop; y < goalY + 20; y += 14) {
+        ctx.beginPath();
+        ctx.moveTo(4, y);
+        ctx.lineTo(W - 4, y + Math.sin((t * 0.0015) + y * 0.02) * 2);
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = 'rgba(70,190,110,.38)';
+      ctx.fillRect(0, goalY + 20, W, H - goalY - 20);
+      ctx.strokeStyle = 'rgba(239,253,255,.58)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(0, goalY + 2);
+      ctx.lineTo(W, goalY + 2);
+      ctx.stroke();
+    }
+
+    function drawBalls(t) {
+      for (const b of game.balls) {
+        const trailY = b.y - 18;
+        ctx.strokeStyle = 'rgba(175,224,255,.22)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(b.x - 2, trailY - 12);
+        ctx.lineTo(b.x + Math.sin(t * 0.007 + b.spin) * 4, b.y);
+        ctx.stroke();
+
+        const rg = ctx.createRadialGradient(b.x - 3, b.y - 4, 2, b.x, b.y, b.r * 1.1);
+        rg.addColorStop(0, b.colorA);
+        rg.addColorStop(0.45, '#dceeff');
+        rg.addColorStop(1, b.colorB);
+        ctx.fillStyle = rg;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = 'rgba(255,255,255,.52)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.r * 0.78, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+
+    function drawGoalie() {
+      const gk = game.goalie;
+      const bodyH = gk.h;
+      const gloveH = bodyH * 0.84;
+      const gloveW = gk.w;
+
+      const bodyGrad = ctx.createLinearGradient(gk.x, gk.y - bodyH, gk.x, gk.y + bodyH);
+      bodyGrad.addColorStop(0, '#ffde8f');
+      bodyGrad.addColorStop(1, '#ff8f69');
+      ctx.fillStyle = bodyGrad;
+      rr(gk.x - gloveW * 0.16, gk.y - bodyH * 0.7, gloveW * 0.32, bodyH * 1.34, 9);
+      ctx.fill();
+
+      const gloveGrad = ctx.createLinearGradient(gk.x - gloveW * 0.5, gk.y, gk.x + gloveW * 0.5, gk.y);
+      gloveGrad.addColorStop(0, '#8ce6ff');
+      gloveGrad.addColorStop(0.5, '#c9f3ff');
+      gloveGrad.addColorStop(1, '#8ce6ff');
+      ctx.fillStyle = gloveGrad;
+      rr(gk.x - gloveW * 0.5, gk.y - gloveH * 0.5, gloveW, gloveH, 12);
+      ctx.fill();
+
+      ctx.strokeStyle = 'rgba(255,255,255,.55)';
+      ctx.lineWidth = 2;
+      rr(gk.x - gloveW * 0.5 + 1, gk.y - gloveH * 0.5 + 1, gloveW - 2, gloveH - 2, 10);
+      ctx.stroke();
+
+      if (game.focusTimer > 0) {
+        const pulse = 1 + Math.sin(performance.now() * 0.016) * 0.15;
+        ctx.strokeStyle = `rgba(122,255,221,${0.5 + Math.sin(performance.now() * 0.012) * 0.2})`;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(gk.x, gk.y - 2, gloveW * 0.38 * pulse, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+
+    function drawParticles() {
+      for (const p of game.particles) {
+        const a = 1 - p.t / p.life;
+        ctx.globalAlpha = clamp(a, 0, 1);
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r * (0.6 + a), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    function drawGuideText() {
+      if (game.state !== 'play') return;
+      ctx.fillStyle = 'rgba(239,248,255,.9)';
+      ctx.font = '700 12px Inter, sans-serif';
+      ctx.fillText(T('hint'), 12, H - 18);
+    }
+
+    function render(now) {
+      drawBackground(now);
+      drawBalls(now);
+      drawGoalie();
+      drawParticles();
+      drawGuideText();
+
+      if (game.focusTimer > 0) {
+        ctx.fillStyle = 'rgba(88,208,255,.08)';
+        ctx.fillRect(0, 0, W, H);
+      }
+    }
+
+    function syncHud() {
+      mScore.textContent = `${T('score')} ${game.score}`;
+      mBest.textContent = `${T('best')} ${game.best}`;
+      mLives.textContent = `${T('lives')} ${game.lives}`;
+      mCombo.textContent = `${T('combo')} x${game.combo}`;
+      mFocus.textContent = `${T('focus')} ${Math.floor(game.focus)}%`;
+      mStage.textContent = `${T('stage')} ${game.stage}`;
+      focusBtn.textContent = game.focus >= 100 && game.focusTimer <= 0
+        ? T('focusBtnReady')
+        : `${T('focusBtnCharge')} ${Math.floor(game.focus)}%`;
+    }
+
+    function syncText() {
+      document.documentElement.lang = lang;
+
+      titleTxt.textContent = T('title');
+      subTxt.textContent = T('subtitle');
+      startBtn.textContent = T('start');
+      retryBtn.textContent = T('retry');
+      homeBtn.textContent = T('home');
+      goTitle.textContent = T('goTitle');
+      goDesc.textContent = T('goDesc');
+      langBtn.textContent = T('langLabel');
+
+      const cost = save.upgrades.glove >= 5 ? null : gloveCost(save.upgrades.glove);
+      upgradeBtn.textContent = save.upgrades.glove >= 5
+        ? `${T('upgradeGlove')} (${T('upgradeMax')})`
+        : `${T('upgradeGlove')} Lv.${save.upgrades.glove + 1} · ${cost}`;
+
+      metaTxt.textContent = T('titleMeta', {
+        best: save.best,
+        credits: save.credits,
+        glove: save.upgrades.glove
+      });
+
+      goMeta.textContent = T('gameMeta', {
+        score: game.score,
+        combo: game.comboBest,
+        earned: game.earned
+      });
+
+      syncHud();
+    }
+
+    let toastTimer = null;
+    function flashToast(text) {
+      toast.textContent = text;
+      toast.classList.add('show');
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove('show'), 760);
+    }
+    function hideToast() {
+      toast.classList.remove('show');
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = null;
+    }
+
+    function setTargetFromClientX(clientX) {
+      if (game.state !== 'play') return;
+      game.goalie.targetX = clamp(clientX, 8, W - 8);
+    }
+
+    canvas.addEventListener('pointerdown', (e) => { setTargetFromClientX(e.clientX); }, { passive: true });
+    canvas.addEventListener('pointermove', (e) => {
+      if (e.buttons === 1 || e.pointerType === 'touch') setTargetFromClientX(e.clientX);
+    }, { passive: true });
+
+    focusBtn.addEventListener('click', triggerFocus);
+    startBtn.addEventListener('click', startRun);
+    retryBtn.addEventListener('click', startRun);
+    homeBtn.addEventListener('click', showTitle);
+    langBtn.addEventListener('click', () => {
+      lang = lang === 'ko' ? 'en' : 'ko';
+      save.lang = lang;
+      persist();
+      syncText();
+    });
+    upgradeBtn.addEventListener('click', buyGlove);
+
+    let last = performance.now();
+    function loop(now) {
+      const dt = clamp((now - last) / 1000, 0, 0.05);
+      last = now;
+      update(dt);
+      render(now);
+      requestAnimationFrame(loop);
+    }
+
+    try {
+      if (window.Leaderboard && typeof window.Leaderboard.renderBoard === 'function') {
+        window.Leaderboard.renderBoard('leaderboard');
+      }
+    } catch {}
+
+    showTitle();
+    syncText();
+    requestAnimationFrame(loop);
+
+    window.__goalieGlide = {
+      start: startRun,
+      getState: () => game.state,
+      getMeta: () => ({
+        score: game.score,
+        best: game.best,
+        credits: save.credits,
+        stage: game.stage,
+        lives: game.lives,
+        focus: game.focus,
+        combo: game.combo,
+        glove: save.upgrades.glove
+      }),
+      setGoalieX: (x) => { game.goalie.targetX = clamp(+x || W * 0.5, 8, W - 8); return game.goalie.targetX; },
+      triggerFocus,
+      toggleLang: () => { langBtn.click(); return lang; },
+      buyGlove,
+      forceGameOver: () => { game.lives = 1; registerMiss(game.goalie.x); }
+    };
+  })();
+  </script>
+
+  <script src="/games/cross-promo.js"></script>
+  <script src="../shared/leaderboard.js"></script>
+</body>
+</html>

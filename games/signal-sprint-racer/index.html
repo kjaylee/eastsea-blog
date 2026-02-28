@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+  <title>Signal Sprint Racer</title>
+  <meta name="description" content="Swipe lanes, dodge traffic, and burn boost in this mobile one-touch racing survival game." />
+  <meta name="keywords" content="html5 racing game,mobile touch game,canvas runner,telegram mini app" />
+  <meta property="og:title" content="Signal Sprint Racer" />
+  <meta property="og:description" content="Three-lane neon sprint racer with upgrades, boost management, and endless score chase." />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="/games/signal-sprint-racer/cover.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Signal Sprint Racer" />
+  <meta name="twitter:description" content="Dodge, boost, and survive in a high-speed lane switch racer." />
+  <link rel="manifest" href="/games/manifest.json" />
+  <script type="application/ld+json">
+  {
+    "@context":"https://schema.org",
+    "@type":"VideoGame",
+    "name":"Signal Sprint Racer",
+    "genre":["Racing","Arcade"],
+    "applicationCategory":"Game",
+    "operatingSystem":"Any",
+    "inLanguage":["ko","en"],
+    "url":"https://eastsea.games/games/signal-sprint-racer/"
+  }
+  </script>
+  <style>
+    :root{
+      --bg0:#03060f;
+      --bg1:#122449;
+      --bg2:#1e3f72;
+      --bg3:#2d184d;
+      --panel:rgba(5,12,30,.84);
+      --line:rgba(130,182,255,.36);
+      --text:#edf3ff;
+      --mint:#8fffd2;
+      --warn:#ff9da4;
+      --gold:#ffd884;
+    }
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;}
+    html,body{margin:0;width:100%;height:100%;overflow:hidden;background:radial-gradient(circle at 50% -20%, #264d8e 0%, #070d1d 64%);color:var(--text);font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Noto Sans KR',sans-serif;}
+    body{touch-action:none;}
+    #game{position:fixed;inset:0;width:100%;height:100%;display:block;background:linear-gradient(180deg,var(--bg2),var(--bg0));}
+
+    #hud{
+      position:fixed;left:10px;right:10px;top:max(10px,env(safe-area-inset-top));
+      display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;align-items:center;
+      z-index:20;background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:8px 10px;
+      backdrop-filter:blur(8px);opacity:0;transform:translateY(-10px);pointer-events:none;
+      transition:opacity .2s ease,transform .2s ease;
+      font-size:12px;font-weight:700;
+    }
+    #hud.show{opacity:1;transform:translateY(0);}
+    .metric{min-width:58px;text-align:left}
+    .metric b{color:var(--mint)}
+
+    #controls{
+      position:fixed;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));
+      z-index:22;display:grid;grid-template-columns:1fr 1fr;gap:10px;pointer-events:none;
+    }
+    #controls.show{pointer-events:auto;}
+    #controls button{
+      min-height:56px;border-radius:13px;border:1px solid rgba(178,219,255,.35);
+      font-size:16px;font-weight:820;letter-spacing:.3px;color:var(--text);cursor:pointer;
+      background:rgba(11,21,52,.82);
+    }
+    #leftBtn{background:linear-gradient(135deg,#79d2ff,#7c97ff);color:#042746;}
+    #rightBtn{background:linear-gradient(135deg,#ff9ee6,#ffc18f);color:#3e1a2a;}
+    #boostBtn{grid-column:1 / span 2;background:linear-gradient(135deg,#7bffc8,#84dfff);color:#0a3d2f;}
+    #boostBtn.lock{filter:grayscale(.4) brightness(.7)}
+
+    #overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:12px;z-index:30;}
+    .panel{
+      width:min(94vw,470px);background:linear-gradient(180deg,rgba(10,22,58,.95),rgba(5,10,26,.94));
+      border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:0 22px 56px rgba(0,0,0,.45);
+    }
+    h1,h2{margin:0 0 8px;line-height:1.15}
+    h1{font-size:clamp(28px,8vw,36px)}
+    h2{font-size:clamp(23px,7vw,30px)}
+    p{margin:0}
+    .sub{font-size:14px;line-height:1.42;opacity:.92;margin-bottom:12px}
+    .small{font-size:12px;opacity:.82;line-height:1.4}
+    .row{display:flex;gap:8px;margin-top:10px}
+    button.ui{
+      min-height:46px;flex:1;border-radius:11px;border:1px solid rgba(255,255,255,.23);
+      background:rgba(19,36,79,.64);color:var(--text);font-size:15px;font-weight:780;padding:10px 14px;cursor:pointer;
+    }
+    button.ui.primary{background:linear-gradient(135deg,#73d5ff,#8fffc6);color:#07273f;border-color:rgba(154,255,215,.62)}
+    button.ui.warn{background:linear-gradient(135deg,#ffb690,#ff8f9f);color:#501b18;border-color:rgba(255,209,171,.65)}
+
+    .stats{margin-top:10px;font-size:13px;display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;}
+    .stats span b{color:var(--gold)}
+    .upgrade{margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .upgrade button{min-height:44px;border-radius:10px;border:1px solid rgba(162,210,255,.35);background:rgba(16,31,66,.72);color:var(--text);font-size:13px;font-weight:700;cursor:pointer;padding:8px}
+
+    #toast{
+      position:fixed;left:50%;top:42%;transform:translate(-50%,-50%);
+      z-index:24;font-size:clamp(20px,5vw,30px);font-weight:900;letter-spacing:.8px;
+      text-shadow:0 0 20px rgba(255,255,255,.45);opacity:0;transition:opacity .16s ease;pointer-events:none;
+    }
+    #toast.show{opacity:1}
+
+    #leaderboard{
+      position:fixed;left:10px;right:10px;bottom:calc(146px + env(safe-area-inset-bottom));
+      z-index:18;background:rgba(6,10,26,.58);border:1px solid rgba(120,177,255,.22);border-radius:9px;padding:5px 8px;
+      font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.86;
+    }
+  </style>
+  <script src="../i18n.js"></script>
+</head>
+<body data-state="title">
+  <canvas id="game"></canvas>
+
+  <div id="hud">
+    <div class="metric" id="mScore">S 0</div>
+    <div class="metric" id="mBest">B 0</div>
+    <div class="metric" id="mStage">ST 1</div>
+    <div class="metric" id="mLives">HP 3</div>
+    <div class="metric" id="mBoost">BOOST 0%</div>
+  </div>
+
+  <div id="leaderboard" data-lb-slug="signal-sprint-racer"></div>
+
+  <div id="controls">
+    <button id="leftBtn" aria-label="left">⟵ LEFT</button>
+    <button id="rightBtn" aria-label="right">RIGHT ⟶</button>
+    <button id="boostBtn" class="lock" aria-label="boost">⚡ BOOST</button>
+  </div>
+
+  <div id="toast"></div>
+
+  <div id="overlay">
+    <section class="panel" id="titlePanel">
+      <h1 id="titleText">Signal Sprint Racer</h1>
+      <p class="sub" id="descText">Lane switch to survive neon traffic. Collect cells and burn boost for score spikes.</p>
+      <p class="small" id="hintText">Tap left/right or swipe. Hold BOOST when meter is ready.</p>
+      <div class="stats">
+        <span id="bestStat">Best: <b>0</b></span>
+        <span id="creditStat">Credits: <b>0</b></span>
+        <span id="stageStat">Max Stage: <b>1</b></span>
+        <span id="armorStat">Armor Lv: <b>0</b></span>
+      </div>
+      <div class="upgrade">
+        <button id="upArmorBtn">Armor +1 (20)</button>
+        <button id="upBoostBtn">Boost +1 (20)</button>
+      </div>
+      <div class="row">
+        <button class="ui" id="langBtn">한국어 / EN</button>
+        <button class="ui primary" id="startBtn">Start</button>
+      </div>
+    </section>
+
+    <section class="panel" id="gameoverPanel" hidden>
+      <h2 id="overTitle">Run Over</h2>
+      <p class="sub" id="overDesc">You crashed out of the signal zone.</p>
+      <div class="stats">
+        <span id="finalScore">Score: <b>0</b></span>
+        <span id="finalBest">Best: <b>0</b></span>
+        <span id="finalStage">Stage: <b>1</b></span>
+        <span id="finalCredits">+Credits: <b>0</b></span>
+      </div>
+      <div class="row">
+        <button class="ui" id="backBtn">Title</button>
+        <button class="ui warn" id="retryBtn">Retry</button>
+      </div>
+    </section>
+  </div>
+
+  <script src="../tg-sdk-wrapper.js"></script>
+  <script src="../shared/sound-manager.js"></script>
+  <script>
+  (() => {
+    const STRINGS = {
+      title:{ko:'시그널 스프린트 레이서',en:'Signal Sprint Racer'},
+      desc:{ko:'차선을 바꿔 네온 교통을 회피하고 부스트로 점수를 폭발시키세요.',en:'Lane switch through neon traffic and explode your score with boost.'},
+      hint:{ko:'좌/우 탭 또는 스와이프. BOOST를 길게 눌러 가속!',en:'Tap or swipe left/right. Hold BOOST to accelerate!'},
+      start:{ko:'시작',en:'Start'}, retry:{ko:'다시',en:'Retry'}, back:{ko:'타이틀',en:'Title'},
+      over:{ko:'주행 종료',en:'Run Over'}, overDesc:{ko:'신호 지대에서 충돌했습니다.',en:'You crashed out of the signal zone.'},
+      left:{ko:'왼쪽',en:'LEFT'}, right:{ko:'오른쪽',en:'RIGHT'}, boost:{ko:'부스트',en:'BOOST'},
+      best:{ko:'최고점',en:'Best'}, score:{ko:'점수',en:'Score'}, stage:{ko:'스테이지',en:'Stage'}, credits:{ko:'크레딧',en:'Credits'},
+      armor:{ko:'내구',en:'Armor'}, boostUp:{ko:'부스트효율',en:'Boost'}, maxStage:{ko:'최대 스테이지',en:'Max Stage'},
+      armorUp:{ko:'내구 +1 (20)',en:'Armor +1 (20)'}, boostUpgrade:{ko:'부스트 +1 (20)',en:'Boost +1 (20)'},
+      notEnough:{ko:'크레딧 부족',en:'Not enough credits'}, upgraded:{ko:'업그레이드 완료',en:'Upgrade Complete'},
+      perfect:{ko:'클린!',en:'CLEAN!'}, near:{ko:'근접 회피!',en:'NEAR MISS!'}, crash:{ko:'충돌!',en:'CRASH!'}
+    };
+
+    const tfn = (window.GameI18n ? window.GameI18n(STRINGS) : (k => (STRINGS[k] ? STRINGS[k].en : k)));
+    let lang = localStorage.getItem('signalSprintLang') || 'en';
+    const T = (k) => {
+      const item = STRINGS[k];
+      if (!item) return k;
+      if (window.GameI18n) {
+        const backup = tfn(k);
+        if (lang === 'ko' && item.ko) return item.ko;
+        return backup;
+      }
+      return lang === 'ko' ? item.ko : item.en;
+    };
+
+    const storageKey = 'signal-sprint-racer-save-v1';
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const hud = document.getElementById('hud');
+    const controls = document.getElementById('controls');
+    const toast = document.getElementById('toast');
+    const overlay = document.getElementById('overlay');
+
+    const ui = {
+      titlePanel:document.getElementById('titlePanel'),
+      gameoverPanel:document.getElementById('gameoverPanel'),
+      startBtn:document.getElementById('startBtn'),
+      retryBtn:document.getElementById('retryBtn'),
+      backBtn:document.getElementById('backBtn'),
+      langBtn:document.getElementById('langBtn'),
+      leftBtn:document.getElementById('leftBtn'),
+      rightBtn:document.getElementById('rightBtn'),
+      boostBtn:document.getElementById('boostBtn'),
+      upArmorBtn:document.getElementById('upArmorBtn'),
+      upBoostBtn:document.getElementById('upBoostBtn'),
+      mScore:document.getElementById('mScore'),
+      mBest:document.getElementById('mBest'),
+      mStage:document.getElementById('mStage'),
+      mLives:document.getElementById('mLives'),
+      mBoost:document.getElementById('mBoost'),
+      titleText:document.getElementById('titleText'),
+      descText:document.getElementById('descText'),
+      hintText:document.getElementById('hintText'),
+      bestStat:document.getElementById('bestStat'),
+      creditStat:document.getElementById('creditStat'),
+      stageStat:document.getElementById('stageStat'),
+      armorStat:document.getElementById('armorStat'),
+      overTitle:document.getElementById('overTitle'),
+      overDesc:document.getElementById('overDesc'),
+      finalScore:document.getElementById('finalScore'),
+      finalBest:document.getElementById('finalBest'),
+      finalStage:document.getElementById('finalStage'),
+      finalCredits:document.getElementById('finalCredits')
+    };
+
+    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    let vw=390, vh=844;
+
+    const lanes = [0.23,0.5,0.77];
+    const roadMarks = Array.from({length:22}, (_,i)=>({y:i*120}));
+
+    const game = {
+      state:'title',
+      score:0,
+      best:0,
+      stage:1,
+      lives:3,
+      creditsEarned:0,
+      distance:0,
+      speed:340,
+      boost:0,
+      combo:0,
+      lane:1,
+      carX:0,
+      invuln:0,
+      boostActive:false,
+      time:0,
+      spawnT:0,
+      cellT:0,
+      obstacles:[],
+      cells:[],
+      particles:[]
+    };
+
+    const save = loadSave();
+    game.best = save.best;
+
+    const sound = initSound();
+
+    function initSound(){
+      let sm = null;
+      try{ if(window.SoundManager) sm = new window.SoundManager(); }catch(e){}
+      let ac = null;
+      const beep = (freq=420,duration=.05,type='sine',gain=.06)=>{
+        try{
+          ac = ac || new (window.AudioContext||window.webkitAudioContext)();
+          const o=ac.createOscillator(), g=ac.createGain();
+          o.type=type;o.frequency.value=freq;g.gain.value=gain;
+          o.connect(g);g.connect(ac.destination);o.start();
+          g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime+duration);
+          o.stop(ac.currentTime+duration+0.01);
+        }catch(e){}
+      };
+      return {
+        move(){ sm&&sm.play?sm.play('move',1):beep(510,.05,'triangle'); },
+        collect(){ sm&&sm.play?sm.play('coin',1.1):beep(860,.08,'sine'); },
+        crash(){ sm&&sm.play?sm.play('hit',.8):beep(140,.18,'sawtooth',.09); },
+        boost(){ sm&&sm.play?sm.play('boost',1.2):beep(620,.05,'square',.05); }
+      };
+    }
+
+    function loadSave(){
+      try{
+        const raw = localStorage.getItem(storageKey);
+        if(raw){
+          const d = JSON.parse(raw);
+          if(d && typeof d === 'object'){
+            return {
+              best: Number.isFinite(d.best)?d.best:0,
+              credits: Number.isFinite(d.credits)?d.credits:0,
+              maxStage: Number.isFinite(d.maxStage)?d.maxStage:1,
+              upgrades:{
+                armor: Number.isFinite(d.upgrades?.armor)?d.upgrades.armor:0,
+                boost: Number.isFinite(d.upgrades?.boost)?d.upgrades.boost:0
+              }
+            };
+          }
+        }
+      }catch(e){}
+      return { best:0, credits:0, maxStage:1, upgrades:{armor:0, boost:0} };
+    }
+
+    function persist(){
+      try{
+        localStorage.setItem(storageKey, JSON.stringify(save));
+      }catch(e){}
+    }
+
+    function setState(next){
+      game.state = next;
+      document.body.dataset.state = next;
+      hud.classList.toggle('show', next === 'play');
+      controls.classList.toggle('show', next === 'play');
+      overlay.style.pointerEvents = next === 'play' ? 'none' : 'auto';
+      if(next === 'title'){
+        ui.titlePanel.hidden = false;
+        ui.gameoverPanel.hidden = true;
+        renderTitleStats();
+      }else if(next === 'play'){
+        ui.titlePanel.hidden = true;
+        ui.gameoverPanel.hidden = true;
+      }else if(next === 'gameover'){
+        ui.titlePanel.hidden = true;
+        ui.gameoverPanel.hidden = false;
+      }
+    }
+
+    function resize(){
+      vw = window.innerWidth;
+      vh = window.innerHeight;
+      canvas.width = Math.floor(vw * dpr);
+      canvas.height = Math.floor(vh * dpr);
+      canvas.style.width = vw + 'px';
+      canvas.style.height = vh + 'px';
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+      game.carX = laneX(game.lane);
+    }
+
+    function laneX(idx){ return vw * lanes[Math.max(0,Math.min(2,idx))]; }
+    function carY(){ return vh * 0.78; }
+
+    function startRun(){
+      game.score = 0;
+      game.stage = 1;
+      game.lives = 3 + save.upgrades.armor;
+      game.creditsEarned = 0;
+      game.distance = 0;
+      game.speed = 340;
+      game.boost = 20 + save.upgrades.boost * 8;
+      game.combo = 0;
+      game.lane = 1;
+      game.carX = laneX(1);
+      game.invuln = 0;
+      game.boostActive = false;
+      game.spawnT = 0;
+      game.cellT = 0;
+      game.time = 0;
+      game.obstacles.length = 0;
+      game.cells.length = 0;
+      game.particles.length = 0;
+      roadMarks.forEach((m,i)=>m.y=i*120);
+      hideToast();
+      setState('play');
+      haptic('impact','light');
+    }
+
+    function endRun(){
+      game.state = 'gameover';
+      document.body.dataset.state = 'gameover';
+      game.score = Math.max(0, Math.floor(game.distance * 0.25 + game.combo * 3));
+      if(game.score > save.best) save.best = game.score;
+      save.maxStage = Math.max(save.maxStage, game.stage);
+      game.creditsEarned = Math.max(8, Math.floor(game.score/100) + game.stage*2);
+      save.credits += game.creditsEarned;
+      persist();
+
+      try{
+        if(window.Leaderboard && window.Leaderboard.submit) window.Leaderboard.submit('signal-sprint-racer','player',game.score);
+      }catch(e){}
+
+      ui.finalScore.innerHTML = `${T('score')}: <b>${game.score}</b>`;
+      ui.finalBest.innerHTML = `${T('best')}: <b>${save.best}</b>`;
+      ui.finalStage.innerHTML = `${T('stage')}: <b>${game.stage}</b>`;
+      ui.finalCredits.innerHTML = `+${T('credits')}: <b>${game.creditsEarned}</b>`;
+      ui.overTitle.textContent = T('over');
+      ui.overDesc.textContent = T('overDesc');
+      sound.crash();
+      haptic('notification','error');
+      setState('gameover');
+    }
+
+    function moveLane(delta){
+      if(game.state !== 'play') return;
+      const prev = game.lane;
+      game.lane = Math.max(0,Math.min(2,game.lane + delta));
+      if(prev !== game.lane){
+        sound.move();
+        haptic('selection','light');
+      }
+    }
+
+    function triggerBoost(on){
+      if(game.state !== 'play') return;
+      game.boostActive = !!on;
+    }
+
+    function spawnObstacle(){
+      const lane = Math.floor(Math.random()*3);
+      const y = -90;
+      const hp = game.stage >= 6 && Math.random() < 0.25 ? 2 : 1;
+      const speedMul = 0.92 + Math.random()*0.28;
+      game.obstacles.push({lane,y,w:58,h:90,hp,speedMul,passed:false,blink:0,color:`hsl(${200+Math.random()*80} 86% 62%)`});
+    }
+
+    function spawnCell(){
+      const lane = Math.floor(Math.random()*3);
+      game.cells.push({lane,y:-60,r:16,life:1});
+    }
+
+    function emit(x,y,color,count=9){
+      for(let i=0;i<count;i++){
+        game.particles.push({
+          x,y,
+          vx:(Math.random()-.5)*220,
+          vy:(Math.random()-.5)*220,
+          life:.35+Math.random()*.4,
+          color
+        });
+      }
+    }
+
+    function update(dt){
+      if(game.state !== 'play') return;
+      game.time += dt;
+      const targetX = laneX(game.lane);
+      game.carX += (targetX - game.carX) * Math.min(1, dt*13);
+
+      const stageSpeed = 300 + game.stage*34;
+      let speedNow = stageSpeed;
+      if(game.boostActive && game.boost > 0){
+        speedNow *= 1.45 + save.upgrades.boost*0.03;
+        game.boost = Math.max(0, game.boost - dt*28);
+        if((game.time*30|0)%5===0) sound.boost();
+      }else{
+        game.boost = Math.min(100, game.boost + dt*(4 + save.upgrades.boost*0.8));
+      }
+      ui.boostBtn.classList.toggle('lock', game.boost < 20);
+
+      game.speed += (speedNow - game.speed) * Math.min(1, dt*4);
+      game.distance += game.speed * dt;
+      game.stage = 1 + Math.floor(game.distance / 1450);
+      save.maxStage = Math.max(save.maxStage, game.stage);
+
+      if(game.invuln > 0) game.invuln -= dt;
+
+      game.spawnT -= dt;
+      if(game.spawnT <= 0){
+        spawnObstacle();
+        const tighten = Math.max(0.28, 0.92 - game.stage*0.045);
+        game.spawnT = tighten + Math.random()*0.36;
+      }
+
+      game.cellT -= dt;
+      if(game.cellT <= 0){
+        spawnCell();
+        game.cellT = 1.4 + Math.random()*1.25;
+      }
+
+      const py = carY();
+
+      for(let i=game.obstacles.length-1;i>=0;i--){
+        const o = game.obstacles[i];
+        o.y += game.speed * o.speedMul * dt;
+        o.blink = Math.max(0, o.blink - dt*3.3);
+        const ox = laneX(o.lane);
+        const nearX = Math.abs(ox - game.carX);
+        const nearY = Math.abs(o.y - py);
+
+        if(nearX < 52 && nearY < 64){
+          if(game.invuln <= 0){
+            game.lives -= 1;
+            game.combo = 0;
+            game.invuln = 1.1;
+            o.blink = 1;
+            emit(game.carX, py, '#ff97a0', 16);
+            sound.crash();
+            showToast(T('crash'));
+            haptic('notification','error');
+            if(game.lives <= 0){
+              endRun();
+              return;
+            }
+          }
+        }
+
+        if(!o.passed && o.y > py + 70){
+          o.passed = true;
+          game.combo += 1;
+          if(game.combo % 5 === 0){
+            showToast(T('near'));
+            emit(game.carX, py-60, '#9effd8', 10);
+          }
+        }
+
+        if(o.y > vh + 120) game.obstacles.splice(i,1);
+      }
+
+      for(let i=game.cells.length-1;i>=0;i--){
+        const c = game.cells[i];
+        c.y += game.speed * .88 * dt;
+        const cx = laneX(c.lane);
+        if(Math.abs(cx - game.carX) < 54 && Math.abs(c.y - py) < 58){
+          game.boost = Math.min(100, game.boost + 22);
+          game.score += 18;
+          game.cells.splice(i,1);
+          emit(cx,c.y,'#82e9ff',11);
+          sound.collect();
+          showToast(T('perfect'));
+          haptic('impact','medium');
+          continue;
+        }
+        if(c.y > vh + 70) game.cells.splice(i,1);
+      }
+
+      for(const m of roadMarks){
+        m.y += game.speed * dt;
+        if(m.y > vh + 80) m.y -= (vh + 200);
+      }
+
+      for(let i=game.particles.length-1;i>=0;i--){
+        const p = game.particles[i];
+        p.life -= dt;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.vy += 280 * dt;
+        if(p.life<=0) game.particles.splice(i,1);
+      }
+
+      game.score = Math.max(game.score, Math.floor(game.distance*0.22 + game.combo*2));
+      if(game.score > save.best) save.best = game.score;
+
+      if((game.time*10|0)%9===0) persist();
+    }
+
+    function drawRoad(){
+      const g = ctx.createLinearGradient(0,0,0,vh);
+      g.addColorStop(0,'#2a3f84');
+      g.addColorStop(.42,'#152b58');
+      g.addColorStop(1,'#070e1d');
+      ctx.fillStyle = g;
+      ctx.fillRect(0,0,vw,vh);
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(vw*.15,0); ctx.lineTo(vw*.85,0); ctx.lineTo(vw*.95,vh); ctx.lineTo(vw*.05,vh); ctx.closePath();
+      ctx.clip();
+
+      const rg = ctx.createLinearGradient(0,0,0,vh);
+      rg.addColorStop(0,'rgba(255,255,255,.08)');
+      rg.addColorStop(1,'rgba(0,0,0,.45)');
+      ctx.fillStyle = rg;
+      ctx.fillRect(vw*.06,0,vw*.88,vh);
+
+      ctx.strokeStyle='rgba(180,220,255,.26)';
+      ctx.lineWidth=2;
+      for(let i=1;i<3;i++){
+        const x = laneX(i)-vw*0.14;
+        ctx.setLineDash([16,20]);
+        ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x+vw*0.28,vh);ctx.stroke();
+      }
+      ctx.setLineDash([]);
+
+      for(const m of roadMarks){
+        ctx.fillStyle='rgba(170,220,255,.58)';
+        ctx.fillRect(vw*.47, m.y, vw*.06, 34);
+      }
+
+      ctx.restore();
+    }
+
+    function drawCar(){
+      const x = game.carX;
+      const y = carY();
+      const w = 52, h = 84;
+      ctx.save();
+      ctx.translate(x,y);
+      if(game.boostActive && game.boost > 0){
+        ctx.fillStyle='rgba(127,248,255,.26)';
+        ctx.beginPath();ctx.ellipse(0,28,36,22,0,0,Math.PI*2);ctx.fill();
+      }
+      ctx.fillStyle = game.invuln>0 && (game.time*16|0)%2 ? 'rgba(255,255,255,.4)' : '#8bf3ff';
+      ctx.fillRect(-w*.45,-h*.48,w*.9,h*.96);
+      ctx.fillStyle='#172f66';
+      ctx.fillRect(-w*.22,-h*.3,w*.44,h*.42);
+      ctx.fillStyle='#ffc37c';
+      ctx.fillRect(-w*.28,-h*.1,w*.56,h*.16);
+      ctx.fillStyle='#0a1020';
+      ctx.fillRect(-w*.56,-h*.3,w*.14,h*.34);
+      ctx.fillRect(w*.42,-h*.3,w*.14,h*.34);
+      ctx.fillRect(-w*.56,h*.02,w*.14,h*.34);
+      ctx.fillRect(w*.42,h*.02,w*.14,h*.34);
+      ctx.restore();
+    }
+
+    function drawObstacles(){
+      for(const o of game.obstacles){
+        const x = laneX(o.lane);
+        const y = o.y;
+        const flash = o.blink>0 ? `rgba(255,156,166,${0.32+o.blink*0.45})` : 'rgba(14,28,62,.84)';
+        ctx.fillStyle = flash;
+        ctx.fillRect(x-30,y-45,60,90);
+        ctx.strokeStyle = o.color;
+        ctx.lineWidth = 3;
+        ctx.strokeRect(x-26,y-40,52,80);
+        ctx.fillStyle = o.hp>1 ? '#ffd48b' : '#8dd6ff';
+        ctx.fillRect(x-8,y-8,16,16);
+      }
+      for(const c of game.cells){
+        const x = laneX(c.lane);
+        ctx.fillStyle='rgba(120,240,255,.28)';
+        ctx.beginPath();ctx.arc(x,c.y,24,0,Math.PI*2);ctx.fill();
+        ctx.fillStyle='#8fefff';
+        ctx.beginPath();ctx.arc(x,c.y,14,0,Math.PI*2);ctx.fill();
+        ctx.fillStyle='#e8feff';
+        ctx.fillRect(x-3,c.y-10,6,20);
+        ctx.fillRect(x-10,c.y-3,20,6);
+      }
+    }
+
+    function drawParticles(){
+      for(const p of game.particles){
+        ctx.fillStyle = p.color.replace(')', ` / ${Math.max(0,p.life).toFixed(2)})`).replace('rgb','rgba');
+        ctx.globalAlpha = Math.max(0,p.life);
+        ctx.fillRect(p.x,p.y,4,4);
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    function render(){
+      drawRoad();
+      if(game.state === 'play' || game.state === 'gameover'){
+        drawObstacles();
+        drawCar();
+        drawParticles();
+      }
+      ui.mScore.textContent = `S ${game.score}`;
+      ui.mBest.textContent = `B ${save.best}`;
+      ui.mStage.textContent = `ST ${game.stage}`;
+      ui.mLives.textContent = `HP ${game.lives}`;
+      ui.mBoost.textContent = `BOOST ${Math.floor(game.boost)}%`;
+    }
+
+    function frame(ts){
+      if(!frame.last) frame.last = ts;
+      const dt = Math.min(.05, (ts - frame.last)/1000);
+      frame.last = ts;
+      update(dt);
+      render();
+      requestAnimationFrame(frame);
+    }
+
+    function showToast(text){
+      toast.textContent = text;
+      toast.classList.add('show');
+      clearTimeout(showToast.tid);
+      showToast.tid = setTimeout(hideToast, 440);
+    }
+    function hideToast(){ toast.classList.remove('show'); }
+
+    function renderTitleStats(){
+      ui.titleText.textContent = T('title');
+      ui.descText.textContent = T('desc');
+      ui.hintText.textContent = T('hint');
+      ui.startBtn.textContent = T('start');
+      ui.retryBtn.textContent = T('retry');
+      ui.backBtn.textContent = T('back');
+      ui.overTitle.textContent = T('over');
+      ui.overDesc.textContent = T('overDesc');
+      ui.leftBtn.textContent = `⟵ ${T('left')}`;
+      ui.rightBtn.textContent = `${T('right')} ⟶`;
+      ui.boostBtn.textContent = `⚡ ${T('boost')}`;
+      ui.bestStat.innerHTML = `${T('best')}: <b>${save.best}</b>`;
+      ui.creditStat.innerHTML = `${T('credits')}: <b>${save.credits}</b>`;
+      ui.stageStat.innerHTML = `${T('maxStage')}: <b>${save.maxStage}</b>`;
+      ui.armorStat.innerHTML = `${T('armor')} Lv: <b>${save.upgrades.armor}</b>`;
+      ui.upArmorBtn.textContent = T('armorUp');
+      ui.upBoostBtn.textContent = T('boostUpgrade');
+      ui.finalScore.innerHTML = `${T('score')}: <b>${game.score}</b>`;
+      ui.finalBest.innerHTML = `${T('best')}: <b>${save.best}</b>`;
+      ui.finalStage.innerHTML = `${T('stage')}: <b>${game.stage}</b>`;
+      ui.finalCredits.innerHTML = `+${T('credits')}: <b>${game.creditsEarned}</b>`;
+    }
+
+    function tryUpgrade(type){
+      if(save.credits < 20){ showToast(T('notEnough')); return; }
+      save.credits -= 20;
+      if(type==='armor') save.upgrades.armor += 1;
+      else save.upgrades.boost += 1;
+      persist();
+      renderTitleStats();
+      showToast(T('upgraded'));
+      haptic('impact','medium');
+    }
+
+    function haptic(kind,style){
+      try{ if(window.TG && TG.haptic) TG.haptic(kind,style); }catch(e){}
+      if(navigator.vibrate){
+        if(kind==='notification'&&style==='error') navigator.vibrate([24,24,24]);
+        else navigator.vibrate(16);
+      }
+    }
+
+    function bindInput(){
+      ui.startBtn.addEventListener('click', startRun);
+      ui.retryBtn.addEventListener('click', startRun);
+      ui.backBtn.addEventListener('click', () => setState('title'));
+      ui.upArmorBtn.addEventListener('click', () => tryUpgrade('armor'));
+      ui.upBoostBtn.addEventListener('click', () => tryUpgrade('boost'));
+      ui.langBtn.addEventListener('click', () => {
+        lang = lang === 'ko' ? 'en' : 'ko';
+        localStorage.setItem('signalSprintLang', lang);
+        renderTitleStats();
+      });
+
+      ui.leftBtn.addEventListener('pointerdown', e => { e.preventDefault(); moveLane(-1); });
+      ui.rightBtn.addEventListener('pointerdown', e => { e.preventDefault(); moveLane(1); });
+      ui.boostBtn.addEventListener('pointerdown', e => { e.preventDefault(); triggerBoost(true); });
+      ui.boostBtn.addEventListener('pointerup', e => { e.preventDefault(); triggerBoost(false); });
+      ui.boostBtn.addEventListener('pointercancel', () => triggerBoost(false));
+
+      let sx = 0;
+      canvas.addEventListener('pointerdown', e => { sx = e.clientX; });
+      canvas.addEventListener('pointermove', e => {
+        if(game.state !== 'play') return;
+        const dx = e.clientX - sx;
+        if(Math.abs(dx) > 34){
+          moveLane(dx>0?1:-1);
+          sx = e.clientX;
+        }
+      });
+      window.addEventListener('keydown', e => {
+        if(e.key === 'ArrowLeft') moveLane(-1);
+        if(e.key === 'ArrowRight') moveLane(1);
+        if(e.key === ' ') triggerBoost(true);
+      });
+      window.addEventListener('keyup', e => {
+        if(e.key === ' ') triggerBoost(false);
+      });
+      window.addEventListener('resize', resize);
+      document.addEventListener('visibilitychange', () => {
+        if(document.hidden) triggerBoost(false);
+      });
+    }
+
+    function init(){
+      resize();
+      bindInput();
+      renderTitleStats();
+      setState('title');
+      try{ if(window.Leaderboard && window.Leaderboard.renderBoard) window.Leaderboard.renderBoard('leaderboard'); }catch(e){}
+      requestAnimationFrame(frame);
+    }
+
+    window.__signalSprintRacer = {
+      storageKey,
+      getState: () => game.state,
+      getMetrics: () => ({ score:game.score, stage:game.stage, lives:game.lives, boost:Math.floor(game.boost), lane:game.lane }),
+      getSave: () => JSON.parse(JSON.stringify(save)),
+      forceGameOver: () => { if(game.state==='play'){ game.lives = 0; endRun(); } },
+      debugCollect: (n=3) => { for(let i=0;i<n;i++){ game.boost = Math.min(100, game.boost+15); game.score += 30; } },
+      debugAddCredits: (n=100) => { save.credits += n; persist(); renderTitleStats(); },
+      debugMove: moveLane,
+      startRun,
+      setLang: (v) => { lang = v==='ko'?'ko':'en'; renderTitleStats(); }
+    };
+
+    init();
+  })();
+  </script>
+  <script src="/games/cross-promo.js"></script>
+  <script src="../shared/leaderboard.js"></script>
+</body>
+</html>

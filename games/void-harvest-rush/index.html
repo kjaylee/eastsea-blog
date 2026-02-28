@@ -1,0 +1,741 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>Void Harvest Rush</title>
+  <style>
+    :root{
+      --bg0:#080a1a;
+      --bg1:#151738;
+      --bg2:#2d1f66;
+      --c-cyan:#5fe7ff;
+      --c-violet:#8b6cff;
+      --c-pink:#ff6dc8;
+      --c-good:#62ffbd;
+      --c-warn:#ffd166;
+      --c-bad:#ff5d6e;
+      --ink:#f6f7ff;
+      --panel:rgba(14,18,42,.72);
+    }
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    html,body{margin:0;height:100%;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Apple SD Gothic Neo,Noto Sans KR,sans-serif;background:radial-gradient(120% 100% at 50% 0%, #1f2257 0%, #0c112f 45%, #070913 100%);color:var(--ink)}
+    body{display:flex;justify-content:center;align-items:stretch;overflow:hidden;touch-action:none}
+    .app{
+      width:min(100vw,560px);
+      height:100dvh;
+      position:relative;
+      background:linear-gradient(180deg,var(--bg1),var(--bg0) 32%, #05060d 100%);
+      overflow:hidden;
+      padding-top:env(safe-area-inset-top,0);
+      padding-bottom:env(safe-area-inset-bottom,0);
+    }
+    canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+    .hud{
+      position:absolute;left:0;right:0;top:0;
+      padding:calc(env(safe-area-inset-top,0px) + 10px) 12px 8px;
+      display:grid;grid-template-columns:1fr auto;gap:8px;z-index:3;
+      pointer-events:none;
+    }
+    .hud.hidden{display:none}
+    .pill{background:rgba(10,14,32,.66);border:1px solid rgba(121,138,255,.35);padding:8px 10px;border-radius:12px;backdrop-filter:blur(6px);font-size:13px;line-height:1.35;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+    .score{font-weight:800;font-size:15px;letter-spacing:.3px}
+    .small{opacity:.86;font-size:12px}
+    .energyWrap{display:flex;align-items:center;gap:8px;margin-top:4px}
+    .energyBar{width:122px;height:9px;border-radius:999px;background:#1f274d;overflow:hidden;border:1px solid rgba(120,150,255,.45)}
+    .energyFill{height:100%;width:0%;background:linear-gradient(90deg,#36d1ff,#7f77ff 58%,#ff61c7);transition:width .1s linear}
+
+    .overlay{position:absolute;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;padding:24px}
+    .overlay.hidden{display:none}
+    .panel{
+      width:min(92%,420px);
+      background:var(--panel);
+      border:1px solid rgba(143,162,255,.35);
+      border-radius:18px;
+      box-shadow:0 16px 40px rgba(0,0,0,.4);
+      backdrop-filter:blur(10px);
+      padding:18px 16px;
+    }
+    h1{font-size:28px;line-height:1.05;margin:0 0 8px;letter-spacing:.3px}
+    h2{font-size:22px;margin:0 0 10px}
+    p{margin:8px 0 0;opacity:.92;line-height:1.45}
+    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;opacity:.9}
+    .row{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+    button{
+      border:none;border-radius:12px;padding:12px 14px;min-height:44px;
+      font-weight:700;font-size:14px;cursor:pointer;color:white;
+      background:linear-gradient(135deg,#3957ff,#7b5cff);
+      box-shadow:0 8px 20px rgba(48,84,255,.36);
+    }
+    button:active{transform:translateY(1px) scale(.99)}
+    .ghost{background:rgba(39,53,96,.66);box-shadow:none;border:1px solid rgba(121,138,255,.5)}
+    .warn{background:linear-gradient(135deg,#ff8a3d,#ff4f8c)}
+
+    .controls{
+      position:absolute;left:0;right:0;bottom:0;z-index:4;
+      padding:8px 12px calc(env(safe-area-inset-bottom,0px) + 12px);
+      display:grid;grid-template-columns:1fr .8fr 1fr;gap:10px;
+    }
+    .controls.hidden{display:none}
+    .ctrl{
+      user-select:none;
+      border-radius:14px;
+      min-height:56px;
+      border:1px solid rgba(120,140,255,.35);
+      color:#f6f7ff;
+      background:linear-gradient(180deg,rgba(28,37,73,.94),rgba(16,22,47,.92));
+      font-size:16px;font-weight:800;
+      letter-spacing:.5px;
+      display:flex;justify-content:center;align-items:center;
+      box-shadow:inset 0 0 0 1px rgba(182,196,255,.08), 0 12px 26px rgba(0,0,0,.28);
+    }
+    .ctrl.on{outline:2px solid rgba(97,214,255,.8);background:linear-gradient(180deg,rgba(47,67,134,.96),rgba(20,31,72,.94))}
+    .ctrl.boost{background:linear-gradient(180deg,rgba(87,40,133,.95),rgba(34,14,56,.95));border-color:rgba(255,125,219,.42)}
+    .ctrl.boost.ready{outline:2px solid rgba(98,255,189,.85)}
+
+    .tag{
+      display:inline-block;padding:5px 8px;border-radius:999px;font-size:12px;
+      border:1px solid rgba(117,142,255,.48);background:rgba(33,45,90,.56);margin-right:6px;margin-top:7px;
+    }
+
+    .hint{margin-top:10px;font-size:12px;opacity:.82}
+  </style>
+</head>
+<body>
+  <main class="app" id="app">
+    <canvas id="gameCanvas" width="390" height="844" aria-label="Void Harvest Rush Canvas"></canvas>
+
+    <section class="hud hidden" id="hud">
+      <div class="pill">
+        <div class="score">SCORE <span id="scoreText">0</span></div>
+        <div class="small">BEST <span id="bestText">0</span> · CRYSTAL <span id="runCrystalText">0</span></div>
+        <div class="energyWrap">
+          <span class="small">ENERGY</span>
+          <div class="energyBar"><div class="energyFill" id="energyFill"></div></div>
+          <span class="small" id="energyText">0%</span>
+        </div>
+      </div>
+      <div class="pill" style="text-align:right">
+        <div class="small">HULL</div>
+        <div id="hullText" style="font-weight:800;font-size:18px">3</div>
+      </div>
+    </section>
+
+    <section class="overlay" id="titlePanel">
+      <div class="panel">
+        <h1>🌀 Void Harvest Rush</h1>
+        <p>균열 지대를 항해하며 에테르 크리스탈을 수확하세요. 지뢰를 피하고 에너지 100%에서 <b>Overdrive</b>를 발동하면 생존 확률이 크게 오릅니다.</p>
+        <div>
+          <span class="tag">모바일 터치</span>
+          <span class="tag">캔버스 아케이드</span>
+          <span class="tag">로컬 저장</span>
+        </div>
+        <p class="mono" id="saveSummary">Best 0 · Total Crystals 0</p>
+        <div class="row">
+          <button id="startBtn">Start Run</button>
+        </div>
+        <div class="hint">좌/우 버튼으로 이동 · 중앙 BURST로 오버드라이브</div>
+      </div>
+    </section>
+
+    <section class="overlay hidden" id="gameoverPanel">
+      <div class="panel">
+        <h2>Run Complete</h2>
+        <p id="resultLine">Score 0 · Best 0</p>
+        <p id="crystalLine">Run Crystals 0 · Total 0</p>
+        <div class="row">
+          <button id="retryBtn">Retry</button>
+          <button id="homeBtn" class="ghost">Home</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="controls hidden" id="controls">
+      <button class="ctrl" id="leftBtn" aria-label="Move Left">◀</button>
+      <button class="ctrl boost" id="boostBtn" aria-label="Boost">BURST</button>
+      <button class="ctrl" id="rightBtn" aria-label="Move Right">▶</button>
+    </section>
+  </main>
+
+  <script>
+  (() => {
+    'use strict';
+
+    const SAVE_KEY = 'vh_rush_save_v1';
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d', { alpha: false });
+
+    const hud = document.getElementById('hud');
+    const titlePanel = document.getElementById('titlePanel');
+    const gameoverPanel = document.getElementById('gameoverPanel');
+    const controls = document.getElementById('controls');
+
+    const scoreText = document.getElementById('scoreText');
+    const bestText = document.getElementById('bestText');
+    const runCrystalText = document.getElementById('runCrystalText');
+    const hullText = document.getElementById('hullText');
+    const energyFill = document.getElementById('energyFill');
+    const energyText = document.getElementById('energyText');
+    const saveSummary = document.getElementById('saveSummary');
+    const resultLine = document.getElementById('resultLine');
+    const crystalLine = document.getElementById('crystalLine');
+
+    const startBtn = document.getElementById('startBtn');
+    const retryBtn = document.getElementById('retryBtn');
+    const homeBtn = document.getElementById('homeBtn');
+    const leftBtn = document.getElementById('leftBtn');
+    const rightBtn = document.getElementById('rightBtn');
+    const boostBtn = document.getElementById('boostBtn');
+
+    const DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    let W = 390, H = 844;
+
+    const state = {
+      mode: 'title',
+      time: 0,
+      score: 0,
+      best: 0,
+      hull: 3,
+      energy: 0,
+      runCrystals: 0,
+      totalCrystals: 0,
+      difficulty: 1,
+      speed: 220,
+      overdrive: 0,
+      invuln: 0,
+      shake: 0,
+      spawnOrbT: 0,
+      spawnMineT: 0,
+      stars: [],
+      crystals: [],
+      mines: [],
+      particles: [],
+      input: { left: false, right: false },
+      player: { x: 195, y: 680, r: 18, vx: 0 },
+      loaded: false
+    };
+
+    let audioCtx = null;
+
+    function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
+    function rand(a, b){ return a + Math.random() * (b - a); }
+    function pick(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
+
+    function initStars(){
+      state.stars.length = 0;
+      for(let i=0;i<96;i++){
+        state.stars.push({ x: Math.random()*W, y: Math.random()*H, z: rand(.4,1.8), tw: Math.random()*Math.PI*2 });
+      }
+    }
+
+    function resize(){
+      const rect = canvas.getBoundingClientRect();
+      W = Math.max(320, Math.round(rect.width));
+      H = Math.max(568, Math.round(rect.height));
+      canvas.width = Math.round(W * DPR);
+      canvas.height = Math.round(H * DPR);
+      ctx.setTransform(DPR,0,0,DPR,0,0);
+      state.player.x = clamp(state.player.x || W*0.5, 24, W-24);
+      state.player.y = H * 0.8;
+      initStars();
+    }
+
+    function loadSave(){
+      try {
+        const raw = localStorage.getItem(SAVE_KEY);
+        if (!raw) return;
+        const data = JSON.parse(raw);
+        state.best = Number.isFinite(data.bestScore) ? data.bestScore : 0;
+        state.totalCrystals = Number.isFinite(data.totalCrystals) ? data.totalCrystals : 0;
+      } catch (err) {
+        console.warn('save-load-skip', err && err.message ? err.message : err);
+      }
+    }
+
+    function persist(lastScore=0){
+      const payload = {
+        bestScore: Math.max(state.best|0, Math.floor(lastScore)),
+        totalCrystals: Math.max(0, state.totalCrystals|0),
+        lastScore: Math.floor(lastScore),
+        updatedAt: new Date().toISOString()
+      };
+      try { localStorage.setItem(SAVE_KEY, JSON.stringify(payload)); } catch {}
+    }
+
+    function updateSaveSummary(){
+      saveSummary.textContent = `Best ${Math.floor(state.best)} · Total Crystals ${Math.floor(state.totalCrystals)}`;
+    }
+
+    function resetRun(){
+      state.time = 0;
+      state.score = 0;
+      state.hull = 3;
+      state.energy = 0;
+      state.runCrystals = 0;
+      state.difficulty = 1;
+      state.speed = 220;
+      state.overdrive = 0;
+      state.invuln = 0;
+      state.shake = 0;
+      state.spawnOrbT = 0;
+      state.spawnMineT = 0;
+      state.player.x = W * 0.5;
+      state.player.vx = 0;
+      state.crystals.length = 0;
+      state.mines.length = 0;
+      state.particles.length = 0;
+      syncHud();
+    }
+
+    function setMode(next){
+      state.mode = next;
+      const isPlay = next === 'play';
+      titlePanel.classList.toggle('hidden', next !== 'title');
+      hud.classList.toggle('hidden', !isPlay);
+      controls.classList.toggle('hidden', !isPlay);
+      gameoverPanel.classList.toggle('hidden', next !== 'gameover');
+      if (next === 'title') updateSaveSummary();
+      syncHud();
+    }
+
+    function syncHud(){
+      scoreText.textContent = Math.floor(state.score);
+      bestText.textContent = Math.floor(state.best);
+      runCrystalText.textContent = Math.floor(state.runCrystals);
+      hullText.textContent = '★'.repeat(Math.max(0,state.hull));
+      const pct = clamp(state.energy,0,100);
+      energyFill.style.width = pct + '%';
+      energyText.textContent = Math.floor(pct) + '%';
+      boostBtn.classList.toggle('ready', pct >= 100);
+    }
+
+    function blip(freq=420, duration=.05, type='triangle', gain=.035){
+      try {
+        audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.type = type;
+        o.frequency.value = freq;
+        g.gain.value = gain;
+        o.connect(g); g.connect(audioCtx.destination);
+        const t = audioCtx.currentTime;
+        g.gain.setValueAtTime(gain, t);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+        o.start(t); o.stop(t + duration);
+      } catch {}
+    }
+
+    function burstSound(){ blip(180,.08,'sawtooth',.05); setTimeout(()=>blip(260,.09,'square',.04),35); setTimeout(()=>blip(340,.09,'triangle',.03),70); }
+
+    function spawnCrystal(){
+      state.crystals.push({ x: rand(24, W-24), y: -24, r: rand(9,13), vy: state.speed * rand(.82,1.12), spin: rand(0,Math.PI*2), color: pick(['#74e9ff','#a0b1ff','#8dfcca']) });
+    }
+
+    function spawnMine(){
+      const size = rand(14,21);
+      state.mines.push({ x: rand(20, W-20), y: -36, r: size, vy: state.speed * rand(.78,1.14), rot: rand(0,6.28), vr: rand(-1.8,1.8) });
+    }
+
+    function emit(x,y,color,count=12,power=1){
+      for(let i=0;i<count;i++){
+        const a = Math.random() * Math.PI * 2;
+        const sp = rand(36, 220) * power;
+        state.particles.push({ x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:rand(.24,.62),t:0,color,size:rand(1.5,4.2) });
+      }
+    }
+
+    function activateOverdrive(){
+      if(state.energy < 100 || state.overdrive > 0 || state.mode !== 'play') return false;
+      state.energy = 0;
+      state.overdrive = 3;
+      state.invuln = Math.max(state.invuln, .25);
+      emit(state.player.x, state.player.y, '#8cf6ff', 40, 1.45);
+      burstSound();
+      return true;
+    }
+
+    function collideCircle(ax, ay, ar, bx, by, br){
+      const dx = ax - bx, dy = ay - by;
+      const rr = ar + br;
+      return dx*dx + dy*dy <= rr*rr;
+    }
+
+    function updatePlay(dt){
+      state.time += dt;
+      state.difficulty = 1 + state.time * 0.055;
+      state.speed = 230 + state.time * 3.2;
+      state.overdrive = Math.max(0, state.overdrive - dt);
+      state.invuln = Math.max(0, state.invuln - dt);
+      state.shake = Math.max(0, state.shake - dt * 2.8);
+
+      const accel = 950;
+      if(state.input.left) state.player.vx -= accel * dt;
+      if(state.input.right) state.player.vx += accel * dt;
+      state.player.vx *= (state.input.left || state.input.right) ? 0.92 : 0.82;
+      state.player.x += state.player.vx * dt;
+      state.player.x = clamp(state.player.x, 20, W - 20);
+
+      state.spawnOrbT -= dt;
+      if(state.spawnOrbT <= 0){
+        spawnCrystal();
+        state.spawnOrbT = clamp(0.78 - state.difficulty * 0.04, 0.22, 0.78);
+      }
+
+      state.spawnMineT -= dt;
+      if(state.spawnMineT <= 0){
+        spawnMine();
+        if(Math.random() < Math.min(0.42, state.difficulty * 0.06)) spawnMine();
+        state.spawnMineT = clamp(1.05 - state.difficulty * 0.045, 0.28, 1.05);
+      }
+
+      for(let i=state.crystals.length-1;i>=0;i--){
+        const c = state.crystals[i];
+        c.y += c.vy * dt;
+        c.spin += dt * 3.2;
+        if(c.y > H + 40){ state.crystals.splice(i,1); continue; }
+        if(collideCircle(state.player.x,state.player.y,state.player.r,c.x,c.y,c.r)){
+          state.crystals.splice(i,1);
+          state.score += 22 + state.difficulty * 2;
+          state.energy = clamp(state.energy + 18, 0, 100);
+          state.runCrystals += 1;
+          emit(c.x,c.y,c.color,14,1.05);
+          blip(530 + Math.random()*120,.04,'triangle',.03);
+        }
+      }
+
+      for(let i=state.mines.length-1;i>=0;i--){
+        const m = state.mines[i];
+        m.y += m.vy * dt;
+        m.rot += m.vr * dt;
+        if(m.y > H + 60){ state.mines.splice(i,1); continue; }
+        if(collideCircle(state.player.x,state.player.y,state.player.r,m.x,m.y,m.r-2)){
+          state.mines.splice(i,1);
+          if(state.overdrive > 0){
+            state.score += 8;
+            emit(m.x,m.y,'#8f7eff',18,1.2);
+            continue;
+          }
+          if(state.invuln <= 0){
+            state.hull -= 1;
+            state.invuln = .9;
+            state.shake = .45;
+            state.energy = clamp(state.energy - 28, 0, 100);
+            emit(state.player.x,state.player.y,'#ff6d94',22,1.25);
+            blip(160,.08,'square',.05);
+            if(state.hull <= 0){
+              endRun();
+              return;
+            }
+          }
+        }
+      }
+
+      for(let i=state.particles.length-1;i>=0;i--){
+        const p = state.particles[i];
+        p.t += dt;
+        if(p.t >= p.life){ state.particles.splice(i,1); continue; }
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.vx *= .96;
+        p.vy = p.vy * .96 + 16 * dt;
+      }
+
+      const overdriveBonus = state.overdrive > 0 ? 30 : 0;
+      state.score += dt * (10 + state.difficulty * 5 + overdriveBonus);
+      state.best = Math.max(state.best, Math.floor(state.score));
+      syncHud();
+    }
+
+    function endRun(){
+      state.totalCrystals += state.runCrystals;
+      state.best = Math.max(state.best, Math.floor(state.score));
+      persist(state.score);
+      resultLine.textContent = `Score ${Math.floor(state.score)} · Best ${Math.floor(state.best)}`;
+      crystalLine.textContent = `Run Crystals ${state.runCrystals} · Total ${state.totalCrystals}`;
+      setMode('gameover');
+    }
+
+    function drawBackground(){
+      const g = ctx.createLinearGradient(0,0,0,H);
+      g.addColorStop(0,'#18194d');
+      g.addColorStop(.45,'#0d163b');
+      g.addColorStop(1,'#05070f');
+      ctx.fillStyle = g;
+      ctx.fillRect(0,0,W,H);
+
+      for(const s of state.stars){
+        s.y += (24 + s.z*24) * 0.016;
+        if(s.y > H+2){ s.y = -2; s.x = Math.random()*W; }
+        const a = 0.3 + 0.6*(0.5+0.5*Math.sin(performance.now()*0.0015 + s.tw));
+        ctx.fillStyle = `rgba(160,210,255,${a*0.75})`;
+        ctx.fillRect(s.x, s.y, s.z, s.z);
+      }
+
+      const laneGlow = ctx.createLinearGradient(0,0,W,0);
+      laneGlow.addColorStop(0,'rgba(111,115,255,.03)');
+      laneGlow.addColorStop(.5,'rgba(111,115,255,.09)');
+      laneGlow.addColorStop(1,'rgba(111,115,255,.03)');
+      ctx.fillStyle = laneGlow;
+      ctx.fillRect(W*.18,0,W*.64,H);
+
+      ctx.strokeStyle = 'rgba(137,151,255,.14)';
+      ctx.lineWidth = 1;
+      const laneA = W*.33, laneB = W*.66;
+      ctx.beginPath();
+      for(let y=0;y<H;y+=24){
+        ctx.moveTo(laneA,y); ctx.lineTo(laneA,y+10);
+        ctx.moveTo(laneB,y); ctx.lineTo(laneB,y+10);
+      }
+      ctx.stroke();
+    }
+
+    function drawPlayer(){
+      const p = state.player;
+      const pulse = state.overdrive>0 ? (0.7 + 0.3*Math.sin(performance.now()*0.02)) : 0;
+
+      if(state.invuln > 0){
+        ctx.beginPath();
+        ctx.arc(p.x,p.y,p.r + 8 + pulse*3,0,Math.PI*2);
+        ctx.fillStyle = `rgba(122,179,255,${0.16 + pulse*0.22})`;
+        ctx.fill();
+      }
+
+      ctx.save();
+      ctx.translate(p.x,p.y);
+      const tilt = clamp(p.vx * 0.0023, -.33, .33);
+      ctx.rotate(tilt);
+
+      const body = ctx.createLinearGradient(-16,-22,16,22);
+      body.addColorStop(0,'#d6f1ff');
+      body.addColorStop(.5,'#86c8ff');
+      body.addColorStop(1,'#5268ff');
+      ctx.fillStyle = body;
+      ctx.beginPath();
+      ctx.moveTo(0,-24);
+      ctx.lineTo(17,18);
+      ctx.lineTo(0,10);
+      ctx.lineTo(-17,18);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = state.overdrive>0 ? '#91f9ff' : '#85a8ff';
+      ctx.beginPath();
+      ctx.arc(0,-5,6.5,0,Math.PI*2);
+      ctx.fill();
+
+      const flame = 12 + Math.random()*10 + (state.overdrive>0 ? 16 : 0);
+      const fg = ctx.createLinearGradient(0,14,0,14+flame);
+      fg.addColorStop(0,'rgba(120,170,255,.95)');
+      fg.addColorStop(1,'rgba(255,82,173,.08)');
+      ctx.fillStyle = fg;
+      ctx.beginPath();
+      ctx.moveTo(-6,15); ctx.lineTo(0,14 + flame); ctx.lineTo(6,15); ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function drawCrystal(c){
+      ctx.save();
+      ctx.translate(c.x,c.y);
+      ctx.rotate(c.spin);
+      const rg = ctx.createRadialGradient(0,0,2,0,0,c.r+2);
+      rg.addColorStop(0,'rgba(255,255,255,.98)');
+      rg.addColorStop(.35,c.color);
+      rg.addColorStop(1,'rgba(103,120,255,.08)');
+      ctx.fillStyle = rg;
+      ctx.beginPath();
+      for(let i=0;i<6;i++){
+        const a = i * Math.PI/3;
+        const rr = i%2===0 ? c.r : c.r*0.55;
+        const x = Math.cos(a)*rr, y = Math.sin(a)*rr;
+        if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function drawMine(m){
+      ctx.save();
+      ctx.translate(m.x,m.y);
+      ctx.rotate(m.rot);
+      const mg = ctx.createRadialGradient(0,0,3,0,0,m.r+3);
+      mg.addColorStop(0,'#ffd9f4');
+      mg.addColorStop(.35,'#ff76c4');
+      mg.addColorStop(1,'#4a245f');
+      ctx.fillStyle = mg;
+      ctx.beginPath();
+      ctx.arc(0,0,m.r,0,Math.PI*2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,244,255,.95)';
+      for(let i=0;i<8;i++){
+        const a = i*Math.PI/4;
+        const x = Math.cos(a)*(m.r+2), y = Math.sin(a)*(m.r+2);
+        ctx.beginPath();
+        ctx.moveTo(x,y);
+        ctx.lineTo(x*1.35,y*1.35);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = 'rgba(255,151,228,.82)';
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    function drawParticles(){
+      for(const p of state.particles){
+        const life = 1 - p.t / p.life;
+        ctx.fillStyle = p.color.replace(')', `,${0.1 + life*0.7})`).replace('rgb','rgba');
+        if(!ctx.fillStyle.includes('rgba')){
+          ctx.fillStyle = `rgba(140,197,255,${0.16 + life*0.62})`;
+        }
+        ctx.beginPath();
+        ctx.arc(p.x,p.y,p.size * (0.5 + life),0,Math.PI*2);
+        ctx.fill();
+      }
+    }
+
+    function drawTitleFX(t){
+      const cy = H * 0.38;
+      ctx.save();
+      ctx.globalAlpha = 0.33;
+      for(let i=0;i<4;i++){
+        const r = 34 + i*20 + Math.sin(t*0.0012 + i)*8;
+        ctx.beginPath();
+        ctx.arc(W*0.5,cy,r,0,Math.PI*2);
+        ctx.strokeStyle = `rgba(${90+i*30},${140+i*20},255,${0.25-i*0.04})`;
+        ctx.lineWidth = 3-i*0.4;
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    function drawOverdriveFX(){
+      if(state.overdrive <= 0) return;
+      const t = performance.now()*0.01;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const alpha = 0.08 + 0.08 * Math.sin(t);
+      ctx.fillStyle = `rgba(89,187,255,${alpha})`;
+      ctx.fillRect(0,0,W,H);
+      for(let i=0;i<10;i++){
+        const x = ((t*20 + i*42) % (W+120)) - 60;
+        ctx.fillStyle = `rgba(120,220,255,${0.08 + i*0.01})`;
+        ctx.fillRect(x,0,8,H);
+      }
+      ctx.restore();
+    }
+
+    function render(){
+      const shakeX = state.shake > 0 ? rand(-8,8) * state.shake : 0;
+      const shakeY = state.shake > 0 ? rand(-6,6) * state.shake : 0;
+      ctx.save();
+      ctx.translate(shakeX, shakeY);
+      drawBackground();
+
+      if(state.mode === 'title') drawTitleFX(performance.now());
+
+      for(const c of state.crystals) drawCrystal(c);
+      for(const m of state.mines) drawMine(m);
+      drawPlayer();
+      drawParticles();
+      drawOverdriveFX();
+      ctx.restore();
+    }
+
+    let lastT = performance.now();
+    function frame(now){
+      const dt = Math.min(0.033, (now - lastT) / 1000);
+      lastT = now;
+
+      if(state.mode === 'play') updatePlay(dt);
+      render();
+      requestAnimationFrame(frame);
+    }
+
+    function pressControl(el, active){
+      el.classList.toggle('on', !!active);
+    }
+
+    function bindHold(btn, key){
+      const set = (v) => {
+        state.input[key] = v;
+        pressControl(btn, v);
+      };
+      btn.addEventListener('pointerdown', (e)=>{ e.preventDefault(); set(true); });
+      btn.addEventListener('pointerup',   (e)=>{ e.preventDefault(); set(false); });
+      btn.addEventListener('pointercancel', ()=>set(false));
+      btn.addEventListener('pointerleave', ()=>set(false));
+    }
+
+    bindHold(leftBtn, 'left');
+    bindHold(rightBtn, 'right');
+
+    boostBtn.addEventListener('pointerdown', (e)=>{ e.preventDefault(); activateOverdrive(); });
+
+    window.addEventListener('keydown', (e) => {
+      if(e.key === 'ArrowLeft' || e.key === 'a') state.input.left = true;
+      if(e.key === 'ArrowRight' || e.key === 'd') state.input.right = true;
+      if(e.key === ' ' || e.key === 'Enter') activateOverdrive();
+    });
+
+    window.addEventListener('keyup', (e) => {
+      if(e.key === 'ArrowLeft' || e.key === 'a') state.input.left = false;
+      if(e.key === 'ArrowRight' || e.key === 'd') state.input.right = false;
+    });
+
+    function startRun(){
+      resetRun();
+      setMode('play');
+      blip(420,.05,'triangle',.035);
+    }
+
+    startBtn.addEventListener('click', startRun);
+    retryBtn.addEventListener('click', startRun);
+    homeBtn.addEventListener('click', () => setMode('title'));
+
+    // QA debug bridge
+    window.__gameDebug = {
+      getState: () => state.mode,
+      getSaveKey: () => SAVE_KEY,
+      startRun: () => { startRun(); return state.mode; },
+      forceCollect: () => {
+        state.score += 120;
+        state.runCrystals += 3;
+        state.energy = clamp(state.energy + 40,0,100);
+        emit(state.player.x, state.player.y-16, '#8dfcca', 22, 1.2);
+        syncHud();
+        return { score: Math.floor(state.score), crystals: state.runCrystals, energy: state.energy };
+      },
+      forceDamage: () => {
+        if(state.mode !== 'play') return { ok:false };
+        state.hull = Math.max(0, state.hull - 1);
+        state.invuln = .6;
+        state.shake = .35;
+        syncHud();
+        if(state.hull <= 0) endRun();
+        return { ok:true, hull: state.hull, mode: state.mode };
+      },
+      forceGameOver: () => { state.hull = 0; endRun(); return state.mode; },
+      snapshot: () => ({
+        score: Math.floor(state.score),
+        best: state.best,
+        hull: state.hull,
+        energy: state.energy,
+        runCrystals: state.runCrystals,
+        totalCrystals: state.totalCrystals,
+        mode: state.mode
+      })
+    };
+
+    loadSave();
+    updateSaveSummary();
+    resize();
+    setMode('title');
+    state.loaded = true;
+
+    window.addEventListener('resize', resize, { passive: true });
+    requestAnimationFrame(frame);
+  })();
+  </script>
+</body>
+</html>

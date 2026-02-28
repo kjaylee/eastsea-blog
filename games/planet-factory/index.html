@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Planet Factory | 무료 HTML5 게임 Free HTML5 Game</title>
+<meta name="description" content="Planet Factory는 드론을 발사해 소행성 자원을 채굴하고 코어를 확장하는 방치형 시뮬레이션 게임입니다. Planet Factory is a free idle simulation browser game where you launch drones, mine asteroids, and expand your planetary core.">
+<meta name="keywords" content="idle game, sim game, planet factory, HTML5 game, 방치형, 시뮬레이션, 브라우저 게임">
+<meta name="author" content="J&J Games">
+<meta property="og:title" content="Planet Factory">
+<meta property="og:description" content="드론 자동화와 업그레이드로 행성 코어를 확장하세요.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://games.eastsea.xyz/planet-factory/">
+<meta property="og:image" content="https://games.eastsea.xyz/planet-factory/og-image.png">
+<meta property="og:site_name" content="J&J Games">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Planet Factory">
+<meta name="twitter:description" content="Launch drones, mine ore, upgrade your core.">
+<link rel="canonical" href="https://games.eastsea.xyz/planet-factory/">
+<link rel="manifest" href="/games/manifest.json">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"VideoGame","name":"Planet Factory","description":"Idle simulation mining game in browser","genre":"Simulation","gamePlatform":"Web Browser","applicationCategory":"Game","operatingSystem":"Any","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"author":{"@type":"Organization","name":"J&J Games"},"url":"https://games.eastsea.xyz/planet-factory/"}</script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;overflow:hidden;background:#04070f;color:#d9eeff;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;touch-action:none}
+#c{position:fixed;inset:0;width:100%;height:100%;display:block}
+#ui{position:fixed;inset:0;pointer-events:none}
+.hud{position:absolute;left:10px;right:10px;top:calc(env(safe-area-inset-top) + 8px);display:grid;grid-template-columns:1fr auto;gap:8px;align-items:start}
+.panel{background:rgba(5,9,22,.72);backdrop-filter:blur(6px);border:1px solid rgba(120,180,255,.2);border-radius:14px;padding:9px 10px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+.title{font-size:12px;opacity:.9;letter-spacing:.3px}
+.val{font-size:17px;font-weight:800;color:#8cf8ff;line-height:1.2}
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.metric{font-size:11px;opacity:.82}
+.metric b{display:block;font-size:15px;opacity:1;color:#f2fbff}
+.actions{position:absolute;left:10px;right:10px;bottom:calc(env(safe-area-inset-bottom) + 12px);display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;pointer-events:auto}
+button{border:none;border-radius:12px;padding:10px 8px;background:linear-gradient(135deg,#5a71ff,#31d0ff);color:#071022;font-weight:800;font-size:12px;min-height:46px}
+button:disabled{opacity:.45;filter:grayscale(.35)}
+#tapBtn{background:linear-gradient(135deg,#f7ff7f,#45e6b4)}
+#titleScreen,#gameOver{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:24px;background:linear-gradient(180deg,rgba(0,0,0,.35),rgba(0,0,0,.72));text-align:center;pointer-events:auto}
+#titleScreen h1{font-size:30px;letter-spacing:.8px;margin-bottom:8px}
+#titleScreen p{max-width:320px;font-size:14px;opacity:.86;margin-bottom:16px;line-height:1.4}
+#titleScreen .start{font-size:17px;padding:13px 24px;min-width:180px}
+#gameOver{display:none}
+#gameOver h2{font-size:34px;color:#ffd27a;margin-bottom:6px}
+#gameOver p{font-size:15px;opacity:.9;margin:3px 0}
+#gameOver .retry{margin-top:14px;font-size:16px;padding:12px 24px}
+.badge{margin-top:10px;font-size:12px;opacity:.85;padding:6px 10px;border:1px solid rgba(150,220,255,.28);border-radius:999px;background:rgba(15,29,54,.58)}
+#leaderboard{position:fixed;right:10px;bottom:78px;z-index:1200;max-width:min(90vw,340px);pointer-events:none}
+.hide{display:none!important}
+</style>
+<script src="../i18n.js"></script>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="/games/tg-sdk-wrapper.js"></script>
+<script src="/shared/analytics.js"></script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui">
+  <div class="hud">
+    <div class="panel">
+      <div class="title" id="hudTitle">Planet Factory</div>
+      <div class="val" id="oreVal">0 ore</div>
+      <div class="grid" style="margin-top:8px">
+        <div class="metric" id="sectorLabel">Sector<b id="sectorVal">1</b></div>
+        <div class="metric" id="energyLabel">Energy<b id="energyVal">0 / 120</b></div>
+        <div class="metric" id="heatLabel">Heat<b id="heatVal">0%</b></div>
+      </div>
+    </div>
+    <div class="panel" style="text-align:right;min-width:112px">
+      <div class="title" id="timeLabel">Time</div>
+      <div class="val" id="timeVal">90s</div>
+      <div class="title" style="margin-top:8px" id="bestLabel">Best</div>
+      <div style="font-size:15px;font-weight:700;color:#ffe8aa" id="bestVal">S1</div>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button id="tapBtn">Launch Drone</button>
+    <button id="upgDrill">Drill Lv.1</button>
+    <button id="upgAuto">Auto Lv.1</button>
+  </div>
+
+  <div id="titleScreen">
+    <h1 id="titleText">Planet Factory</h1>
+    <p id="subtitleText">Launch drones and automate your planetary core.</p>
+    <button class="start" id="startBtn">Start Mission</button>
+    <div class="badge" id="tipText">Tap rapidly to gather ore, but avoid overheating.</div>
+  </div>
+
+  <div id="gameOver">
+    <h2 id="overTitle">Mission Over</h2>
+    <p id="resultSector">Sector 1 reached</p>
+    <p id="resultOre">Ore: 0</p>
+    <p id="resultScore">Score: 0</p>
+    <button class="retry" id="retryBtn">Retry</button>
+  </div>
+</div>
+
+<script src="../shared/sound-manager.js"></script>
+<script>
+(() => {
+'use strict';
+const GAME_ID = 'planet-factory';
+const SAVE_KEY = 'planetFactorySave_v1';
+const STATE = { title:'title', play:'play', gameover:'gameover' };
+
+const T = GameI18n({
+  gameTitle: { ko:'플래닛 팩토리', en:'Planet Factory / 플래닛 팩토리' },
+  subtitle: { ko:'드론을 발사해 행성 코어를 자동화하세요.', en:'Launch drones and automate your planetary core. / 드론으로 코어를 자동화하세요.' },
+  start: { ko:'미션 시작', en:'Start Mission / 미션 시작' },
+  tip: { ko:'빠르게 탭해 채굴하되 과열을 관리하세요.', en:'Tap quickly to mine ore, but manage overheating.' },
+  ore: { ko:'광물', en:'Ore' },
+  sector: { ko:'섹터', en:'Sector' },
+  energy: { ko:'에너지', en:'Energy' },
+  heat: { ko:'열', en:'Heat' },
+  time: { ko:'시간', en:'Time' },
+  best: { ko:'최고 기록', en:'Best' },
+  launch: { ko:'드론 발사', en:'Launch Drone / 드론 발사' },
+  drillBtn: { ko:'드릴 Lv.', en:'Drill Lv.' },
+  autoBtn: { ko:'오토 Lv.', en:'Auto Lv.' },
+  missionOver: { ko:'미션 종료', en:'Mission Over' },
+  sectorReached: { ko:'도달 섹터', en:'Sector Reached' },
+  score: { ko:'점수', en:'Score' },
+  retry: { ko:'다시 시도', en:'Retry' },
+  overheat: { ko:'과열 붕괴', en:'Overheat Collapse' },
+  timeout: { ko:'시간 종료', en:'Time Up' }
+});
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d', { alpha:false });
+let W = 0, H = 0, DPR = 1;
+
+const ui = {
+  titleScreen: document.getElementById('titleScreen'),
+  gameOver: document.getElementById('gameOver'),
+  hudTitle: document.getElementById('hudTitle'),
+  oreVal: document.getElementById('oreVal'),
+  sectorLabel: document.getElementById('sectorLabel'),
+  sectorVal: document.getElementById('sectorVal'),
+  energyLabel: document.getElementById('energyLabel'),
+  energyVal: document.getElementById('energyVal'),
+  heatLabel: document.getElementById('heatLabel'),
+  heatVal: document.getElementById('heatVal'),
+  timeLabel: document.getElementById('timeLabel'),
+  timeVal: document.getElementById('timeVal'),
+  bestLabel: document.getElementById('bestLabel'),
+  bestVal: document.getElementById('bestVal'),
+  startBtn: document.getElementById('startBtn'),
+  tapBtn: document.getElementById('tapBtn'),
+  upgDrill: document.getElementById('upgDrill'),
+  upgAuto: document.getElementById('upgAuto'),
+  titleText: document.getElementById('titleText'),
+  subtitleText: document.getElementById('subtitleText'),
+  tipText: document.getElementById('tipText'),
+  overTitle: document.getElementById('overTitle'),
+  resultSector: document.getElementById('resultSector'),
+  resultOre: document.getElementById('resultOre'),
+  resultScore: document.getElementById('resultScore'),
+  retryBtn: document.getElementById('retryBtn')
+};
+
+const audio = {
+  ctx: null,
+  inited: false,
+  sm: window.SoundManager ? new SoundManager() : null,
+  init(){
+    if (this.inited) return;
+    this.inited = true;
+    try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch(_) {}
+  },
+  tone(freq, dur, type='sine', vol=.03){
+    this.init();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    const o = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, now);
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(vol, now + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+    o.connect(g).connect(this.ctx.destination);
+    o.start(now);
+    o.stop(now + dur + 0.02);
+  },
+  sfx(kind){
+    try { if (this.sm && this.sm.playSFX) this.sm.playSFX(kind); } catch(_) {}
+    if (kind === 'launch') this.tone(380, 0.08, 'triangle', 0.025);
+    if (kind === 'mine') this.tone(720, 0.06, 'square', 0.02);
+    if (kind === 'upgrade') { this.tone(540, 0.05, 'sine', 0.02); this.tone(820, 0.08, 'sine', 0.016); }
+    if (kind === 'fail') this.tone(140, 0.15, 'sawtooth', 0.025);
+  }
+};
+
+const game = {
+  state: STATE.title,
+  ore: 0,
+  totalOre: 0,
+  sector: 1,
+  bestSector: 1,
+  energy: 0,
+  energyGoal: 120,
+  heat: 0,
+  timer: 90,
+  score: 0,
+  reason: '',
+  upgrades: {
+    drill: 1,
+    auto: 1
+  },
+  cooldown: 0,
+  autoCooldown: 0,
+  core: { x:0, y:0, r: 42, pulse:0 },
+  asteroids: [],
+  drones: [],
+  particles: [],
+  stars: [],
+  saveTimer: 0
+};
+
+function resize(){
+  DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  W = window.innerWidth;
+  H = window.innerHeight;
+  canvas.width = Math.floor(W * DPR);
+  canvas.height = Math.floor(H * DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  game.core.x = W * 0.5;
+  game.core.y = H * 0.54;
+}
+window.addEventListener('resize', resize, { passive:true });
+resize();
+
+function createStars(){
+  game.stars.length = 0;
+  for (let i=0;i<110;i++) {
+    game.stars.push({ x:Math.random()*W, y:Math.random()*H, r:Math.random()*1.8 + .5, a:Math.random()*Math.PI*2, s:Math.random()*0.03 + 0.01 });
+  }
+}
+createStars();
+
+function makeAsteroids(){
+  game.asteroids.length = 0;
+  const cnt = 6;
+  for (let i=0;i<cnt;i++) {
+    const ang = (Math.PI * 2 / cnt) * i + (Math.random() * 0.4 - 0.2);
+    const dist = Math.min(W, H) * (0.24 + Math.random() * 0.13);
+    game.asteroids.push({
+      ang,
+      dist,
+      r: 16 + Math.random() * 12,
+      ore: 70 + Math.random() * 90,
+      oreMax: 120,
+      spin: (Math.random() * 0.5 + 0.2) * (Math.random() > 0.5 ? 1 : -1),
+      rot: Math.random() * Math.PI * 2
+    });
+  }
+}
+
+function loadSave(){
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    if (data && typeof data === 'object') {
+      game.bestSector = Math.max(1, Number(data.bestSector || 1));
+      game.totalOre = Math.max(0, Number(data.totalOre || 0));
+      if (data.upgrades) {
+        game.upgrades.drill = Math.max(1, Number(data.upgrades.drill || 1));
+        game.upgrades.auto = Math.max(1, Number(data.upgrades.auto || 1));
+      }
+    }
+  } catch (_) {}
+}
+
+function saveNow(){
+  const payload = {
+    bestSector: game.bestSector,
+    totalOre: Math.floor(game.totalOre),
+    upgrades: { drill: game.upgrades.drill, auto: game.upgrades.auto }
+  };
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(payload)); } catch(_) {}
+}
+
+function resetRun(){
+  game.ore = 0;
+  game.sector = 1;
+  game.energy = 0;
+  game.energyGoal = 120;
+  game.heat = 0;
+  game.timer = 90;
+  game.score = 0;
+  game.reason = '';
+  game.cooldown = 0;
+  game.autoCooldown = 0;
+  game.drones.length = 0;
+  game.particles.length = 0;
+  makeAsteroids();
+}
+
+function launchDrone(manual = true){
+  if (game.state !== STATE.play) return;
+  if (game.cooldown > 0) return;
+  if (game.heat >= 100) return;
+  const target = game.asteroids[Math.floor(Math.random() * game.asteroids.length)];
+  if (!target) return;
+
+  const mineAmount = Math.max(2, Math.floor((4 + game.upgrades.drill * 1.8) * (0.8 + Math.random() * 0.5)));
+  const speed = 120 + game.upgrades.auto * 8 + game.sector * 2;
+  game.drones.push({
+    x: game.core.x,
+    y: game.core.y,
+    tx: game.core.x + Math.cos(target.ang) * target.dist,
+    ty: game.core.y + Math.sin(target.ang) * target.dist,
+    phase: 'toMine',
+    speed,
+    ore: 0,
+    mineAmount,
+    life: 1
+  });
+
+  game.cooldown = Math.max(0.09, 0.26 - game.upgrades.auto * 0.01);
+  game.heat += manual ? 4.8 : 2.6;
+  if (window.TG && window.TG.haptic) {
+    try { window.TG.haptic('impact', manual ? 'light' : 'soft'); } catch(_) {}
+  }
+  audio.sfx('launch');
+}
+
+function updateAsteroids(dt){
+  for (const a of game.asteroids) {
+    a.ang += a.spin * dt * 0.12;
+    a.rot += a.spin * dt;
+    a.ore = Math.min(a.oreMax, a.ore + dt * (1.6 + game.sector * 0.1));
+  }
+}
+
+function updateDrones(dt){
+  for (let i = game.drones.length - 1; i >= 0; i--) {
+    const d = game.drones[i];
+    const tx = d.phase === 'toMine' ? d.tx : game.core.x;
+    const ty = d.phase === 'toMine' ? d.ty : game.core.y;
+    const dx = tx - d.x;
+    const dy = ty - d.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    const step = Math.min(dist, d.speed * dt);
+    d.x += (dx / dist) * step;
+    d.y += (dy / dist) * step;
+
+    if (dist < 5) {
+      if (d.phase === 'toMine') {
+        let mined = d.mineAmount;
+        let picked = 0;
+        for (const a of game.asteroids) {
+          const ax = game.core.x + Math.cos(a.ang) * a.dist;
+          const ay = game.core.y + Math.sin(a.ang) * a.dist;
+          if (Math.hypot(ax - d.tx, ay - d.ty) < a.r + 6) {
+            picked = Math.min(a.ore, mined);
+            a.ore -= picked;
+            break;
+          }
+        }
+        d.ore = picked;
+        d.phase = 'toCore';
+        burst(d.x, d.y, '#79f0ff', 6);
+        audio.sfx('mine');
+      } else {
+        game.ore += d.ore;
+        game.totalOre += d.ore;
+        game.energy += d.ore * (0.85 + game.upgrades.drill * 0.05);
+        game.score += Math.floor(d.ore * 3);
+        burst(d.x, d.y, '#8af7ad', 8);
+        game.drones.splice(i, 1);
+      }
+    }
+  }
+}
+
+function updateParticles(dt){
+  for (let i = game.particles.length - 1; i >= 0; i--) {
+    const p = game.particles[i];
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.vx *= 0.99;
+    p.vy *= 0.99;
+    p.life -= dt * p.decay;
+    if (p.life <= 0) game.particles.splice(i, 1);
+  }
+}
+
+function burst(x, y, c, n){
+  for (let i=0;i<n;i++) {
+    const ang = Math.random() * Math.PI * 2;
+    const sp = 16 + Math.random() * 52;
+    game.particles.push({ x, y, vx:Math.cos(ang)*sp, vy:Math.sin(ang)*sp, life:1, decay:1.8 + Math.random()*1.2, c });
+  }
+}
+
+function spendOre(cost){
+  if (game.ore < cost || game.state !== STATE.play) {
+    audio.sfx('fail');
+    return false;
+  }
+  game.ore -= cost;
+  return true;
+}
+
+function drillCost(){ return Math.floor(18 * Math.pow(1.45, game.upgrades.drill - 1)); }
+function autoCost(){ return Math.floor(22 * Math.pow(1.5, game.upgrades.auto - 1)); }
+
+function updateEconomy(dt){
+  game.cooldown = Math.max(0, game.cooldown - dt);
+  game.autoCooldown -= dt;
+  const autoRate = Math.max(0.65, 1.5 - game.upgrades.auto * 0.12);
+  if (game.autoCooldown <= 0) {
+    launchDrone(false);
+    game.autoCooldown = autoRate;
+  }
+
+  game.heat = Math.max(0, game.heat - dt * (6.8 + game.upgrades.auto * 0.45));
+  game.timer = Math.max(0, game.timer - dt);
+
+  while (game.energy >= game.energyGoal) {
+    game.energy -= game.energyGoal;
+    game.sector += 1;
+    game.score += 250 + game.sector * 40;
+    game.energyGoal = Math.floor(game.energyGoal * 1.32 + 30);
+    for (const a of game.asteroids) {
+      a.oreMax += 14;
+      a.ore = Math.min(a.oreMax, a.ore + 22);
+      a.spin *= 1.02;
+    }
+    burst(game.core.x, game.core.y, '#ffe97f', 20);
+    if (window.TG && window.TG.haptic) {
+      try { window.TG.haptic('notification', 'success'); } catch(_) {}
+    }
+  }
+
+  if (game.heat >= 100) {
+    endGame(T('overheat'));
+    return;
+  }
+
+  if (game.timer <= 0) {
+    endGame(T('timeout'));
+    return;
+  }
+}
+
+function updateHud(){
+  ui.hudTitle.textContent = T('gameTitle');
+  ui.oreVal.textContent = Math.floor(game.ore) + ' ' + T('ore');
+  ui.sectorLabel.childNodes[0].nodeValue = T('sector');
+  ui.energyLabel.childNodes[0].nodeValue = T('energy');
+  ui.heatLabel.childNodes[0].nodeValue = T('heat');
+  ui.timeLabel.textContent = T('time');
+  ui.bestLabel.textContent = T('best');
+  ui.sectorVal.textContent = game.sector;
+  ui.energyVal.textContent = Math.floor(game.energy) + ' / ' + game.energyGoal;
+  ui.heatVal.textContent = Math.floor(game.heat) + '%';
+  ui.timeVal.textContent = Math.ceil(game.timer) + 's';
+  ui.bestVal.textContent = 'S' + game.bestSector;
+
+  ui.tapBtn.textContent = T('launch');
+  ui.upgDrill.textContent = T('drillBtn') + game.upgrades.drill + ' (' + drillCost() + ')';
+  ui.upgAuto.textContent = T('autoBtn') + game.upgrades.auto + ' (' + autoCost() + ')';
+  ui.upgDrill.disabled = game.ore < drillCost() || game.state !== STATE.play;
+  ui.upgAuto.disabled = game.ore < autoCost() || game.state !== STATE.play;
+}
+
+function drawBackground(t){
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#030712');
+  g.addColorStop(1, '#07142f');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+
+  for (const s of game.stars) {
+    s.a += s.s;
+    const alpha = 0.35 + Math.sin(s.a + t * 0.001) * 0.25;
+    ctx.fillStyle = 'rgba(180,220,255,' + alpha.toFixed(3) + ')';
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawCore(t){
+  game.core.pulse = Math.sin(t * 0.004) * 0.5 + 0.5;
+  const r = game.core.r + game.core.pulse * 2;
+  const glow = ctx.createRadialGradient(game.core.x, game.core.y, 0, game.core.x, game.core.y, r * 2.3);
+  glow.addColorStop(0, 'rgba(108,243,255,.42)');
+  glow.addColorStop(1, 'rgba(108,243,255,0)');
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(game.core.x, game.core.y, r * 2.2, 0, Math.PI * 2);
+  ctx.fill();
+
+  const core = ctx.createRadialGradient(game.core.x - 9, game.core.y - 10, 3, game.core.x, game.core.y, r);
+  core.addColorStop(0, '#f5feff');
+  core.addColorStop(1, '#36b6ff');
+  ctx.fillStyle = core;
+  ctx.beginPath();
+  ctx.arc(game.core.x, game.core.y, r, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = 'rgba(170,240,255,.45)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(game.core.x, game.core.y, r + 11 + game.core.pulse * 2, 0, Math.PI * 2);
+  ctx.stroke();
+}
+
+function drawAsteroids(){
+  for (const a of game.asteroids) {
+    const x = game.core.x + Math.cos(a.ang) * a.dist;
+    const y = game.core.y + Math.sin(a.ang) * a.dist;
+
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(a.rot);
+    ctx.fillStyle = '#63749f';
+    ctx.beginPath();
+    for (let i=0;i<7;i++) {
+      const an = (Math.PI * 2 / 7) * i;
+      const rr = a.r * (0.78 + Math.sin(i * 2.1) * 0.2);
+      const px = Math.cos(an) * rr;
+      const py = Math.sin(an) * rr;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    const ratio = Math.max(0, Math.min(1, a.ore / a.oreMax));
+    ctx.fillStyle = 'rgba(20,40,70,.78)';
+    ctx.fillRect(x - 18, y - a.r - 10, 36, 4);
+    ctx.fillStyle = '#79f0ff';
+    ctx.fillRect(x - 18, y - a.r - 10, 36 * ratio, 4);
+  }
+}
+
+function drawDrones(){
+  for (const d of game.drones) {
+    const angle = Math.atan2((d.phase === 'toMine' ? d.ty : game.core.y) - d.y, (d.phase === 'toMine' ? d.tx : game.core.x) - d.x);
+    ctx.save();
+    ctx.translate(d.x, d.y);
+    ctx.rotate(angle);
+    ctx.fillStyle = '#d7f5ff';
+    ctx.beginPath();
+    ctx.moveTo(7, 0);
+    ctx.lineTo(-5, -4);
+    ctx.lineTo(-2, 0);
+    ctx.lineTo(-5, 4);
+    ctx.closePath();
+    ctx.fill();
+    if (d.phase === 'toCore' && d.ore > 0) {
+      ctx.fillStyle = '#8af7ad';
+      ctx.fillRect(-8, -1.5, 3.8, 3);
+    }
+    ctx.restore();
+  }
+}
+
+function drawParticles(){
+  for (const p of game.particles) {
+    ctx.globalAlpha = Math.max(0, p.life);
+    ctx.fillStyle = p.c;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 1.6 + p.life * 2.3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawHeatRing(){
+  const ratio = Math.max(0, Math.min(1, game.heat / 100));
+  if (ratio <= 0.01) return;
+  ctx.strokeStyle = 'rgba(255,120,80,' + (0.35 + ratio * 0.5).toFixed(3) + ')';
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.arc(game.core.x, game.core.y, game.core.r + 23, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * ratio);
+  ctx.stroke();
+}
+
+function draw(t){
+  drawBackground(t);
+  drawCore(t);
+  drawAsteroids();
+  drawDrones();
+  drawParticles();
+  drawHeatRing();
+}
+
+function endGame(reason){
+  if (game.state !== STATE.play) return;
+  game.state = STATE.gameover;
+  game.reason = reason;
+  game.bestSector = Math.max(game.bestSector, game.sector);
+  game.score += Math.floor(game.ore * 4) + game.sector * 120;
+  saveNow();
+
+  ui.gameOver.style.display = 'flex';
+  ui.overTitle.textContent = T('missionOver') + ' — ' + reason;
+  ui.resultSector.textContent = T('sectorReached') + ': ' + game.sector;
+  ui.resultOre.textContent = T('ore') + ': ' + Math.floor(game.ore);
+  ui.resultScore.textContent = T('score') + ': ' + Math.floor(game.score);
+
+  submitLeaderboard(Math.floor(game.score));
+  if (window.TG && window.TG.haptic) {
+    try { window.TG.haptic('notification', 'error'); } catch(_) {}
+  }
+}
+
+function startGame(){
+  game.state = STATE.play;
+  ui.titleScreen.classList.add('hide');
+  ui.gameOver.style.display = 'none';
+  resetRun();
+  updateHud();
+  if (window.TG && window.TG.haptic) {
+    try { window.TG.haptic('impact', 'medium'); } catch(_) {}
+  }
+}
+
+function retry(){
+  game.state = STATE.play;
+  ui.gameOver.style.display = 'none';
+  resetRun();
+  updateHud();
+}
+
+function localizedStatic(){
+  ui.titleText.textContent = T('gameTitle');
+  ui.subtitleText.textContent = T('subtitle');
+  ui.startBtn.textContent = T('start');
+  ui.tipText.textContent = T('tip');
+  ui.retryBtn.textContent = T('retry');
+  updateHud();
+}
+
+let last = performance.now();
+function loop(now){
+  const dt = Math.min(0.033, (now - last) / 1000);
+  last = now;
+
+  if (game.state === STATE.play) {
+    updateAsteroids(dt);
+    updateDrones(dt);
+    updateParticles(dt);
+    updateEconomy(dt);
+
+    game.saveTimer += dt;
+    if (game.saveTimer >= 2.2) {
+      game.saveTimer = 0;
+      saveNow();
+    }
+    updateHud();
+  } else {
+    updateParticles(dt);
+  }
+
+  draw(now);
+  requestAnimationFrame(loop);
+}
+
+function playerName(){
+  try {
+    const u = window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.user;
+    if (u) {
+      const full = [u.first_name, u.last_name].filter(Boolean).join(' ').trim();
+      if (full) return full;
+      if (u.username) return u.username;
+    }
+  } catch(_) {}
+  try {
+    const key = 'lb_player_name';
+    const old = localStorage.getItem(key);
+    if (old) return old;
+    const generated = 'Player' + Math.floor(1000 + Math.random() * 9000);
+    localStorage.setItem(key, generated);
+    return generated;
+  } catch(_) {
+    return 'Player' + Math.floor(1000 + Math.random() * 9000);
+  }
+}
+
+function submitLeaderboard(score){
+  if (!window.Leaderboard || !Number.isFinite(score)) return;
+  const name = playerName();
+  try { window.Leaderboard.submit(GAME_ID, name, score, { reason:'gameover' }); } catch(_) {}
+  try {
+    window.Leaderboard.getTop(GAME_ID).then((scores) => {
+      if (window.Leaderboard && window.Leaderboard.renderBoard) {
+        window.Leaderboard.renderBoard('leaderboard', scores);
+      }
+    });
+  } catch(_) {}
+}
+
+function hookInput(){
+  const onTap = (e) => {
+    e.preventDefault();
+    if (game.state !== STATE.play) return;
+    launchDrone(true);
+  };
+  canvas.addEventListener('pointerdown', onTap);
+  canvas.addEventListener('touchstart', onTap, { passive:false });
+
+  ui.tapBtn.addEventListener('click', () => launchDrone(true));
+  ui.startBtn.addEventListener('click', startGame);
+  ui.retryBtn.addEventListener('click', retry);
+
+  ui.upgDrill.addEventListener('click', () => {
+    const cost = drillCost();
+    if (!spendOre(cost)) return;
+    game.upgrades.drill += 1;
+    audio.sfx('upgrade');
+    if (window.TG && window.TG.haptic) {
+      try { window.TG.haptic('impact', 'light'); } catch(_) {}
+    }
+    updateHud();
+  });
+
+  ui.upgAuto.addEventListener('click', () => {
+    const cost = autoCost();
+    if (!spendOre(cost)) return;
+    game.upgrades.auto += 1;
+    audio.sfx('upgrade');
+    if (window.TG && window.TG.haptic) {
+      try { window.TG.haptic('impact', 'light'); } catch(_) {}
+    }
+    updateHud();
+  });
+}
+
+function bootstrap(){
+  loadSave();
+  resetRun();
+  localizedStatic();
+  hookInput();
+  requestAnimationFrame(loop);
+  try {
+    if (window.Leaderboard && window.Leaderboard.getTop) {
+      window.Leaderboard.getTop(GAME_ID).then((scores) => {
+        if (window.Leaderboard.renderBoard) window.Leaderboard.renderBoard('leaderboard', scores);
+      });
+    }
+  } catch(_) {}
+}
+
+bootstrap();
+})();
+</script>
+
+<script src="/games/cross-promo.js"></script>
+<div id="leaderboard" data-lb-slug="planet-factory"></div>
+<script src="../shared/leaderboard.js"></script>
+</body>
+</html>

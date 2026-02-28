@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Reaction Time - 반응속도 측정 | 무료 HTML5 게임 Free HTML5 Game</title>
+    <!-- SEO Meta -->
+    <meta name="description" content="Reaction Time - 반응속도 측정 게임은 브라우저에서 바로 즐기는 무료 아케이드 게임입니다. 정확한 타이밍과 조작으로 기록을 갱신하는 반응형 플레이가 핵심입니다. Reaction Time is a free arcade HTML5 browser game where you master timing and control to beat your best score or time.">
+    <meta name="keywords" content="Arcade, 아케이드, HTML5 game, free game, 무료 게임, 브라우저 게임, reaction time">
+    <meta name="author" content="J&amp;J Games">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Reaction Time - 반응속도 측정">
+    <meta property="og:description" content="Reaction Time - 반응속도 측정 게임은 브라우저에서 바로 즐기는 무료 아케이드 게임입니다. 정확한 타이밍과 조작으로 기록을 갱신하는 반응형 플레이가 핵심입니다. Reaction Time is a free arcade HTML5 browser game where you master timing and control to beat your best score or time.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://games.eastsea.xyz/reaction-time/">
+    <meta property="og:image" content="https://games.eastsea.xyz/reaction-time/og-image.png">
+    <meta property="og:site_name" content="J&amp;J Games">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Reaction Time - 반응속도 측정">
+    <meta name="twitter:description" content="Reaction Time - 반응속도 측정 게임은 브라우저에서 바로 즐기는 무료 아케이드 게임입니다. 정확한 타이밍과 조작으로 기록을 갱신하는 반응형 플레이가 핵심입니다. Reaction Time is a free arcade HTML5 browser game where you master timing and control to beat your best score or time.">
+
+    <!-- Structured Data -->
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "VideoGame",
+  "name": "Reaction Time - 반응속도 측정",
+  "description": "Reaction Time - 반응속도 측정 게임은 브라우저에서 바로 즐기는 무료 아케이드 게임입니다. 정확한 타이밍과 조작으로 기록을 갱신하는 반응형 플레이가 핵심입니다. Reaction Time is a free arcade HTML5 browser game where you master timing and control to beat your best score or time.",
+  "genre": "Arcade",
+  "gamePlatform": "Web Browser",
+  "applicationCategory": "Game",
+  "operatingSystem": "Any",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  },
+  "author": {
+    "@type": "Organization",
+    "name": "J&J Games"
+  },
+  "url": "https://games.eastsea.xyz/reaction-time/"
+}
+    </script>
+
+    <!-- Canonical -->
+    <link rel="canonical" href="https://games.eastsea.xyz/reaction-time/">
+<!-- Open Graph -->
+
+<!-- Twitter Card -->
+<!-- Canonical -->
+<!-- Open Graph -->
+
+<!-- Twitter Card -->
+<!-- Canonical -->
+<!-- Open Graph -->
+
+<!-- Twitter Card -->
+<!-- Canonical -->
+<style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            touch-action: none;
+            overflow: hidden;
+        }
+        #gameCanvas {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            max-width: 100vw;
+            max-height: 100vh;
+            display: block;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            const size = Math.min(window.innerWidth - 20, window.innerHeight - 20, 700);
+            canvas.width = size;
+            canvas.height = size;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // Game states
+        const STATE_IDLE = 'idle';
+        const STATE_WAITING = 'waiting';
+        const STATE_READY = 'ready';
+        const STATE_RESULT = 'result';
+        const STATE_FAILED = 'failed';
+
+        let state = STATE_IDLE;
+        let waitStartTime = 0;
+        let readyStartTime = 0;
+        let reactionTime = 0;
+        let attempts = [];
+        let bestTime = parseInt(localStorage.getItem('reactionBest')) || Infinity;
+
+        // Audio
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playSound(type) {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            if (type === 'start') {
+                osc.frequency.value = 400;
+                gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.1);
+            } else if (type === 'ready') {
+                osc.frequency.value = 800;
+                gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.2);
+            } else if (type === 'good') {
+                [523, 659, 784].forEach((freq, i) => {
+                    const o = audioCtx.createOscillator();
+                    const g = audioCtx.createGain();
+                    o.connect(g);
+                    g.connect(audioCtx.destination);
+                    o.frequency.value = freq;
+                    g.gain.setValueAtTime(0.1, audioCtx.currentTime + i * 0.08);
+                    g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + i * 0.08 + 0.15);
+                    o.start(audioCtx.currentTime + i * 0.08);
+                    o.stop(audioCtx.currentTime + i * 0.08 + 0.15);
+                });
+            } else if (type === 'fail') {
+                osc.frequency.setValueAtTime(400, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(200, audioCtx.currentTime + 0.3);
+                osc.type = 'sawtooth';
+                gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.3);
+            }
+        }
+
+        // Start test
+        function startTest() {
+            state = STATE_WAITING;
+            waitStartTime = Date.now();
+            const waitTime = 2000 + Math.random() * 3000; // 2-5 seconds
+            
+            setTimeout(() => {
+                if (state === STATE_WAITING) {
+                    state = STATE_READY;
+                    readyStartTime = Date.now();
+                    playSound('ready');
+                }
+            }, waitTime);
+
+            playSound('start');
+        }
+
+        // Handle click
+        function handleClick() {
+            if (state === STATE_IDLE) {
+                startTest();
+            } else if (state === STATE_WAITING) {
+                // Too early!
+                state = STATE_FAILED;
+                playSound('fail');
+            } else if (state === STATE_READY) {
+                // Clicked!
+                reactionTime = Date.now() - readyStartTime;
+                attempts.push(reactionTime);
+                
+                if (reactionTime < bestTime) {
+                    bestTime = reactionTime;
+                    localStorage.setItem('reactionBest', bestTime.toString());
+                }
+                
+                state = STATE_RESULT;
+                playSound('good');
+            } else if (state === STATE_RESULT || state === STATE_FAILED) {
+                state = STATE_IDLE;
+            }
+        }
+
+        canvas.addEventListener('click', handleClick);
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            handleClick();
+        }, { passive: false });
+
+        // Get rating
+        function getRating(time) {
+            if (time < 200) return { text: '놀라워요!', color: '#9b59b6' };
+            if (time < 250) return { text: '아주 빨라요!', color: '#e74c3c' };
+            if (time < 300) return { text: '빨라요!', color: '#e67e22' };
+            if (time < 350) return { text: '좋아요!', color: '#f39c12' };
+            if (time < 400) return { text: '평균이에요', color: '#27ae60' };
+            return { text: '느려요', color: '#95a5a6' };
+        }
+
+        // Draw idle screen
+        function drawIdleScreen() {
+            ctx.fillStyle = '#3498db';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 48px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Reaction Time', canvas.width / 2, canvas.height / 2 - 120);
+
+            ctx.font = '24px Arial';
+            ctx.fillText('반응속도 테스트', canvas.width / 2, canvas.height / 2 - 70);
+
+            ctx.font = '18px Arial';
+            ctx.fillText('초록색으로 변하면 클릭하세요!', canvas.width / 2, canvas.height / 2 - 30);
+
+            // Start button
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.fillRect(canvas.width / 2 - 100, canvas.height / 2 + 20, 200, 80);
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(canvas.width / 2 - 100, canvas.height / 2 + 20, 200, 80);
+
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 32px Arial';
+            ctx.fillText('시작', canvas.width / 2, canvas.height / 2 + 68);
+
+            // Best time
+            if (bestTime < Infinity) {
+                ctx.font = '20px Arial';
+                ctx.fillText(`최고 기록: ${bestTime}ms`, canvas.width / 2, canvas.height / 2 + 140);
+            }
+
+            // Average
+            if (attempts.length > 0) {
+                const avg = Math.round(attempts.reduce((a, b) => a + b, 0) / attempts.length);
+                ctx.font = '16px Arial';
+                ctx.fillText(`평균: ${avg}ms (${attempts.length}회 시도)`, canvas.width / 2, canvas.height / 2 + 170);
+            }
+        }
+
+        // Draw waiting screen
+        function drawWaitingScreen() {
+            ctx.fillStyle = '#e74c3c';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 48px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('대기...', canvas.width / 2, canvas.height / 2 - 40);
+
+            ctx.font = '24px Arial';
+            ctx.fillText('초록색이 될 때까지 기다리세요', canvas.width / 2, canvas.height / 2 + 20);
+
+            // Pulsing dot
+            const elapsed = (Date.now() - waitStartTime) / 1000;
+            const pulse = Math.sin(elapsed * 3) * 0.3 + 0.7;
+            ctx.fillStyle = `rgba(255, 255, 255, ${pulse})`;
+            ctx.beginPath();
+            ctx.arc(canvas.width / 2, canvas.height / 2 + 80, 20, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Draw ready screen
+        function drawReadyScreen() {
+            ctx.fillStyle = '#27ae60';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 72px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('클릭!', canvas.width / 2, canvas.height / 2);
+
+            ctx.font = '32px Arial';
+            ctx.fillText('지금 클릭하세요!', canvas.width / 2, canvas.height / 2 + 60);
+        }
+
+        // Draw result screen
+        function drawResultScreen() {
+            const rating = getRating(reactionTime);
+            
+            ctx.fillStyle = rating.color;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 64px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(`${reactionTime}ms`, canvas.width / 2, canvas.height / 2 - 60);
+
+            ctx.font = 'bold 36px Arial';
+            ctx.fillText(rating.text, canvas.width / 2, canvas.height / 2 + 10);
+
+            if (reactionTime === bestTime) {
+                ctx.font = '28px Arial';
+                ctx.fillText('🎉 신기록! 🎉', canvas.width / 2, canvas.height / 2 + 60);
+            }
+
+            // Continue button
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.fillRect(canvas.width / 2 - 100, canvas.height / 2 + 100, 200, 60);
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(canvas.width / 2 - 100, canvas.height / 2 + 100, 200, 60);
+
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 24px Arial';
+            ctx.fillText('다시 하기', canvas.width / 2, canvas.height / 2 + 138);
+        }
+
+        // Draw failed screen
+        function drawFailedScreen() {
+            ctx.fillStyle = '#e67e22';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 48px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('너무 빨라요!', canvas.width / 2, canvas.height / 2 - 40);
+
+            ctx.font = '24px Arial';
+            ctx.fillText('초록색이 될 때까지 기다리세요', canvas.width / 2, canvas.height / 2 + 10);
+
+            // Retry button
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.fillRect(canvas.width / 2 - 100, canvas.height / 2 + 60, 200, 60);
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(canvas.width / 2 - 100, canvas.height / 2 + 60, 200, 60);
+
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 24px Arial';
+            ctx.fillText('다시 시도', canvas.width / 2, canvas.height / 2 + 98);
+        }
+
+        // Game loop
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            switch (state) {
+                case STATE_IDLE:
+                    drawIdleScreen();
+                    break;
+                case STATE_WAITING:
+                    drawWaitingScreen();
+                    break;
+                case STATE_READY:
+                    drawReadyScreen();
+                    break;
+                case STATE_RESULT:
+                    drawResultScreen();
+                    break;
+                case STATE_FAILED:
+                    drawFailedScreen();
+                    break;
+            }
+
+            requestAnimationFrame(draw);
+        }
+
+        draw();
+    </script>
+
+    <!-- leaderboard-integration:reaction-time -->
+    <div id="leaderboard" data-lb-slug="reaction-time" style="position:fixed;right:10px;bottom:10px;z-index:1100;max-width:min(90vw,340px);pointer-events:none;"></div>
+    <script src="../shared/leaderboard.js"></script>
+    <script>
+    (() => {
+      const GAME_SLUG = "reaction-time";
+      const CANDIDATE_OBJECTS = [];
+      const END_METHODS = ["gameOver", "endGame", "showResult", "showResults", "showGameOver", "victory", "win", "lose", "die", "defeat", "completeGame", "levelComplete"];
+      const START_METHODS = ["start", "startGame", "newGame", "restart", "retry", "resetGame", "initGame", "beginGame", "playAgain"];
+      const SCORE_KEYS = ["score", "time", "points", "gold", "coins", "wave", "level", "finalScore", "totalScore", "bestScore", "highScore"];
+
+      function resolvePlayerName() {
+        try {
+          const tgUser = window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.user;
+          if (tgUser) {
+            const fullName = [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ').trim();
+            if (fullName) return fullName;
+            if (tgUser.username) return tgUser.username;
+          }
+        } catch (_) {}
+
+        try {
+          const saved = localStorage.getItem('lb_player_name');
+          if (saved) return saved;
+          const generated = 'Player' + Math.floor(1000 + Math.random() * 9000);
+          localStorage.setItem('lb_player_name', generated);
+          return generated;
+        } catch (_) {
+          return 'Player' + Math.floor(1000 + Math.random() * 9000);
+        }
+      }
+
+      if (!window.Leaderboard) return;
+
+      const playerName = resolvePlayerName();
+      let lastSubmit = { score: null, at: 0 };
+      let hooksInstalled = false;
+
+      function toNumber(value) {
+        if (typeof value === 'number') return Number.isFinite(value) ? value : NaN;
+        if (typeof value === 'string') {
+          const cleaned = value.replace(/[^\d.-]/g, '');
+          if (!cleaned) return NaN;
+          const num = Number(cleaned);
+          return Number.isFinite(num) ? num : NaN;
+        }
+        return NaN;
+      }
+
+      function collectFromObject(obj) {
+        const found = [];
+        if (!obj || typeof obj !== 'object') return found;
+        for (const key of SCORE_KEYS) {
+          if (key in obj) {
+            const n = toNumber(obj[key]);
+            if (Number.isFinite(n)) found.push(n);
+          }
+        }
+        return found;
+      }
+
+      function extractScore() {
+        const values = [];
+
+        for (const key of SCORE_KEYS) {
+          try {
+            if (key in window) {
+              const n = toNumber(window[key]);
+              if (Number.isFinite(n)) values.push(n);
+            }
+          } catch (_) {}
+        }
+
+        const objectRefs = [window.game, window.Game, window.app, window.engine, window.state, window.G, window.gameState, window.gameManager];
+        for (const name of CANDIDATE_OBJECTS) {
+          try {
+            if (name && window[name]) objectRefs.push(window[name]);
+          } catch (_) {}
+        }
+
+        for (const obj of objectRefs) {
+          values.push(...collectFromObject(obj));
+        }
+
+        const domIds = [
+          'finalScore','score','scoreValue','points','gold','coins','money','cash','souls','wave','level',
+          'resultScore','bestScore','highScore','totalScore','earnedGold','finalFloor','finalWave'
+        ];
+
+        for (const id of domIds) {
+          const el = document.getElementById(id);
+          if (!el) continue;
+          const n = toNumber(el.textContent || el.innerText || '');
+          if (Number.isFinite(n)) values.push(n);
+        }
+
+        const scoreLikeEls = document.querySelectorAll('[id*="score" i], [class*="score" i], [id*="point" i], [id*="gold" i], [id*="coin" i], [id*="wave" i], [id*="level" i]');
+        let checked = 0;
+        for (const el of scoreLikeEls) {
+          if (checked > 30) break;
+          checked += 1;
+          const n = toNumber(el.textContent || el.innerText || '');
+          if (Number.isFinite(n)) values.push(n);
+        }
+
+        if (!values.length) return null;
+        return Math.max(...values.filter(v => Number.isFinite(v)));
+      }
+
+      function refreshBoard() {
+        Leaderboard.getTop(GAME_SLUG).then(scores => Leaderboard.renderBoard('leaderboard', scores));
+      }
+
+      function submitScore(reason) {
+        const score = extractScore();
+        if (!Number.isFinite(score)) return;
+
+        const now = Date.now();
+        if (lastSubmit.score === score && now - lastSubmit.at < 8000) return;
+
+        lastSubmit = { score, at: now };
+        Leaderboard.submit(GAME_SLUG, playerName, score, { reason });
+        refreshBoard();
+      }
+
+      function wrapMethod(target, methodName, onAfter) {
+        if (!target || typeof target[methodName] !== 'function') return false;
+        const wrappedFlag = '__lbWrapped_' + methodName;
+        if (target[wrappedFlag]) return true;
+
+        const original = target[methodName];
+        target[methodName] = function(...args) {
+          const result = original.apply(this, args);
+          try { onAfter(methodName); } catch (_) {}
+          return result;
+        };
+        target[wrappedFlag] = true;
+        return true;
+      }
+
+      function installHooks() {
+        let installedAny = false;
+        const targets = [window, window.game, window.Game, window.app, window.engine, window.state, window.G, window.gameState, window.gameManager];
+        for (const name of CANDIDATE_OBJECTS) {
+          try {
+            if (name && window[name]) targets.push(window[name]);
+          } catch (_) {}
+        }
+
+        for (const t of targets) {
+          if (!t) continue;
+          for (const m of END_METHODS) installedAny = wrapMethod(t, m, () => submitScore('end:' + m)) || installedAny;
+          for (const m of START_METHODS) installedAny = wrapMethod(t, m, () => refreshBoard()) || installedAny;
+        }
+
+        hooksInstalled = hooksInstalled || installedAny;
+      }
+
+      function observeEndScreens() {
+        const endPattern = /(game\s*over|victory|defeat|you\s*win|you\s*lose|final\s*score|result|패배|승리|클리어|결과|게임\s*오버|게임오버)/i;
+
+        const maybeSubmit = () => {
+          const markers = document.querySelectorAll('[id*="gameover" i], [id*="result" i], [class*="gameover" i], [class*="result" i], [id*="victory" i], [class*="victory" i]');
+          for (const el of markers) {
+            const style = window.getComputedStyle(el);
+            const visible = style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
+            if (visible) {
+              submitScore('screen-visible');
+              return;
+            }
+          }
+
+          const text = (document.body && document.body.innerText) ? document.body.innerText.slice(0, 5000) : '';
+          if (endPattern.test(text)) submitScore('text-match');
+        };
+
+        const observer = new MutationObserver(() => maybeSubmit());
+        observer.observe(document.body, { childList: true, subtree: true, attributes: true, characterData: true });
+
+        document.addEventListener('click', (e) => {
+          const t = e.target;
+          if (!t) return;
+          const txt = (t.innerText || t.textContent || '').toLowerCase();
+          if (/start|retry|restart|play|begin|시작|재도전|다시/.test(txt)) {
+            setTimeout(refreshBoard, 300);
+          }
+          if (/result|finish|end|win|lose|game over|결과|종료|패배|승리|클리어/.test(txt)) {
+            setTimeout(() => submitScore('button-click'), 300);
+          }
+        }, true);
+      }
+
+      refreshBoard();
+      installHooks();
+      observeEndScreens();
+
+      let hookTry = 0;
+      const hookTimer = setInterval(() => {
+        hookTry += 1;
+        if (!hooksInstalled) installHooks();
+        if (hookTry > 30) clearInterval(hookTimer);
+      }, 1000);
+
+      setInterval(refreshBoard, 30000);
+    })();
+    </script>
+
+</body>
+</html>

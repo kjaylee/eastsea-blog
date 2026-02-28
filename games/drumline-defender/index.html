@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+  <title>Drumline Defender</title>
+  <meta name="description" content="Tap lane pads on beat to blast incoming waves in this rhythm defense canvas game." />
+  <meta name="keywords" content="html5 rhythm defense,mobile touch game,canvas shooter,telegram mini app" />
+  <meta property="og:title" content="Drumline Defender" />
+  <meta property="og:description" content="Four-lane rhythm defense with combo, shockwave, and persistent upgrades." />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="/games/drumline-defender/cover.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Drumline Defender" />
+  <meta name="twitter:description" content="Hold the beat line. Tap lanes, stack combo, and drop shockwaves." />
+  <link rel="manifest" href="/games/manifest.json" />
+  <script type="application/ld+json">
+  {
+    "@context":"https://schema.org",
+    "@type":"VideoGame",
+    "name":"Drumline Defender",
+    "genre":["Defense","Rhythm"],
+    "applicationCategory":"Game",
+    "operatingSystem":"Any",
+    "inLanguage":["ko","en"],
+    "url":"https://eastsea.games/games/drumline-defender/"
+  }
+  </script>
+  <style>
+    :root{
+      --bg0:#050916;
+      --bg1:#12254e;
+      --bg2:#2a1358;
+      --panel:rgba(7,13,35,.86);
+      --line:rgba(153,196,255,.34);
+      --text:#eef4ff;
+      --mint:#90ffd9;
+      --vio:#bca6ff;
+      --warn:#ff9ca8;
+      --gold:#ffd591;
+    }
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;}
+    html,body{margin:0;width:100%;height:100%;overflow:hidden;background:radial-gradient(circle at 50% 0%, #2b3179 0%, #070c1b 60%);color:var(--text);font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Noto Sans KR',sans-serif;}
+    body{touch-action:none;}
+    #game{position:fixed;inset:0;width:100%;height:100%;display:block;background:linear-gradient(180deg,var(--bg2),var(--bg0));}
+
+    #hud{
+      position:fixed;left:10px;right:10px;top:max(10px,env(safe-area-inset-top));
+      display:flex;gap:8px;justify-content:space-between;align-items:center;flex-wrap:wrap;
+      z-index:20;background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:8px 10px;
+      backdrop-filter:blur(8px);opacity:0;transform:translateY(-8px);pointer-events:none;
+      transition:opacity .2s ease,transform .2s ease;font-size:12px;font-weight:700;
+    }
+    #hud.show{opacity:1;transform:translateY(0)}
+    .metric{min-width:56px}
+    .metric b{color:var(--mint)}
+
+    #controls{
+      position:fixed;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));
+      z-index:22;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;pointer-events:none;
+    }
+    #controls.show{pointer-events:auto}
+    .pad{
+      min-height:58px;border-radius:12px;border:1px solid rgba(182,222,255,.35);
+      background:rgba(14,23,56,.84);color:var(--text);font-weight:820;font-size:14px;letter-spacing:.2px;
+    }
+    .pad[data-lane="0"]{background:linear-gradient(135deg,#7fd1ff,#7e8fff);color:#041e4a}
+    .pad[data-lane="1"]{background:linear-gradient(135deg,#8fffc7,#8cc5ff);color:#05342a}
+    .pad[data-lane="2"]{background:linear-gradient(135deg,#ffabed,#ffbf9a);color:#3f1233}
+    .pad[data-lane="3"]{background:linear-gradient(135deg,#ffe097,#ff9eb4);color:#502512}
+    #shockBtn{grid-column:1 / span 4;min-height:50px;border-radius:12px;border:1px solid rgba(165,232,255,.42);background:linear-gradient(135deg,#7bffd8,#86e4ff);color:#053f31;font-weight:850;font-size:15px}
+    #shockBtn.lock{filter:grayscale(.38) brightness(.72)}
+
+    #leaderboard{
+      position:fixed;left:10px;right:10px;bottom:calc(172px + env(safe-area-inset-bottom));
+      z-index:18;background:rgba(6,11,28,.6);border:1px solid rgba(128,182,255,.22);border-radius:9px;padding:5px 8px;
+      font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.86;
+    }
+
+    #overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:12px;z-index:30;}
+    .panel{
+      width:min(95vw,470px);background:linear-gradient(180deg,rgba(9,21,57,.95),rgba(6,9,24,.94));
+      border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:0 24px 54px rgba(0,0,0,.48);
+    }
+    h1,h2{margin:0 0 8px;line-height:1.14}
+    h1{font-size:clamp(27px,8vw,36px)}
+    h2{font-size:clamp(23px,7vw,31px)}
+    .sub{font-size:14px;line-height:1.42;opacity:.92;margin-bottom:12px}
+    .small{font-size:12px;line-height:1.4;opacity:.82}
+    .row{display:flex;gap:8px;margin-top:10px}
+    button.ui{
+      min-height:46px;flex:1;border-radius:10px;border:1px solid rgba(255,255,255,.24);
+      background:rgba(20,35,75,.66);color:var(--text);font-size:15px;font-weight:760;padding:10px 14px;cursor:pointer;
+    }
+    button.ui.primary{background:linear-gradient(135deg,#76d8ff,#95ffbd);color:#07273f;border-color:rgba(160,255,214,.62)}
+    button.ui.warn{background:linear-gradient(135deg,#ffb08a,#ff8da0);color:#4c1516;border-color:rgba(255,197,156,.62)}
+    .stats{margin-top:10px;font-size:13px;display:grid;grid-template-columns:1fr 1fr;gap:6px 10px}
+    .stats b{color:var(--gold)}
+    .upgrade{margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .upgrade button{min-height:44px;border-radius:10px;border:1px solid rgba(166,214,255,.35);background:rgba(16,32,68,.74);color:var(--text);font-size:13px;font-weight:710;cursor:pointer;padding:8px}
+
+    #judge{
+      position:fixed;left:50%;top:44%;transform:translate(-50%,-50%);z-index:25;
+      font-size:clamp(20px,6vw,30px);font-weight:900;letter-spacing:.8px;
+      text-shadow:0 0 18px rgba(255,255,255,.42);opacity:0;transition:opacity .14s ease;pointer-events:none;
+    }
+    #judge.show{opacity:1}
+  </style>
+  <script src="../i18n.js"></script>
+</head>
+<body data-state="title">
+  <canvas id="game"></canvas>
+
+  <div id="hud">
+    <div class="metric" id="mScore">S 0</div>
+    <div class="metric" id="mCombo">C 0</div>
+    <div class="metric" id="mWave">WV 1</div>
+    <div class="metric" id="mHp">HP 5</div>
+    <div class="metric" id="mShock">SK 0%</div>
+  </div>
+
+  <div id="leaderboard" data-lb-slug="drumline-defender"></div>
+
+  <div id="controls">
+    <button class="pad" data-lane="0">1</button>
+    <button class="pad" data-lane="1">2</button>
+    <button class="pad" data-lane="2">3</button>
+    <button class="pad" data-lane="3">4</button>
+    <button id="shockBtn" class="lock">⚡ SHOCKWAVE</button>
+  </div>
+
+  <div id="judge"></div>
+
+  <div id="overlay">
+    <section class="panel" id="titlePanel">
+      <h1 id="titleText">Drumline Defender</h1>
+      <p class="sub" id="descText">Tap lane pads on beat to destroy incoming units before they break your base line.</p>
+      <p class="small" id="hintText">Perfect timing boosts combo and charges shockwave. Misses break combo.</p>
+      <div class="stats">
+        <span id="bestStat">Best: <b>0</b></span>
+        <span id="creditStat">Credits: <b>0</b></span>
+        <span id="waveStat">Max Wave: <b>1</b></span>
+        <span id="powerStat">Power Lv: <b>0</b></span>
+      </div>
+      <div class="upgrade">
+        <button id="upPowerBtn">Power +1 (20)</button>
+        <button id="upWallBtn">Wall +1 (20)</button>
+      </div>
+      <div class="row">
+        <button class="ui" id="langBtn">한국어 / EN</button>
+        <button class="ui primary" id="startBtn">Start</button>
+      </div>
+    </section>
+
+    <section class="panel" id="gameoverPanel" hidden>
+      <h2 id="overTitle">Base Down</h2>
+      <p class="sub" id="overDesc">The rhythm line collapsed.</p>
+      <div class="stats">
+        <span id="finalScore">Score: <b>0</b></span>
+        <span id="finalBest">Best: <b>0</b></span>
+        <span id="finalWave">Wave: <b>1</b></span>
+        <span id="finalCredits">+Credits: <b>0</b></span>
+      </div>
+      <div class="row">
+        <button class="ui" id="backBtn">Title</button>
+        <button class="ui warn" id="retryBtn">Retry</button>
+      </div>
+    </section>
+  </div>
+
+  <script src="../tg-sdk-wrapper.js"></script>
+  <script src="../shared/sound-manager.js"></script>
+  <script>
+  (() => {
+    const STRINGS = {
+      title:{ko:'드럼라인 디펜더',en:'Drumline Defender'},
+      desc:{ko:'비트에 맞춰 레인 패드를 탭해 침입 유닛을 제거하세요.',en:'Tap lane pads on beat to remove incoming units.'},
+      hint:{ko:'퍼펙트 판정은 콤보/쇼크웨이브를 빠르게 올립니다.',en:'Perfect timing builds combo and shock faster.'},
+      start:{ko:'시작',en:'Start'}, retry:{ko:'다시',en:'Retry'}, back:{ko:'타이틀',en:'Title'},
+      over:{ko:'기지 붕괴',en:'Base Down'}, overDesc:{ko:'리듬 라인이 무너졌습니다.',en:'The rhythm line collapsed.'},
+      best:{ko:'최고점',en:'Best'}, score:{ko:'점수',en:'Score'}, wave:{ko:'웨이브',en:'Wave'}, credits:{ko:'크레딧',en:'Credits'},
+      maxWave:{ko:'최대 웨이브',en:'Max Wave'}, power:{ko:'파워',en:'Power'}, wall:{ko:'벽',en:'Wall'},
+      powerUp:{ko:'파워 +1 (20)',en:'Power +1 (20)'}, wallUp:{ko:'벽 +1 (20)',en:'Wall +1 (20)'},
+      perfect:{ko:'퍼펙트!',en:'PERFECT!'}, good:{ko:'굿',en:'GOOD'}, miss:{ko:'미스',en:'MISS'},
+      notEnough:{ko:'크레딧 부족',en:'Not enough credits'}, upgraded:{ko:'강화 완료',en:'Upgraded'},
+      shock:{ko:'쇼크웨이브',en:'SHOCKWAVE'}
+    };
+
+    const tfn = (window.GameI18n ? window.GameI18n(STRINGS) : (k => (STRINGS[k] ? STRINGS[k].en : k)));
+    let lang = localStorage.getItem('drumlineLang') || 'en';
+    const T = (k) => {
+      const item = STRINGS[k];
+      if(!item) return k;
+      if(window.GameI18n){
+        const backup = tfn(k);
+        if(lang==='ko' && item.ko) return item.ko;
+        return backup;
+      }
+      return lang==='ko' ? item.ko : item.en;
+    };
+
+    const storageKey = 'drumline-defender-save-v1';
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const hud = document.getElementById('hud');
+    const controls = document.getElementById('controls');
+    const judge = document.getElementById('judge');
+    const overlay = document.getElementById('overlay');
+
+    const ui = {
+      titlePanel:document.getElementById('titlePanel'),
+      gameoverPanel:document.getElementById('gameoverPanel'),
+      startBtn:document.getElementById('startBtn'),
+      retryBtn:document.getElementById('retryBtn'),
+      backBtn:document.getElementById('backBtn'),
+      langBtn:document.getElementById('langBtn'),
+      pads:Array.from(document.querySelectorAll('.pad')),
+      shockBtn:document.getElementById('shockBtn'),
+      upPowerBtn:document.getElementById('upPowerBtn'),
+      upWallBtn:document.getElementById('upWallBtn'),
+      mScore:document.getElementById('mScore'),
+      mCombo:document.getElementById('mCombo'),
+      mWave:document.getElementById('mWave'),
+      mHp:document.getElementById('mHp'),
+      mShock:document.getElementById('mShock'),
+      titleText:document.getElementById('titleText'),
+      descText:document.getElementById('descText'),
+      hintText:document.getElementById('hintText'),
+      bestStat:document.getElementById('bestStat'),
+      creditStat:document.getElementById('creditStat'),
+      waveStat:document.getElementById('waveStat'),
+      powerStat:document.getElementById('powerStat'),
+      overTitle:document.getElementById('overTitle'),
+      overDesc:document.getElementById('overDesc'),
+      finalScore:document.getElementById('finalScore'),
+      finalBest:document.getElementById('finalBest'),
+      finalWave:document.getElementById('finalWave'),
+      finalCredits:document.getElementById('finalCredits')
+    };
+
+    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    let vw = 390, vh = 844;
+    const laneRatios = [0.15,0.38,0.62,0.85];
+
+    const game = {
+      state:'title',
+      score:0,
+      combo:0,
+      wave:1,
+      hp:5,
+      best:0,
+      creditsEarned:0,
+      multiplier:1,
+      shock:0,
+      beatInterval:560,
+      nextBeat:0,
+      now:0,
+      spawnTimer:0,
+      kills:0,
+      enemies:[],
+      pulses:[],
+      particles:[],
+      laneFlash:[0,0,0,0]
+    };
+
+    const save = loadSave();
+    game.best = save.best;
+
+    const sound = initSound();
+
+    function initSound(){
+      let sm = null;
+      try{ if(window.SoundManager) sm = new window.SoundManager(); }catch(e){}
+      let ac = null;
+      const beep = (freq=420,dur=.05,type='sine',gain=.06)=>{
+        try{
+          ac = ac || new (window.AudioContext||window.webkitAudioContext)();
+          const o = ac.createOscillator();
+          const g = ac.createGain();
+          o.type = type;
+          o.frequency.value = freq;
+          g.gain.value = gain;
+          o.connect(g); g.connect(ac.destination); o.start();
+          g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + dur);
+          o.stop(ac.currentTime + dur + 0.01);
+        }catch(e){}
+      };
+      return {
+        tap(){ sm&&sm.play?sm.play('tap',1):beep(560,.05,'triangle'); },
+        hit(){ sm&&sm.play?sm.play('hit',1.1):beep(760,.08,'sine'); },
+        miss(){ sm&&sm.play?sm.play('miss',.8):beep(170,.12,'square',.08); },
+        shock(){ sm&&sm.play?sm.play('shock',1.2):beep(320,.2,'sawtooth',.08); }
+      };
+    }
+
+    function loadSave(){
+      try{
+        const raw = localStorage.getItem(storageKey);
+        if(raw){
+          const d = JSON.parse(raw);
+          if(d && typeof d === 'object'){
+            return {
+              best:Number.isFinite(d.best)?d.best:0,
+              credits:Number.isFinite(d.credits)?d.credits:0,
+              maxWave:Number.isFinite(d.maxWave)?d.maxWave:1,
+              upgrades:{
+                power:Number.isFinite(d.upgrades?.power)?d.upgrades.power:0,
+                wall:Number.isFinite(d.upgrades?.wall)?d.upgrades.wall:0
+              }
+            };
+          }
+        }
+      }catch(e){}
+      return { best:0, credits:0, maxWave:1, upgrades:{power:0, wall:0} };
+    }
+
+    function persist(){
+      try{ localStorage.setItem(storageKey, JSON.stringify(save)); }catch(e){}
+    }
+
+    function laneX(index){ return vw * laneRatios[Math.max(0,Math.min(3,index))]; }
+    function beatLineY(){ return vh * 0.68; }
+
+    function setState(next){
+      game.state = next;
+      document.body.dataset.state = next;
+      hud.classList.toggle('show', next === 'play');
+      controls.classList.toggle('show', next === 'play');
+      overlay.style.pointerEvents = next === 'play' ? 'none' : 'auto';
+      if(next === 'title'){
+        ui.titlePanel.hidden = false;
+        ui.gameoverPanel.hidden = true;
+        renderTitleStats();
+      }else if(next === 'play'){
+        ui.titlePanel.hidden = true;
+        ui.gameoverPanel.hidden = true;
+      }else if(next === 'gameover'){
+        ui.titlePanel.hidden = true;
+        ui.gameoverPanel.hidden = false;
+      }
+    }
+
+    function resize(){
+      vw = window.innerWidth;
+      vh = window.innerHeight;
+      canvas.width = Math.floor(vw * dpr);
+      canvas.height = Math.floor(vh * dpr);
+      canvas.style.width = vw + 'px';
+      canvas.style.height = vh + 'px';
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+    }
+
+    function startRun(){
+      game.score = 0;
+      game.combo = 0;
+      game.wave = 1;
+      game.hp = 5 + save.upgrades.wall;
+      game.creditsEarned = 0;
+      game.multiplier = 1;
+      game.shock = 14;
+      game.now = 0;
+      game.spawnTimer = 0.45;
+      game.kills = 0;
+      game.enemies.length = 0;
+      game.pulses.length = 0;
+      game.particles.length = 0;
+      game.laneFlash = [0,0,0,0];
+      game.nextBeat = game.beatInterval;
+      hideJudge();
+      setState('play');
+      haptic('impact','light');
+    }
+
+    function endRun(){
+      game.state = 'gameover';
+      document.body.dataset.state = 'gameover';
+      save.best = Math.max(save.best, game.score);
+      save.maxWave = Math.max(save.maxWave, game.wave);
+      game.creditsEarned = Math.max(8, Math.floor(game.score/90) + game.wave*2);
+      save.credits += game.creditsEarned;
+      persist();
+      try{
+        if(window.Leaderboard && window.Leaderboard.submit) window.Leaderboard.submit('drumline-defender','player',game.score);
+      }catch(e){}
+      ui.finalScore.innerHTML = `${T('score')}: <b>${game.score}</b>`;
+      ui.finalBest.innerHTML = `${T('best')}: <b>${save.best}</b>`;
+      ui.finalWave.innerHTML = `${T('wave')}: <b>${game.wave}</b>`;
+      ui.finalCredits.innerHTML = `+${T('credits')}: <b>${game.creditsEarned}</b>`;
+      sound.miss();
+      haptic('notification','error');
+      setState('gameover');
+    }
+
+    function spawnEnemy(forceLane){
+      const lane = Number.isInteger(forceLane) ? Math.max(0,Math.min(3,forceLane)) : Math.floor(Math.random()*4);
+      const hp = game.wave >= 5 && Math.random() < 0.28 ? 2 : 1;
+      const spd = 110 + game.wave*18 + Math.random()*26;
+      game.enemies.push({ lane, y:-30, hp, speed:spd, wobble:Math.random()*6.28 });
+    }
+
+    function fireLane(lane){
+      if(game.state !== 'play') return false;
+      lane = Math.max(0, Math.min(3, lane|0));
+      game.laneFlash[lane] = .22;
+      sound.tap();
+
+      const lineY = beatLineY();
+      const beatDelta = Math.abs(game.now - game.nextBeat + game.beatInterval);
+      const mod = Math.min(beatDelta, Math.abs(beatDelta - game.beatInterval));
+      let judgeType = 'good';
+      if(mod < 90) judgeType = 'perfect';
+      else if(mod > 220) judgeType = 'miss';
+
+      let targetIndex = -1;
+      let bestDist = Infinity;
+      for(let i=0;i<game.enemies.length;i++){
+        const e = game.enemies[i];
+        if(e.lane !== lane) continue;
+        const d = Math.abs(e.y - lineY);
+        if(d < bestDist){ bestDist = d; targetIndex = i; }
+      }
+
+      game.pulses.push({ lane, y:lineY, life:.16 });
+
+      if(targetIndex >= 0){
+        const e = game.enemies[targetIndex];
+        const power = 1 + save.upgrades.power * 0.35 + (judgeType==='perfect' ? 0.5 : 0);
+        e.hp -= power;
+        if(e.hp <= 0){
+          game.enemies.splice(targetIndex,1);
+          game.kills += 1;
+          const gain = judgeType==='perfect' ? 16 : 11;
+          if(judgeType==='miss'){
+            game.combo = 0;
+            game.multiplier = 1;
+          }else{
+            game.combo += (judgeType==='perfect' ? 2 : 1);
+            game.multiplier = Math.min(4, 1 + game.combo*0.045);
+            game.shock = Math.min(100, game.shock + (judgeType==='perfect' ? 9 : 5));
+          }
+          const scoreAdd = Math.floor(gain * game.multiplier);
+          game.score += scoreAdd;
+          emit(laneX(lane), lineY-32, judgeType==='perfect' ? '#9cffde' : '#9fc7ff', 12);
+          sound.hit();
+          showJudge(judgeType === 'perfect' ? T('perfect') : T('good'));
+          haptic('impact', judgeType==='perfect'?'medium':'light');
+        }else{
+          showJudge(T('good'));
+        }
+      }else{
+        game.combo = 0;
+        game.multiplier = 1;
+        game.score = Math.max(0, game.score - 6);
+        showJudge(T('miss'));
+        sound.miss();
+      }
+
+      if(game.kills > 0 && game.kills % 18 === 0){
+        game.wave += 1;
+        save.maxWave = Math.max(save.maxWave, game.wave);
+      }
+      return true;
+    }
+
+    function useShock(){
+      if(game.state !== 'play' || game.shock < 100) return;
+      game.shock = 0;
+      let removed = 0;
+      const yLimit = beatLineY() + 40;
+      for(let i=game.enemies.length-1;i>=0;i--){
+        const e = game.enemies[i];
+        if(e.y < yLimit){
+          emit(laneX(e.lane), e.y, '#a4f2ff', 9);
+          game.enemies.splice(i,1);
+          removed += 1;
+        }
+      }
+      if(removed > 0){
+        game.score += removed * 18;
+        game.combo += Math.min(6, removed);
+        game.multiplier = Math.min(4, 1 + game.combo*0.04);
+      }
+      sound.shock();
+      showJudge(`⚡ ${T('shock')}`);
+      haptic('notification','success');
+    }
+
+    function emit(x,y,color,count=8){
+      for(let i=0;i<count;i++){
+        game.particles.push({
+          x,y,
+          vx:(Math.random()-.5)*230,
+          vy:(Math.random()-.5)*230,
+          life:.3+Math.random()*.5,
+          color
+        });
+      }
+    }
+
+    function update(dt){
+      if(game.state !== 'play') return;
+      game.now += dt*1000;
+
+      while(game.now >= game.nextBeat){
+        game.nextBeat += game.beatInterval;
+      }
+
+      game.spawnTimer -= dt;
+      if(game.spawnTimer <= 0){
+        spawnEnemy();
+        const base = Math.max(.2, .86 - game.wave*0.05);
+        game.spawnTimer = base + Math.random()*0.25;
+      }
+
+      const lineY = beatLineY();
+      for(let i=game.enemies.length-1;i>=0;i--){
+        const e = game.enemies[i];
+        e.y += e.speed * dt;
+        e.wobble += dt*4;
+        if(e.y >= lineY + 22){
+          game.enemies.splice(i,1);
+          game.hp -= 1;
+          game.combo = 0;
+          game.multiplier = 1;
+          game.shock = Math.max(0, game.shock - 14);
+          emit(laneX(e.lane), lineY+10, '#ff9fa8', 12);
+          sound.miss();
+          haptic('impact','heavy');
+          if(game.hp <= 0){
+            endRun();
+            return;
+          }
+        }
+      }
+
+      for(let i=game.pulses.length-1;i>=0;i--){
+        const p = game.pulses[i];
+        p.life -= dt;
+        p.y -= dt * 520;
+        if(p.life<=0) game.pulses.splice(i,1);
+      }
+
+      for(let i=game.particles.length-1;i>=0;i--){
+        const p = game.particles[i];
+        p.life -= dt;
+        p.x += p.vx*dt;
+        p.y += p.vy*dt;
+        p.vy += 260*dt;
+        if(p.life<=0) game.particles.splice(i,1);
+      }
+
+      for(let i=0;i<4;i++) game.laneFlash[i] = Math.max(0, game.laneFlash[i] - dt*2.4);
+
+      if(game.score > save.best) save.best = game.score;
+      if((game.now|0)%1000 < 16) persist();
+      ui.shockBtn.classList.toggle('lock', game.shock < 100);
+    }
+
+    function drawBackground(){
+      const g = ctx.createLinearGradient(0,0,0,vh);
+      g.addColorStop(0,'#261761');
+      g.addColorStop(.48,'#142a5a');
+      g.addColorStop(1,'#060d1d');
+      ctx.fillStyle = g;
+      ctx.fillRect(0,0,vw,vh);
+
+      const topGlow = ctx.createRadialGradient(vw*.5,0,20,vw*.5,0,vw*.8);
+      topGlow.addColorStop(0,'rgba(145,174,255,.38)');
+      topGlow.addColorStop(1,'rgba(145,174,255,0)');
+      ctx.fillStyle = topGlow;
+      ctx.fillRect(0,0,vw,vh*.56);
+
+      for(let i=0;i<4;i++){
+        const x = laneX(i);
+        ctx.strokeStyle = `rgba(146,192,255,${0.22 + game.laneFlash[i]*0.4})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x, 80);
+        ctx.lineTo(x, beatLineY()+70);
+        ctx.stroke();
+      }
+
+      ctx.strokeStyle = 'rgba(143,251,209,.55)';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(vw*0.07, beatLineY());
+      ctx.lineTo(vw*0.93, beatLineY());
+      ctx.stroke();
+
+      const beatProg = (game.now % game.beatInterval) / game.beatInterval;
+      const beatAlpha = 0.2 + (1-beatProg) * 0.45;
+      ctx.fillStyle = `rgba(176,221,255,${beatAlpha.toFixed(3)})`;
+      ctx.fillRect(vw*0.06, beatLineY()-8, vw*0.88, 16);
+    }
+
+    function drawEnemies(){
+      for(const e of game.enemies){
+        const x = laneX(e.lane);
+        const pulse = Math.sin(e.wobble)*4;
+        ctx.fillStyle = 'rgba(16,28,62,.88)';
+        ctx.fillRect(x-25, e.y-26, 50, 52);
+        ctx.strokeStyle = e.hp > 1 ? '#ffd79c' : '#9fc8ff';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(x-21, e.y-22+pulse*0.08, 42, 44);
+        ctx.fillStyle = e.hp > 1 ? '#ffd79c' : '#90e0ff';
+        ctx.fillRect(x-6, e.y-6, 12, 12);
+      }
+
+      for(const p of game.pulses){
+        const x = laneX(p.lane);
+        ctx.fillStyle = `rgba(145,242,255,${Math.max(0,p.life*2)})`;
+        ctx.fillRect(x-8, p.y-26, 16, 52);
+      }
+
+      for(const part of game.particles){
+        ctx.globalAlpha = Math.max(0, part.life);
+        ctx.fillStyle = part.color;
+        ctx.fillRect(part.x, part.y, 4, 4);
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    function render(){
+      drawBackground();
+      if(game.state === 'play' || game.state === 'gameover') drawEnemies();
+      ui.mScore.textContent = `S ${game.score}`;
+      ui.mCombo.textContent = `C ${game.combo}`;
+      ui.mWave.textContent = `WV ${game.wave}`;
+      ui.mHp.textContent = `HP ${game.hp}`;
+      ui.mShock.textContent = `SK ${Math.floor(game.shock)}%`;
+    }
+
+    function frame(ts){
+      if(!frame.last) frame.last = ts;
+      const dt = Math.min(.05, (ts - frame.last)/1000);
+      frame.last = ts;
+      update(dt);
+      render();
+      requestAnimationFrame(frame);
+    }
+
+    function showJudge(text){
+      judge.textContent = text;
+      judge.classList.add('show');
+      clearTimeout(showJudge.tid);
+      showJudge.tid = setTimeout(hideJudge, 300);
+    }
+    function hideJudge(){ judge.classList.remove('show'); }
+
+    function renderTitleStats(){
+      ui.titleText.textContent = T('title');
+      ui.descText.textContent = T('desc');
+      ui.hintText.textContent = T('hint');
+      ui.startBtn.textContent = T('start');
+      ui.retryBtn.textContent = T('retry');
+      ui.backBtn.textContent = T('back');
+      ui.overTitle.textContent = T('over');
+      ui.overDesc.textContent = T('overDesc');
+      ui.shockBtn.textContent = `⚡ ${T('shock')}`;
+      ui.bestStat.innerHTML = `${T('best')}: <b>${save.best}</b>`;
+      ui.creditStat.innerHTML = `${T('credits')}: <b>${save.credits}</b>`;
+      ui.waveStat.innerHTML = `${T('maxWave')}: <b>${save.maxWave}</b>`;
+      ui.powerStat.innerHTML = `${T('power')} Lv: <b>${save.upgrades.power}</b>`;
+      ui.upPowerBtn.textContent = T('powerUp');
+      ui.upWallBtn.textContent = T('wallUp');
+      ui.finalScore.innerHTML = `${T('score')}: <b>${game.score}</b>`;
+      ui.finalBest.innerHTML = `${T('best')}: <b>${save.best}</b>`;
+      ui.finalWave.innerHTML = `${T('wave')}: <b>${game.wave}</b>`;
+      ui.finalCredits.innerHTML = `+${T('credits')}: <b>${game.creditsEarned}</b>`;
+    }
+
+    function tryUpgrade(type){
+      if(save.credits < 20){ showJudge(T('notEnough')); return; }
+      save.credits -= 20;
+      if(type === 'power') save.upgrades.power += 1;
+      else save.upgrades.wall += 1;
+      persist();
+      renderTitleStats();
+      showJudge(T('upgraded'));
+      haptic('impact','medium');
+    }
+
+    function haptic(kind,style){
+      try{ if(window.TG && TG.haptic) TG.haptic(kind,style); }catch(e){}
+      if(navigator.vibrate){
+        if(kind==='notification'&&style==='error') navigator.vibrate([24,24,24]);
+        else navigator.vibrate(15);
+      }
+    }
+
+    function bindInput(){
+      ui.startBtn.addEventListener('click', startRun);
+      ui.retryBtn.addEventListener('click', startRun);
+      ui.backBtn.addEventListener('click', () => setState('title'));
+      ui.langBtn.addEventListener('click', () => {
+        lang = lang === 'ko' ? 'en' : 'ko';
+        localStorage.setItem('drumlineLang', lang);
+        renderTitleStats();
+      });
+      ui.upPowerBtn.addEventListener('click', () => tryUpgrade('power'));
+      ui.upWallBtn.addEventListener('click', () => tryUpgrade('wall'));
+
+      ui.pads.forEach(btn => {
+        btn.addEventListener('pointerdown', e => {
+          e.preventDefault();
+          const lane = Number(btn.dataset.lane);
+          fireLane(lane);
+        });
+      });
+
+      ui.shockBtn.addEventListener('pointerdown', e => { e.preventDefault(); useShock(); });
+
+      window.addEventListener('keydown', e => {
+        if('1234'.includes(e.key)) fireLane(Number(e.key)-1);
+        if(e.key.toLowerCase() === 'q') useShock();
+      });
+
+      window.addEventListener('resize', resize);
+    }
+
+    function init(){
+      resize();
+      bindInput();
+      renderTitleStats();
+      setState('title');
+      try{ if(window.Leaderboard && window.Leaderboard.renderBoard) window.Leaderboard.renderBoard('leaderboard'); }catch(e){}
+      requestAnimationFrame(frame);
+    }
+
+    window.__drumlineDefender = {
+      storageKey,
+      getState: () => game.state,
+      getMetrics: () => ({ score:game.score, combo:game.combo, wave:game.wave, hp:game.hp, shock:Math.floor(game.shock), enemies:game.enemies.length }),
+      getSave: () => JSON.parse(JSON.stringify(save)),
+      forceGameOver: () => { if(game.state === 'play'){ game.hp = 0; endRun(); } },
+      spawnEnemy,
+      tapLane: fireLane,
+      useShock,
+      debugAddCredits: (n=100) => { save.credits += n; persist(); renderTitleStats(); }
+    };
+
+    init();
+  })();
+  </script>
+  <script src="/games/cross-promo.js"></script>
+  <script src="../shared/leaderboard.js"></script>
+</body>
+</html>

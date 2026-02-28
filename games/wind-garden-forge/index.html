@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+  <title>Wind Garden Forge - 윈드 가든 포지</title>
+  <meta name="description" content="드래그와 탭으로 바람 팬을 배치해 꽃가루 오브를 새싹 포드로 유도하는 오리지널 샌드박스 아케이드." />
+  <meta name="keywords" content="html5,canvas,mobile,touch,sandbox,arcade,routing,telegram mini app" />
+  <meta property="og:title" content="Wind Garden Forge - 윈드 가든 포지" />
+  <meta property="og:description" content="Wind Fan을 조작해 오브를 유도하고 정원을 성장시키세요." />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="/games/wind-garden-forge/cover.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Wind Garden Forge" />
+  <meta name="twitter:description" content="Original touch sandbox-routing game with upgrades and stage progression." />
+  <link rel="manifest" href="/games/manifest.json" />
+  <script type="application/ld+json">
+  {
+    "@context":"https://schema.org",
+    "@type":"VideoGame",
+    "name":"Wind Garden Forge",
+    "genre":["Sandbox","Arcade"],
+    "applicationCategory":"Game",
+    "operatingSystem":"Any",
+    "inLanguage":["ko","en"],
+    "url":"https://games.eastsea.xyz/wind-garden-forge/"
+  }
+  </script>
+  <style>
+    :root{
+      --bg0:#081325;
+      --bg1:#102a4f;
+      --bg2:#1a4c7a;
+      --panel:rgba(8,18,38,.84);
+      --line:rgba(158,223,255,.28);
+      --text:#eef8ff;
+      --mint:#8effcf;
+      --aqua:#79deff;
+      --warn:#ff9f94;
+      --gold:#ffd279;
+    }
+    *{box-sizing:border-box;user-select:none;-webkit-tap-highlight-color:transparent}
+    html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#061022;color:var(--text);font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Noto Sans KR',sans-serif}
+    body{touch-action:none}
+
+    #game{
+      position:fixed;inset:0;width:100%;height:100%;display:block;
+      background:radial-gradient(circle at 50% -10%, #2c6ba3 0%, #102341 42%, #070f22 100%);
+    }
+
+    #hud{
+      position:fixed;left:10px;right:10px;top:max(10px,env(safe-area-inset-top));z-index:20;
+      display:flex;flex-wrap:wrap;gap:6px;justify-content:space-between;align-items:center;
+      padding:9px 10px;border-radius:12px;background:var(--panel);border:1px solid var(--line);
+      backdrop-filter:blur(6px);font-size:12px;font-weight:800;
+      opacity:0;transform:translateY(-8px);pointer-events:none;
+      transition:opacity .18s ease, transform .18s ease;
+    }
+    #hud.show{opacity:1;transform:translateY(0)}
+    .metric{min-width:60px}
+    .metric b{color:var(--mint)}
+
+    #leaderboard{
+      position:fixed;left:10px;right:10px;bottom:calc(74px + env(safe-area-inset-bottom));z-index:14;
+      padding:5px 8px;border-radius:9px;border:1px solid rgba(128,198,255,.24);
+      background:rgba(7,15,34,.58);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+      opacity:.88;
+    }
+
+    #controls{
+      position:fixed;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:22;
+      display:flex;gap:8px;pointer-events:none;
+      opacity:0;transform:translateY(10px);transition:.18s ease;
+    }
+    #controls.show{opacity:1;transform:translateY(0);pointer-events:auto}
+    .ctrl{
+      min-height:50px;border-radius:11px;border:1px solid rgba(180,230,255,.3);
+      background:rgba(11,27,55,.84);color:var(--text);font-size:13px;font-weight:800;letter-spacing:.15px;
+      padding:8px 12px;
+    }
+    #hintBtn{flex:1}
+
+    #overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:12px;z-index:30;pointer-events:none}
+    .panel{
+      width:min(95vw,470px);padding:18px;border-radius:16px;pointer-events:auto;
+      background:linear-gradient(180deg,rgba(13,33,64,.96),rgba(5,12,24,.95));
+      border:1px solid var(--line);box-shadow:0 24px 54px rgba(0,0,0,.5);
+    }
+    h1,h2{margin:0 0 8px;line-height:1.15}
+    h1{font-size:clamp(29px,7.4vw,37px)}
+    h2{font-size:clamp(23px,6vw,30px)}
+    .sub{font-size:14px;line-height:1.45;opacity:.94;margin-bottom:10px}
+    .small{font-size:12px;line-height:1.42;opacity:.86}
+    .row{display:flex;gap:8px;margin-top:10px}
+    button{
+      flex:1;min-height:46px;border-radius:10px;border:1px solid rgba(255,255,255,.24);
+      background:rgba(19,40,75,.72);color:var(--text);font-size:14px;font-weight:770;padding:9px 12px;cursor:pointer;
+    }
+    button.primary{background:linear-gradient(135deg,#8ed5ff,#7dffd5);color:#04344b;border-color:rgba(138,255,220,.66)}
+    button.warn{background:linear-gradient(135deg,#ffc39f,#ff9389);color:#45140c;border-color:rgba(255,193,156,.66)}
+
+    #toast{
+      position:fixed;left:50%;transform:translateX(-50%);
+      bottom:calc(136px + env(safe-area-inset-bottom));z-index:60;
+      padding:7px 12px;border-radius:999px;border:1px solid var(--line);
+      background:rgba(7,17,36,.88);font-size:12px;font-weight:820;opacity:0;pointer-events:none;
+      transition:opacity .2s ease;
+    }
+    #toast.show{opacity:1}
+  </style>
+  <script src="../i18n.js"></script>
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div id="hud">
+    <div class="metric" id="mScore">S 0</div>
+    <div class="metric" id="mBest">B 0</div>
+    <div class="metric" id="mStorm">Storm 100</div>
+    <div class="metric" id="mCombo">C x0</div>
+    <div class="metric" id="mStage">ST 1</div>
+    <div class="metric" id="mTarget">Goal 0/8</div>
+  </div>
+
+  <div id="leaderboard" data-lb-slug="wind-garden-forge"></div>
+
+  <div id="controls">
+    <button id="hintBtn" class="ctrl"></button>
+  </div>
+
+  <div id="toast"></div>
+
+  <div id="overlay">
+    <section class="panel" id="titlePanel">
+      <h1 id="titleTxt"></h1>
+      <div class="sub" id="subTxt"></div>
+      <div class="small" id="metaTxt"></div>
+      <div class="row"><button id="startBtn" class="primary"></button></div>
+      <div class="row"><button id="upgradeForceBtn"></button></div>
+      <div class="row"><button id="upgradeRadiusBtn"></button></div>
+      <div class="row"><button id="upgradeUnlockBtn"></button></div>
+      <div class="row"><button id="langBtn"></button></div>
+    </section>
+
+    <section class="panel" id="gameoverPanel" style="display:none">
+      <h2 id="goTitle"></h2>
+      <div class="sub" id="goDesc"></div>
+      <div class="small" id="goMeta"></div>
+      <div class="row">
+        <button id="retryBtn" class="warn"></button>
+        <button id="homeBtn"></button>
+      </div>
+    </section>
+  </div>
+
+  <script src="../shared/sound-manager.js"></script>
+  <script src="../tg-sdk-wrapper.js"></script>
+  <script>
+  (() => {
+    'use strict';
+
+    const GAME_ID = 'wind-garden-forge';
+    const STORAGE_KEY = 'windGardenForgeSave_v1';
+
+    const TEXT = {
+      title: { ko:'윈드 가든 포지', en:'Wind Garden Forge' },
+      subtitle: { ko:'팬을 드래그해서 위치를 바꾸고 탭으로 방향을 회전하세요. 꽃가루 오브를 새싹 포드로 유도해 정원을 성장시키세요.', en:'Drag fans to move them and tap to rotate direction. Route pollen orbs into sprout pods to grow your garden.' },
+      start: { ko:'정원 시작', en:'Start Garden' },
+      retry: { ko:'다시 가꾸기', en:'Retry' },
+      home: { ko:'타이틀', en:'Home' },
+      gameover: { ko:'폭풍으로 정원 붕괴', en:'Storm Broke the Garden' },
+      gameoverDesc: { ko:'팬 배치를 조정해 더 오래 생태계를 유지해보세요.', en:'Reposition your fans to keep the ecosystem stable longer.' },
+      hint: { ko:'팬 드래그 이동 · 탭 회전 · 같은 색 포드로 유도', en:'Drag fan to move · Tap to rotate · Match pod colors' },
+      stormLabel: { ko:'폭풍', en:'Storm' },
+      stageLabel: { ko:'단계', en:'Stage' },
+      scoreLabel: { ko:'점수', en:'Score' },
+      bestLabel: { ko:'최고', en:'Best' },
+      comboLabel: { ko:'콤보', en:'Combo' },
+      goalLabel: { ko:'목표', en:'Goal' },
+      earned: { ko:'획득', en:'Earned' },
+      titleMeta: { ko:'최고 {best} · 크레딧 {credits} · 최대 단계 {maxStage}', en:'Best {best} · Credits {credits} · Max Stage {maxStage}' },
+      gameMeta: { ko:'점수 {score} · 도달 단계 {stage} · 획득 {earned}', en:'Score {score} · Reached Stage {stage} · Earned {earned}' },
+      forceUp: { ko:'팬 출력 강화', en:'Upgrade Fan Force' },
+      radiusUp: { ko:'팬 반경 강화', en:'Upgrade Fan Radius' },
+      unlockUp: { ko:'색상 언락 확장', en:'Expand Color Unlock' },
+      maxed: { ko:'최대', en:'MAX' },
+      needCredit: { ko:'크레딧 부족', en:'Not enough credits' },
+      bought: { ko:'강화 완료', en:'Upgrade purchased' },
+      langKo: { ko:'언어: 한국어', en:'Language: Korean' },
+      langEn: { ko:'언어: 영어', en:'Language: English' },
+      levelUp: { ko:'단계 상승!', en:'Stage Up!' },
+      harvest: { ko:'수확 성공', en:'Harvested' },
+      failed: { ko:'오브 손실', en:'Orb Lost' }
+    };
+
+    const tg = window.TG && typeof window.TG.init === 'function' ? window.TG : null;
+    if (tg) { try { tg.init(); } catch {} }
+    const haptic = (kind, style) => { try { if (tg && typeof tg.haptic === 'function') tg.haptic(kind, style); } catch {} };
+
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d', { alpha: false });
+    const $ = (id) => document.getElementById(id);
+
+    const hud = $('hud');
+    const controls = $('controls');
+    const hintBtn = $('hintBtn');
+
+    const titlePanel = $('titlePanel');
+    const gameoverPanel = $('gameoverPanel');
+
+    const startBtn = $('startBtn');
+    const retryBtn = $('retryBtn');
+    const homeBtn = $('homeBtn');
+    const langBtn = $('langBtn');
+
+    const upgradeForceBtn = $('upgradeForceBtn');
+    const upgradeRadiusBtn = $('upgradeRadiusBtn');
+    const upgradeUnlockBtn = $('upgradeUnlockBtn');
+
+    const titleTxt = $('titleTxt');
+    const subTxt = $('subTxt');
+    const metaTxt = $('metaTxt');
+    const goTitle = $('goTitle');
+    const goDesc = $('goDesc');
+    const goMeta = $('goMeta');
+    const toast = $('toast');
+
+    const mScore = $('mScore');
+    const mBest = $('mBest');
+    const mStorm = $('mStorm');
+    const mCombo = $('mCombo');
+    const mStage = $('mStage');
+    const mTarget = $('mTarget');
+
+    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+    const lerp = (a, b, t) => a + (b - a) * t;
+    const rnd = (a, b) => a + Math.random() * (b - a);
+
+    const C = [
+      { fill:'#8dd3ff', glow:'#d8f1ff' },
+      { fill:'#9dffbb', glow:'#dcffe8' },
+      { fill:'#ffd48e', glow:'#ffefcf' },
+      { fill:'#ff9cc4', glow:'#ffd8ea' }
+    ];
+
+    let W = 390;
+    let H = 844;
+    let DPR = Math.min(2, window.devicePixelRatio || 1);
+
+    let audioCtx = null;
+    function ensureAudio() {
+      if (audioCtx) return audioCtx;
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      audioCtx = new AC();
+      return audioCtx;
+    }
+
+    function tone(freq, dur = 0.06, type = 'sine', vol = 0.04, slide = 0) {
+      const ac = ensureAudio();
+      if (!ac) return;
+      const t = ac.currentTime;
+      const o = ac.createOscillator();
+      const g = ac.createGain();
+      o.type = type;
+      o.frequency.setValueAtTime(freq, t);
+      if (slide) o.frequency.linearRampToValueAtTime(freq + slide, t + dur);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(vol, t + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g); g.connect(ac.destination);
+      o.start(t); o.stop(t + dur + 0.01);
+    }
+
+    function sfxCollect() { tone(640, 0.07, 'triangle', 0.045, 120); }
+    function sfxMiss() { tone(190, 0.14, 'sawtooth', 0.045, -40); }
+    function sfxRotate() { tone(420, 0.05, 'square', 0.03, 20); }
+    function sfxLevel() { tone(480, 0.06, 'triangle', 0.04, 90); setTimeout(() => tone(640, 0.08, 'triangle', 0.04, 160), 45); }
+
+    function loadSave() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) throw new Error('empty');
+        const p = JSON.parse(raw);
+        return {
+          best: Number.isFinite(+p.best) ? +p.best : 0,
+          credits: Number.isFinite(+p.credits) ? +p.credits : 0,
+          maxStage: Number.isFinite(+p.maxStage) ? +p.maxStage : 1,
+          lang: p.lang === 'en' ? 'en' : 'ko',
+          upgrades: {
+            force: clamp((p.upgrades && Number.isFinite(+p.upgrades.force) ? +p.upgrades.force : 0), 0, 5),
+            radius: clamp((p.upgrades && Number.isFinite(+p.upgrades.radius) ? +p.upgrades.radius : 0), 0, 5),
+            unlock: clamp((p.upgrades && Number.isFinite(+p.upgrades.unlock) ? +p.upgrades.unlock : 0), 0, 2)
+          }
+        };
+      } catch {
+        return { best: 0, credits: 0, maxStage: 1, lang: 'ko', upgrades: { force: 0, radius: 0, unlock: 0 } };
+      }
+    }
+
+    const meta = loadSave();
+    let lang = meta.lang;
+
+    const tBase = window.GameI18n ? GameI18n(TEXT) : (k => (TEXT[k] && TEXT[k].en) || k);
+    function T(key, vars) {
+      let text = (TEXT[key] && TEXT[key][lang]) || tBase(key) || key;
+      if (vars) {
+        Object.keys(vars).forEach((v) => { text = text.replaceAll(`{${v}}`, String(vars[v])); });
+      }
+      return text;
+    }
+
+    function persist() {
+      meta.lang = lang;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(meta));
+    }
+
+    const game = {
+      state: 'title',
+      score: 0,
+      combo: 0,
+      comboTimer: 0,
+      storm: 100,
+      stage: 1,
+      stageFill: 0,
+      stageGoal: 8,
+      earned: 0,
+      fans: [],
+      orbs: [],
+      bursts: [],
+      pods: [],
+      spawnTimer: 0,
+      backgroundPulse: 0,
+      reachedStage: 1,
+      pointer: {
+        active: false,
+        id: -1,
+        fanIndex: -1,
+        sx: 0,
+        sy: 0,
+        moved: false
+      }
+    };
+
+    const DIR = [
+      { x:1, y:0 },
+      { x:0, y:1 },
+      { x:-1, y:0 },
+      { x:0, y:-1 }
+    ];
+
+    function colorCount() {
+      return 2 + meta.upgrades.unlock;
+    }
+
+    function forcePower() {
+      return 220 + meta.upgrades.force * 42;
+    }
+
+    function fanRadius() {
+      return 94 + meta.upgrades.radius * 14;
+    }
+
+    function makeFans() {
+      const y0 = H * 0.53;
+      return [
+        { x: W * 0.24, y: y0, dir: 1 },
+        { x: W * 0.50, y: y0 - 44, dir: 1 },
+        { x: W * 0.76, y: y0, dir: 1 }
+      ];
+    }
+
+    function makePods() {
+      const count = 4;
+      const arr = [];
+      const usable = colorCount();
+      const y = H - 122;
+      const w = Math.max(56, W * 0.18);
+      for (let i = 0; i < count; i++) {
+        arr.push({
+          x: ((i + 0.5) / count) * W,
+          y,
+          w,
+          h: 30,
+          color: i % usable,
+          pulse: 0
+        });
+      }
+      return arr;
+    }
+
+    function orbSpawnInterval() {
+      return Math.max(0.28, 1.08 - game.stage * 0.05);
+    }
+
+    function stageGoal(stage) {
+      return 8 + Math.floor(stage * 2.4);
+    }
+
+    function resetRun() {
+      game.score = 0;
+      game.combo = 0;
+      game.comboTimer = 0;
+      game.storm = 100;
+      game.stage = 1;
+      game.stageFill = 0;
+      game.stageGoal = stageGoal(1);
+      game.earned = 0;
+      game.reachedStage = 1;
+      game.fans = makeFans();
+      game.orbs = [];
+      game.bursts = [];
+      game.pods = makePods();
+      game.spawnTimer = 0.3;
+      game.backgroundPulse = 0;
+    }
+
+    function resize() {
+      DPR = Math.min(2, window.devicePixelRatio || 1);
+      W = window.innerWidth;
+      H = window.innerHeight;
+      canvas.width = Math.floor(W * DPR);
+      canvas.height = Math.floor(H * DPR);
+      canvas.style.width = W + 'px';
+      canvas.style.height = H + 'px';
+      ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+      if (game.state !== 'play') {
+        game.fans = makeFans();
+        game.pods = makePods();
+      }
+    }
+
+    function showToast(text, ms = 680) {
+      toast.textContent = text;
+      toast.classList.add('show');
+      clearTimeout(showToast._t);
+      showToast._t = setTimeout(() => toast.classList.remove('show'), ms);
+    }
+
+    function setPanels(titleVisible) {
+      titlePanel.style.display = titleVisible ? '' : 'none';
+      gameoverPanel.style.display = 'none';
+    }
+
+    function syncHud() {
+      mScore.textContent = `${T('scoreLabel')} ${game.score}`;
+      mBest.textContent = `${T('bestLabel')} ${meta.best}`;
+      mStorm.innerHTML = `${T('stormLabel')} <b>${Math.max(0, Math.floor(game.storm))}</b>`;
+      mCombo.textContent = `${T('comboLabel')} x${game.combo}`;
+      mStage.textContent = `${T('stageLabel')} ${game.stage}`;
+      mTarget.textContent = `${T('goalLabel')} ${game.stageFill}/${game.stageGoal}`;
+      hintBtn.textContent = T('hint');
+    }
+
+    function syncText() {
+      titleTxt.textContent = T('title');
+      subTxt.textContent = T('subtitle');
+      metaTxt.textContent = T('titleMeta', { best: meta.best, credits: meta.credits, maxStage: meta.maxStage });
+      startBtn.textContent = T('start');
+      retryBtn.textContent = T('retry');
+      homeBtn.textContent = T('home');
+      goTitle.textContent = T('gameover');
+      goDesc.textContent = T('gameoverDesc');
+      langBtn.textContent = lang === 'ko' ? T('langEn') : T('langKo');
+      syncUpgradeText();
+      syncHud();
+    }
+
+    function upCost(type) {
+      if (type === 'force') return 70 + meta.upgrades.force * 50;
+      if (type === 'radius') return 80 + meta.upgrades.radius * 55;
+      if (type === 'unlock') return 140 + meta.upgrades.unlock * 120;
+      return 999;
+    }
+
+    function syncUpgradeText() {
+      const fLv = meta.upgrades.force;
+      const rLv = meta.upgrades.radius;
+      const uLv = meta.upgrades.unlock;
+
+      const fText = fLv >= 5 ? `${T('forceUp')} · ${T('maxed')}` : `${T('forceUp')} Lv.${fLv} · ${upCost('force')}c`;
+      const rText = rLv >= 5 ? `${T('radiusUp')} · ${T('maxed')}` : `${T('radiusUp')} Lv.${rLv} · ${upCost('radius')}c`;
+      const uText = uLv >= 2 ? `${T('unlockUp')} · ${T('maxed')}` : `${T('unlockUp')} Lv.${uLv} · ${upCost('unlock')}c`;
+
+      upgradeForceBtn.textContent = fText;
+      upgradeRadiusBtn.textContent = rText;
+      upgradeUnlockBtn.textContent = `${uText} (2→${2 + meta.upgrades.unlock} colors)`;
+      metaTxt.textContent = T('titleMeta', { best: meta.best, credits: meta.credits, maxStage: meta.maxStage });
+    }
+
+    function buyUpgrade(key) {
+      const lv = meta.upgrades[key];
+      const max = key === 'unlock' ? 2 : 5;
+      if (lv >= max) {
+        showToast(T('maxed'));
+        return false;
+      }
+      const cost = upCost(key);
+      if (meta.credits < cost) {
+        showToast(T('needCredit'));
+        return false;
+      }
+      meta.credits -= cost;
+      meta.upgrades[key] += 1;
+      persist();
+      syncUpgradeText();
+      showToast(T('bought'));
+      haptic('impact', 'light');
+      return true;
+    }
+
+    function showTitle() {
+      game.state = 'title';
+      hud.classList.remove('show');
+      controls.classList.remove('show');
+      setPanels(true);
+      syncText();
+    }
+
+    function startRun() {
+      ensureAudio();
+      resetRun();
+      game.state = 'play';
+      titlePanel.style.display = 'none';
+      gameoverPanel.style.display = 'none';
+      hud.classList.add('show');
+      controls.classList.add('show');
+      syncHud();
+      showToast(T('hint'), 1200);
+      haptic('impact', 'light');
+    }
+
+    function endRun() {
+      game.state = 'gameover';
+      hud.classList.remove('show');
+      controls.classList.remove('show');
+      game.earned = Math.max(8, Math.floor(game.score / 18) + game.stage * 2);
+      meta.credits += game.earned;
+      if (game.score > meta.best) meta.best = game.score;
+      if (game.reachedStage > meta.maxStage) meta.maxStage = game.reachedStage;
+      persist();
+
+      goMeta.textContent = T('gameMeta', { score: game.score, stage: game.stage, earned: game.earned });
+      titlePanel.style.display = 'none';
+      gameoverPanel.style.display = '';
+
+      try {
+        if (window.Leaderboard && typeof window.Leaderboard.submitScore === 'function') {
+          window.Leaderboard.submitScore(game.score);
+        }
+      } catch {}
+    }
+
+    function spawnOrb(custom = null) {
+      const colors = colorCount();
+      const o = custom || {
+        x: rnd(30, W - 30),
+        y: -24,
+        vx: rnd(-36, 36),
+        vy: rnd(34, 74) + game.stage * 4,
+        r: rnd(8, 12),
+        color: Math.floor(Math.random() * colors),
+        life: 0
+      };
+      game.orbs.push(o);
+      return o;
+    }
+
+    function burst(x, y, color, power = 1) {
+      for (let i = 0; i < 9 * power; i++) {
+        const ang = rnd(0, Math.PI * 2);
+        const sp = rnd(50, 160) * power;
+        game.bursts.push({
+          x, y,
+          vx: Math.cos(ang) * sp,
+          vy: Math.sin(ang) * sp,
+          life: rnd(0.3, 0.65),
+          age: 0,
+          color
+        });
+      }
+    }
+
+    function handleHarvest(orb, pod) {
+      const nowCombo = game.comboTimer > 0 ? game.combo + 1 : 1;
+      game.combo = nowCombo;
+      game.comboTimer = 1.1;
+      const gain = 7 + Math.floor(game.stage * 0.8) + nowCombo * 2;
+      game.score += gain;
+      game.stageFill += 1;
+      pod.pulse = 1;
+      burst(orb.x, orb.y, C[orb.color].fill, 1);
+      sfxCollect();
+      haptic('impact', 'light');
+
+      if (game.stageFill >= game.stageGoal) {
+        game.stage += 1;
+        game.reachedStage = Math.max(game.reachedStage, game.stage);
+        game.stageFill = 0;
+        game.stageGoal = stageGoal(game.stage);
+        game.storm = clamp(game.storm + 12, 0, 100);
+        sfxLevel();
+        haptic('notification', 'success');
+        showToast(T('levelUp'));
+      }
+    }
+
+    function handleMiss(x, y) {
+      game.combo = 0;
+      game.comboTimer = 0;
+      game.storm -= 13;
+      burst(x, y, '#ffc2c2', 1);
+      sfxMiss();
+      haptic('notification', 'error');
+      showToast(T('failed'), 420);
+      if (game.storm <= 0) {
+        game.storm = 0;
+        endRun();
+      }
+    }
+
+    function updatePlay(dt) {
+      game.backgroundPulse += dt;
+      game.comboTimer = Math.max(0, game.comboTimer - dt);
+      if (game.comboTimer <= 0) game.combo = 0;
+
+      game.spawnTimer -= dt;
+      if (game.spawnTimer <= 0) {
+        spawnOrb();
+        game.spawnTimer = orbSpawnInterval();
+      }
+
+      const g = 120 + game.stage * 8;
+      const fPower = forcePower();
+      const fRadius = fanRadius();
+      const playFloorY = H - 96;
+
+      for (let i = game.orbs.length - 1; i >= 0; i--) {
+        const o = game.orbs[i];
+        o.life += dt;
+
+        o.vy += g * dt;
+
+        for (let j = 0; j < game.fans.length; j++) {
+          const f = game.fans[j];
+          const dx = o.x - f.x;
+          const dy = o.y - f.y;
+          const dist = Math.hypot(dx, dy);
+          if (dist < fRadius) {
+            const p = (1 - dist / fRadius);
+            const dir = DIR[f.dir];
+            const accel = fPower * p;
+            o.vx += dir.x * accel * dt;
+            o.vy += dir.y * accel * dt;
+            o.vx += (-dy / Math.max(12, dist)) * 16 * p * dt; // subtle swirl
+          }
+        }
+
+        o.x += o.vx * dt;
+        o.y += o.vy * dt;
+
+        if (o.x < o.r) { o.x = o.r; o.vx *= -0.62; }
+        if (o.x > W - o.r) { o.x = W - o.r; o.vx *= -0.62; }
+
+        if (o.y > playFloorY) {
+          let podHit = null;
+          for (let p = 0; p < game.pods.length; p++) {
+            const pod = game.pods[p];
+            if (Math.abs(o.x - pod.x) <= pod.w * 0.5) { podHit = pod; break; }
+          }
+          if (podHit && podHit.color === o.color) {
+            handleHarvest(o, podHit);
+          } else {
+            handleMiss(o.x, Math.min(H - 110, o.y));
+          }
+          game.orbs.splice(i, 1);
+          continue;
+        }
+
+        if (o.y > H + 60 || o.life > 12) {
+          game.orbs.splice(i, 1);
+          handleMiss(o.x, H - 110);
+        }
+      }
+
+      for (let i = game.bursts.length - 1; i >= 0; i--) {
+        const b = game.bursts[i];
+        b.age += dt;
+        b.x += b.vx * dt;
+        b.y += b.vy * dt;
+        b.vx *= 0.98;
+        b.vy *= 0.98;
+        if (b.age > b.life) game.bursts.splice(i, 1);
+      }
+
+      for (const pod of game.pods) pod.pulse = Math.max(0, pod.pulse - dt * 2.6);
+
+      syncHud();
+    }
+
+    function drawBackground(now) {
+      const t = now * 0.001;
+      const pulse = 0.08 + Math.sin(t * 1.3 + game.backgroundPulse * 2.1) * 0.05;
+      const grd = ctx.createLinearGradient(0, 0, 0, H);
+      grd.addColorStop(0, `rgba(23,71,122,${0.95 + pulse})`);
+      grd.addColorStop(0.42, '#102845');
+      grd.addColorStop(1, '#070f1f');
+      ctx.fillStyle = grd;
+      ctx.fillRect(0, 0, W, H);
+
+      ctx.globalAlpha = 0.08;
+      ctx.strokeStyle = '#b1dcff';
+      ctx.lineWidth = 1;
+      for (let y = 88; y < H - 120; y += 44) {
+        ctx.beginPath();
+        ctx.moveTo(0, y + Math.sin((t * 0.8) + y * 0.01) * 2.2);
+        ctx.lineTo(W, y + Math.cos((t * 0.8) + y * 0.01) * 2.2);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    function drawPods() {
+      const y = H - 108;
+      ctx.fillStyle = 'rgba(6,13,29,.75)';
+      ctx.fillRect(0, y - 26, W, 70);
+
+      for (const pod of game.pods) {
+        const cc = C[pod.color];
+        const pulse = pod.pulse;
+        const w = pod.w + pulse * 8;
+        const h = pod.h + pulse * 4;
+
+        ctx.fillStyle = 'rgba(12,28,52,.95)';
+        roundRect(ctx, pod.x - w * 0.5, pod.y - h * 0.6, w, h, 8, true);
+
+        ctx.globalAlpha = 0.35 + pulse * 0.4;
+        ctx.fillStyle = cc.fill;
+        roundRect(ctx, pod.x - w * 0.46, pod.y - h * 0.45, w * 0.92, h * 0.38, 6, true);
+        ctx.globalAlpha = 1;
+
+        ctx.strokeStyle = cc.glow;
+        ctx.lineWidth = 2;
+        roundRect(ctx, pod.x - w * 0.5, pod.y - h * 0.6, w, h, 8, false);
+      }
+    }
+
+    function drawFans() {
+      const rad = fanRadius();
+      for (let i = 0; i < game.fans.length; i++) {
+        const f = game.fans[i];
+        const active = game.pointer.active && game.pointer.fanIndex === i;
+
+        ctx.globalAlpha = 0.12;
+        ctx.fillStyle = '#9de7ff';
+        ctx.beginPath(); ctx.arc(f.x, f.y, rad, 0, Math.PI * 2); ctx.fill();
+
+        ctx.globalAlpha = 0.95;
+        ctx.fillStyle = active ? '#95ffe0' : '#89d6ff';
+        ctx.beginPath(); ctx.arc(f.x, f.y, 22, 0, Math.PI * 2); ctx.fill();
+
+        ctx.strokeStyle = '#e7f7ff';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(f.x, f.y, 22, 0, Math.PI * 2); ctx.stroke();
+
+        const d = DIR[f.dir];
+        const tx = f.x + d.x * 15;
+        const ty = f.y + d.y * 15;
+        ctx.strokeStyle = '#0d2a41';
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(f.x - d.x * 10, f.y - d.y * 10); ctx.lineTo(tx, ty); ctx.stroke();
+
+        const px = tx + d.x * 6;
+        const py = ty + d.y * 6;
+        const nx = -d.y;
+        const ny = d.x;
+        ctx.fillStyle = '#0d2a41';
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.lineTo(px - d.x * 8 + nx * 5, py - d.y * 8 + ny * 5);
+        ctx.lineTo(px - d.x * 8 - nx * 5, py - d.y * 8 - ny * 5);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    function drawOrbs() {
+      for (const o of game.orbs) {
+        const c = C[o.color];
+        ctx.globalAlpha = 0.26;
+        ctx.fillStyle = c.glow;
+        ctx.beginPath(); ctx.arc(o.x, o.y, o.r * 2.1, 0, Math.PI * 2); ctx.fill();
+
+        const g = ctx.createRadialGradient(o.x - o.r * 0.3, o.y - o.r * 0.4, 1, o.x, o.y, o.r);
+        g.addColorStop(0, '#ffffff');
+        g.addColorStop(0.42, c.glow);
+        g.addColorStop(1, c.fill);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(o.x, o.y, o.r, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+
+    function drawBursts() {
+      for (const b of game.bursts) {
+        const alpha = 1 - (b.age / b.life);
+        if (alpha <= 0) continue;
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = b.color;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, 2.3 + alpha * 1.8, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    function drawTitleBackdrop() {
+      if (game.state === 'play') return;
+      ctx.fillStyle = 'rgba(6,12,24,.35)';
+      ctx.fillRect(0, 0, W, H);
+
+      ctx.fillStyle = 'rgba(150,217,255,.18)';
+      for (let i = 0; i < 5; i++) {
+        const x = (i + 1) * (W / 6);
+        const y = H * (0.26 + i * 0.1);
+        ctx.beginPath();
+        ctx.arc(x, y, 14 + i * 4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    function roundRect(ctx2, x, y, w, h, r, fill = false) {
+      const rr = Math.min(r, w * 0.5, h * 0.5);
+      ctx2.beginPath();
+      ctx2.moveTo(x + rr, y);
+      ctx2.arcTo(x + w, y, x + w, y + h, rr);
+      ctx2.arcTo(x + w, y + h, x, y + h, rr);
+      ctx2.arcTo(x, y + h, x, y, rr);
+      ctx2.arcTo(x, y, x + w, y, rr);
+      if (fill) ctx2.fill(); else ctx2.stroke();
+    }
+
+    function screenToCanvas(clientX, clientY) {
+      const rect = canvas.getBoundingClientRect();
+      return { x: clientX - rect.left, y: clientY - rect.top };
+    }
+
+    function pickFan(x, y) {
+      let best = -1;
+      let bestD = Infinity;
+      for (let i = 0; i < game.fans.length; i++) {
+        const f = game.fans[i];
+        const d = Math.hypot(x - f.x, y - f.y);
+        if (d < 30 && d < bestD) {
+          best = i;
+          bestD = d;
+        }
+      }
+      return best;
+    }
+
+    function rotateFan(idx) {
+      const f = game.fans[idx];
+      if (!f) return;
+      f.dir = (f.dir + 1) % 4;
+      sfxRotate();
+      haptic('impact', 'soft');
+    }
+
+    function onPointerDown(e) {
+      if (game.state !== 'play') return;
+      ensureAudio();
+      const p = screenToCanvas(e.clientX, e.clientY);
+      const idx = pickFan(p.x, p.y);
+      if (idx === -1) return;
+      game.pointer.active = true;
+      game.pointer.id = e.pointerId;
+      game.pointer.fanIndex = idx;
+      game.pointer.sx = p.x;
+      game.pointer.sy = p.y;
+      game.pointer.moved = false;
+      canvas.setPointerCapture(e.pointerId);
+    }
+
+    function onPointerMove(e) {
+      if (!game.pointer.active || e.pointerId !== game.pointer.id || game.state !== 'play') return;
+      const p = screenToCanvas(e.clientX, e.clientY);
+      const f = game.fans[game.pointer.fanIndex];
+      if (!f) return;
+      if (Math.hypot(p.x - game.pointer.sx, p.y - game.pointer.sy) > 8) game.pointer.moved = true;
+      f.x = clamp(p.x, 34, W - 34);
+      f.y = clamp(p.y, 118, H - 168);
+    }
+
+    function onPointerUp(e) {
+      if (!game.pointer.active || e.pointerId !== game.pointer.id) return;
+      if (game.state === 'play' && !game.pointer.moved && game.pointer.fanIndex >= 0) {
+        rotateFan(game.pointer.fanIndex);
+      }
+      game.pointer.active = false;
+      game.pointer.id = -1;
+      game.pointer.fanIndex = -1;
+      game.pointer.moved = false;
+    }
+
+    canvas.addEventListener('pointerdown', onPointerDown, { passive: true });
+    canvas.addEventListener('pointermove', onPointerMove, { passive: true });
+    canvas.addEventListener('pointerup', onPointerUp, { passive: true });
+    canvas.addEventListener('pointercancel', onPointerUp, { passive: true });
+
+    startBtn.addEventListener('click', startRun);
+    retryBtn.addEventListener('click', startRun);
+    homeBtn.addEventListener('click', showTitle);
+    hintBtn.addEventListener('click', () => showToast(T('hint')));
+
+    langBtn.addEventListener('click', () => {
+      lang = lang === 'ko' ? 'en' : 'ko';
+      persist();
+      syncText();
+    });
+
+    upgradeForceBtn.addEventListener('click', () => buyUpgrade('force'));
+    upgradeRadiusBtn.addEventListener('click', () => buyUpgrade('radius'));
+    upgradeUnlockBtn.addEventListener('click', () => buyUpgrade('unlock'));
+
+    function render(now) {
+      drawBackground(now);
+      drawPods();
+      drawFans();
+      drawOrbs();
+      drawBursts();
+      drawTitleBackdrop();
+    }
+
+    let last = performance.now();
+    function loop(now) {
+      const dt = clamp((now - last) / 1000, 0, 0.05);
+      last = now;
+      if (game.state === 'play') updatePlay(dt);
+      render(now);
+      requestAnimationFrame(loop);
+    }
+
+    resize();
+    window.addEventListener('resize', resize);
+
+    try {
+      if (window.Leaderboard && typeof window.Leaderboard.renderBoard === 'function') {
+        window.Leaderboard.renderBoard('leaderboard');
+      }
+    } catch {}
+
+    syncText();
+    showTitle();
+    requestAnimationFrame(loop);
+
+    window.__windGardenForge = {
+      start: startRun,
+      retry: startRun,
+      home: showTitle,
+      getState: () => game.state,
+      getMetrics: () => ({ score: game.score, stage: game.stage, storm: game.storm, combo: game.combo, fill: game.stageFill, goal: game.stageGoal }),
+      getFans: () => game.fans.map(f => ({ x: f.x, y: f.y, dir: f.dir })),
+      rotateFan,
+      moveFan: (i, x, y) => {
+        const f = game.fans[i];
+        if (!f) return null;
+        f.x = clamp(+x || f.x, 34, W - 34);
+        f.y = clamp(+y || f.y, 118, H - 168);
+        return { x: f.x, y: f.y, dir: f.dir };
+      },
+      debugHarvest: (n = 1) => {
+        if (game.state !== 'play') return false;
+        for (let i = 0; i < n; i++) {
+          const pod = game.pods[i % game.pods.length];
+          handleHarvest({ x: pod.x, y: pod.y - 18, color: pod.color }, pod);
+        }
+        return true;
+      },
+      debugMiss: (n = 1) => {
+        if (game.state !== 'play') return false;
+        for (let i = 0; i < n; i++) handleMiss(W * 0.5, H - 120);
+        return true;
+      },
+      forceGameOver: () => {
+        if (game.state !== 'play') return false;
+        game.storm = 0;
+        endRun();
+        return true;
+      },
+      addCredits: (n = 0) => { meta.credits += Number(n) || 0; persist(); syncUpgradeText(); return meta.credits; },
+      buy: buyUpgrade,
+      toggleLang: () => { langBtn.click(); return lang; },
+      getSave: () => {
+        try { return JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch { return null; }
+      },
+      storageKey: STORAGE_KEY
+    };
+  })();
+  </script>
+
+  <script src="/games/cross-promo.js"></script>
+  <script src="../shared/leaderboard.js"></script>
+</body>
+</html>

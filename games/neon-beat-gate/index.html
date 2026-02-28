@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+  <title>Neon Beat Gate</title>
+  <meta name="description" content="Tap left/right on the beat, stack combo, and fire Overdrive in this mobile rhythm canvas game." />
+  <meta name="keywords" content="html5 rhythm game,beat game,mobile touch,canvas,telegram mini app" />
+  <meta property="og:title" content="Neon Beat Gate" />
+  <meta property="og:description" content="A two-lane rhythm survival with combo, overdrive, and persistent upgrades." />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="/games/neon-beat-gate/cover.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Neon Beat Gate" />
+  <meta name="twitter:description" content="Hit the beat gates, protect HP, and climb the leaderboard." />
+  <link rel="manifest" href="/games/manifest.json" />
+  <script type="application/ld+json">
+  {
+    "@context":"https://schema.org",
+    "@type":"VideoGame",
+    "name":"Neon Beat Gate",
+    "genre":["Rhythm","Arcade"],
+    "applicationCategory":"Game",
+    "operatingSystem":"Any",
+    "inLanguage":["ko","en"],
+    "url":"https://eastsea.games/games/neon-beat-gate/"
+  }
+  </script>
+  <style>
+    :root{
+      --bg0:#040716;
+      --bg1:#102550;
+      --bg2:#32145f;
+      --panel:rgba(8,14,40,.85);
+      --line:rgba(158,195,255,.35);
+      --text:#eef4ff;
+      --cyan:#7beaff;
+      --pink:#ff8cfa;
+      --lime:#a7ff9f;
+      --warn:#ff8d93;
+      --gold:#ffd189;
+    }
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;}
+    html,body{margin:0;width:100%;height:100%;overflow:hidden;background:radial-gradient(circle at 50% 0%, #2a2f78 0%, #070b17 56%);color:var(--text);font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Noto Sans KR',sans-serif;}
+    body{touch-action:none;}
+    #game{position:fixed;inset:0;width:100%;height:100%;display:block;background:linear-gradient(180deg,var(--bg2),var(--bg0));}
+
+    #hud{
+      position:fixed;left:10px;right:10px;top:max(10px,env(safe-area-inset-top));
+      display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;
+      background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:9px 11px;
+      backdrop-filter:blur(8px);z-index:30;opacity:0;pointer-events:none;transform:translateY(-8px);
+      transition:opacity .2s ease,transform .2s ease;font-size:12px;font-weight:700;
+    }
+    #hud.show{opacity:1;transform:translateY(0);}
+    .metric{min-width:56px}
+    .metric b{color:var(--lime)}
+
+    #controls{
+      position:fixed;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));
+      display:grid;grid-template-columns:1fr 1fr;gap:10px;z-index:32;pointer-events:none;
+    }
+    #controls.show{pointer-events:auto;}
+    .pad{
+      min-height:58px;border-radius:13px;border:1px solid rgba(180,223,255,.35);
+      background:rgba(9,18,44,.82);color:var(--text);font-weight:800;font-size:14px;letter-spacing:.2px;
+    }
+    .pad.left{background:linear-gradient(135deg,#61d1ff,#7f8dff);color:#031e3e}
+    .pad.right{background:linear-gradient(135deg,#ff8cfa,#ffb18a);color:#3a0e30}
+    .pad.overdrive{grid-column:1 / span 2;background:linear-gradient(135deg,#8bffb0,#6de9ff);color:#04352e}
+    .pad.overdrive.lock{filter:grayscale(.35) brightness(.66)}
+
+    #overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:40;padding:12px;pointer-events:none;}
+    .panel{
+      width:min(95vw,460px);pointer-events:auto;background:linear-gradient(180deg,rgba(10,22,58,.95),rgba(7,11,30,.94));
+      border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:0 24px 56px rgba(0,0,0,.46);
+    }
+    h1,h2{margin:0 0 8px;line-height:1.15}
+    h1{font-size:clamp(28px,7vw,36px)}
+    h2{font-size:clamp(23px,6vw,30px)}
+    .sub{font-size:14px;line-height:1.42;opacity:.92;margin-bottom:12px}
+    .small{font-size:12px;opacity:.84;line-height:1.4}
+    .row{display:flex;gap:8px;margin-top:10px;}
+    button{
+      min-height:46px;flex:1;border-radius:10px;border:1px solid rgba(255,255,255,.24);
+      background:rgba(17,35,77,.67);color:var(--text);font-size:15px;font-weight:760;padding:10px 14px;cursor:pointer;
+    }
+    button.primary{background:linear-gradient(135deg,#70d0ff,#90ffbc);color:#07273f;border-color:rgba(150,255,214,.64)}
+    button.warn{background:linear-gradient(135deg,#ffb08e,#ff8a90);color:#431714;border-color:rgba(255,196,154,.62)}
+
+    #judge{
+      position:fixed;left:50%;top:46%;transform:translate(-50%,-50%);z-index:35;
+      font-size:clamp(20px,5vw,28px);font-weight:900;letter-spacing:.8px;
+      text-shadow:0 0 18px rgba(255,255,255,.42);opacity:0;transition:opacity .15s ease;
+      pointer-events:none;
+    }
+    #judge.show{opacity:1}
+
+    #leaderboard{
+      position:fixed;left:10px;right:10px;bottom:calc(142px + env(safe-area-inset-bottom));z-index:18;
+      background:rgba(8,14,34,.58);border:1px solid rgba(120,180,255,.24);border-radius:9px;padding:5px 8px;
+      font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.84;
+    }
+  </style>
+  <script src="../i18n.js"></script>
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div id="hud">
+    <div class="metric" id="mScore">S 0</div>
+    <div class="metric" id="mCombo">C 0</div>
+    <div class="metric" id="mHp">HP 0</div>
+    <div class="metric" id="mStage">ST 1</div>
+    <div class="metric" id="mEnergy">OD 0%</div>
+  </div>
+
+  <div id="leaderboard" data-lb-slug="neon-beat-gate"></div>
+
+  <div id="controls">
+    <button id="leftBtn" class="pad left"></button>
+    <button id="rightBtn" class="pad right"></button>
+    <button id="overdriveBtn" class="pad overdrive lock"></button>
+  </div>
+
+  <div id="judge"></div>
+
+  <div id="overlay">
+    <section class="panel" id="titlePanel">
+      <h1 id="titleTxt"></h1>
+      <div class="sub" id="subTxt"></div>
+      <div class="small" id="metaTxt"></div>
+      <div class="row"><button id="startBtn" class="primary"></button></div>
+      <div class="row"><button id="upgradeBtn"></button></div>
+      <div class="row"><button id="langBtn"></button></div>
+    </section>
+
+    <section class="panel" id="gameoverPanel" style="display:none;">
+      <h2 id="goTitle"></h2>
+      <div class="sub" id="goDesc"></div>
+      <div class="small" id="goMeta"></div>
+      <div class="row">
+        <button id="retryBtn" class="warn"></button>
+        <button id="homeBtn"></button>
+      </div>
+    </section>
+  </div>
+
+  <script src="../shared/sound-manager.js"></script>
+  <script src="../tg-sdk-wrapper.js"></script>
+  <script>
+  (() => {
+    'use strict';
+
+    const GAME_ID = 'neon-beat-gate';
+    const STORAGE_KEY = 'neonBeatGateSave_v1';
+
+    const I18N = {
+      title: { ko:'네온 비트 게이트', en:'Neon Beat Gate' },
+      subtitle: { ko:'좌/우 패드로 비트 게이트를 맞추고 콤보를 유지하세요. 오버드라이브로 위기를 돌파하세요.', en:'Tap left/right on beat gates, keep combo alive, and burst through with Overdrive.' },
+      start: { ko:'비트 시작', en:'Start Run' },
+      retry: { ko:'다시 도전', en:'Retry' },
+      home: { ko:'타이틀', en:'Home' },
+      left: { ko:'왼쪽 비트', en:'Left Beat' },
+      right: { ko:'오른쪽 비트', en:'Right Beat' },
+      overdrive: { ko:'오버드라이브', en:'Overdrive' },
+      overdriveReady: { ko:'오버드라이브 발동!', en:'Overdrive Ready!' },
+      overdriveNeed: { ko:'에너지가 부족합니다', en:'Not enough energy' },
+      goTitle: { ko:'세트 종료', en:'Set Over' },
+      goDesc: { ko:'HP가 모두 소진되었습니다. 정확도를 올려 베스트를 갱신하세요.', en:'HP depleted. Improve timing and push a new best.' },
+      score: { ko:'점수', en:'Score' },
+      combo: { ko:'콤보', en:'Combo' },
+      best: { ko:'베스트', en:'Best' },
+      hp: { ko:'체력', en:'HP' },
+      stage: { ko:'스테이지', en:'Stage' },
+      credits: { ko:'크레딧', en:'Credits' },
+      earned: { ko:'획득', en:'Earned' },
+      perfect: { ko:'퍼펙트', en:'PERFECT' },
+      good: { ko:'굿', en:'GOOD' },
+      miss: { ko:'미스', en:'MISS' },
+      focusUpgrade: { ko:'포커스 업그레이드', en:'Upgrade Focus' },
+      focusMax: { ko:'포커스 최대치', en:'Focus Maxed' },
+      focusNeed: { ko:'크레딧 부족', en:'Not enough credits' },
+      langLabel: { ko:'언어: 한국어', en:'Language: English' },
+      titleMeta: { ko:'베스트 {best} · 크레딧 {credits} · 포커스 Lv.{focus}', en:'Best {best} · Credits {credits} · Focus Lv.{focus}' },
+      gameMeta: { ko:'점수 {score} · 최대 콤보 {combo} · 획득 {earned}', en:'Score {score} · Max Combo {combo} · Earned {earned}' }
+    };
+
+    const tg = window.TG && typeof TG.init === 'function' ? window.TG : null;
+    if (tg) tg.init();
+
+    const snd = window.SoundManager ? new SoundManager() : { loadSFX(){}, play(){} };
+    snd.loadSFX('tap', 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEA');
+    snd.loadSFX('hit', 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEA');
+    snd.loadSFX('fail', 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEA');
+
+    const $ = (id) => document.getElementById(id);
+    const canvas = $('game');
+    const ctx = canvas.getContext('2d');
+
+    const hud = $('hud');
+    const controls = $('controls');
+    const titlePanel = $('titlePanel');
+    const gameoverPanel = $('gameoverPanel');
+
+    const startBtn = $('startBtn');
+    const retryBtn = $('retryBtn');
+    const homeBtn = $('homeBtn');
+    const langBtn = $('langBtn');
+    const upgradeBtn = $('upgradeBtn');
+
+    const leftBtn = $('leftBtn');
+    const rightBtn = $('rightBtn');
+    const overdriveBtn = $('overdriveBtn');
+    const judge = $('judge');
+
+    const mScore = $('mScore');
+    const mCombo = $('mCombo');
+    const mHp = $('mHp');
+    const mStage = $('mStage');
+    const mEnergy = $('mEnergy');
+
+    const titleTxt = $('titleTxt');
+    const subTxt = $('subTxt');
+    const metaTxt = $('metaTxt');
+    const goTitle = $('goTitle');
+    const goDesc = $('goDesc');
+    const goMeta = $('goMeta');
+
+    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+    const lerp = (a, b, t) => a + (b - a) * t;
+    const rnd = (a, b) => a + Math.random() * (b - a);
+
+    function loadSave() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) throw 0;
+        const p = JSON.parse(raw);
+        return {
+          best: +p.best || 0,
+          credits: +p.credits || 0,
+          lang: p.lang === 'ko' ? 'ko' : 'en',
+          upgrades: { focus: clamp((p.upgrades && +p.upgrades.focus) || 0, 0, 3) }
+        };
+      } catch {
+        return { best: 0, credits: 0, lang: 'ko', upgrades: { focus: 0 } };
+      }
+    }
+
+    const save = loadSave();
+    let lang = save.lang;
+    document.documentElement.lang = lang;
+
+    const _Tbase = window.GameI18n ? GameI18n(I18N) : (k => (I18N[k] && I18N[k].en) || k);
+    const T = (key, vars) => {
+      let text = (I18N[key] && I18N[key][lang]) || _Tbase(key);
+      if (vars) for (const [k, v] of Object.entries(vars)) text = text.replaceAll(`{${k}}`, String(v));
+      return text;
+    };
+
+    let DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    let W = 390;
+    let H = 844;
+    let hitY = 650;
+
+    function resize() {
+      DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+      W = Math.max(320, window.innerWidth);
+      H = Math.max(560, window.innerHeight);
+      canvas.width = Math.floor(W * DPR);
+      canvas.height = Math.floor(H * DPR);
+      canvas.style.width = W + 'px';
+      canvas.style.height = H + 'px';
+      ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+      hitY = H * 0.78;
+    }
+    addEventListener('resize', resize, { passive: true });
+    resize();
+
+    function laneX(lane) {
+      return lane === 0 ? W * 0.3 : W * 0.7;
+    }
+
+    const game = {
+      state: 'title',
+      score: 0,
+      best: save.best,
+      combo: 0,
+      maxCombo: 0,
+      stage: 1,
+      hp: 0,
+      energy: 0,
+      earned: 0,
+      credits: save.credits,
+      bpm: 112,
+      noteSpeed: 280,
+      notes: [],
+      particles: [],
+      bars: [],
+      spawnT: 0,
+      elapsed: 0,
+      overdrive: 0,
+      judgeText: '',
+      judgeT: 0,
+      beatPhase: 0,
+      inputCd: 0,
+      seedLane: 0
+    };
+
+    for (let i = 0; i < 52; i++) {
+      game.bars.push({ x: rnd(0, W), y: rnd(0, H), h: rnd(40, 220), spd: rnd(20, 90), a: rnd(0.08, 0.28) });
+    }
+
+    function persist() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        best: save.best,
+        credits: save.credits,
+        lang,
+        upgrades: { focus: save.upgrades.focus }
+      }));
+    }
+
+    function focusCost(level) {
+      return 110 + level * 90;
+    }
+
+    function buyFocus() {
+      if (save.upgrades.focus >= 3) {
+        flashJudge(T('focusMax'), '#ffd88f');
+        return false;
+      }
+      const cost = focusCost(save.upgrades.focus);
+      if (save.credits < cost) {
+        flashJudge(T('focusNeed'), '#ff9fa4');
+        return false;
+      }
+      save.credits -= cost;
+      game.credits = save.credits;
+      save.upgrades.focus += 1;
+      snd.play('hit', 1.0);
+      if (tg) tg.haptic('impact', 'medium');
+      persist();
+      syncText();
+      return true;
+    }
+
+    function showTitle() {
+      game.state = 'title';
+      hud.classList.remove('show');
+      controls.classList.remove('show');
+      titlePanel.style.display = '';
+      gameoverPanel.style.display = 'none';
+      syncText();
+    }
+
+    function resetRun() {
+      game.state = 'play';
+      game.score = 0;
+      game.combo = 0;
+      game.maxCombo = 0;
+      game.stage = 1;
+      game.energy = 0;
+      game.hp = 7 + save.upgrades.focus * 2;
+      game.earned = 0;
+      game.bpm = 112;
+      game.noteSpeed = 280;
+      game.notes.length = 0;
+      game.particles.length = 0;
+      game.spawnT = 0.45;
+      game.elapsed = 0;
+      game.overdrive = 0;
+      game.judgeText = '';
+      game.judgeT = 0;
+      game.beatPhase = 0;
+      game.inputCd = 0;
+      game.seedLane = 0;
+
+      hud.classList.add('show');
+      controls.classList.add('show');
+      titlePanel.style.display = 'none';
+      gameoverPanel.style.display = 'none';
+      syncText();
+    }
+
+    function endRun() {
+      if (game.state !== 'play') return;
+      game.state = 'gameover';
+      const earned = Math.floor(game.score / 300) + game.stage * 2;
+      game.earned = earned;
+      game.credits += earned;
+      save.credits = game.credits;
+      if (game.score > game.best) {
+        game.best = game.score;
+        save.best = game.best;
+      }
+      persist();
+
+      if (window.Leaderboard && typeof Leaderboard.submit === 'function') {
+        try { Leaderboard.submit(GAME_ID, 'player', game.score); } catch {}
+      }
+
+      hud.classList.remove('show');
+      controls.classList.remove('show');
+      titlePanel.style.display = 'none';
+      gameoverPanel.style.display = '';
+      syncText();
+      if (tg) tg.haptic('notification', 'error');
+    }
+
+    function spawnNote(forceLane = null) {
+      const lane = forceLane ?? ((Math.random() < 0.45) ? game.seedLane : 1 - game.seedLane);
+      game.seedLane = lane;
+      game.notes.push({ lane, x: laneX(lane), y: -26, r: 14, hit: false, gone: false, pulse: rnd(0, Math.PI * 2) });
+
+      if (game.stage >= 4 && Math.random() < 0.18) {
+        const lane2 = 1 - lane;
+        game.notes.push({ lane: lane2, x: laneX(lane2), y: -58, r: 12, hit: false, gone: false, pulse: rnd(0, Math.PI * 2) });
+      }
+    }
+
+    function noteWindow() {
+      return 28 + save.upgrades.focus * 8;
+    }
+
+    function flashJudge(text, color = '#ffffff') {
+      game.judgeText = text;
+      game.judgeT = 0.45;
+      judge.textContent = text;
+      judge.style.color = color;
+      judge.classList.add('show');
+    }
+
+    function missPenalty() {
+      game.combo = 0;
+      game.hp -= 1;
+      snd.play('fail', 0.9);
+      flashJudge(T('miss'), '#ff9fa4');
+      if (tg) tg.haptic('notification', 'warning');
+      if (game.hp <= 0) endRun();
+    }
+
+    function spawnHitParticles(x, y, tone) {
+      for (let i = 0; i < 14; i++) {
+        game.particles.push({
+          x, y,
+          vx: rnd(-170, 170),
+          vy: rnd(-190, 70),
+          life: rnd(0.22, 0.56),
+          t: 0,
+          c: tone
+        });
+      }
+    }
+
+    function registerHit(note, delta, auto = false) {
+      note.hit = true;
+      note.gone = true;
+
+      const w = noteWindow();
+      const perfect = delta <= w * 0.34;
+      const base = perfect ? 120 : 82;
+      const mult = auto ? 0.65 : 1;
+      const gain = Math.floor(base * mult + Math.min(game.combo, 45) * 0.8);
+
+      game.score += gain;
+      game.combo += 1;
+      game.maxCombo = Math.max(game.maxCombo, game.combo);
+      game.energy = clamp(game.energy + (perfect ? 18 : 11) * (auto ? 0.45 : 1), 0, 100);
+
+      const text = perfect ? T('perfect') : T('good');
+      flashJudge(text, perfect ? '#8dfdff' : '#ffe59d');
+      spawnHitParticles(note.x, note.y, perfect ? '#72ecff' : '#ffd99b');
+      snd.play('hit', perfect ? 1.05 : 0.95);
+      if (!auto && tg) tg.haptic('impact', perfect ? 'light' : 'soft');
+    }
+
+    function strike(lane) {
+      if (game.state !== 'play') return false;
+      if (game.inputCd > 0) return false;
+      game.inputCd = 0.04;
+      snd.play('tap', 0.7);
+
+      const w = noteWindow();
+      let picked = null;
+      let pickedDelta = 1e9;
+
+      for (const n of game.notes) {
+        if (n.gone || n.lane !== lane) continue;
+        const d = Math.abs(n.y - hitY);
+        if (d <= w && d < pickedDelta) {
+          picked = n;
+          pickedDelta = d;
+        }
+      }
+
+      if (!picked) {
+        missPenalty();
+        return false;
+      }
+
+      registerHit(picked, pickedDelta, false);
+      return true;
+    }
+
+    function activateOverdrive() {
+      if (game.state !== 'play') return false;
+      if (game.energy < 100) {
+        flashJudge(T('overdriveNeed'), '#ffd89f');
+        return false;
+      }
+      game.energy = 0;
+      game.overdrive = 4.2 + save.upgrades.focus * 0.5;
+      snd.play('hit', 1.2);
+      if (tg) tg.haptic('notification', 'success');
+      flashJudge(T('overdriveReady'), '#a7ff9f');
+      return true;
+    }
+
+    function autoJudgeOverdrive() {
+      const w = noteWindow() * 1.15;
+      for (const n of game.notes) {
+        if (n.gone) continue;
+        const d = Math.abs(n.y - hitY);
+        if (d <= w) registerHit(n, d * 0.45, true);
+      }
+    }
+
+    function update(dt) {
+      for (const b of game.bars) {
+        b.y += b.spd * dt;
+        if (b.y > H + b.h) {
+          b.y = -b.h;
+          b.x = rnd(0, W);
+          b.spd = rnd(20, 90);
+          b.a = rnd(0.08, 0.28);
+        }
+      }
+
+      for (let i = game.particles.length - 1; i >= 0; i--) {
+        const p = game.particles[i];
+        p.t += dt;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.vx *= 0.98;
+        p.vy += 220 * dt;
+        if (p.t >= p.life) game.particles.splice(i, 1);
+      }
+
+      game.judgeT = Math.max(0, game.judgeT - dt);
+      if (game.judgeT <= 0) judge.classList.remove('show');
+
+      if (game.state !== 'play') return;
+
+      game.elapsed += dt;
+      game.stage = 1 + Math.floor(game.elapsed / 18);
+      game.bpm = 112 + game.stage * 3;
+      game.noteSpeed = 280 + game.stage * 24;
+      game.beatPhase += dt * (game.bpm / 60) * Math.PI * 2;
+      game.inputCd = Math.max(0, game.inputCd - dt);
+
+      game.spawnT -= dt;
+      const interval = clamp(60 / game.bpm * 0.86, 0.34, 0.6);
+      if (game.spawnT <= 0) {
+        spawnNote();
+        game.spawnT = interval + rnd(-0.05, 0.06);
+      }
+
+      if (game.overdrive > 0) {
+        game.overdrive = Math.max(0, game.overdrive - dt);
+        autoJudgeOverdrive();
+      }
+
+      const w = noteWindow();
+      for (let i = game.notes.length - 1; i >= 0; i--) {
+        const n = game.notes[i];
+        n.y += game.noteSpeed * dt;
+        n.pulse += dt * 7;
+
+        if (!n.gone && n.y > hitY + w) {
+          n.gone = true;
+          missPenalty();
+        }
+
+        if (n.y > H + 80 || (n.gone && n.y > hitY + 130)) {
+          game.notes.splice(i, 1);
+        }
+      }
+
+      if (game.energy >= 100) overdriveBtn.classList.remove('lock');
+      else overdriveBtn.classList.add('lock');
+
+      syncHud();
+    }
+
+    function drawBackground(t) {
+      const g = ctx.createLinearGradient(0, 0, 0, H);
+      g.addColorStop(0, '#2a1f75');
+      g.addColorStop(0.48, '#111f4c');
+      g.addColorStop(1, '#050918');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+
+      for (const b of game.bars) {
+        ctx.fillStyle = `rgba(116,198,255,${b.a})`;
+        ctx.fillRect(b.x, b.y, 2, b.h);
+      }
+
+      const laneW = W * 0.29;
+      const leftX = W * 0.16;
+      const rightX = W * 0.55;
+
+      const pulse = 0.18 + (Math.sin(t * 0.008) * 0.08 + 0.08);
+      ctx.fillStyle = `rgba(122,205,255,${pulse})`;
+      roundRect(ctx, leftX, H * 0.08, laneW, H * 0.82, 16);
+      ctx.fill();
+      ctx.fillStyle = `rgba(255,149,230,${pulse})`;
+      roundRect(ctx, rightX, H * 0.08, laneW, H * 0.82, 16);
+      ctx.fill();
+
+      const beatGlow = 0.4 + Math.sin(game.beatPhase) * 0.2;
+      ctx.strokeStyle = `rgba(255,255,255,${0.45 + beatGlow * 0.25})`;
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(0, hitY);
+      ctx.lineTo(W, hitY);
+      ctx.stroke();
+
+      ctx.strokeStyle = 'rgba(150,218,255,.36)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 16; i++) {
+        const y = H * 0.12 + i * (H * 0.74 / 16);
+        ctx.beginPath();
+        ctx.moveTo(W * 0.16, y);
+        ctx.lineTo(W * 0.84, y);
+        ctx.stroke();
+      }
+    }
+
+    function drawNotes() {
+      for (const n of game.notes) {
+        if (n.gone) continue;
+
+        const aura = 1 + Math.sin(n.pulse) * 0.2;
+        const glow = ctx.createRadialGradient(n.x - 3, n.y - 3, 2, n.x, n.y, n.r * 2.3);
+        if (n.lane === 0) {
+          glow.addColorStop(0, '#ffffff');
+          glow.addColorStop(0.3, '#8cf0ff');
+          glow.addColorStop(1, 'rgba(88,145,255,0)');
+        } else {
+          glow.addColorStop(0, '#ffffff');
+          glow.addColorStop(0.3, '#ff9cf8');
+          glow.addColorStop(1, 'rgba(255,143,190,0)');
+        }
+
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, n.r * 2.0 * aura, 0, Math.PI * 2);
+        ctx.fill();
+
+        const core = ctx.createRadialGradient(n.x - 2, n.y - 2, 1, n.x, n.y, n.r * 1.2);
+        core.addColorStop(0, '#ffffff');
+        core.addColorStop(1, n.lane === 0 ? '#60a2ff' : '#ff72dc');
+        ctx.fillStyle = core;
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    function drawParticles() {
+      for (const p of game.particles) {
+        const a = 1 - p.t / p.life;
+        ctx.globalAlpha = clamp(a, 0, 1);
+        ctx.fillStyle = p.c;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 2.4 + a * 2.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    function drawOverlayText() {
+      if (game.state !== 'play') return;
+      ctx.fillStyle = 'rgba(236,245,255,.88)';
+      ctx.font = '700 12px Inter, sans-serif';
+      ctx.fillText(lang === 'ko' ? '타이밍 라인에 맞춰 입력' : 'Tap on the hit line', 12, H - 152);
+
+      if (game.overdrive > 0) {
+        ctx.fillStyle = 'rgba(167,255,159,.95)';
+        ctx.font = '800 16px Inter, sans-serif';
+        ctx.fillText(`OVERDRIVE ${game.overdrive.toFixed(1)}s`, W * 0.5 - 70, H * 0.15);
+      }
+    }
+
+    function roundRect(ct, x, y, w, h, r) {
+      ct.beginPath();
+      ct.moveTo(x + r, y);
+      ct.arcTo(x + w, y, x + w, y + h, r);
+      ct.arcTo(x + w, y + h, x, y + h, r);
+      ct.arcTo(x, y + h, x, y, r);
+      ct.arcTo(x, y, x + w, y, r);
+      ct.closePath();
+    }
+
+    function render(now) {
+      drawBackground(now);
+      drawNotes();
+      drawParticles();
+      drawOverlayText();
+    }
+
+    function syncHud() {
+      mScore.textContent = `${T('score')} ${game.score}`;
+      mCombo.textContent = `${T('combo')} ${game.combo}`;
+      mHp.textContent = `${T('hp')} ${game.hp}`;
+      mStage.textContent = `${T('stage')} ${game.stage}`;
+      mEnergy.textContent = `OD ${Math.floor(game.energy)}%`;
+
+      overdriveBtn.textContent = game.energy >= 100
+        ? `${T('overdrive')} 100%`
+        : `${T('overdrive')} ${Math.floor(game.energy)}%`;
+    }
+
+    function syncText() {
+      document.documentElement.lang = lang;
+      titleTxt.textContent = T('title');
+      subTxt.textContent = T('subtitle');
+      startBtn.textContent = T('start');
+      retryBtn.textContent = T('retry');
+      homeBtn.textContent = T('home');
+      leftBtn.textContent = T('left');
+      rightBtn.textContent = T('right');
+      langBtn.textContent = T('langLabel');
+      goTitle.textContent = T('goTitle');
+      goDesc.textContent = T('goDesc');
+
+      const cost = save.upgrades.focus >= 3 ? null : focusCost(save.upgrades.focus);
+      upgradeBtn.textContent = save.upgrades.focus >= 3
+        ? `${T('focusUpgrade')} (${T('focusMax')})`
+        : `${T('focusUpgrade')} Lv.${save.upgrades.focus + 1} · ${cost}`;
+
+      metaTxt.textContent = T('titleMeta', {
+        best: save.best,
+        credits: save.credits,
+        focus: save.upgrades.focus
+      });
+
+      goMeta.textContent = T('gameMeta', {
+        score: game.score,
+        combo: game.maxCombo,
+        earned: game.earned
+      });
+
+      syncHud();
+    }
+
+    function toggleLang() {
+      lang = lang === 'ko' ? 'en' : 'ko';
+      save.lang = lang;
+      persist();
+      syncText();
+      return lang;
+    }
+
+    function canvasTap(ev) {
+      if (game.state !== 'play') return;
+      const x = ev.clientX ?? 0;
+      if (x < W * 0.5) strike(0);
+      else strike(1);
+    }
+
+    canvas.addEventListener('pointerdown', canvasTap, { passive: true });
+    leftBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); strike(0); });
+    rightBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); strike(1); });
+    overdriveBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); activateOverdrive(); });
+
+    addEventListener('keydown', (e) => {
+      if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') strike(0);
+      if (e.key === 'l' || e.key === 'L' || e.key === 'ArrowRight') strike(1);
+      if (e.key === ' ' || e.key === 'Enter') activateOverdrive();
+    });
+
+    startBtn.addEventListener('click', resetRun);
+    retryBtn.addEventListener('click', resetRun);
+    homeBtn.addEventListener('click', showTitle);
+    langBtn.addEventListener('click', toggleLang);
+    upgradeBtn.addEventListener('click', buyFocus);
+
+    let last = performance.now();
+    function loop(now) {
+      const dt = clamp((now - last) / 1000, 0, 0.05);
+      last = now;
+      update(dt);
+      render(now);
+      requestAnimationFrame(loop);
+    }
+
+    try {
+      if (window.Leaderboard && typeof Leaderboard.renderBoard === 'function') {
+        Leaderboard.renderBoard('leaderboard');
+      }
+    } catch {}
+
+    showTitle();
+    syncText();
+    requestAnimationFrame(loop);
+
+    window.__neonBeatGate = {
+      start: resetRun,
+      getState: () => game.state,
+      strikeLeft: () => strike(0),
+      strikeRight: () => strike(1),
+      activateOverdrive,
+      toggleLang,
+      getLang: () => lang,
+      spawnTestNote: (lane = 0, offset = 0) => {
+        const l = lane === 1 ? 1 : 0;
+        game.notes.push({ lane: l, x: laneX(l), y: hitY + offset, r: 14, hit: false, gone: false, pulse: 0 });
+      },
+      forceGameOver: () => { game.hp = 0; endRun(); },
+      addCredits: (n) => { save.credits += Math.max(0, n|0); game.credits = save.credits; persist(); syncText(); },
+      buyFocus,
+      getMeta: () => ({
+        state: game.state,
+        score: game.score,
+        combo: game.combo,
+        maxCombo: game.maxCombo,
+        hp: game.hp,
+        energy: game.energy,
+        best: game.best,
+        credits: save.credits,
+        upgrades: { focus: save.upgrades.focus }
+      })
+    };
+  })();
+  </script>
+
+  <script src="/games/cross-promo.js"></script>
+  <script src="../shared/leaderboard.js"></script>
+</body>
+</html>

@@ -1,0 +1,1140 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Chain Reaction — 연쇄 폭발 전략</title>
+  <meta name="theme-color" content="#0a0a1a" />
+  <style>
+    :root {
+      --bg: #0a0a1a;
+      --panel: rgba(18, 18, 42, 0.9);
+      --line: rgba(255, 255, 255, 0.16);
+      --text: #eaf0ff;
+      --muted: #93a0d9;
+      --blue: #42d7ff;
+      --red: #ff4f72;
+      --yellow: #ffd24f;
+      --green: #6fffa8;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      min-height: 100%;
+      background:
+        radial-gradient(circle at 20% 0%, #1c1a44 0%, transparent 40%),
+        radial-gradient(circle at 80% 100%, #191536 0%, transparent 44%),
+        var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+    }
+
+    body {
+      display: flex;
+      justify-content: center;
+      padding: 12px;
+    }
+
+    .app {
+      width: min(980px, 100%);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: linear-gradient(180deg, rgba(20, 21, 54, 0.95), rgba(10, 10, 26, 0.92));
+      box-shadow: inset 0 0 18px rgba(95, 135, 255, 0.09), 0 8px 24px rgba(0, 0, 0, 0.28);
+    }
+
+    .title {
+      padding: 12px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      border-color: rgba(66, 215, 255, 0.35);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.02rem, 3.8vw, 1.44rem);
+      letter-spacing: 0.04em;
+      color: #d7f9ff;
+      text-shadow: 0 0 14px rgba(66, 215, 255, 0.44);
+    }
+
+    .pitch {
+      margin-top: 4px;
+      font-size: 0.8rem;
+      color: #ffd8ef;
+      opacity: 0.95;
+    }
+
+    .chip {
+      padding: 6px 10px;
+      border: 1px solid rgba(255,255,255,0.22);
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      color: #d9e5ff;
+      white-space: nowrap;
+      background: rgba(255,255,255,0.06);
+    }
+
+    .hud {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .stat {
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 10px;
+      background: rgba(9, 11, 30, 0.84);
+      text-align: center;
+      padding: 8px 4px;
+    }
+
+    .stat .label {
+      font-size: 0.62rem;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+
+    .stat .value {
+      margin-top: 2px;
+      font-size: clamp(0.9rem, 2.7vw, 1.12rem);
+      font-weight: 800;
+    }
+
+    .value.level { color: #b7cbff; }
+    .value.target { color: #ffd9ad; }
+    .value.removed { color: #9dfff7; }
+    .value.combo { color: #ff9ce8; }
+    .value.best { color: #9effbe; }
+
+    .legend {
+      padding: 0 10px 10px;
+      display: grid;
+      gap: 6px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .legend-item {
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 10px;
+      padding: 7px 8px;
+      font-size: 0.74rem;
+      color: #d7defe;
+      background: rgba(14, 16, 38, 0.78);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .legend-item span:last-child {
+      color: #a9b7ea;
+      font-size: 0.68rem;
+    }
+
+    .arena {
+      position: relative;
+      padding: 10px;
+    }
+
+    .canvas-wrap {
+      border: 1px solid rgba(66, 215, 255, 0.4);
+      border-radius: 14px;
+      overflow: hidden;
+      background: #050512;
+      box-shadow: 0 0 24px rgba(66, 215, 255, 0.14), inset 0 0 24px rgba(255,255,255,0.05);
+    }
+
+    canvas {
+      width: 100%;
+      display: block;
+      aspect-ratio: 9 / 14;
+      max-height: 72vh;
+      background: radial-gradient(circle at 50% 52%, rgba(30, 26, 60, 0.9), rgba(8, 8, 20, 0.95));
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .status {
+      min-height: 20px;
+      margin-top: 7px;
+      text-align: center;
+      font-size: 0.8rem;
+      color: #c0cbf6;
+      text-shadow: 0 0 10px rgba(0, 0, 0, 0.65);
+    }
+
+    .controls {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .btn {
+      border: 1px solid rgba(255,255,255,0.24);
+      border-radius: 10px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.1), rgba(255,255,255,0.015));
+      color: #e7eeff;
+      font-weight: 800;
+      letter-spacing: 0.03em;
+      font-size: 0.78rem;
+      padding: 10px 6px;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    .btn.primary {
+      border-color: rgba(111, 255, 168, 0.6);
+      color: #c2ffd9;
+      box-shadow: 0 0 10px rgba(111, 255, 168, 0.18);
+    }
+
+    .btn.warn {
+      border-color: rgba(255, 79, 114, 0.55);
+      color: #ffc7d1;
+    }
+
+    .btn:disabled {
+      opacity: 0.42;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    .help {
+      padding: 0 12px 12px;
+      color: #9eabdd;
+      font-size: 0.72rem;
+      line-height: 1.45;
+    }
+
+    .result {
+      position: absolute;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(4, 4, 14, 0.58);
+      backdrop-filter: blur(2px);
+    }
+
+    .result.show { display: flex; }
+
+    .result-card {
+      width: min(420px, 96%);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 14px;
+      background: linear-gradient(180deg, rgba(24, 24, 58, 0.95), rgba(11, 11, 30, 0.92));
+      box-shadow: 0 10px 24px rgba(0,0,0,0.4);
+      padding: 14px;
+      text-align: center;
+    }
+
+    .result h2 {
+      margin: 0;
+      font-size: 1.22rem;
+      letter-spacing: 0.04em;
+    }
+
+    .result h2.success { color: #8fffbe; text-shadow: 0 0 12px rgba(111,255,168,0.42); }
+    .result h2.fail { color: #ff9cb3; text-shadow: 0 0 12px rgba(255,79,114,0.4); }
+
+    .result p {
+      margin: 8px 0 0;
+      color: #d0d9ff;
+      font-size: 0.86rem;
+    }
+
+    .result-actions {
+      margin-top: 12px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    @media (max-width: 720px) {
+      body { padding: 8px; }
+      .hud { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .legend { grid-template-columns: 1fr; }
+      .title { align-items: flex-start; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="panel title">
+      <div>
+        <h1>Chain Reaction — 연쇄 폭발 전략</h1>
+        <div class="pitch">"하나를 터뜨려 연쇄 반응으로 전부 제거하는 전략 퍼즐"</div>
+      </div>
+      <div class="chip">1탭 클리어</div>
+    </section>
+
+    <section class="panel hud">
+      <div class="stat"><div class="label">레벨</div><div class="value level" id="ui-level">1 / 12</div></div>
+      <div class="stat"><div class="label">목표</div><div class="value target" id="ui-target">0개</div></div>
+      <div class="stat"><div class="label">제거</div><div class="value removed" id="ui-removed">0 / 0</div></div>
+      <div class="stat"><div class="label">최대 콤보</div><div class="value combo" id="ui-combo">x0</div></div>
+      <div class="stat"><div class="label">최소 탭</div><div class="value best" id="ui-best">-</div></div>
+    </section>
+
+    <section class="panel legend">
+      <div class="legend-item">🔵 일반<span>보통 반경</span></div>
+      <div class="legend-item">🔴 대형<span>큰 반경 · 느린 이동</span></div>
+      <div class="legend-item">⚡ 전기<span>4방향 번개 연쇄</span></div>
+      <div class="legend-item">🛡️ 방패<span>2번 맞아야 폭발</span></div>
+    </section>
+
+    <section class="panel arena">
+      <div class="canvas-wrap">
+        <canvas id="gameCanvas"></canvas>
+      </div>
+      <div class="status" id="ui-status">화면을 탭해 첫 폭발을 시작하세요.</div>
+      <div class="result" id="result-layer">
+        <div class="result-card">
+          <h2 id="result-title" class="success">클리어!</h2>
+          <p id="result-detail"></p>
+          <div class="result-actions">
+            <button class="btn warn" id="btn-retry">다시 도전</button>
+            <button class="btn primary" id="btn-next">다음 레벨</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel controls">
+      <button class="btn" id="btn-prev">이전 레벨</button>
+      <button class="btn" id="btn-restart">레벨 재시작</button>
+      <button class="btn primary" id="btn-tap">현재 레벨 도전</button>
+      <button class="btn" id="btn-next-level">다음 레벨</button>
+    </section>
+
+    <section class="panel help">
+      한 번의 탭으로 연쇄 폭발을 설계하세요. 전기 구체는 십자 번개를 뿜고, 방패 구체는 두 번 맞아야 터집니다. 목표 제거 수를 넘기면 다음 레벨이 열립니다.
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = "chain_reaction_progress_v1";
+      const TOTAL_LEVELS = 12;
+      const canvas = document.getElementById("gameCanvas");
+      const ctx = canvas.getContext("2d");
+
+      const ui = {
+        level: document.getElementById("ui-level"),
+        target: document.getElementById("ui-target"),
+        removed: document.getElementById("ui-removed"),
+        combo: document.getElementById("ui-combo"),
+        best: document.getElementById("ui-best"),
+        status: document.getElementById("ui-status"),
+        resultLayer: document.getElementById("result-layer"),
+        resultTitle: document.getElementById("result-title"),
+        resultDetail: document.getElementById("result-detail"),
+        btnPrev: document.getElementById("btn-prev"),
+        btnRestart: document.getElementById("btn-restart"),
+        btnTap: document.getElementById("btn-tap"),
+        btnNextLevel: document.getElementById("btn-next-level"),
+        btnRetry: document.getElementById("btn-retry"),
+        btnNext: document.getElementById("btn-next")
+      };
+
+      const levels = Array.from({ length: TOTAL_LEVELS }, (_, i) => {
+        const p = i / (TOTAL_LEVELS - 1);
+        const orbCount = Math.round(8 + (30 - 8) * p);
+        const targetRatio = 0.5 + 0.4 * p;
+        return {
+          id: i + 1,
+          progress: p,
+          orbCount,
+          targetRatio,
+          targetCount: Math.ceil(orbCount * targetRatio)
+        };
+      });
+
+      function loadProgress() {
+        try {
+          const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+          const highestUnlocked = Math.min(TOTAL_LEVELS, Math.max(1, Number(parsed.highestUnlocked) || 1));
+          const bestTapsByLevel = parsed.bestTapsByLevel && typeof parsed.bestTapsByLevel === "object" ? parsed.bestTapsByLevel : {};
+          return { highestUnlocked, bestTapsByLevel };
+        } catch (_) {
+          return { highestUnlocked: 1, bestTapsByLevel: {} };
+        }
+      }
+
+      function saveProgress() {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify({
+            highestUnlocked: game.highestUnlocked,
+            bestTapsByLevel: game.bestTapsByLevel
+          }));
+        } catch (_) {}
+      }
+
+      const saved = loadProgress();
+
+      const game = {
+        width: 720,
+        height: 1120,
+        dpr: Math.min(2, window.devicePixelRatio || 1),
+        level: 1,
+        highestUnlocked: saved.highestUnlocked,
+        bestTapsByLevel: saved.bestTapsByLevel,
+        phase: "aim",
+        tapsUsed: 0,
+        removed: 0,
+        targetCount: 0,
+        targetRatio: 0,
+        totalOrbs: 0,
+        comboMax: 0,
+        comboPulse: 0,
+        comboText: "",
+        shake: 0,
+        settleTimer: 0,
+        effectId: 1,
+        pointerHint: 0,
+        lastTime: performance.now(),
+        stars: []
+      };
+
+      const world = {
+        orbs: [],
+        explosions: [],
+        lightnings: [],
+        particles: []
+      };
+
+      const AUDIO = {
+        ctx: null,
+        noise: null,
+        unlocked: false
+      };
+
+      function ensureAudio() {
+        if (AUDIO.ctx) return;
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        AUDIO.ctx = new AC();
+        const len = Math.floor(AUDIO.ctx.sampleRate * 0.3);
+        AUDIO.noise = AUDIO.ctx.createBuffer(1, len, AUDIO.ctx.sampleRate);
+        const data = AUDIO.noise.getChannelData(0);
+        for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+      }
+
+      function safeResumeAudio() {
+        ensureAudio();
+        if (!AUDIO.ctx) return;
+        if (AUDIO.ctx.state === "suspended") AUDIO.ctx.resume();
+        AUDIO.unlocked = true;
+      }
+
+      function tone(freq = 440, duration = 0.12, type = "sine", gain = 0.07, sweepTo = null, delay = 0) {
+        if (!AUDIO.unlocked || !AUDIO.ctx) return;
+        const t0 = AUDIO.ctx.currentTime + delay;
+        const osc = AUDIO.ctx.createOscillator();
+        const g = AUDIO.ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, t0);
+        if (sweepTo) osc.frequency.exponentialRampToValueAtTime(Math.max(24, sweepTo), t0 + duration);
+        g.gain.setValueAtTime(0.0001, t0);
+        g.gain.exponentialRampToValueAtTime(gain, t0 + 0.015);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
+        osc.connect(g);
+        g.connect(AUDIO.ctx.destination);
+        osc.start(t0);
+        osc.stop(t0 + duration + 0.02);
+      }
+
+      function noiseBurst(duration = 0.16, gain = 0.09, hp = 520, delay = 0) {
+        if (!AUDIO.unlocked || !AUDIO.ctx || !AUDIO.noise) return;
+        const t0 = AUDIO.ctx.currentTime + delay;
+        const src = AUDIO.ctx.createBufferSource();
+        src.buffer = AUDIO.noise;
+        const filter = AUDIO.ctx.createBiquadFilter();
+        filter.type = "highpass";
+        filter.frequency.value = hp;
+        const g = AUDIO.ctx.createGain();
+        g.gain.setValueAtTime(0.0001, t0);
+        g.gain.exponentialRampToValueAtTime(gain, t0 + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
+        src.connect(filter);
+        filter.connect(g);
+        g.connect(AUDIO.ctx.destination);
+        src.start(t0);
+        src.stop(t0 + duration + 0.02);
+      }
+
+      function sfxExplosion(power = 1) {
+        tone(180 + Math.random() * 40, 0.16, "triangle", 0.08 * power, 58 + Math.random() * 8);
+        noiseBurst(0.14, 0.07 * power, 420 + Math.random() * 170);
+      }
+
+      function sfxChain(combo) {
+        const f = Math.min(980, 230 + combo * 26);
+        tone(f, 0.08, "sawtooth", 0.045, Math.max(120, f * 0.8));
+        if (combo % 4 === 0) tone(f * 1.25, 0.06, "square", 0.03, f);
+      }
+
+      function sfxShield() {
+        tone(180, 0.08, "square", 0.035, 145);
+      }
+
+      function sfxClear() {
+        tone(392, 0.2, "triangle", 0.05, 460, 0);
+        tone(523.25, 0.24, "triangle", 0.05, 620, 0.06);
+        tone(659.25, 0.3, "triangle", 0.055, 760, 0.12);
+      }
+
+      function sfxFail() {
+        tone(320, 0.14, "sine", 0.04, 220, 0);
+        tone(240, 0.16, "sine", 0.04, 160, 0.1);
+      }
+
+      function levelConfig(level) {
+        return levels[Math.max(0, Math.min(TOTAL_LEVELS - 1, level - 1))];
+      }
+
+      function weightedType(progress) {
+        const w = {
+          normal: 0.58 - progress * 0.18,
+          large: 0.2 + progress * 0.08,
+          electric: 0.12 + progress * 0.06,
+          shield: 0.1 + progress * 0.14
+        };
+        const total = w.normal + w.large + w.electric + w.shield;
+        const r = Math.random() * total;
+        if (r < w.normal) return "normal";
+        if (r < w.normal + w.large) return "large";
+        if (r < w.normal + w.large + w.electric) return "electric";
+        return "shield";
+      }
+
+      function orbTemplate(type, progress) {
+        const speedMul = 1 + progress * 0.22;
+        if (type === "large") {
+          return { r: 17 + Math.random() * 4, speed: 23 * speedMul, explosionRadius: 152 + Math.random() * 16, hp: 1, color: "#ff4f72", glow: "rgba(255,79,114,0.55)" };
+        }
+        if (type === "electric") {
+          return { r: 11 + Math.random() * 2.5, speed: 35 * speedMul, explosionRadius: 92 + Math.random() * 10, hp: 1, color: "#ffd24f", glow: "rgba(255,210,79,0.58)" };
+        }
+        if (type === "shield") {
+          return { r: 12 + Math.random() * 2.8, speed: 30 * speedMul, explosionRadius: 94 + Math.random() * 10, hp: 2, color: "#6fffa8", glow: "rgba(111,255,168,0.52)" };
+        }
+        return { r: 10 + Math.random() * 2.4, speed: 34 * speedMul, explosionRadius: 108 + Math.random() * 12, hp: 1, color: "#42d7ff", glow: "rgba(66,215,255,0.54)" };
+      }
+
+      function createOrb(type, progress) {
+        const spec = orbTemplate(type, progress);
+        const angle = Math.random() * Math.PI * 2;
+        return {
+          id: Math.random().toString(36).slice(2),
+          type,
+          x: 0,
+          y: 0,
+          vx: Math.cos(angle) * spec.speed,
+          vy: Math.sin(angle) * spec.speed,
+          r: spec.r,
+          hp: spec.hp,
+          maxHp: spec.hp,
+          explosionRadius: spec.explosionRadius,
+          color: spec.color,
+          glow: spec.glow,
+          alive: true,
+          triggered: false,
+          hitSources: new Set(),
+          wobbleSeed: Math.random() * Math.PI * 2,
+          flash: 0
+        };
+      }
+
+      function spawnOrbs(count, progress) {
+        const list = [];
+        const margin = 24;
+        const minGap = 5;
+        for (let i = 0; i < count; i++) {
+          const type = weightedType(progress);
+          const orb = createOrb(type, progress);
+          let placed = false;
+          for (let t = 0; t < 90 && !placed; t++) {
+            const x = margin + orb.r + Math.random() * (game.width - (margin + orb.r) * 2);
+            const y = margin + orb.r + Math.random() * (game.height - (margin + orb.r) * 2);
+            let ok = true;
+            for (const other of list) {
+              const dx = x - other.x;
+              const dy = y - other.y;
+              const distSq = dx * dx + dy * dy;
+              const minDist = orb.r + other.r + minGap;
+              if (distSq < minDist * minDist) {
+                ok = false;
+                break;
+              }
+            }
+            if (ok) {
+              orb.x = x;
+              orb.y = y;
+              placed = true;
+            }
+          }
+          if (!placed) {
+            orb.x = margin + orb.r + Math.random() * (game.width - (margin + orb.r) * 2);
+            orb.y = margin + orb.r + Math.random() * (game.height - (margin + orb.r) * 2);
+          }
+          list.push(orb);
+        }
+        return list;
+      }
+
+      function createExplosion(x, y, maxRadius, color = "#42d7ff", duration = 560, power = 1, from = "orb") {
+        world.explosions.push({
+          id: game.effectId++,
+          x,
+          y,
+          t: 0,
+          duration,
+          maxRadius,
+          color,
+          power,
+          from
+        });
+        game.shake = Math.min(18, game.shake + 3.8 * power);
+      }
+
+      function spawnParticles(x, y, color, count = 22, speed = 220) {
+        for (let i = 0; i < count; i++) {
+          const ang = Math.random() * Math.PI * 2;
+          const sp = speed * (0.2 + Math.random());
+          world.particles.push({
+            x,
+            y,
+            vx: Math.cos(ang) * sp,
+            vy: Math.sin(ang) * sp,
+            life: 0.4 + Math.random() * 0.5,
+            maxLife: 0.4 + Math.random() * 0.5,
+            size: 1.4 + Math.random() * 2.8,
+            color
+          });
+        }
+      }
+
+      function spawnLightning(orb) {
+        const dirs = [
+          { dx: 1, dy: 0 },
+          { dx: -1, dy: 0 },
+          { dx: 0, dy: 1 },
+          { dx: 0, dy: -1 }
+        ];
+        for (const d of dirs) {
+          world.lightnings.push({
+            id: game.effectId++,
+            x: orb.x,
+            y: orb.y,
+            dx: d.dx,
+            dy: d.dy,
+            length: 220,
+            width: 18,
+            t: 0,
+            duration: 230
+          });
+        }
+      }
+
+      function registerHit(orb, sourceId) {
+        if (!orb.alive) return;
+        if (orb.hitSources.has(sourceId)) return;
+        orb.hitSources.add(sourceId);
+
+        if (orb.type === "shield" && orb.hp > 1) {
+          orb.hp -= 1;
+          orb.flash = 0.25;
+          spawnParticles(orb.x, orb.y, "#6fffa8", 9, 130);
+          sfxShield();
+          return;
+        }
+
+        orb.alive = false;
+        orb.triggered = true;
+        game.removed += 1;
+        game.comboMax = Math.max(game.comboMax, game.removed);
+        game.comboPulse = 0.85;
+        game.comboText = "COMBO x" + game.removed;
+
+        createExplosion(orb.x, orb.y, orb.explosionRadius, orb.color, 520, orb.type === "large" ? 1.35 : 1.05);
+        spawnParticles(orb.x, orb.y, orb.color, orb.type === "large" ? 28 : 22, orb.type === "large" ? 260 : 220);
+        sfxChain(game.removed);
+
+        if (orb.type === "electric") {
+          spawnLightning(orb);
+          tone(620, 0.09, "square", 0.04, 510);
+        }
+      }
+
+      function pointLineHit(orb, l) {
+        const minX = Math.min(l.x, l.x + l.dx * l.length);
+        const maxX = Math.max(l.x, l.x + l.dx * l.length);
+        const minY = Math.min(l.y, l.y + l.dy * l.length);
+        const maxY = Math.max(l.y, l.y + l.dy * l.length);
+
+        if (l.dy === 0) {
+          if (Math.abs(orb.y - l.y) > orb.r + l.width * 0.5) return false;
+          return orb.x + orb.r >= minX && orb.x - orb.r <= maxX;
+        }
+        if (Math.abs(orb.x - l.x) > orb.r + l.width * 0.5) return false;
+        return orb.y + orb.r >= minY && orb.y - orb.r <= maxY;
+      }
+
+      function triggerTapExplosion(x, y) {
+        if (game.phase !== "aim") return;
+        safeResumeAudio();
+        game.tapsUsed += 1;
+        game.phase = "resolve";
+        game.pointerHint = 0;
+        createExplosion(x, y, 118, "#ffffff", 640, 1.35, "tap");
+        spawnParticles(x, y, "#8df4ff", 32, 280);
+        sfxExplosion(1.2);
+        setStatus("연쇄 반응 진행 중...");
+      }
+
+      function finishLevel() {
+        game.phase = "result";
+        const success = game.removed >= game.targetCount;
+        const remain = game.targetCount - game.removed;
+
+        if (success) {
+          const nextUnlocked = Math.min(TOTAL_LEVELS, game.level + 1);
+          if (nextUnlocked > game.highestUnlocked) game.highestUnlocked = nextUnlocked;
+          const prevBest = Number(game.bestTapsByLevel[game.level] || Infinity);
+          if (game.tapsUsed < prevBest) game.bestTapsByLevel[game.level] = game.tapsUsed;
+          saveProgress();
+          sfxClear();
+          showResult(true, `제거 ${game.removed}/${game.totalOrbs} · 목표 ${game.targetCount} 달성!`);
+          setStatus("완벽한 연쇄입니다. 다음 레벨이 열렸어요.");
+        } else {
+          sfxFail();
+          showResult(false, `목표까지 ${remain}개 부족해요. 제거 ${game.removed}/${game.totalOrbs}`);
+          setStatus("아쉽습니다. 배치와 첫 폭발 위치를 바꿔보세요.");
+        }
+
+        updateHud();
+        updateButtons();
+      }
+
+      function hideResult() {
+        ui.resultLayer.classList.remove("show");
+      }
+
+      function showResult(success, detail) {
+        ui.resultTitle.textContent = success ? "클리어!" : "실패";
+        ui.resultTitle.className = success ? "success" : "fail";
+        ui.resultDetail.textContent = detail;
+        ui.resultLayer.classList.add("show");
+        ui.btnNext.textContent = game.level < TOTAL_LEVELS ? "다음 레벨" : "완료";
+        ui.btnNext.disabled = !success || game.level >= TOTAL_LEVELS;
+      }
+
+      function setStatus(text) {
+        ui.status.textContent = text;
+      }
+
+      function setupLevel(level) {
+        const lv = Math.max(1, Math.min(TOTAL_LEVELS, level));
+        const conf = levelConfig(lv);
+
+        game.level = lv;
+        game.phase = "aim";
+        game.tapsUsed = 0;
+        game.removed = 0;
+        game.comboMax = 0;
+        game.comboPulse = 0;
+        game.comboText = "";
+        game.settleTimer = 0;
+        game.pointerHint = 1;
+
+        game.totalOrbs = conf.orbCount;
+        game.targetRatio = conf.targetRatio;
+        game.targetCount = conf.targetCount;
+
+        world.orbs = spawnOrbs(conf.orbCount, conf.progress);
+        world.explosions = [];
+        world.lightnings = [];
+        world.particles = [];
+
+        hideResult();
+        setStatus("한 지점을 탭해 첫 폭발을 만들어 주세요.");
+        updateHud();
+        updateButtons();
+      }
+
+      function changeLevel(next) {
+        const n = Math.max(1, Math.min(game.highestUnlocked, next));
+        setupLevel(n);
+      }
+
+      function updateButtons() {
+        ui.btnPrev.disabled = game.level <= 1;
+        ui.btnNextLevel.disabled = game.level >= game.highestUnlocked;
+      }
+
+      function updateHud() {
+        ui.level.textContent = `${game.level} / ${TOTAL_LEVELS}`;
+        ui.target.textContent = `${game.targetCount}개 (${Math.round(game.targetRatio * 100)}%)`;
+        ui.removed.textContent = `${game.removed} / ${game.totalOrbs}`;
+        ui.combo.textContent = `x${game.comboMax}`;
+        const best = game.bestTapsByLevel[game.level];
+        ui.best.textContent = best ? `${best}탭` : "-";
+      }
+
+      function onPointerDown(ev) {
+        const rect = canvas.getBoundingClientRect();
+        const x = ((ev.clientX - rect.left) / rect.width) * game.width;
+        const y = ((ev.clientY - rect.top) / rect.height) * game.height;
+        triggerTapExplosion(x, y);
+      }
+
+      function resizeCanvas() {
+        game.dpr = Math.min(2, window.devicePixelRatio || 1);
+        const displayW = Math.max(320, Math.floor(canvas.clientWidth));
+        const displayH = Math.max(420, Math.floor(canvas.clientHeight));
+        canvas.width = Math.floor(displayW * game.dpr);
+        canvas.height = Math.floor(displayH * game.dpr);
+        ctx.setTransform(game.dpr, 0, 0, game.dpr, 0, 0);
+
+        game.width = displayW;
+        game.height = displayH;
+
+        if (!game.stars.length) {
+          game.stars = Array.from({ length: 70 }, () => ({
+            x: Math.random(),
+            y: Math.random(),
+            z: 0.3 + Math.random() * 0.7
+          }));
+        }
+
+        setupLevel(Math.min(game.level, game.highestUnlocked));
+      }
+
+      function drawBackground(time) {
+        const grad = ctx.createLinearGradient(0, 0, 0, game.height);
+        grad.addColorStop(0, "#121133");
+        grad.addColorStop(0.45, "#0a0a1a");
+        grad.addColorStop(1, "#050510");
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, game.width, game.height);
+
+        for (const s of game.stars) {
+          const x = s.x * game.width;
+          const y = (s.y * game.height + Math.sin(time * 0.00028 + s.x * 8) * 6) % game.height;
+          const a = 0.28 + 0.48 * s.z;
+          ctx.fillStyle = `rgba(173, 205, 255, ${a})`;
+          ctx.fillRect(x, y, 1.4 * s.z, 1.4 * s.z);
+        }
+      }
+
+      function drawOrb(orb, time) {
+        const pulse = 1 + Math.sin(time * 0.002 + orb.wobbleSeed) * 0.05;
+        const r = orb.r * pulse;
+
+        ctx.save();
+        ctx.shadowBlur = 22;
+        ctx.shadowColor = orb.glow;
+        ctx.fillStyle = orb.color;
+        ctx.beginPath();
+        ctx.arc(orb.x, orb.y, r, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.shadowBlur = 0;
+        ctx.lineWidth = 1.2;
+        ctx.strokeStyle = "rgba(255,255,255,0.78)";
+        ctx.beginPath();
+        ctx.arc(orb.x - r * 0.2, orb.y - r * 0.2, r * 0.42, 0, Math.PI * 2);
+        ctx.stroke();
+
+        if (orb.type === "electric") {
+          ctx.strokeStyle = "rgba(255, 228, 130, 0.9)";
+          ctx.lineWidth = 1.4;
+          ctx.beginPath();
+          ctx.moveTo(orb.x - r * 0.5, orb.y);
+          ctx.lineTo(orb.x - r * 0.08, orb.y - r * 0.08);
+          ctx.lineTo(orb.x + r * 0.02, orb.y + r * 0.12);
+          ctx.lineTo(orb.x + r * 0.4, orb.y + r * 0.02);
+          ctx.stroke();
+        }
+
+        if (orb.type === "shield") {
+          ctx.strokeStyle = orb.hp > 1 ? "rgba(187,255,217,0.95)" : "rgba(255,205,146,0.95)";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(orb.x, orb.y, r + 4, 0, Math.PI * 2);
+          ctx.stroke();
+
+          ctx.fillStyle = "rgba(255,255,255,0.85)";
+          const dotR = 2.2;
+          for (let i = 0; i < orb.hp; i++) {
+            ctx.beginPath();
+            ctx.arc(orb.x - (orb.hp - 1) * 4 + i * 8, orb.y + r + 8, dotR, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+
+        if (orb.flash > 0) {
+          ctx.fillStyle = `rgba(255,255,255,${Math.min(0.45, orb.flash * 2)})`;
+          ctx.beginPath();
+          ctx.arc(orb.x, orb.y, r + 2.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.restore();
+      }
+
+      function drawExplosion(ex) {
+        const p = ex.t / ex.duration;
+        const radius = ex.maxRadius * Math.sin(Math.min(1, p) * Math.PI * 0.5);
+        const alpha = Math.max(0, 0.45 * (1 - p));
+
+        const g = ctx.createRadialGradient(ex.x, ex.y, 0, ex.x, ex.y, radius);
+        g.addColorStop(0, "rgba(255,255,255,0.95)");
+        g.addColorStop(0.28, `${hexToRgba(ex.color, 0.65 * (1 - p))}`);
+        g.addColorStop(1, `${hexToRgba(ex.color, 0)}`);
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(ex.x, ex.y, radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = hexToRgba(ex.color, alpha + 0.16);
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        ctx.arc(ex.x, ex.y, radius * 0.84, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      function drawLightning(l) {
+        const p = l.t / l.duration;
+        const alpha = Math.max(0, 0.85 * (1 - p));
+        const x2 = l.x + l.dx * l.length;
+        const y2 = l.y + l.dy * l.length;
+
+        ctx.save();
+        ctx.strokeStyle = `rgba(255, 238, 174, ${alpha})`;
+        ctx.shadowColor = "rgba(255, 238, 174, 0.8)";
+        ctx.shadowBlur = 18;
+        ctx.lineWidth = l.width * (1 - p * 0.4);
+        ctx.beginPath();
+        ctx.moveTo(l.x, l.y);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+
+        ctx.strokeStyle = `rgba(255,255,255,${Math.min(1, alpha + 0.2)})`;
+        ctx.lineWidth = Math.max(1.4, l.width * 0.22 * (1 - p));
+        ctx.beginPath();
+        ctx.moveTo(l.x, l.y);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      function drawParticles() {
+        for (const p of world.particles) {
+          const a = Math.max(0, p.life / p.maxLife);
+          ctx.fillStyle = hexToRgba(p.color, a);
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size * (0.6 + a), 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      function drawAimHint(time) {
+        if (game.phase !== "aim") return;
+        const t = (Math.sin(time * 0.004) + 1) * 0.5;
+        const r = 30 + t * 16;
+        ctx.save();
+        ctx.strokeStyle = `rgba(166, 235, 255, ${0.35 + t * 0.35})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(game.width * 0.5, game.height * 0.5, r, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = "rgba(255,255,255,0.9)";
+        ctx.beginPath();
+        ctx.arc(game.width * 0.5, game.height * 0.5, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        ctx.fillStyle = "rgba(203, 220, 255, 0.75)";
+        ctx.font = "700 13px -apple-system, BlinkMacSystemFont, 'Noto Sans KR', sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("탭 위치가 곧 전략입니다", game.width * 0.5, game.height * 0.5 + r + 24);
+      }
+
+      function drawComboText() {
+        if (game.comboPulse <= 0 || !game.comboText) return;
+        const a = Math.min(1, game.comboPulse);
+        const y = 52 + (1 - a) * 14;
+        ctx.save();
+        ctx.globalAlpha = a;
+        ctx.textAlign = "center";
+        ctx.font = "900 28px -apple-system, BlinkMacSystemFont, 'Noto Sans KR', sans-serif";
+        ctx.fillStyle = "#ffb2f0";
+        ctx.shadowColor = "rgba(255, 120, 220, 0.9)";
+        ctx.shadowBlur = 14;
+        ctx.fillText(game.comboText, game.width * 0.5, y);
+        ctx.restore();
+      }
+
+      function update(dt, now) {
+        const sec = dt / 1000;
+
+        for (const orb of world.orbs) {
+          if (!orb.alive) continue;
+          orb.flash = Math.max(0, orb.flash - sec * 2.3);
+
+          orb.x += orb.vx * sec;
+          orb.y += orb.vy * sec;
+          orb.x += Math.sin(now * 0.001 + orb.wobbleSeed) * 0.08;
+          orb.y += Math.cos(now * 0.0012 + orb.wobbleSeed) * 0.08;
+
+          if (orb.x < orb.r) { orb.x = orb.r; orb.vx *= -1; }
+          if (orb.x > game.width - orb.r) { orb.x = game.width - orb.r; orb.vx *= -1; }
+          if (orb.y < orb.r) { orb.y = orb.r; orb.vy *= -1; }
+          if (orb.y > game.height - orb.r) { orb.y = game.height - orb.r; orb.vy *= -1; }
+        }
+
+        for (let i = world.explosions.length - 1; i >= 0; i--) {
+          const ex = world.explosions[i];
+          ex.t += dt;
+          if (ex.t >= ex.duration) world.explosions.splice(i, 1);
+        }
+
+        for (let i = world.lightnings.length - 1; i >= 0; i--) {
+          const l = world.lightnings[i];
+          l.t += dt;
+          if (l.t >= l.duration) world.lightnings.splice(i, 1);
+        }
+
+        for (let i = world.particles.length - 1; i >= 0; i--) {
+          const p = world.particles[i];
+          p.life -= sec;
+          p.x += p.vx * sec;
+          p.y += p.vy * sec;
+          p.vx *= 0.98;
+          p.vy *= 0.98;
+          if (p.life <= 0) world.particles.splice(i, 1);
+        }
+
+        if (game.phase === "resolve") {
+          let activeEffect = world.explosions.length > 0 || world.lightnings.length > 0;
+
+          for (const orb of world.orbs) {
+            if (!orb.alive) continue;
+
+            for (const ex of world.explosions) {
+              const p = ex.t / ex.duration;
+              const currentRadius = ex.maxRadius * Math.sin(Math.min(1, p) * Math.PI * 0.5);
+              const dx = orb.x - ex.x;
+              const dy = orb.y - ex.y;
+              const rr = currentRadius + orb.r;
+              if (dx * dx + dy * dy <= rr * rr) {
+                registerHit(orb, ex.id);
+              }
+            }
+
+            for (const l of world.lightnings) {
+              if (pointLineHit(orb, l)) {
+                registerHit(orb, l.id);
+              }
+            }
+          }
+
+          if (!activeEffect) {
+            game.settleTimer += sec;
+            if (game.settleTimer >= 0.28) finishLevel();
+          } else {
+            game.settleTimer = 0;
+          }
+        }
+
+        game.comboPulse = Math.max(0, game.comboPulse - sec * 1.35);
+        game.shake = Math.max(0, game.shake - sec * 12);
+
+        updateHud();
+      }
+
+      function render(now) {
+        ctx.save();
+        if (game.shake > 0.01) {
+          const sx = (Math.random() - 0.5) * game.shake;
+          const sy = (Math.random() - 0.5) * game.shake;
+          ctx.translate(sx, sy);
+        }
+
+        drawBackground(now);
+        for (const ex of world.explosions) drawExplosion(ex);
+        for (const l of world.lightnings) drawLightning(l);
+        drawParticles();
+        for (const orb of world.orbs) if (orb.alive) drawOrb(orb, now);
+        drawAimHint(now);
+        drawComboText();
+
+        ctx.restore();
+      }
+
+      function loop(now) {
+        const dt = Math.min(33, now - game.lastTime);
+        game.lastTime = now;
+        update(dt, now);
+        render(now);
+        requestAnimationFrame(loop);
+      }
+
+      function hexToRgba(hex, alpha) {
+        const clean = hex.replace("#", "");
+        const bigint = Number.parseInt(clean, 16);
+        const r = (bigint >> 16) & 255;
+        const g = (bigint >> 8) & 255;
+        const b = bigint & 255;
+        return `rgba(${r}, ${g}, ${b}, ${Math.max(0, Math.min(1, alpha))})`;
+      }
+
+      ui.btnPrev.addEventListener("click", () => changeLevel(game.level - 1));
+      ui.btnRestart.addEventListener("click", () => setupLevel(game.level));
+      ui.btnTap.addEventListener("click", () => setupLevel(game.level));
+      ui.btnNextLevel.addEventListener("click", () => {
+        if (game.level < game.highestUnlocked) changeLevel(game.level + 1);
+      });
+      ui.btnRetry.addEventListener("click", () => setupLevel(game.level));
+      ui.btnNext.addEventListener("click", () => {
+        if (game.level < TOTAL_LEVELS) {
+          const next = Math.min(game.highestUnlocked, game.level + 1);
+          setupLevel(next);
+        }
+      });
+
+      canvas.addEventListener("pointerdown", onPointerDown, { passive: true });
+      window.addEventListener("resize", resizeCanvas);
+
+      resizeCanvas();
+      requestAnimationFrame((t) => {
+        game.lastTime = t;
+        loop(t);
+      });
+    })();
+  </script>
+</body>
+</html>

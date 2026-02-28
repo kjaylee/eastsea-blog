@@ -1,0 +1,600 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>API 응답 시간 테스터</title>
+  <meta name="description" content="API 엔드포인트 응답 속도와 상태 코드를 반복 측정하고 통계로 확인하는 도구" />
+
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-TVJ4W0GQNG"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){ dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'G-TVJ4W0GQNG');
+  </script>
+  <script>
+    (function(c, l, a, r, i, t, y) {
+      c[a] = c[a] || function() { (c[a].q = c[a].q || []).push(arguments); };
+      t = l.createElement(r);
+      t.async = 1;
+      t.src = 'https://www.clarity.ms/tag/' + i;
+      y = l.getElementsByTagName(r)[0];
+      y.parentNode.insertBefore(t, y);
+    })(window, document, 'clarity', 'script', 'vmms1upl1l');
+  </script>
+
+  <style>
+    :root {
+      --bg: #0a0a1a;
+      --panel: #12122a;
+      --panel-2: #171738;
+      --text: #f3f5ff;
+      --muted: #9ca3c7;
+      --line: #2b2f57;
+      --accent: #41e8ff;
+      --accent-2: #8a6bff;
+      --ok: #33d69f;
+      --warn: #ffd166;
+      --bad: #ff5d7a;
+      --shadow: 0 12px 36px rgba(0, 0, 0, 0.36);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: 'Pretendard', 'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(840px 400px at 10% -10%, rgba(65, 232, 255, 0.2), transparent 58%),
+        radial-gradient(700px 360px at 100% 0%, rgba(138, 107, 255, 0.22), transparent 62%),
+        var(--bg);
+      padding: 16px;
+    }
+    .app {
+      width: min(1100px, 100%);
+      margin: 0 auto;
+      background: rgba(18, 18, 42, 0.8);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    header {
+      padding: 18px 18px 14px;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(23, 23, 56, 0.95), rgba(18, 18, 42, 0.95));
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(1.15rem, 2.4vw, 1.8rem);
+      letter-spacing: 0.01em;
+    }
+    .sub {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+      line-height: 1.5;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr;
+      gap: 12px;
+      padding: 14px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px;
+    }
+    .card h2 {
+      margin: 0 0 10px;
+      font-size: 1rem;
+      font-weight: 700;
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .full { grid-column: 1 / -1; }
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 0.86rem;
+      color: var(--muted);
+    }
+    input, select, textarea, button {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 11px;
+      font: inherit;
+      color: var(--text);
+      background: var(--panel-2);
+    }
+    textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(65, 232, 255, 0.2);
+    }
+    .btns {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    button {
+      width: auto;
+      cursor: pointer;
+      transition: 0.18s ease;
+      font-weight: 600;
+    }
+    .primary {
+      border: none;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      color: #091220;
+    }
+    .ghost:hover, .primary:hover { transform: translateY(-1px); filter: brightness(1.06); }
+    .danger {
+      border-color: rgba(255, 93, 122, 0.6);
+      color: #ffd9e1;
+      background: rgba(255, 93, 122, 0.15);
+    }
+    .meta {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 0.85rem;
+      line-height: 1.45;
+      word-break: keep-all;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .stat {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px;
+      background: rgba(23, 23, 56, 0.65);
+    }
+    .stat .k {
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .stat .v {
+      font-size: 1.08rem;
+      font-weight: 700;
+    }
+    #status {
+      margin-top: 10px;
+      min-height: 22px;
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+    #status.ok { color: var(--ok); }
+    #status.warn { color: var(--warn); }
+    #status.bad { color: var(--bad); }
+    .table-wrap {
+      margin-top: 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      overflow: auto;
+      max-height: 340px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 720px;
+      background: #10102a;
+    }
+    th, td {
+      border-bottom: 1px solid #252a4e;
+      padding: 9px 10px;
+      font-size: 0.86rem;
+      text-align: left;
+      white-space: nowrap;
+    }
+    th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: #171738;
+      color: #cfd6ff;
+    }
+    td.err { color: var(--bad); }
+    td.ok { color: var(--ok); }
+    .hint {
+      margin-top: 8px;
+      font-size: 0.8rem;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    @media (max-width: 900px) {
+      .grid { grid-template-columns: 1fr; }
+      .form-grid { grid-template-columns: 1fr; }
+      .stats { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 520px) {
+      body { padding: 10px; }
+      .app { border-radius: 14px; }
+      .stats { grid-template-columns: 1fr; }
+      .btns button { flex: 1 1 100%; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header>
+      <h1>API 응답 시간 테스터</h1>
+      <p class="sub">URL을 반복 호출해 응답 속도, 성공률, 상태 코드 분포를 빠르게 확인하세요. (브라우저 CORS 정책이 적용됩니다.)</p>
+    </header>
+
+    <section class="grid">
+      <article class="card">
+        <h2>요청 설정</h2>
+        <div class="form-grid">
+          <div class="full">
+            <label for="url">요청 URL</label>
+            <input id="url" type="url" placeholder="https://jsonplaceholder.typicode.com/posts/1" />
+          </div>
+
+          <div>
+            <label for="method">HTTP 메서드</label>
+            <select id="method">
+              <option>GET</option>
+              <option>POST</option>
+              <option>PUT</option>
+              <option>PATCH</option>
+              <option>DELETE</option>
+              <option>HEAD</option>
+            </select>
+          </div>
+          <div>
+            <label for="count">반복 횟수 (1~50)</label>
+            <input id="count" type="number" min="1" max="50" value="5" />
+          </div>
+
+          <div>
+            <label for="interval">요청 간격(ms)</label>
+            <input id="interval" type="number" min="0" max="10000" value="300" />
+          </div>
+          <div>
+            <label for="timeout">타임아웃(ms)</label>
+            <input id="timeout" type="number" min="200" max="60000" value="8000" />
+          </div>
+
+          <div class="full">
+            <label for="headers">헤더 (한 줄에 하나, 형식: Key: Value)</label>
+            <textarea id="headers" placeholder="Accept: application/json"></textarea>
+          </div>
+          <div class="full">
+            <label for="body">요청 본문 (POST/PUT/PATCH에서 사용)</label>
+            <textarea id="body" placeholder="{&quot;name&quot;:&quot;테스트&quot;}"></textarea>
+          </div>
+
+          <div class="full btns">
+            <button class="primary" id="run-once" type="button">1회 테스트</button>
+            <button class="ghost" id="run-many" type="button">반복 테스트 시작</button>
+            <button class="danger" id="stop" type="button" disabled>중지</button>
+            <button class="ghost" id="sample" type="button">샘플 URL 입력</button>
+            <button class="ghost" id="clear" type="button">결과 초기화</button>
+          </div>
+        </div>
+        <p class="meta" id="progress">대기 중</p>
+      </article>
+
+      <article class="card">
+        <h2>측정 결과 요약</h2>
+        <div class="stats">
+          <div class="stat"><div class="k">총 요청</div><div class="v" id="s-total">0</div></div>
+          <div class="stat"><div class="k">성공률</div><div class="v" id="s-success">0%</div></div>
+          <div class="stat"><div class="k">평균</div><div class="v" id="s-avg">-</div></div>
+          <div class="stat"><div class="k">최소 / 최대</div><div class="v" id="s-minmax">-</div></div>
+          <div class="stat"><div class="k">중앙값</div><div class="v" id="s-median">-</div></div>
+          <div class="stat"><div class="k">P95</div><div class="v" id="s-p95">-</div></div>
+        </div>
+        <p id="status">URL을 입력한 뒤 테스트를 시작하세요.</p>
+        <p class="hint">팁: CORS 에러가 발생하면 브라우저에서 직접 접근 가능한 API인지 먼저 확인해 주세요.</p>
+      </article>
+    </section>
+
+    <section class="card" style="margin: 0 14px 14px;">
+      <h2>상세 로그</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>시간</th>
+              <th>상태</th>
+              <th>코드</th>
+              <th>응답시간</th>
+              <th>크기</th>
+              <th>메시지</th>
+            </tr>
+          </thead>
+          <tbody id="rows">
+            <tr><td colspan="7" style="color: var(--muted);">아직 측정 기록이 없습니다.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const els = {
+      url: document.getElementById('url'),
+      method: document.getElementById('method'),
+      count: document.getElementById('count'),
+      interval: document.getElementById('interval'),
+      timeout: document.getElementById('timeout'),
+      headers: document.getElementById('headers'),
+      body: document.getElementById('body'),
+      runOnce: document.getElementById('run-once'),
+      runMany: document.getElementById('run-many'),
+      stop: document.getElementById('stop'),
+      sample: document.getElementById('sample'),
+      clear: document.getElementById('clear'),
+      rows: document.getElementById('rows'),
+      progress: document.getElementById('progress'),
+      status: document.getElementById('status'),
+      total: document.getElementById('s-total'),
+      success: document.getElementById('s-success'),
+      avg: document.getElementById('s-avg'),
+      minmax: document.getElementById('s-minmax'),
+      median: document.getElementById('s-median'),
+      p95: document.getElementById('s-p95')
+    };
+
+    let records = [];
+    let running = false;
+    let activeController = null;
+
+    function setStatus(message, kind) {
+      els.status.textContent = message;
+      els.status.className = kind ? kind : '';
+    }
+
+    function parseHeaders(text) {
+      const out = {};
+      text.split(/\n+/).forEach((line) => {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+        const idx = trimmed.indexOf(':');
+        if (idx < 1) return;
+        const key = trimmed.slice(0, idx).trim();
+        const val = trimmed.slice(idx + 1).trim();
+        if (key) out[key] = val;
+      });
+      return out;
+    }
+
+    function quantile(arr, q) {
+      if (!arr.length) return null;
+      const sorted = [...arr].sort((a, b) => a - b);
+      const pos = (sorted.length - 1) * q;
+      const base = Math.floor(pos);
+      const rest = pos - base;
+      if (sorted[base + 1] !== undefined) {
+        return sorted[base] + rest * (sorted[base + 1] - sorted[base]);
+      }
+      return sorted[base];
+    }
+
+    function fmtMs(v) {
+      if (typeof v !== 'number' || Number.isNaN(v)) return '-';
+      return `${Math.round(v)} ms`;
+    }
+
+    function fmtBytes(bytes) {
+      if (typeof bytes !== 'number' || Number.isNaN(bytes)) return '-';
+      if (bytes < 1024) return `${bytes} B`;
+      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+      return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+    }
+
+    function updateSummary() {
+      const total = records.length;
+      const successCount = records.filter((r) => r.ok).length;
+      const times = records.map((r) => r.duration).filter((n) => typeof n === 'number' && !Number.isNaN(n));
+
+      els.total.textContent = String(total);
+      els.success.textContent = total ? `${((successCount / total) * 100).toFixed(1)}%` : '0%';
+
+      if (!times.length) {
+        els.avg.textContent = '-';
+        els.minmax.textContent = '-';
+        els.median.textContent = '-';
+        els.p95.textContent = '-';
+        return;
+      }
+
+      const avg = times.reduce((a, b) => a + b, 0) / times.length;
+      const min = Math.min(...times);
+      const max = Math.max(...times);
+      const median = quantile(times, 0.5);
+      const p95 = quantile(times, 0.95);
+
+      els.avg.textContent = fmtMs(avg);
+      els.minmax.textContent = `${Math.round(min)} / ${Math.round(max)} ms`;
+      els.median.textContent = fmtMs(median);
+      els.p95.textContent = fmtMs(p95);
+    }
+
+    function renderRows() {
+      if (!records.length) {
+        els.rows.innerHTML = '<tr><td colspan="7" style="color: var(--muted);">아직 측정 기록이 없습니다.</td></tr>';
+        return;
+      }
+      els.rows.innerHTML = records.map((r, idx) => {
+        const statusText = r.ok ? '성공' : '실패';
+        const statusClass = r.ok ? 'ok' : 'err';
+        return `
+          <tr>
+            <td>${idx + 1}</td>
+            <td>${r.time}</td>
+            <td class="${statusClass}">${statusText}</td>
+            <td>${r.code ?? '-'}</td>
+            <td>${fmtMs(r.duration)}</td>
+            <td>${fmtBytes(r.size)}</td>
+            <td title="${r.message || ''}">${r.message || '-'}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function lockUi(isLocked) {
+      els.runOnce.disabled = isLocked;
+      els.runMany.disabled = isLocked;
+      els.stop.disabled = !isLocked;
+    }
+
+    async function singleRequest(index, total) {
+      const url = els.url.value.trim();
+      if (!url) {
+        setStatus('요청 URL을 입력해 주세요.', 'bad');
+        throw new Error('URL 없음');
+      }
+
+      const method = els.method.value;
+      const timeoutMs = Math.min(60000, Math.max(200, Number(els.timeout.value) || 8000));
+      const headers = parseHeaders(els.headers.value);
+      const bodyText = els.body.value;
+
+      activeController = new AbortController();
+      const timer = setTimeout(() => activeController.abort('timeout'), timeoutMs);
+      const start = performance.now();
+
+      const options = {
+        method,
+        headers,
+        signal: activeController.signal
+      };
+
+      if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) && bodyText.trim()) {
+        options.body = bodyText;
+        if (!headers['Content-Type']) headers['Content-Type'] = 'application/json';
+      }
+
+      els.progress.textContent = `진행 중: ${index}/${total}`;
+
+      try {
+        const res = await fetch(url, options);
+        const clone = res.clone();
+        const buffer = await clone.arrayBuffer();
+        const duration = performance.now() - start;
+        clearTimeout(timer);
+
+        const record = {
+          ok: res.ok,
+          code: res.status,
+          duration,
+          size: buffer.byteLength,
+          message: res.statusText || '',
+          time: new Date().toLocaleTimeString('ko-KR', { hour12: false })
+        };
+        records.push(record);
+
+        if (res.ok) {
+          setStatus(`요청 ${index}/${total} 성공 (${Math.round(duration)}ms)`, 'ok');
+        } else {
+          setStatus(`요청 ${index}/${total} 실패 (${res.status})`, 'warn');
+        }
+      } catch (error) {
+        clearTimeout(timer);
+        const duration = performance.now() - start;
+        const msg = activeController.signal.aborted ? '타임아웃 또는 중단됨' : (error && error.message ? error.message : '요청 실패');
+        records.push({
+          ok: false,
+          code: '-',
+          duration,
+          size: null,
+          message: msg,
+          time: new Date().toLocaleTimeString('ko-KR', { hour12: false })
+        });
+        setStatus(`요청 ${index}/${total} 실패: ${msg}`, 'bad');
+      } finally {
+        activeController = null;
+        renderRows();
+        updateSummary();
+      }
+    }
+
+    async function runBatch(total) {
+      const intervalMs = Math.max(0, Number(els.interval.value) || 0);
+      running = true;
+      lockUi(true);
+
+      for (let i = 1; i <= total; i += 1) {
+        if (!running) break;
+        await singleRequest(i, total);
+        if (!running || i === total) continue;
+        if (intervalMs > 0) await new Promise((resolve) => setTimeout(resolve, intervalMs));
+      }
+
+      const done = !running ? '중지됨' : '완료됨';
+      els.progress.textContent = `테스트 ${done} • 총 ${records.length}건 기록`;
+      running = false;
+      lockUi(false);
+    }
+
+    function stopRun() {
+      if (!running) return;
+      running = false;
+      if (activeController) activeController.abort('manual-stop');
+      setStatus('사용자 요청으로 테스트를 중지했습니다.', 'warn');
+    }
+
+    els.runOnce.addEventListener('click', () => {
+      records = [];
+      renderRows();
+      updateSummary();
+      runBatch(1);
+    });
+
+    els.runMany.addEventListener('click', () => {
+      const count = Math.min(50, Math.max(1, Number(els.count.value) || 1));
+      records = [];
+      renderRows();
+      updateSummary();
+      runBatch(count);
+    });
+
+    els.stop.addEventListener('click', stopRun);
+
+    els.sample.addEventListener('click', () => {
+      els.url.value = 'https://jsonplaceholder.typicode.com/posts/1';
+      els.method.value = 'GET';
+      els.count.value = '5';
+      els.interval.value = '300';
+      els.timeout.value = '8000';
+      els.headers.value = 'Accept: application/json';
+      els.body.value = '';
+      setStatus('샘플 값을 입력했습니다. 테스트를 시작하세요.', 'ok');
+    });
+
+    els.clear.addEventListener('click', () => {
+      stopRun();
+      records = [];
+      renderRows();
+      updateSummary();
+      els.progress.textContent = '대기 중';
+      setStatus('결과를 초기화했습니다.', 'ok');
+    });
+
+    els.url.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !running) {
+        e.preventDefault();
+        els.runMany.click();
+      }
+    });
+  </script>
+</body>
+</html>

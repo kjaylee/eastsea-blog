@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0a0a1a" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230a0a1a'/%3E%3Crect x='10' y='10' width='18' height='18' rx='4' fill='%239a67ff'/%3E%3Crect x='36' y='10' width='18' height='18' rx='4' fill='%2377d8ff'/%3E%3Crect x='10' y='36' width='18' height='18' rx='4' fill='%23ffd54f'/%3E%3Ccircle cx='45' cy='45' r='8' fill='%2333f3ff'/%3E%3C/svg%3E" />
+  <title>Decay — 시간 붕괴 퍼즐</title>
+  <style>
+    :root {
+      --bg: #0a0a1a;
+      --panel: rgba(15, 16, 38, 0.92);
+      --line: rgba(185, 196, 255, 0.24);
+      --text: #e8ebff;
+      --muted: #a4afd9;
+      --purple: #9a67ff;
+      --danger: #ff4d6d;
+      --cyan: #33f3ff;
+      --ice: #77d8ff;
+      --elec: #ffd54f;
+      --reset: #78ff9b;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      min-height: 100%;
+      background: radial-gradient(circle at 20% 0%, #1a1a45 0%, #0a0a1a 58%);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR', sans-serif;
+      touch-action: manipulation;
+    }
+
+    body {
+      display: flex;
+      justify-content: center;
+      padding: 10px;
+    }
+
+    .app {
+      width: min(100vw, 960px);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--panel);
+      box-shadow: 0 0 22px rgba(99, 98, 255, 0.2);
+      padding: 12px;
+    }
+
+    h1 {
+      margin: 0;
+      color: #b99cff;
+      letter-spacing: 0.03em;
+      font-size: clamp(1.1rem, 4.4vw, 1.56rem);
+      text-shadow: 0 0 12px rgba(156, 109, 255, 0.45);
+    }
+
+    .pitch {
+      margin-top: 5px;
+      color: #dde5ff;
+      font-size: 0.86rem;
+    }
+
+    .sub {
+      margin-top: 3px;
+      font-size: 0.76rem;
+      color: var(--muted);
+    }
+
+    .hud {
+      margin-top: 10px;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .stat {
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 10px;
+      background: rgba(8, 9, 24, 0.85);
+      min-height: 56px;
+      padding: 7px 9px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 2px;
+    }
+
+    .k {
+      font-size: 0.68rem;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+
+    .v { font-size: 1rem; font-weight: 800; }
+    .v.cyan { color: var(--cyan); text-shadow: 0 0 8px rgba(51, 243, 255, 0.35); }
+    .v.good { color: #90ffba; text-shadow: 0 0 8px rgba(144, 255, 186, 0.3); }
+
+    .canvas-wrap {
+      border: 1px solid rgba(173, 186, 255, 0.3);
+      border-radius: 14px;
+      overflow: hidden;
+      background: #060612;
+      position: relative;
+      box-shadow: 0 0 26px rgba(121, 95, 255, 0.26);
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .status {
+      position: absolute;
+      left: 10px;
+      right: 10px;
+      bottom: 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(0, 0, 0, 0.44);
+      color: #ecf0ff;
+      font-size: 0.76rem;
+      padding: 7px 11px;
+      text-align: center;
+      pointer-events: none;
+    }
+
+    .buttons {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    button {
+      min-height: 44px;
+      border-radius: 10px;
+      border: 1px solid rgba(139, 126, 255, 0.48);
+      background: rgba(127, 104, 255, 0.14);
+      color: #ecf0ff;
+      font-weight: 700;
+      font-size: 0.88rem;
+      cursor: pointer;
+    }
+
+    button:active { transform: scale(0.985); }
+    button.ghost {
+      border-color: rgba(255, 255, 255, 0.26);
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    button.warn {
+      border-color: rgba(255, 97, 128, 0.5);
+      background: rgba(255, 97, 128, 0.15);
+    }
+
+    .levels {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 6px;
+    }
+
+    .lv {
+      min-height: 54px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      background: rgba(255, 255, 255, 0.07);
+      color: #dbe3ff;
+      padding: 6px 4px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      font-size: 0.74rem;
+    }
+
+    .lv.active {
+      border-color: rgba(51, 243, 255, 0.7);
+      box-shadow: 0 0 12px rgba(51, 243, 255, 0.24);
+      color: #adf7ff;
+    }
+
+    .lv.lock {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+
+    .lv .mark {
+      color: #ffd47c;
+      font-size: 0.7rem;
+    }
+
+    .legend {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+      color: #cad3ff;
+      font-size: 0.74rem;
+    }
+
+    .chip { display: inline-flex; align-items: center; gap: 5px; }
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+      box-shadow: 0 0 8px rgba(255,255,255,0.4);
+    }
+
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(3, 4, 14, 0.82);
+      backdrop-filter: blur(2px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 15;
+      padding: 12px;
+    }
+
+    .overlay.show { display: flex; }
+
+    .card {
+      width: min(94vw, 430px);
+      border-radius: 14px;
+      border: 1px solid rgba(154, 103, 255, 0.52);
+      background: linear-gradient(180deg, rgba(28, 24, 68, 0.96), rgba(10, 9, 28, 0.95));
+      box-shadow: 0 0 28px rgba(154, 103, 255, 0.3);
+      padding: 16px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .card h2 { margin: 0; }
+    .card p { margin: 0; color: #d2dcff; font-size: 0.9rem; }
+    .row { display: flex; gap: 8px; margin-top: 4px; }
+    .row button { flex: 1; }
+
+    @media (max-width: 760px) {
+      body { padding: 8px; }
+      .hud { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .buttons { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .levels { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="panel">
+      <h1>Decay — 시간 붕괴 퍼즐</h1>
+      <div class="pitch">"발판이 밟으면 사라진다 — 한 번에 모든 발판을 밟아라"</div>
+      <div class="sub">방향키 또는 스와이프로 이동 • 모든 발판 1회 방문 시 클리어</div>
+      <div class="hud">
+        <div class="stat"><div class="k">레벨</div><div id="hudLevel" class="v cyan">1 / 10</div></div>
+        <div class="stat"><div class="k">진행</div><div id="hudProgress" class="v">0 / 0</div></div>
+        <div class="stat"><div class="k">이동 수</div><div id="hudMoves" class="v">0</div></div>
+        <div class="stat"><div class="k">최고 기록</div><div id="hudBest" class="v good">-</div></div>
+      </div>
+    </section>
+
+    <section class="canvas-wrap panel" style="padding:0;">
+      <canvas id="game" width="720" height="720" aria-label="Decay game canvas"></canvas>
+      <div id="status" class="status">준비 완료. 첫 발판부터 시작하세요.</div>
+    </section>
+
+    <section class="panel buttons">
+      <button id="btnPrev" class="ghost">이전 레벨</button>
+      <button id="btnRestart" class="warn">재시작</button>
+      <button id="btnNext" class="ghost">다음 레벨</button>
+      <button id="btnMute" class="ghost">사운드 ON</button>
+      <button id="btnResetSave" class="ghost">저장 초기화</button>
+    </section>
+
+    <section class="panel">
+      <div style="font-size:0.78rem; color:#bcc7ef; margin-bottom:8px; letter-spacing:.06em; text-transform:uppercase;">레벨 선택</div>
+      <div id="levelGrid" class="levels"></div>
+      <div class="legend">
+        <span class="chip"><span class="dot" style="background:#9a67ff"></span>일반</span>
+        <span class="chip"><span class="dot" style="background:#77d8ff"></span>❄️ 얼음(2회 가능)</span>
+        <span class="chip"><span class="dot" style="background:#ffd54f"></span>⚡ 전기(즉시 붕괴)</span>
+        <span class="chip"><span class="dot" style="background:#78ff9b"></span>🔄 리셋(주변 복원)</span>
+      </div>
+    </section>
+  </main>
+
+  <div id="overlay" class="overlay" role="dialog" aria-modal="true">
+    <div class="card">
+      <h2 id="ovTitle">클리어</h2>
+      <p id="ovText">다음 레벨로 이동합니다.</p>
+      <div class="row">
+        <button id="ovRestart" class="ghost">같은 레벨 다시</button>
+        <button id="ovNext">다음 레벨</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      'use strict';
+
+      const STORAGE_KEY = 'decay-progress-v1';
+      const TILE = { VOID: 'void', NORMAL: 'normal', ICE: 'ice', ELECTRIC: 'electric', RESET: 'reset' };
+
+      const LEVELS = [
+        { id: 1, name: '기초 경로', size: 6, start: [0, 0], rows: ['......', '......', '......', '......', '......', '......'] },
+        { id: 2, name: '역방향 루프', size: 6, start: [5, 0], rows: ['......', '..##..', '......', '......', '..##..', '......'] },
+        { id: 3, name: '코너 압박', size: 6, start: [0, 5], rows: ['......', '.#..#.', '......', '......', '.#..#.', '......'] },
+        { id: 4, name: '냉전 시작', size: 6, start: [0, 0], rows: ['..I...', '......', '...E..', '..I...', '......', '......'] },
+        { id: 5, name: '양극 미로', size: 7, start: [0, 0], rows: ['.......', '.I...E.', '...#...', '..E....', '...#...', '.I.....', '.......'] },
+        { id: 6, name: '빙결 스텝', size: 7, start: [6, 0], rows: ['....I..', '..#....', '.E.....', '...I...', '.....E.', '....#..', '..I....'] },
+        { id: 7, name: '복원 실험', size: 7, start: [0, 6], rows: ['.......', '..I....', '...R...', '..E....', '....I..', '...#...', '.......'] },
+        { id: 8, name: '리셋 라인', size: 7, start: [6, 6], rows: ['..R....', '.#...E.', '....I..', '...#...', '..E....', '.I...#.', '....R..'] },
+        { id: 9, name: '대형 복합 A', size: 8, start: [0, 0], rows: ['........', '.##..I..', '...E....', '..#..#..', '...R....', '....I..E', '..##....', '........'] },
+        { id: 10, name: '대형 복합 B', size: 8, start: [7, 7], rows: ['...I....', '.##..E..', '..R.....', '....#...', '.E..I..R', '...##...', '.....E..', '....I...'] }
+      ];
+
+      const canvas = document.getElementById('game');
+      const ctx = canvas.getContext('2d');
+      const statusEl = document.getElementById('status');
+      const hudLevel = document.getElementById('hudLevel');
+      const hudProgress = document.getElementById('hudProgress');
+      const hudMoves = document.getElementById('hudMoves');
+      const hudBest = document.getElementById('hudBest');
+      const levelGrid = document.getElementById('levelGrid');
+      const overlay = document.getElementById('overlay');
+      const ovTitle = document.getElementById('ovTitle');
+      const ovText = document.getElementById('ovText');
+      const btnMute = document.getElementById('btnMute');
+
+      const state = {
+        levelIndex: 0,
+        grid: [],
+        width: 0,
+        height: 0,
+        player: { x: 0, y: 0 },
+        moves: 0,
+        covered: 0,
+        target: 0,
+        status: 'playing',
+        particles: [],
+        progress: loadProgress(),
+        muted: false,
+        audioCtx: null,
+        lastTime: performance.now(),
+        shakeUntil: 0,
+        shakePower: 0
+      };
+
+      function loadProgress() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return { unlocked: 1, best: {} };
+          const parsed = JSON.parse(raw);
+          return {
+            unlocked: Math.min(10, Math.max(1, Number(parsed.unlocked) || 1)),
+            best: parsed.best && typeof parsed.best === 'object' ? parsed.best : {}
+          };
+        } catch {
+          return { unlocked: 1, best: {} };
+        }
+      }
+
+      function saveProgress() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state.progress));
+      }
+
+      function setStatus(text) {
+        statusEl.textContent = text;
+      }
+
+      function tileTypeFromChar(ch) {
+        if (ch === '#') return TILE.VOID;
+        if (ch === 'I') return TILE.ICE;
+        if (ch === 'E') return TILE.ELECTRIC;
+        if (ch === 'R') return TILE.RESET;
+        return TILE.NORMAL;
+      }
+
+      function makeTile(type, x, y) {
+        return {
+          x,
+          y,
+          type,
+          active: type !== TILE.VOID,
+          visited: false,
+          visits: 0,
+          collapseAt: null
+        };
+      }
+
+      function openOverlay(title, text, isFail) {
+        ovTitle.textContent = title;
+        ovText.textContent = text;
+        ovTitle.style.color = isFail ? '#ff6f8d' : '#91ffc0';
+        overlay.classList.add('show');
+      }
+
+      function closeOverlay() {
+        overlay.classList.remove('show');
+      }
+
+      function buildLevel(index) {
+        const level = LEVELS[index];
+        state.levelIndex = index;
+        state.width = level.size;
+        state.height = level.size;
+        state.grid = [];
+        state.moves = 0;
+        state.covered = 0;
+        state.target = 0;
+        state.status = 'playing';
+        state.particles.length = 0;
+        closeOverlay();
+
+        for (let y = 0; y < level.size; y++) {
+          const row = [];
+          for (let x = 0; x < level.size; x++) {
+            const tile = makeTile(tileTypeFromChar(level.rows[y][x]), x, y);
+            if (tile.type !== TILE.VOID) state.target++;
+            row.push(tile);
+          }
+          state.grid.push(row);
+        }
+
+        state.player.x = level.start[0];
+        state.player.y = level.start[1];
+        enterTile(state.player.x, state.player.y, true);
+        setStatus(`L${level.id} ${level.name} — 모든 발판을 1회 방문하세요.`);
+        renderLevelButtons();
+        updateHUD();
+      }
+
+      function getTile(x, y) {
+        if (x < 0 || y < 0 || y >= state.height || x >= state.width) return null;
+        return state.grid[y][x];
+      }
+
+      function getLayout() {
+        const w = canvas.width;
+        const h = canvas.height;
+        const pad = Math.max(14, Math.min(w, h) * 0.06);
+        const tile = Math.floor(Math.min((w - pad * 2) / state.width, (h - pad * 2) / state.height));
+        const ox = Math.floor((w - tile * state.width) / 2);
+        const oy = Math.floor((h - tile * state.height) / 2);
+        return { tile, ox, oy };
+      }
+
+      function tileCenterPx(x, y) {
+        const { tile, ox, oy } = getLayout();
+        return { x: ox + x * tile + tile / 2, y: oy + y * tile + tile / 2, size: tile };
+      }
+
+      function vibrate(ms = 20) {
+        if (!state.audioCtx || !navigator.vibrate) return;
+        navigator.vibrate(ms);
+      }
+
+      function ensureAudio() {
+        if (state.audioCtx || state.muted) return;
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) return;
+        state.audioCtx = new Ctx();
+      }
+
+      function playTone(freq, duration, type = 'sine', gain = 0.04, glide = null) {
+        if (state.muted) return;
+        ensureAudio();
+        const ac = state.audioCtx;
+        if (!ac) return;
+        const now = ac.currentTime;
+        const osc = ac.createOscillator();
+        const amp = ac.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, now);
+        if (glide) osc.frequency.exponentialRampToValueAtTime(glide, now + duration);
+        amp.gain.setValueAtTime(0.0001, now);
+        amp.gain.exponentialRampToValueAtTime(gain, now + 0.01);
+        amp.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+        osc.connect(amp).connect(ac.destination);
+        osc.start(now);
+        osc.stop(now + duration + 0.01);
+      }
+
+      function sfx(name) {
+        if (name === 'move') playTone(380, 0.06, 'triangle', 0.026, 330);
+        else if (name === 'collapse') playTone(170, 0.18, 'sawtooth', 0.045, 90);
+        else if (name === 'ice') playTone(700, 0.1, 'sine', 0.03, 870);
+        else if (name === 'electric') playTone(940, 0.08, 'square', 0.038, 320);
+        else if (name === 'reset') { playTone(520, 0.12, 'triangle', 0.035, 760); setTimeout(() => playTone(840, 0.08, 'triangle', 0.028, 1020), 45); }
+        else if (name === 'clear') { playTone(520, 0.12, 'sine', 0.04); setTimeout(() => playTone(660, 0.12, 'sine', 0.04), 120); setTimeout(() => playTone(880, 0.16, 'sine', 0.05), 240); }
+        else if (name === 'fail') playTone(240, 0.25, 'sawtooth', 0.05, 90);
+      }
+
+      function spawnCollapseParticles(x, y, color) {
+        const c = tileCenterPx(x, y);
+        for (let i = 0; i < 18; i++) {
+          state.particles.push({
+            x: c.x + (Math.random() - 0.5) * c.size * 0.35,
+            y: c.y + (Math.random() - 0.5) * c.size * 0.25,
+            vx: (Math.random() - 0.5) * 1.8,
+            vy: Math.random() * 1.2 + 0.2,
+            life: 1,
+            size: Math.random() * 3 + 1,
+            color
+          });
+        }
+      }
+
+      function triggerShake(power = 4, duration = 180) {
+        state.shakePower = power;
+        state.shakeUntil = performance.now() + duration;
+      }
+
+      function collapseTile(tile) {
+        if (!tile || tile.type === TILE.VOID || !tile.active) return;
+        tile.active = false;
+        tile.collapseAt = null;
+        spawnCollapseParticles(tile.x, tile.y, '#ff5d78');
+        triggerShake(3.6, 140);
+        sfx('collapse');
+
+        if (state.player.x === tile.x && state.player.y === tile.y && state.status === 'playing') {
+          onFail('발밑 발판이 붕괴했습니다.');
+        }
+      }
+
+      function restoreAround(x, y) {
+        const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+        let restored = 0;
+        for (const [dx, dy] of dirs) {
+          const n = getTile(x + dx, y + dy);
+          if (!n || n.type === TILE.VOID) continue;
+          if (!n.active || n.collapseAt !== null) {
+            n.active = true;
+            n.collapseAt = null;
+            restored++;
+            spawnCollapseParticles(n.x, n.y, '#78ff9b');
+          }
+        }
+        if (restored > 0) setStatus(`리셋 발동! 주변 ${restored}칸 복원`);
+      }
+
+      function markCollapse(tile, ms) {
+        if (!tile.active) return;
+        const due = performance.now() + ms;
+        tile.collapseAt = tile.collapseAt === null ? due : Math.min(tile.collapseAt, due);
+      }
+
+      function canEnter(tile) {
+        if (!tile || tile.type === TILE.VOID) return false;
+        if (!tile.active) return false;
+        if (tile.type === TILE.ICE && tile.visits >= 2) return false;
+        return true;
+      }
+
+      function enterTile(x, y, initial = false) {
+        const tile = getTile(x, y);
+        if (!canEnter(tile)) {
+          if (!initial && state.status === 'playing') {
+            setStatus(tile && tile.type === TILE.ICE ? '얼음 타일은 최대 2회까지만 밟을 수 있습니다.' : '그쪽 발판은 이미 붕괴했습니다.');
+            triggerShake(2.4, 90);
+            vibrate(12);
+          }
+          return false;
+        }
+
+        if (!initial) {
+          state.moves += 1;
+          sfx('move');
+        }
+
+        state.player.x = x;
+        state.player.y = y;
+
+        if (!tile.visited) {
+          tile.visited = true;
+          state.covered += 1;
+        }
+        tile.visits += 1;
+
+        if (!initial) {
+          if (tile.type === TILE.NORMAL || tile.type === TILE.RESET) {
+            markCollapse(tile, 2000);
+          } else if (tile.type === TILE.ELECTRIC) {
+            markCollapse(tile, 250);
+            sfx('electric');
+            setStatus('⚡ 전기 타일! 곧바로 무너집니다.');
+          } else if (tile.type === TILE.ICE) {
+            sfx('ice');
+            if (tile.visits === 2) setStatus('❄️ 얼음 타일 내구도 소진 (2/2). 다시 밟을 수 없습니다.');
+          }
+
+          if (tile.type === TILE.RESET) {
+            restoreAround(x, y);
+            sfx('reset');
+          }
+        }
+
+        if (state.covered >= state.target && state.status === 'playing') {
+          onClear();
+        }
+        updateHUD();
+        return true;
+      }
+
+      function move(dx, dy) {
+        if (state.status !== 'playing') return;
+        const nx = state.player.x + dx;
+        const ny = state.player.y + dy;
+        const tile = getTile(nx, ny);
+        if (!tile || tile.type === TILE.VOID) {
+          setStatus('벽입니다. 다른 방향으로 이동하세요.');
+          return;
+        }
+        if (!enterTile(nx, ny, false)) {
+          if (!tile.active) onFail('붕괴된 발판으로 이동하려 했습니다.');
+          return;
+        }
+      }
+
+      function onClear() {
+        state.status = 'clear';
+        sfx('clear');
+        const levelNo = state.levelIndex + 1;
+        const prevBest = state.progress.best[levelNo];
+        if (!prevBest || state.moves < prevBest) state.progress.best[levelNo] = state.moves;
+        if (state.progress.unlocked < 10 && state.progress.unlocked < levelNo + 1) {
+          state.progress.unlocked = levelNo + 1;
+        }
+        saveProgress();
+        setStatus('레벨 클리어! 다음 레벨이 해금되었습니다.');
+        openOverlay('클리어!', `L${levelNo} 완료 • 이동 ${state.moves}회`, false);
+        renderLevelButtons();
+        updateHUD();
+      }
+
+      function onFail(reason) {
+        if (state.status !== 'playing') return;
+        state.status = 'fail';
+        sfx('fail');
+        vibrate(35);
+        setStatus(`실패: ${reason}`);
+        openOverlay('실패', reason, true);
+      }
+
+      function updateHUD() {
+        const levelNo = state.levelIndex + 1;
+        hudLevel.textContent = `${levelNo} / ${LEVELS.length}`;
+        hudProgress.textContent = `${state.covered} / ${state.target}`;
+        hudMoves.textContent = String(state.moves);
+        hudBest.textContent = state.progress.best[levelNo] ? `${state.progress.best[levelNo]}회` : '-';
+      }
+
+      function renderLevelButtons() {
+        const current = state.levelIndex + 1;
+        levelGrid.innerHTML = '';
+        LEVELS.forEach((lv, i) => {
+          const no = i + 1;
+          const b = document.createElement('button');
+          b.className = 'lv';
+          const lock = no > state.progress.unlocked;
+          if (lock) b.classList.add('lock');
+          if (no === current) b.classList.add('active');
+          const best = state.progress.best[no] ? `${state.progress.best[no]}회` : '미기록';
+          b.innerHTML = `<strong>L${no}</strong><span class="mark">${lock ? '🔒 잠김' : best}</span>`;
+          b.disabled = lock;
+          b.addEventListener('click', () => {
+            if (lock) return;
+            buildLevel(i);
+          });
+          levelGrid.appendChild(b);
+        });
+      }
+
+      function drawRoundRect(x, y, w, h, r) {
+        const rr = Math.min(r, w / 2, h / 2);
+        ctx.beginPath();
+        ctx.moveTo(x + rr, y);
+        ctx.arcTo(x + w, y, x + w, y + h, rr);
+        ctx.arcTo(x + w, y + h, x, y + h, rr);
+        ctx.arcTo(x, y + h, x, y, rr);
+        ctx.arcTo(x, y, x + w, y, rr);
+        ctx.closePath();
+      }
+
+      function drawTile(tile, now, tileSize, x, y) {
+        if (tile.type === TILE.VOID) return;
+
+        const pad = Math.max(3, tileSize * 0.08);
+        let rx = x + pad;
+        let ry = y + pad;
+        const rw = tileSize - pad * 2;
+        const rh = tileSize - pad * 2;
+        let fill = '#1b1530';
+        let border = 'rgba(255,255,255,0.09)';
+
+        if (tile.active) {
+          if (tile.type === TILE.ICE) fill = '#4ca7d7';
+          else if (tile.type === TILE.ELECTRIC) fill = '#b78a0d';
+          else if (tile.type === TILE.RESET) fill = '#2f9d55';
+          else fill = '#6d42d9';
+          border = 'rgba(210,220,255,0.24)';
+        }
+
+        const arming = tile.collapseAt !== null && tile.active;
+        if (arming) {
+          const remain = Math.max(0, tile.collapseAt - now);
+          const duration = tile.type === TILE.ELECTRIC ? 250 : 2000;
+          const p = 1 - Math.min(1, remain / duration);
+          const glow = 10 + p * 26;
+          fill = `rgba(${120 + p * 135}, ${55 - p * 25}, ${130 - p * 75}, 0.95)`;
+          ctx.shadowColor = `rgba(255,80,110,${0.36 + p * 0.4})`;
+          ctx.shadowBlur = glow;
+          const shake = p * 2.2;
+          rx += (Math.random() - 0.5) * shake;
+          ry += (Math.random() - 0.5) * shake;
+        } else {
+          ctx.shadowBlur = 0;
+        }
+
+        drawRoundRect(rx, ry, rw, rh, Math.max(4, tileSize * 0.14));
+        ctx.fillStyle = fill;
+        ctx.fill();
+        ctx.strokeStyle = border;
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+
+        if (!tile.active) {
+          ctx.fillStyle = 'rgba(8,10,23,0.68)';
+          drawRoundRect(rx + 1, ry + 1, rw - 2, rh - 2, Math.max(4, tileSize * 0.12));
+          ctx.fill();
+        }
+
+        if (tile.visited && tile.active) {
+          ctx.fillStyle = 'rgba(255,255,255,0.12)';
+          ctx.beginPath();
+          ctx.arc(x + tileSize * 0.5, y + tileSize * 0.5, tileSize * 0.09, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        if (tile.active && tile.type !== TILE.NORMAL) {
+          const icon = tile.type === TILE.ICE ? '❄' : tile.type === TILE.ELECTRIC ? '⚡' : '↺';
+          ctx.fillStyle = 'rgba(255,255,255,0.92)';
+          ctx.font = `${Math.floor(tileSize * 0.34)}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(icon, x + tileSize * 0.5, y + tileSize * 0.52);
+        }
+
+        if (tile.type === TILE.ICE && tile.active) {
+          const left = Math.max(0, 2 - tile.visits);
+          ctx.fillStyle = 'rgba(3,8,22,0.6)';
+          ctx.font = `${Math.floor(tileSize * 0.18)}px sans-serif`;
+          ctx.textAlign = 'right';
+          ctx.textBaseline = 'bottom';
+          ctx.fillText(String(left), x + tileSize * 0.86, y + tileSize * 0.86);
+        }
+      }
+
+      function updateParticles() {
+        for (let i = state.particles.length - 1; i >= 0; i--) {
+          const p = state.particles[i];
+          p.vy += 0.08;
+          p.x += p.vx;
+          p.y += p.vy;
+          p.life -= 0.025;
+          if (p.life <= 0) state.particles.splice(i, 1);
+        }
+      }
+
+      function drawParticles() {
+        for (const p of state.particles) {
+          ctx.globalAlpha = Math.max(0, p.life);
+          ctx.fillStyle = p.color;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      function update(now) {
+        const dt = Math.min(33, now - state.lastTime);
+        state.lastTime = now;
+
+        for (const row of state.grid) {
+          for (const tile of row) {
+            if (tile.collapseAt !== null && now >= tile.collapseAt) {
+              collapseTile(tile);
+            }
+          }
+        }
+
+        updateParticles(dt);
+        draw(now);
+        requestAnimationFrame(update);
+      }
+
+      function draw(now) {
+        const w = canvas.width;
+        const h = canvas.height;
+        ctx.clearRect(0, 0, w, h);
+        ctx.fillStyle = '#060613';
+        ctx.fillRect(0, 0, w, h);
+
+        ctx.save();
+        if (now < state.shakeUntil) {
+          const p = state.shakePower;
+          ctx.translate((Math.random() - 0.5) * p, (Math.random() - 0.5) * p);
+        }
+
+        const { tile, ox, oy } = getLayout();
+
+        for (let y = 0; y < state.height; y++) {
+          for (let x = 0; x < state.width; x++) {
+            drawTile(state.grid[y][x], now, tile, ox + x * tile, oy + y * tile);
+          }
+        }
+
+        const pc = tileCenterPx(state.player.x, state.player.y);
+        const pulse = Math.sin(now * 0.009) * 0.7;
+        ctx.shadowColor = 'rgba(51,243,255,0.8)';
+        ctx.shadowBlur = 16;
+        ctx.fillStyle = '#33f3ff';
+        ctx.beginPath();
+        ctx.arc(pc.x, pc.y, tile * (0.22 + pulse * 0.01), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        drawParticles();
+        ctx.restore();
+      }
+
+      function resizeCanvas() {
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = Math.max(320, Math.floor(rect.width));
+        canvas.height = Math.max(320, Math.floor(rect.height));
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+      }
+
+      function loadPrev() {
+        const next = Math.max(0, state.levelIndex - 1);
+        buildLevel(next);
+      }
+
+      function loadNext() {
+        const next = Math.min(LEVELS.length - 1, state.levelIndex + 1);
+        if (next + 1 > state.progress.unlocked) {
+          setStatus('다음 레벨이 잠겨 있습니다. 현재 레벨을 클리어하세요.');
+          return;
+        }
+        buildLevel(next);
+      }
+
+      window.addEventListener('keydown', (e) => {
+        const map = {
+          ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0],
+          w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0]
+        };
+        const v = map[e.key];
+        if (!v) return;
+        e.preventDefault();
+        ensureAudio();
+        move(v[0], v[1]);
+      }, { passive: false });
+
+      let touchStart = null;
+      canvas.addEventListener('touchstart', (e) => {
+        if (!e.touches[0]) return;
+        ensureAudio();
+        touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      }, { passive: true });
+
+      canvas.addEventListener('touchend', (e) => {
+        if (!touchStart || !e.changedTouches[0]) return;
+        const dx = e.changedTouches[0].clientX - touchStart.x;
+        const dy = e.changedTouches[0].clientY - touchStart.y;
+        touchStart = null;
+        const threshold = 18;
+        if (Math.abs(dx) < threshold && Math.abs(dy) < threshold) return;
+        if (Math.abs(dx) > Math.abs(dy)) move(dx > 0 ? 1 : -1, 0);
+        else move(0, dy > 0 ? 1 : -1);
+      }, { passive: true });
+
+      document.getElementById('btnRestart').addEventListener('click', () => buildLevel(state.levelIndex));
+      document.getElementById('btnPrev').addEventListener('click', loadPrev);
+      document.getElementById('btnNext').addEventListener('click', loadNext);
+      document.getElementById('btnResetSave').addEventListener('click', () => {
+        if (!confirm('진행도를 초기화할까요?')) return;
+        localStorage.removeItem(STORAGE_KEY);
+        state.progress = { unlocked: 1, best: {} };
+        buildLevel(0);
+        renderLevelButtons();
+        setStatus('저장 데이터가 초기화되었습니다.');
+      });
+
+      btnMute.addEventListener('click', () => {
+        state.muted = !state.muted;
+        btnMute.textContent = state.muted ? '사운드 OFF' : '사운드 ON';
+      });
+
+      document.getElementById('ovRestart').addEventListener('click', () => {
+        buildLevel(state.levelIndex);
+      });
+
+      document.getElementById('ovNext').addEventListener('click', () => {
+        if (state.status === 'fail') {
+          buildLevel(state.levelIndex);
+          return;
+        }
+        loadNext();
+      });
+
+      window.addEventListener('resize', resizeCanvas);
+
+      resizeCanvas();
+      buildLevel(0);
+      requestAnimationFrame(update);
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Mirror Run — 거울 대칭 동시 조작 러너</title>
+<style>
+:root{
+  --bg:#0a0a1a;
+  --panel:#111833;
+  --cyan:#36f4ff;
+  --magenta:#ff4fd8;
+  --red:#ff375f;
+  --gold:#ffd24d;
+  --text:#eaf4ff;
+  --muted:#9db2df;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:'Pretendard','Noto Sans KR',system-ui,-apple-system,sans-serif;}
+body{display:flex;justify-content:center;align-items:flex-start;min-height:100vh;overflow-x:hidden;}
+.app{width:min(1000px,100vw);padding:10px 12px 120px;}
+h1{margin:2px 0 4px;font-size:clamp(22px,5vw,34px);color:var(--cyan);text-shadow:0 0 16px rgba(54,244,255,.55);}
+.sub{margin:0 0 10px;color:var(--muted);font-size:13px;line-height:1.45;}
+.hud{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-bottom:10px;}
+.card{background:linear-gradient(180deg,rgba(20,28,56,.94),rgba(10,14,32,.92));border:1px solid rgba(120,170,255,.33);border-radius:12px;padding:8px 10px;box-shadow:0 0 14px rgba(54,244,255,.14) inset;}
+.k{display:block;font-size:11px;color:#9fb2df;}
+.v{display:block;font-size:14px;font-weight:700;color:#f5fbff;}
+.canvas-wrap{position:relative;border:1px solid rgba(54,244,255,.45);border-radius:14px;overflow:hidden;box-shadow:0 0 26px rgba(54,244,255,.2), inset 0 0 55px rgba(179,83,255,.12);}
+canvas{display:block;width:100%;height:auto;background:#080b1e;touch-action:none;}
+.msg{position:absolute;left:50%;top:10px;transform:translateX(-50%);padding:8px 14px;border-radius:999px;font-size:13px;white-space:nowrap;background:rgba(8,18,30,.85);border:1px solid rgba(125,255,179,.4);box-shadow:0 0 14px rgba(125,255,179,.26);opacity:0;transition:opacity .2s;pointer-events:none;}
+.msg.show{opacity:1;}
+.controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
+button{border:1px solid rgba(120,170,255,.45);background:#0f1732;color:#dff3ff;padding:9px 12px;border-radius:10px;font-size:13px;font-weight:700;}
+button:active{transform:translateY(1px);}
+button.primary{border-color:rgba(54,244,255,.72);background:linear-gradient(180deg,#16314d,#0f2238);}
+button.warn{border-color:rgba(255,55,95,.6);color:#ffd8df;}
+button:disabled{opacity:.4;}
+.level-grid{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:7px;margin-top:10px;}
+.level-btn{padding:8px 6px;border-radius:10px;border:1px solid rgba(130,146,210,.35);background:#101733;color:#dce5ff;font-size:12px;}
+.level-btn.active{border-color:rgba(54,244,255,.95);box-shadow:0 0 14px rgba(54,244,255,.34);}
+.level-btn.locked{opacity:.32;}
+.legend{margin-top:10px;font-size:12px;color:var(--muted);line-height:1.55;}
+.touch-help{position:fixed;left:0;right:0;bottom:0;padding:10px 14px calc(10px + env(safe-area-inset-bottom));background:linear-gradient(180deg,rgba(10,10,26,0),rgba(10,10,26,.88) 28%,rgba(10,10,26,.98));font-size:12px;color:#cde2ff;text-align:center;}
+@media (max-width:760px){
+  .hud{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .level-grid{grid-template-columns:repeat(4,minmax(0,1fr));}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>Mirror Run</h1>
+  <p class="sub">"거울 속 분신이 반대로 움직이는 동시 조작 러너" · 한쪽만 피하면 끝이 아닙니다. 양쪽 모두 살아남아야 합니다.</p>
+
+  <section class="hud">
+    <div class="card"><span class="k">레벨</span><span class="v" id="hudLevel">1</span></div>
+    <div class="card"><span class="k">거울</span><span class="v" id="hudMirror">수직</span></div>
+    <div class="card"><span class="k">거리</span><span class="v" id="hudDist">0 / 0m</span></div>
+    <div class="card"><span class="k">이번 코인</span><span class="v" id="hudCoins">0</span></div>
+    <div class="card"><span class="k">누적 코인</span><span class="v" id="hudTotal">0</span></div>
+  </section>
+
+  <div class="canvas-wrap">
+    <canvas id="game" width="960" height="540" aria-label="Mirror Run 게임 캔버스"></canvas>
+    <div id="msg" class="msg"></div>
+  </div>
+
+  <div class="controls">
+    <button id="btnRestart" class="warn">레벨 다시 시작</button>
+    <button id="btnNext" class="primary" disabled>다음 레벨 ▶</button>
+    <button id="btnResetSave">기록 초기화</button>
+  </div>
+
+  <div id="levelGrid" class="level-grid"></div>
+  <p id="hint" class="legend"></p>
+</div>
+
+<div class="touch-help">터치: 스와이프(상/하/좌/우 이동), 탭(점프) · 키보드: 방향키 + Space</div>
+
+<script>
+(() => {
+  'use strict';
+
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width;
+  const H = canvas.height;
+  const SAVE_KEY = 'mirrorRunSaveV1';
+
+  const ui = {
+    hudLevel: document.getElementById('hudLevel'),
+    hudMirror: document.getElementById('hudMirror'),
+    hudDist: document.getElementById('hudDist'),
+    hudCoins: document.getElementById('hudCoins'),
+    hudTotal: document.getElementById('hudTotal'),
+    hint: document.getElementById('hint'),
+    msg: document.getElementById('msg'),
+    btnRestart: document.getElementById('btnRestart'),
+    btnNext: document.getElementById('btnNext'),
+    btnResetSave: document.getElementById('btnResetSave'),
+    levelGrid: document.getElementById('levelGrid')
+  };
+
+  const LEVELS = [
+    { id:1, name:'수직 거울 I', mirror:'vertical', target:980, speed:205, spawn:1.05, coin:1.6, hint:'L1: 중앙 수직 거울. 좌우 반전을 감 잡아보세요.' },
+    { id:2, name:'수직 거울 II', mirror:'vertical', target:1180, speed:225, spawn:0.88, coin:1.4, hint:'L2: 장애물 밀도 증가. 양쪽 공간을 동시에 읽어야 합니다.' },
+    { id:3, name:'수평 거울 I', mirror:'horizontal', target:1100, speed:220, spawn:0.95, coin:1.55, hint:'L3: 거울선이 수평으로 변경. 위/아래 분신 위치를 주시하세요.' },
+    { id:4, name:'수평 거울 II', mirror:'horizontal', target:1320, speed:240, spawn:0.8, coin:1.35, hint:'L4: 수평 거울 고속 구간. 점프로 높낮이 장애물을 넘으세요.' },
+    { id:5, name:'대각 거울 I', mirror:'diagonal', target:1240, speed:235, spawn:0.9, coin:1.45, hint:'L5: 대각 반사 시작. 내가 안전해도 분신이 위험할 수 있습니다.' },
+    { id:6, name:'대각 거울 II', mirror:'diagonal', target:1480, speed:255, spawn:0.74, coin:1.28, hint:'L6: 대각 + 빠른 스폰. 경로를 미리 예측하세요.' },
+    { id:7, name:'회전 거울', mirror:'rotating', target:1550, speed:255, spawn:0.76, coin:1.3, hint:'L7: 거울선이 계속 회전합니다. 실시간으로 대칭이 바뀝니다.' },
+    { id:8, name:'회전 + 복합', mirror:'composite', target:1780, speed:275, spawn:0.68, coin:1.2, hint:'L8: 회전 + 복합 패턴. Mirror Run 최종 시험.' }
+  ];
+
+  const state = {
+    levelIndex: 0,
+    level: LEVELS[0],
+    mode: 'play',
+    player: {x: W * 0.28, y: H * 0.5, r: 13, z:0, vz:0},
+    clone: {x: W * 0.72, y: H * 0.5, r: 13, z:0},
+    distance: 0,
+    runCoins: 0,
+    obstacles: [],
+    coins: [],
+    particles: [],
+    spawnT: 0.8,
+    coinT: 1.2,
+    elapsed: 0,
+    shake: 0,
+    msgTimer: 0,
+    progress: loadSave(),
+    lastMoveSoundAt: 0,
+    flashTint: 0,
+    nextEnabled: false
+  };
+
+  const input = {
+    left:false,right:false,up:false,down:false,
+    swipeX:0,swipeY:0,swipeTimer:0,
+    jumpQueued:false
+  };
+
+  const audio = {
+    ctx:null,
+    ensure(){
+      if(!this.ctx){
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if(AC) this.ctx = new AC();
+      }
+      if(this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+    },
+    tone(freq=440, dur=0.08, type='sine', vol=0.06){
+      if(!this.ctx) return;
+      const now = this.ctx.currentTime;
+      const o = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      o.type = type;
+      o.frequency.value = freq;
+      o.connect(g); g.connect(this.ctx.destination);
+      g.gain.setValueAtTime(vol, now);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+      o.start(now); o.stop(now + dur);
+    },
+    move(){ this.tone(330,0.05,'triangle',0.05); },
+    jump(){ this.tone(410,0.1,'square',0.07); },
+    coin(){ this.tone(760,0.08,'sine',0.08); this.tone(980,0.09,'sine',0.05); },
+    crash(){ this.tone(180,0.16,'sawtooth',0.11); },
+    clear(){ this.tone(520,0.1,'triangle',0.07); this.tone(760,0.12,'triangle',0.07); this.tone(1040,0.13,'triangle',0.06); }
+  };
+
+  function loadSave(){
+    try{
+      const raw = JSON.parse(localStorage.getItem(SAVE_KEY) || '{}');
+      return {
+        unlocked: Math.max(1, Math.min(8, Number(raw.unlocked || 1))),
+        totalCoins: Math.max(0, Number(raw.totalCoins || 0)),
+        levelCoins: raw.levelCoins && typeof raw.levelCoins === 'object' ? raw.levelCoins : {},
+        bestRunCoins: raw.bestRunCoins && typeof raw.bestRunCoins === 'object' ? raw.bestRunCoins : {}
+      };
+    }catch(_){
+      return {unlocked:1,totalCoins:0,levelCoins:{},bestRunCoins:{}};
+    }
+  }
+
+  function saveProgress(){
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      unlocked: state.progress.unlocked,
+      totalCoins: state.progress.totalCoins,
+      levelCoins: state.progress.levelCoins,
+      bestRunCoins: state.progress.bestRunCoins,
+      updatedAt: Date.now()
+    }));
+  }
+
+  function clamp(v,min,max){ return Math.max(min, Math.min(max,v)); }
+  function rand(min,max){ return min + Math.random() * (max-min); }
+
+  function reflectPoint(px, py, cx, cy, angle){
+    const dx = Math.cos(angle), dy = Math.sin(angle);
+    const vx = px - cx, vy = py - cy;
+    const dot = vx * dx + vy * dy;
+    const projX = dx * dot, projY = dy * dot;
+    return {x: cx + (2 * projX - vx), y: cy + (2 * projY - vy)};
+  }
+
+  function getMirrorState(t){
+    const lv = state.level;
+    const cx0 = W * 0.5;
+    const cy0 = H * 0.5;
+    if(lv.mirror === 'vertical') return {cx:cx0, cy:cy0, angle:Math.PI/2, label:'수직'};
+    if(lv.mirror === 'horizontal') return {cx:cx0, cy:cy0, angle:0, label:'수평'};
+    if(lv.mirror === 'diagonal') return {cx:cx0, cy:cy0, angle:Math.PI/4, label:'대각'};
+    if(lv.mirror === 'rotating') return {cx:cx0, cy:cy0, angle:(Math.PI/2) + t * 0.88, label:'회전'};
+
+    const phase = Math.floor(t / 3.4) % 4;
+    const bases = [Math.PI/2, 0, Math.PI/4, -Math.PI/4];
+    const drift = Math.sin(t * 1.8) * 0.36;
+    return {
+      cx: cx0 + Math.cos(t * 0.8) * 42,
+      cy: cy0 + Math.sin(t * 1.1) * 26,
+      angle: bases[phase] + drift + t * 0.5,
+      label: '회전+복합'
+    };
+  }
+
+  function resetLevel(idx = state.levelIndex){
+    state.levelIndex = idx;
+    state.level = LEVELS[idx];
+    state.mode = 'play';
+    state.distance = 0;
+    state.runCoins = 0;
+    state.elapsed = 0;
+    state.spawnT = 0.65;
+    state.coinT = 1.1;
+    state.obstacles = [];
+    state.coins = [];
+    state.particles = [];
+    state.shake = 0;
+    state.flashTint = 0;
+    state.nextEnabled = false;
+    state.player.x = W * 0.28;
+    state.player.y = H * 0.5;
+    state.player.z = 0;
+    state.player.vz = 0;
+    input.swipeX = 0;
+    input.swipeY = 0;
+    input.swipeTimer = 0;
+    input.jumpQueued = false;
+
+    const ms = getMirrorState(0);
+    const rp = reflectPoint(state.player.x, state.player.y, ms.cx, ms.cy, ms.angle);
+    state.clone.x = rp.x;
+    state.clone.y = rp.y;
+    state.clone.z = 0;
+
+    ui.hint.textContent = `${state.level.name}: ${state.level.hint}`;
+    ui.btnNext.disabled = true;
+    refreshLevelButtons();
+    flash(`레벨 ${state.level.id} 시작`);
+  }
+
+  function flash(text){
+    ui.msg.textContent = text;
+    ui.msg.classList.add('show');
+    state.msgTimer = 2.2;
+  }
+
+  function maybeMoveSound(now){
+    if(now - state.lastMoveSoundAt > 0.09){
+      audio.move();
+      state.lastMoveSoundAt = now;
+    }
+  }
+
+  function spawnObstacle(){
+    const lv = state.level;
+    const h = rand(26, 72);
+    const w = rand(32, 84);
+    state.obstacles.push({
+      x: W + w + rand(0, 100),
+      y: rand(44, H - 44 - h),
+      w, h,
+      driftA: rand(0, 18),
+      driftS: rand(0.6, 1.8),
+      driftP: rand(0, Math.PI * 2)
+    });
+    state.spawnT = lv.spawn * rand(0.72, 1.18);
+  }
+
+  function spawnCoin(){
+    const lv = state.level;
+    state.coins.push({
+      x: W + 42 + rand(0, 120),
+      y: rand(40, H - 40),
+      r: 8,
+      phase: rand(0, Math.PI * 2)
+    });
+    state.coinT = lv.coin * rand(0.82, 1.22);
+  }
+
+  function circleRectHit(cx, cy, cr, r){
+    const nx = clamp(cx, r.x, r.x + r.w);
+    const ny = clamp(cy, r.y, r.y + r.h);
+    const dx = cx - nx, dy = cy - ny;
+    return (dx * dx + dy * dy) <= (cr * cr);
+  }
+
+  function circleCircleHit(a, b){
+    const dx = a.x - b.x, dy = a.y - b.y;
+    const rr = (a.r + b.r);
+    return dx*dx + dy*dy <= rr * rr;
+  }
+
+  function spawnCrashFx(x, y){
+    for(let i=0;i<28;i++){
+      const sp = rand(120, 380);
+      const ang = rand(0, Math.PI * 2);
+      state.particles.push({
+        x, y,
+        vx: Math.cos(ang) * sp,
+        vy: Math.sin(ang) * sp,
+        life: rand(0.35, 0.95),
+        max: 1,
+        color: i % 2 ? '#ff375f' : '#ffd24d'
+      });
+    }
+    state.shake = 18;
+    state.flashTint = 0.5;
+  }
+
+  function fail(reason, x, y){
+    if(state.mode !== 'play') return;
+    state.mode = 'crash';
+    spawnCrashFx(x, y);
+    audio.crash();
+    flash(`충돌! ${reason}`);
+    setTimeout(() => resetLevel(state.levelIndex), 850);
+  }
+
+  function clearLevel(){
+    if(state.mode !== 'play') return;
+    state.mode = 'clear';
+    state.nextEnabled = true;
+    ui.btnNext.disabled = false;
+    audio.clear();
+
+    const lid = String(state.level.id);
+    const prevBest = Number(state.progress.bestRunCoins[lid] || 0);
+    if(state.runCoins > prevBest){
+      state.progress.bestRunCoins[lid] = state.runCoins;
+    }
+
+    if(state.progress.unlocked <= state.level.id && state.level.id < 8){
+      state.progress.unlocked = state.level.id + 1;
+    }
+    saveProgress();
+    refreshLevelButtons();
+    flash(state.level.id === 8 ? '🎉 Mirror Run 완전 클리어!' : `레벨 ${state.level.id} 클리어!`);
+  }
+
+  function tryApplyMove(nx, ny, mirror){
+    const margin = 18;
+    nx = clamp(nx, margin, W - margin);
+    ny = clamp(ny, margin, H - margin);
+    const rp = reflectPoint(nx, ny, mirror.cx, mirror.cy, mirror.angle);
+    if(rp.x < margin || rp.x > W - margin || rp.y < margin || rp.y > H - margin){
+      return false;
+    }
+    state.player.x = nx;
+    state.player.y = ny;
+    state.clone.x = rp.x;
+    state.clone.y = rp.y;
+    return true;
+  }
+
+  function update(dt){
+    const lv = state.level;
+    state.elapsed += dt;
+
+    if(state.msgTimer > 0){
+      state.msgTimer -= dt;
+      if(state.msgTimer <= 0) ui.msg.classList.remove('show');
+    }
+
+    const mirror = getMirrorState(state.elapsed);
+    ui.hudMirror.textContent = mirror.label;
+
+    if(state.mode !== 'play'){
+      updateParticles(dt);
+      state.shake *= 0.88;
+      state.flashTint *= 0.8;
+      return;
+    }
+
+    state.spawnT -= dt;
+    state.coinT -= dt;
+    if(state.spawnT <= 0) spawnObstacle();
+    if(state.coinT <= 0) spawnCoin();
+
+    const kx = (input.right ? 1 : 0) + (input.left ? -1 : 0);
+    const ky = (input.down ? 1 : 0) + (input.up ? -1 : 0);
+    let sx = 0, sy = 0;
+    if(input.swipeTimer > 0){
+      sx = input.swipeX;
+      sy = input.swipeY;
+      input.swipeTimer -= dt;
+      if(input.swipeTimer <= 0){ input.swipeX = 0; input.swipeY = 0; }
+    }
+
+    let mx = kx + sx;
+    let my = ky + sy;
+    if(mx || my){
+      const len = Math.hypot(mx, my) || 1;
+      mx /= len; my /= len;
+      const moveSpeed = 240;
+      tryApplyMove(state.player.x + mx * moveSpeed * dt, state.player.y + my * moveSpeed * dt, mirror);
+    } else {
+      tryApplyMove(state.player.x, state.player.y, mirror);
+    }
+
+    if(input.jumpQueued && state.player.z <= 0.01){
+      state.player.vz = 470;
+      audio.jump();
+    }
+    input.jumpQueued = false;
+
+    state.player.vz -= 980 * dt;
+    state.player.z += state.player.vz * dt;
+    if(state.player.z < 0){ state.player.z = 0; state.player.vz = 0; }
+    state.clone.z = state.player.z;
+
+    const scroll = lv.speed;
+    state.distance += scroll * dt;
+
+    for(const ob of state.obstacles){
+      ob.x -= scroll * dt;
+      ob.y += Math.sin(state.elapsed * ob.driftS + ob.driftP) * ob.driftA * dt;
+      ob.y = clamp(ob.y, 20, H - 20 - ob.h);
+    }
+    state.obstacles = state.obstacles.filter(o => o.x + o.w > -80);
+
+    for(const coin of state.coins){
+      coin.x -= scroll * dt;
+      coin.y += Math.sin(state.elapsed * 3 + coin.phase) * 24 * dt;
+    }
+    state.coins = state.coins.filter(c => c.x + c.r > -60);
+
+    // collisions
+    if(state.player.z < 22){
+      for(const ob of state.obstacles){
+        const hitA = circleRectHit(state.player.x, state.player.y, state.player.r, ob);
+        const hitB = circleRectHit(state.clone.x, state.clone.y, state.clone.r, ob);
+        if(hitA || hitB){
+          fail(hitA ? '플레이어 충돌' : '분신 충돌', hitA ? state.player.x : state.clone.x, hitA ? state.player.y : state.clone.y);
+          break;
+        }
+      }
+    }
+
+    if(state.mode === 'play'){
+      for(const coin of state.coins){
+        if(coin.got) continue;
+        const c1 = circleCircleHit({x:state.player.x,y:state.player.y,r:state.player.r},{x:coin.x,y:coin.y,r:coin.r});
+        const c2 = circleCircleHit({x:state.clone.x,y:state.clone.y,r:state.clone.r},{x:coin.x,y:coin.y,r:coin.r});
+        if(c1 || c2){
+          coin.got = true;
+          state.runCoins += 1;
+          state.progress.totalCoins += 1;
+          const lid = String(state.level.id);
+          state.progress.levelCoins[lid] = Number(state.progress.levelCoins[lid] || 0) + 1;
+          saveProgress();
+          audio.coin();
+        }
+      }
+      state.coins = state.coins.filter(c => !c.got && c.x + c.r > -60);
+    }
+
+    if(state.distance >= lv.target){
+      clearLevel();
+    }
+
+    updateParticles(dt);
+    state.shake *= 0.88;
+    state.flashTint *= 0.82;
+  }
+
+  function updateParticles(dt){
+    for(const p of state.particles){
+      p.life -= dt;
+      p.vy += 420 * dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+    }
+    state.particles = state.particles.filter(p => p.life > 0);
+  }
+
+  function drawGrid(){
+    ctx.strokeStyle = 'rgba(80,120,255,0.08)';
+    ctx.lineWidth = 1;
+    for(let x=0;x<=W;x+=48){
+      ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
+    }
+    for(let y=0;y<=H;y+=48){
+      ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
+    }
+  }
+
+  function drawMirrorLine(m){
+    const dx = Math.cos(m.angle), dy = Math.sin(m.angle);
+    const len = 1200;
+    const x1 = m.cx - dx * len, y1 = m.cy - dy * len;
+    const x2 = m.cx + dx * len, y2 = m.cy + dy * len;
+
+    ctx.save();
+    ctx.lineWidth = 8;
+    ctx.strokeStyle = 'rgba(220,230,255,0.16)';
+    ctx.shadowColor = 'rgba(230,240,255,0.7)';
+    ctx.shadowBlur = 18;
+    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+
+    ctx.setLineDash([14, 12]);
+    ctx.lineDashOffset = -(state.elapsed * 80);
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = 'rgba(232,239,255,0.95)';
+    ctx.shadowBlur = 8;
+    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawNeonRect(o){
+    ctx.fillStyle = 'rgba(255,55,95,0.82)';
+    ctx.fillRect(o.x, o.y, o.w, o.h);
+    ctx.strokeStyle = 'rgba(255,160,180,0.95)';
+    ctx.lineWidth = 1.5;
+    ctx.shadowColor = 'rgba(255,55,95,0.78)';
+    ctx.shadowBlur = 10;
+    ctx.strokeRect(o.x + 0.5, o.y + 0.5, o.w - 1, o.h - 1);
+    ctx.shadowBlur = 0;
+  }
+
+  function drawCoin(c){
+    const pulse = 1 + Math.sin(state.elapsed * 8 + c.phase) * 0.12;
+    const r = c.r * pulse;
+    ctx.fillStyle = 'rgba(255,210,77,0.95)';
+    ctx.shadowColor = 'rgba(255,210,77,0.9)';
+    ctx.shadowBlur = 14;
+    ctx.beginPath(); ctx.arc(c.x, c.y, r, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = 'rgba(255,242,182,0.95)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(c.x, c.y, r-2, 0, Math.PI * 2); ctx.stroke();
+  }
+
+  function drawPlayer(p, color){
+    const yy = p.y - p.z * 0.35;
+    ctx.fillStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 18;
+    ctx.beginPath(); ctx.arc(p.x, yy, p.r, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // jump shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.28)';
+    ctx.beginPath(); ctx.ellipse(p.x, p.y + p.r * 0.95, p.r * 0.95, p.r * 0.42, 0, 0, Math.PI * 2); ctx.fill();
+  }
+
+  function drawParticles(){
+    for(const p of state.particles){
+      const a = Math.max(0, p.life / p.max);
+      ctx.fillStyle = p.color;
+      ctx.globalAlpha = a;
+      ctx.beginPath(); ctx.arc(p.x, p.y, 2.8, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawOverlay(){
+    if(state.mode === 'clear' || state.mode === 'crash'){
+      ctx.fillStyle = 'rgba(7,12,30,0.45)';
+      ctx.fillRect(0,0,W,H);
+      ctx.textAlign = 'center';
+      ctx.fillStyle = state.mode === 'clear' ? '#89ffd0' : '#ffd0d9';
+      ctx.font = '700 44px sans-serif';
+      ctx.fillText(state.mode === 'clear' ? 'LEVEL CLEAR' : 'CRASH', W/2, H/2 - 6);
+      ctx.fillStyle = '#dce9ff';
+      ctx.font = '500 20px sans-serif';
+      ctx.fillText(state.mode === 'clear' ? '다음 레벨로 이동하세요.' : '잠시 후 자동 재시작', W/2, H/2 + 34);
+      ctx.textAlign = 'start';
+    }
+  }
+
+  function draw(){
+    const g = ctx.createLinearGradient(0,0,0,H);
+    g.addColorStop(0,'#0a0a1a');
+    g.addColorStop(1,'#07091c');
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,W,H);
+
+    const sx = state.shake > 0 ? (Math.random() - 0.5) * state.shake : 0;
+    const sy = state.shake > 0 ? (Math.random() - 0.5) * state.shake : 0;
+
+    ctx.save();
+    ctx.translate(sx, sy);
+
+    drawGrid();
+    const mirror = getMirrorState(state.elapsed);
+    drawMirrorLine(mirror);
+
+    for(const o of state.obstacles) drawNeonRect(o);
+    for(const c of state.coins) drawCoin(c);
+
+    drawPlayer(state.player, '#36f4ff');
+    drawPlayer(state.clone, '#ff4fd8');
+
+    drawParticles();
+    ctx.restore();
+
+    if(state.flashTint > 0.01){
+      ctx.fillStyle = `rgba(255,85,120,${state.flashTint})`;
+      ctx.fillRect(0,0,W,H);
+    }
+
+    // progress bar
+    const ratio = clamp(state.distance / state.level.target, 0, 1);
+    ctx.fillStyle = 'rgba(8,15,34,0.82)';
+    ctx.fillRect(16, H - 18, W - 32, 8);
+    ctx.fillStyle = 'rgba(54,244,255,0.9)';
+    ctx.fillRect(16, H - 18, (W - 32) * ratio, 8);
+    ctx.strokeStyle = 'rgba(160,190,255,0.45)';
+    ctx.strokeRect(16.5, H - 18.5, W - 33, 9);
+
+    drawOverlay();
+  }
+
+  function renderHUD(){
+    const lv = state.level;
+    ui.hudLevel.textContent = `${lv.id} / 8`;
+    ui.hudDist.textContent = `${Math.floor(state.distance)} / ${lv.target}m`;
+    ui.hudCoins.textContent = `${state.runCoins}`;
+    ui.hudTotal.textContent = `${state.progress.totalCoins}`;
+  }
+
+  function refreshLevelButtons(){
+    ui.levelGrid.innerHTML = '';
+    for(let i=0;i<LEVELS.length;i++){
+      const lv = LEVELS[i];
+      const b = document.createElement('button');
+      b.className = 'level-btn';
+      if(i === state.levelIndex) b.classList.add('active');
+      const locked = lv.id > state.progress.unlocked;
+      if(locked) b.classList.add('locked');
+      b.disabled = locked;
+      const best = Number(state.progress.bestRunCoins[String(lv.id)] || 0);
+      b.textContent = `L${lv.id}${best ? ` · ${best}🪙` : ''}`;
+      b.addEventListener('click', () => {
+        audio.ensure();
+        resetLevel(i);
+      });
+      ui.levelGrid.appendChild(b);
+    }
+  }
+
+  let lastTs = 0;
+  function frame(ts){
+    if(!lastTs) lastTs = ts;
+    const dt = Math.min(0.033, (ts - lastTs) / 1000);
+    lastTs = ts;
+
+    update(dt);
+    draw();
+    renderHUD();
+
+    requestAnimationFrame(frame);
+  }
+
+  // Keyboard controls
+  window.addEventListener('keydown', (e) => {
+    audio.ensure();
+    const t = performance.now() / 1000;
+    if(['ArrowLeft','a','A'].includes(e.key)){ input.left = true; maybeMoveSound(t); }
+    if(['ArrowRight','d','D'].includes(e.key)){ input.right = true; maybeMoveSound(t); }
+    if(['ArrowUp','w','W'].includes(e.key)){ input.up = true; maybeMoveSound(t); }
+    if(['ArrowDown','s','S'].includes(e.key)){ input.down = true; maybeMoveSound(t); }
+    if(e.key === ' '){ input.jumpQueued = true; e.preventDefault(); }
+  });
+
+  window.addEventListener('keyup', (e) => {
+    if(['ArrowLeft','a','A'].includes(e.key)) input.left = false;
+    if(['ArrowRight','d','D'].includes(e.key)) input.right = false;
+    if(['ArrowUp','w','W'].includes(e.key)) input.up = false;
+    if(['ArrowDown','s','S'].includes(e.key)) input.down = false;
+  });
+
+  // Touch swipe + tap
+  let touchStart = null;
+  canvas.addEventListener('pointerdown', (e) => {
+    audio.ensure();
+    touchStart = {x:e.clientX,y:e.clientY,t:performance.now()};
+  }, {passive:true});
+
+  canvas.addEventListener('pointerup', (e) => {
+    if(!touchStart) return;
+    const dx = e.clientX - touchStart.x;
+    const dy = e.clientY - touchStart.y;
+    const dist = Math.hypot(dx, dy);
+    const dt = performance.now() - touchStart.t;
+
+    if(dist < 20 || dt > 360 && dist < 36){
+      input.jumpQueued = true;
+    } else {
+      const t = performance.now() / 1000;
+      if(Math.abs(dx) > Math.abs(dy)){
+        input.swipeX = dx > 0 ? 1 : -1;
+        input.swipeY = 0;
+      } else {
+        input.swipeY = dy > 0 ? 1 : -1;
+        input.swipeX = 0;
+      }
+      input.swipeTimer = 0.2;
+      maybeMoveSound(t);
+    }
+    touchStart = null;
+  }, {passive:true});
+
+  canvas.addEventListener('pointercancel', () => { touchStart = null; }, {passive:true});
+
+  // Buttons
+  ui.btnRestart.addEventListener('click', () => {
+    audio.ensure();
+    resetLevel(state.levelIndex);
+  });
+
+  ui.btnNext.addEventListener('click', () => {
+    audio.ensure();
+    if(!state.nextEnabled) return;
+    if(state.levelIndex < LEVELS.length - 1){
+      const next = Math.min(state.levelIndex + 1, state.progress.unlocked - 1);
+      resetLevel(next);
+    }
+  });
+
+  ui.btnResetSave.addEventListener('click', () => {
+    if(!confirm('진행도와 코인 기록을 초기화할까요?')) return;
+    state.progress = {unlocked:1,totalCoins:0,levelCoins:{},bestRunCoins:{}};
+    saveProgress();
+    resetLevel(0);
+    flash('기록 초기화 완료');
+  });
+
+  window.addEventListener('pointerdown', () => audio.ensure(), {once:true});
+
+  refreshLevelButtons();
+  resetLevel(0);
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

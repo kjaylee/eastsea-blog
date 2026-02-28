@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HMAC 서명 생성기 | Eastsea Tools</title>
+  <meta name="description" content="SHA-256/384/512 기반 HMAC 서명을 생성하고 검증하는 개발자용 웹 도구입니다. Hex/Base64/Base64URL 출력과 검증 비교를 지원합니다.">
+
+  <!-- GA4 -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-TVJ4W0GQNG"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){ dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'G-TVJ4W0GQNG');
+  </script>
+
+  <!-- Microsoft Clarity -->
+  <script>
+    (function(c,l,a,r,i,t,y){
+      c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+      t=l.createElement(r);t.async=1;t.src='https://www.clarity.ms/tag/'+i;
+      y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+    })(window, document, 'clarity', 'script', 'vmms1upl1l');
+  </script>
+
+  <style>
+    :root {
+      --bg: #0a0a1a;
+      --panel: #12122a;
+      --panel-2: #171739;
+      --line: #2f2f68;
+      --text: #eef0ff;
+      --muted: #a4a8d8;
+      --accent: #2ee6ff;
+      --accent-2: #b14cff;
+      --good: #42f5b3;
+      --bad: #ff6d8e;
+      --warn: #ffbe5c;
+      color-scheme: dark;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(1200px 700px at -10% -20%, rgba(177, 76, 255, 0.22), transparent 55%),
+        radial-gradient(1000px 600px at 120% -10%, rgba(46, 230, 255, 0.2), transparent 55%),
+        var(--bg);
+      color: var(--text);
+      font-family: "Pretendard", "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      padding: 16px;
+    }
+
+    .wrap {
+      max-width: 980px;
+      margin: 0 auto;
+      display: grid;
+      gap: 12px;
+    }
+
+    .card {
+      background: linear-gradient(180deg, var(--panel-2), var(--panel));
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 14px;
+      box-shadow: 0 0 0 1px rgba(46, 230, 255, 0.06), 0 14px 36px rgba(0, 0, 0, 0.35);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.3rem, 4.6vw, 2rem);
+      letter-spacing: -0.02em;
+    }
+
+    .sub {
+      margin: 8px 0 0;
+      color: var(--muted);
+      line-height: 1.5;
+      font-size: 0.95rem;
+    }
+
+    .grid {
+      display: grid;
+      gap: 10px;
+    }
+
+    .cols {
+      display: grid;
+      gap: 10px;
+    }
+
+    @media (min-width: 860px) {
+      .cols {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    label {
+      display: block;
+      font-size: 0.83rem;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    input[type="text"],
+    input[type="password"],
+    select,
+    textarea,
+    button {
+      width: 100%;
+      border-radius: 10px;
+      border: 1px solid #3e3e82;
+      background: #0d0d24;
+      color: var(--text);
+      font: inherit;
+      padding: 10px 12px;
+    }
+
+    textarea {
+      min-height: 170px;
+      resize: vertical;
+      line-height: 1.55;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    input:focus,
+    select:focus,
+    textarea:focus,
+    button:focus {
+      outline: 2px solid rgba(46, 230, 255, 0.62);
+      outline-offset: 1px;
+      border-color: var(--accent);
+    }
+
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .row > * {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .btn {
+      cursor: pointer;
+      border: 1px solid #4b4b9b;
+      background: linear-gradient(180deg, #1a1a46, #141433);
+      font-weight: 700;
+      transition: transform 120ms ease, border-color 120ms ease;
+    }
+
+    .btn:hover {
+      border-color: var(--accent);
+      transform: translateY(-1px);
+    }
+
+    .btn.primary {
+      background: linear-gradient(180deg, #22c6e8, #157fca);
+      border-color: #36d6f5;
+      color: #051425;
+    }
+
+    .btn.secondary {
+      background: linear-gradient(180deg, #924dff, #6527ca);
+      border-color: #b07dff;
+      color: #fff;
+    }
+
+    .output {
+      border: 1px dashed #4a4a94;
+      border-radius: 12px;
+      background: #09091f;
+      padding: 12px;
+      min-height: 82px;
+      white-space: pre-wrap;
+      word-break: break-all;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      line-height: 1.45;
+    }
+
+    .status {
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+      border-top: 1px dashed #3a3a79;
+      padding-top: 8px;
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    .ok { color: var(--good); font-weight: 700; }
+    .fail { color: var(--bad); font-weight: 700; }
+    .warn { color: var(--warn); font-weight: 700; }
+
+    .hint {
+      color: var(--muted);
+      font-size: 0.84rem;
+      line-height: 1.45;
+    }
+
+    .footer-note {
+      text-align: center;
+      color: #8f93c5;
+      font-size: 0.78rem;
+      margin-top: 2px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="card">
+      <h1>HMAC 서명 생성기</h1>
+      <p class="sub">API 서명 검증, 웹훅 시크릿 테스트, 서버-클라이언트 HMAC 디버깅에 바로 쓸 수 있는 실전 개발 도구입니다.</p>
+    </section>
+
+    <section class="card grid">
+      <div class="cols">
+        <div>
+          <label for="algo">알고리즘</label>
+          <select id="algo">
+            <option value="SHA-256">HMAC-SHA-256</option>
+            <option value="SHA-384">HMAC-SHA-384</option>
+            <option value="SHA-512">HMAC-SHA-512</option>
+          </select>
+        </div>
+        <div>
+          <label for="encoding">출력 인코딩</label>
+          <select id="encoding">
+            <option value="hex">Hex (소문자)</option>
+            <option value="base64">Base64</option>
+            <option value="base64url">Base64URL</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="secret">시크릿 키</label>
+          <input id="secret" type="password" autocomplete="off" placeholder="예: my-super-secret-key">
+        </div>
+      </div>
+
+      <div class="row">
+        <button id="toggleSecretBtn" class="btn" type="button">시크릿 보기/숨기기</button>
+        <button id="loadSampleBtn" class="btn secondary" type="button">샘플 입력</button>
+        <button id="clearBtn" class="btn" type="button">초기화</button>
+      </div>
+
+      <div>
+        <label for="payload">메시지(원문)</label>
+        <textarea id="payload" spellcheck="false" placeholder="예: {&quot;event&quot;:&quot;payment.succeeded&quot;,&quot;id&quot;:&quot;evt_12345&quot;}"></textarea>
+      </div>
+
+      <div class="row">
+        <button id="signBtn" class="btn primary" type="button">서명 생성</button>
+        <button id="copyBtn" class="btn" type="button">서명 복사</button>
+      </div>
+
+      <div>
+        <label for="signatureOutput">생성된 서명</label>
+        <div id="signatureOutput" class="output" aria-live="polite">아직 생성된 서명이 없습니다.</div>
+      </div>
+
+      <div class="status">
+        <span id="statusText">대기 중</span>
+        <span id="metaText">입력 후 "서명 생성"을 눌러 주세요.</span>
+      </div>
+    </section>
+
+    <section class="card grid">
+      <h2 style="margin:0;font-size:1.05rem;">서명 검증</h2>
+      <p class="hint">외부 시스템에서 받은 서명값과 비교해 일치 여부를 확인합니다. 공백/줄바꿈까지 원문이 정확히 같아야 합니다.</p>
+
+      <div>
+        <label for="providedSig">비교할 서명값</label>
+        <input id="providedSig" type="text" autocomplete="off" spellcheck="false" placeholder="예: 9f4a... 또는 Base64 문자열">
+      </div>
+
+      <div class="row">
+        <button id="verifyBtn" class="btn primary" type="button">서명 검증</button>
+      </div>
+
+      <div class="status">
+        <span id="verifyText">검증 전</span>
+        <span id="verifyMeta">서명 생성 후 비교하면 더 정확합니다.</span>
+      </div>
+    </section>
+
+    <p class="footer-note">HMAC Signature Lab · 모바일 반응형 · 네온 다크 테마 (#0a0a1a)</p>
+  </div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      const algoEl = document.getElementById('algo');
+      const encodingEl = document.getElementById('encoding');
+      const secretEl = document.getElementById('secret');
+      const payloadEl = document.getElementById('payload');
+      const signatureOutputEl = document.getElementById('signatureOutput');
+      const statusTextEl = document.getElementById('statusText');
+      const metaTextEl = document.getElementById('metaText');
+      const providedSigEl = document.getElementById('providedSig');
+      const verifyTextEl = document.getElementById('verifyText');
+      const verifyMetaEl = document.getElementById('verifyMeta');
+
+      const signBtn = document.getElementById('signBtn');
+      const copyBtn = document.getElementById('copyBtn');
+      const verifyBtn = document.getElementById('verifyBtn');
+      const clearBtn = document.getElementById('clearBtn');
+      const loadSampleBtn = document.getElementById('loadSampleBtn');
+      const toggleSecretBtn = document.getElementById('toggleSecretBtn');
+
+      let lastSignature = '';
+
+      function bytesToHex(bytes) {
+        return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+      }
+
+      function bytesToBase64(bytes) {
+        let binary = '';
+        const chunk = 0x8000;
+        for (let i = 0; i < bytes.length; i += chunk) {
+          const slice = bytes.subarray(i, i + chunk);
+          binary += String.fromCharCode.apply(null, slice);
+        }
+        return btoa(binary);
+      }
+
+      function toBase64Url(base64) {
+        return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+      }
+
+      async function generateSignature() {
+        const secret = secretEl.value;
+        const payload = payloadEl.value;
+        const algo = algoEl.value;
+        const encoding = encodingEl.value;
+
+        if (!secret) {
+          throw new Error('시크릿 키를 입력해 주세요.');
+        }
+
+        const enc = new TextEncoder();
+        const keyData = enc.encode(secret);
+        const payloadData = enc.encode(payload);
+
+        const cryptoKey = await crypto.subtle.importKey(
+          'raw',
+          keyData,
+          { name: 'HMAC', hash: { name: algo } },
+          false,
+          ['sign']
+        );
+
+        const signatureBuffer = await crypto.subtle.sign('HMAC', cryptoKey, payloadData);
+        const bytes = new Uint8Array(signatureBuffer);
+
+        if (encoding === 'hex') return bytesToHex(bytes);
+        if (encoding === 'base64') return bytesToBase64(bytes);
+        return toBase64Url(bytesToBase64(bytes));
+      }
+
+      function normalizeForCompare(value, mode) {
+        const trimmed = value.trim();
+        if (!trimmed) return '';
+        if (mode === 'hex') return trimmed.toLowerCase();
+        return trimmed;
+      }
+
+      async function handleSign() {
+        const startedAt = performance.now();
+        statusTextEl.textContent = '서명 생성 중...';
+        metaTextEl.textContent = 'Web Crypto API 실행';
+
+        try {
+          if (!window.crypto || !window.crypto.subtle) {
+            throw new Error('이 브라우저는 Web Crypto API를 지원하지 않습니다.');
+          }
+
+          const signature = await generateSignature();
+          lastSignature = signature;
+
+          signatureOutputEl.textContent = signature;
+          statusTextEl.innerHTML = '<span class="ok">생성 완료</span>';
+          metaTextEl.textContent = `알고리즘 ${algoEl.value} · ${encodingEl.value} · ${Math.round(performance.now() - startedAt)}ms`;
+
+          const target = providedSigEl.value.trim();
+          if (target) {
+            handleVerify();
+          }
+        } catch (error) {
+          signatureOutputEl.textContent = '오류: ' + (error && error.message ? error.message : '알 수 없는 오류');
+          statusTextEl.innerHTML = '<span class="fail">생성 실패</span>';
+          metaTextEl.textContent = '입력값을 확인해 주세요.';
+          lastSignature = '';
+        }
+      }
+
+      function handleVerify() {
+        const inputSig = providedSigEl.value;
+        if (!lastSignature) {
+          verifyTextEl.innerHTML = '<span class="warn">먼저 서명을 생성해 주세요.</span>';
+          verifyMetaEl.textContent = '생성된 기준값이 없습니다.';
+          return;
+        }
+
+        const mode = encodingEl.value;
+        const a = normalizeForCompare(lastSignature, mode);
+        const b = normalizeForCompare(inputSig, mode);
+
+        if (!b) {
+          verifyTextEl.innerHTML = '<span class="warn">비교할 서명값을 입력해 주세요.</span>';
+          verifyMetaEl.textContent = '입력 대기 중';
+          return;
+        }
+
+        if (a === b) {
+          verifyTextEl.innerHTML = '<span class="ok">일치합니다 ✅</span>';
+          verifyMetaEl.textContent = '같은 알고리즘/인코딩/원문/시크릿 조합입니다.';
+        } else {
+          verifyTextEl.innerHTML = '<span class="fail">불일치합니다 ❌</span>';
+          verifyMetaEl.textContent = '원문, 시크릿, 알고리즘, 인코딩을 다시 확인해 주세요.';
+        }
+      }
+
+      async function copySignature() {
+        if (!lastSignature) {
+          statusTextEl.innerHTML = '<span class="warn">복사할 서명이 없습니다.</span>';
+          return;
+        }
+
+        try {
+          await navigator.clipboard.writeText(lastSignature);
+          statusTextEl.innerHTML = '<span class="ok">복사 완료</span>';
+          metaTextEl.textContent = '클립보드에 서명값을 복사했습니다.';
+        } catch (error) {
+          statusTextEl.innerHTML = '<span class="fail">복사 실패</span>';
+          metaTextEl.textContent = '브라우저 권한을 확인해 주세요.';
+        }
+      }
+
+      function clearAll() {
+        secretEl.value = '';
+        payloadEl.value = '';
+        providedSigEl.value = '';
+        lastSignature = '';
+        signatureOutputEl.textContent = '아직 생성된 서명이 없습니다.';
+        statusTextEl.textContent = '초기화 완료';
+        metaTextEl.textContent = '새 입력을 기다리는 중';
+        verifyTextEl.textContent = '검증 전';
+        verifyMetaEl.textContent = '서명 생성 후 비교하면 더 정확합니다.';
+      }
+
+      function loadSample() {
+        secretEl.value = 'sk_test_51NEXAMPLE_SECRET';
+        payloadEl.value = [
+          '{',
+          '  "event": "invoice.paid",',
+          '  "id": "evt_20260228_001",',
+          '  "amount": 12900,',
+          '  "currency": "KRW"',
+          '}'
+        ].join('\n');
+        providedSigEl.value = '';
+        statusTextEl.textContent = '샘플 로드 완료';
+        metaTextEl.textContent = '원문 그대로 서명을 생성해 보세요.';
+        verifyTextEl.textContent = '검증 전';
+        verifyMetaEl.textContent = '서명 생성 후 값을 붙여넣어 확인할 수 있습니다.';
+      }
+
+      function toggleSecretVisibility() {
+        secretEl.type = secretEl.type === 'password' ? 'text' : 'password';
+      }
+
+      signBtn.addEventListener('click', handleSign);
+      copyBtn.addEventListener('click', copySignature);
+      verifyBtn.addEventListener('click', handleVerify);
+      clearBtn.addEventListener('click', clearAll);
+      loadSampleBtn.addEventListener('click', loadSample);
+      toggleSecretBtn.addEventListener('click', toggleSecretVisibility);
+
+      algoEl.addEventListener('change', () => {
+        if (secretEl.value || payloadEl.value) {
+          handleSign();
+        }
+      });
+
+      encodingEl.addEventListener('change', () => {
+        if (lastSignature) {
+          handleSign();
+        }
+      });
+
+      providedSigEl.addEventListener('input', () => {
+        if (providedSigEl.value.trim()) {
+          handleVerify();
+        } else {
+          verifyTextEl.textContent = '검증 전';
+          verifyMetaEl.textContent = '비교할 서명값을 입력해 주세요.';
+        }
+      });
+
+      loadSample();
+    })();
+  </script>
+</body>
+</html>

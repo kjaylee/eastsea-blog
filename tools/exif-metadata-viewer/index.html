@@ -1,0 +1,1131 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EXIF 메타데이터 뷰어 | 이미지 촬영 정보 확인</title>
+  <meta name="description" content="JPEG/TIFF 이미지의 EXIF 메타데이터(카메라, 렌즈, 촬영값, GPS)를 로컬에서 안전하게 확인하는 도구">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0a0a1a;
+      --panel: #12122b;
+      --panel-2: #171738;
+      --text: #eef4ff;
+      --muted: #98a7c2;
+      --accent: #27e1ff;
+      --accent-2: #a855f7;
+      --good: #22d3ee;
+      --warn: #f59e0b;
+      --danger: #ff5c8a;
+      --line: #27335f;
+      --chip: rgba(39, 225, 255, 0.12);
+      --glow: 0 0 0 1px rgba(39,225,255,0.2), 0 10px 30px rgba(39,225,255,0.08);
+      --radius: 14px;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+      background: radial-gradient(circle at 20% 0%, #11143a, var(--bg) 45%);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 18px;
+    }
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: grid;
+      gap: 14px;
+    }
+    .hero {
+      background: linear-gradient(145deg, rgba(39,225,255,0.12), rgba(168,85,247,0.08));
+      border: 1px solid rgba(39,225,255,0.35);
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: var(--glow);
+    }
+    .hero h1 {
+      font-size: clamp(1.35rem, 3vw, 1.9rem);
+      line-height: 1.2;
+      letter-spacing: -0.01em;
+    }
+    .hero p {
+      color: var(--muted);
+      margin-top: 6px;
+      font-size: 0.95rem;
+    }
+    .grid {
+      display: grid;
+      gap: 14px;
+      grid-template-columns: 1fr;
+    }
+    .card {
+      background: linear-gradient(180deg, rgba(20,20,46,0.96), rgba(12,12,30,0.98));
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 16px;
+      box-shadow: 0 12px 25px rgba(0,0,0,0.22);
+    }
+    .card h2 {
+      font-size: 1rem;
+      margin-bottom: 10px;
+      color: #cfe8ff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .drop-zone {
+      border: 1.5px dashed #2d71a8;
+      border-radius: 12px;
+      background: rgba(39,225,255,0.04);
+      text-align: center;
+      padding: 20px 14px;
+      cursor: pointer;
+      transition: 0.2s ease;
+    }
+    .drop-zone:hover,
+    .drop-zone.dragover {
+      border-color: var(--accent);
+      background: rgba(39,225,255,0.09);
+      box-shadow: 0 0 0 2px rgba(39,225,255,0.15) inset;
+    }
+    .drop-zone strong { color: var(--accent); }
+    .hint {
+      color: var(--muted);
+      font-size: 0.86rem;
+      margin-top: 6px;
+    }
+    input[type="file"] { display: none; }
+
+    .toolbar {
+      margin-top: 12px;
+      display: grid;
+      gap: 10px;
+      grid-template-columns: 1fr;
+    }
+    .tool-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    select, input[type="text"] {
+      background: var(--panel-2);
+      border: 1px solid #334277;
+      color: var(--text);
+      border-radius: 10px;
+      padding: 9px 10px;
+      min-height: 40px;
+      font-size: 0.93rem;
+      width: 100%;
+    }
+    .tool-row label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 0.9rem;
+      user-select: none;
+    }
+    button {
+      border: 1px solid #3462a2;
+      background: linear-gradient(180deg, #182753, #121f47);
+      color: #dff7ff;
+      padding: 9px 12px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: 0.2s ease;
+    }
+    button:hover { transform: translateY(-1px); border-color: var(--accent); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+
+    .status {
+      margin-top: 10px;
+      font-size: 0.9rem;
+      color: var(--muted);
+      min-height: 1.2rem;
+    }
+    .status.good { color: var(--good); }
+    .status.warn { color: var(--warn); }
+    .status.danger { color: var(--danger); }
+
+    .preview-wrap {
+      margin-top: 12px;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      min-height: 100px;
+      display: grid;
+      place-items: center;
+      background: #0e1026;
+      position: relative;
+    }
+    .preview-wrap img {
+      max-width: 100%;
+      max-height: 280px;
+      object-fit: contain;
+      display: none;
+    }
+    .preview-empty {
+      color: var(--muted);
+      font-size: 0.9rem;
+      padding: 18px;
+      text-align: center;
+    }
+
+    .meta-list {
+      display: grid;
+      gap: 9px;
+    }
+    .meta-item {
+      background: rgba(152,167,194,0.07);
+      border: 1px solid rgba(152,167,194,0.2);
+      border-radius: 10px;
+      padding: 10px;
+      display: grid;
+      gap: 4px;
+    }
+    .meta-item .k {
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+    .meta-item .v {
+      font-size: 0.93rem;
+      word-break: break-all;
+    }
+
+    .summary-grid {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: 1fr 1fr;
+    }
+    .summary-pill {
+      background: var(--chip);
+      border: 1px solid rgba(39,225,255,0.22);
+      border-radius: 11px;
+      padding: 9px;
+    }
+    .summary-pill .label {
+      color: var(--muted);
+      font-size: 0.78rem;
+      margin-bottom: 3px;
+    }
+    .summary-pill .value {
+      font-weight: 600;
+      font-size: 0.9rem;
+      line-height: 1.3;
+      word-break: break-word;
+    }
+
+    .table-wrap {
+      margin-top: 10px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      overflow: auto;
+      max-height: 430px;
+      background: #0c1028;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 730px;
+    }
+    th, td {
+      text-align: left;
+      vertical-align: top;
+      border-bottom: 1px solid rgba(65, 95, 151, 0.35);
+      padding: 9px 10px;
+      font-size: 0.85rem;
+    }
+    th {
+      position: sticky;
+      top: 0;
+      background: #152148;
+      color: #ddf6ff;
+      z-index: 1;
+    }
+    td code {
+      color: #99eaff;
+      font-size: 0.78rem;
+    }
+    .tag-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 4px 8px;
+      border: 1px solid rgba(39,225,255,0.25);
+      background: rgba(39,225,255,0.09);
+      font-size: 0.74rem;
+      color: #c8f6ff;
+    }
+
+    .subtle {
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    @media (min-width: 900px) {
+      .grid {
+        grid-template-columns: 1.04fr 0.96fr;
+      }
+      .toolbar {
+        grid-template-columns: 1fr 1fr;
+      }
+      .toolbar > .tool-row.full {
+        grid-column: 1 / -1;
+      }
+    }
+    @media (max-width: 620px) {
+      body { padding: 12px; }
+      .card { padding: 13px; }
+      .summary-grid { grid-template-columns: 1fr; }
+      th, td { padding: 8px; }
+    }
+  </style>
+  <script src="/assets/analytics.js"></script>
+</head>
+<body>
+  <main class="container">
+    <section class="hero">
+      <h1>📷 EXIF 메타데이터 뷰어</h1>
+      <p>이미지를 업로드하면 카메라/렌즈/촬영값/GPS 정보를 브라우저에서 로컬로 분석합니다. 파일은 서버로 전송되지 않습니다.</p>
+    </section>
+
+    <section class="grid">
+      <article class="card">
+        <h2>🗂️ 이미지 업로드</h2>
+        <label class="drop-zone" id="dropZone" for="fileInput">
+          <div><strong>클릭 또는 드래그 앤 드롭</strong>으로 이미지 선택</div>
+          <div class="hint">지원: JPEG(.jpg/.jpeg), TIFF(.tif/.tiff) · 최대 파일 크기 제한 없음(브라우저 메모리 범위)</div>
+        </label>
+        <input id="fileInput" type="file" accept="image/jpeg,image/tiff,.jpg,.jpeg,.tif,.tiff">
+
+        <div class="toolbar">
+          <div class="tool-row">
+            <label for="coordFormat">좌표 표시 방식</label>
+            <select id="coordFormat" aria-label="좌표 표시 방식">
+              <option value="decimal">십진수 (37.5665, 126.9780)</option>
+              <option value="dms">도/분/초 (37°33'59.4")</option>
+            </select>
+          </div>
+          <div class="tool-row">
+            <label><input id="showUnknown" type="checkbox"> 알 수 없는 태그도 표시</label>
+          </div>
+          <div class="tool-row full">
+            <button id="copyJsonBtn" disabled>JSON 복사</button>
+            <button id="downloadJsonBtn" disabled>JSON 다운로드</button>
+            <button id="clearBtn" disabled>초기화</button>
+          </div>
+        </div>
+
+        <div id="status" class="status">이미지를 선택하면 EXIF 분석 결과가 표시됩니다.</div>
+
+        <div class="preview-wrap">
+          <img id="previewImg" alt="업로드 이미지 미리보기">
+          <div id="previewEmpty" class="preview-empty">미리보기 영역</div>
+        </div>
+
+        <div style="margin-top:12px">
+          <h2>📁 파일 정보</h2>
+          <div class="meta-list" id="fileMeta">
+            <div class="meta-item"><div class="k">상태</div><div class="v">아직 파일이 선택되지 않았습니다.</div></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="card">
+        <h2>⚡ 핵심 촬영 정보</h2>
+        <div class="summary-grid" id="summaryGrid"></div>
+
+        <div style="margin-top:12px">
+          <h2>🧭 GPS</h2>
+          <div class="meta-list" id="gpsMeta">
+            <div class="meta-item"><div class="k">위치</div><div class="v">GPS 정보 없음</div></div>
+          </div>
+        </div>
+
+        <div style="margin-top:12px">
+          <h2>🔎 태그 검색</h2>
+          <input id="searchInput" type="text" placeholder="태그명/그룹/값 검색 (예: ISO, Lens, DateTime)">
+          <div class="subtle" style="margin-top:8px">표시 태그: <strong id="tagCount">0</strong>개</div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>그룹</th>
+                  <th>태그</th>
+                  <th>이름</th>
+                  <th>값</th>
+                </tr>
+              </thead>
+              <tbody id="tagTableBody">
+                <tr><td colspan="4" class="subtle">EXIF 데이터가 여기에 표시됩니다.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <script>
+    const STORAGE_KEY = "exif-viewer-settings-v1";
+    const state = {
+      settings: loadSettings(),
+      parsed: null,
+      objectUrl: ""
+    };
+
+    const IFD0_TAGS = {
+      0x010E: "ImageDescription",
+      0x010F: "Make",
+      0x0110: "Model",
+      0x0112: "Orientation",
+      0x011A: "XResolution",
+      0x011B: "YResolution",
+      0x0128: "ResolutionUnit",
+      0x0131: "Software",
+      0x0132: "DateTime",
+      0x013B: "Artist",
+      0x8298: "Copyright",
+      0x8769: "ExifIFDPointer",
+      0x8825: "GPSInfoIFDPointer"
+    };
+
+    const EXIF_TAGS = {
+      0x829A: "ExposureTime",
+      0x829D: "FNumber",
+      0x8822: "ExposureProgram",
+      0x8827: "ISO",
+      0x9003: "DateTimeOriginal",
+      0x9004: "DateTimeDigitized",
+      0x9101: "ComponentsConfiguration",
+      0x9201: "ShutterSpeedValue",
+      0x9202: "ApertureValue",
+      0x9204: "ExposureBiasValue",
+      0x9207: "MeteringMode",
+      0x9209: "Flash",
+      0x920A: "FocalLength",
+      0x927C: "MakerNote",
+      0x9286: "UserComment",
+      0xA001: "ColorSpace",
+      0xA002: "PixelXDimension",
+      0xA003: "PixelYDimension",
+      0xA405: "FocalLengthIn35mmFilm",
+      0xA420: "ImageUniqueID",
+      0xA431: "BodySerialNumber",
+      0xA432: "LensSpecification",
+      0xA433: "LensMake",
+      0xA434: "LensModel"
+    };
+
+    const GPS_TAGS = {
+      0x0000: "GPSVersionID",
+      0x0001: "GPSLatitudeRef",
+      0x0002: "GPSLatitude",
+      0x0003: "GPSLongitudeRef",
+      0x0004: "GPSLongitude",
+      0x0005: "GPSAltitudeRef",
+      0x0006: "GPSAltitude",
+      0x0007: "GPSTimeStamp",
+      0x0012: "GPSMapDatum",
+      0x001D: "GPSDateStamp"
+    };
+
+    const LABEL_KO = {
+      Make: "제조사",
+      Model: "카메라 모델",
+      LensModel: "렌즈 모델",
+      LensMake: "렌즈 제조사",
+      DateTimeOriginal: "촬영 시각",
+      DateTime: "수정 시각",
+      ISO: "ISO 감도",
+      ExposureTime: "셔터 속도",
+      FNumber: "조리개",
+      FocalLength: "초점거리",
+      FocalLengthIn35mmFilm: "35mm 환산 초점거리",
+      PixelXDimension: "이미지 가로(px)",
+      PixelYDimension: "이미지 세로(px)",
+      Orientation: "회전 방향",
+      GPSLatitude: "위도",
+      GPSLongitude: "경도",
+      GPSAltitude: "고도"
+    };
+
+    const $ = (id) => document.getElementById(id);
+
+    function loadSettings() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return { coordFormat: "decimal", showUnknown: true };
+        const parsed = JSON.parse(raw);
+        return {
+          coordFormat: parsed.coordFormat === "dms" ? "dms" : "decimal",
+          showUnknown: parsed.showUnknown !== false
+        };
+      } catch (_) {
+        return { coordFormat: "decimal", showUnknown: true };
+      }
+    }
+
+    function saveSettings() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state.settings));
+    }
+
+    function setStatus(text, type) {
+      const el = $("status");
+      el.textContent = text;
+      el.className = "status" + (type ? " " + type : "");
+    }
+
+    function htmlEscape(text) {
+      return String(text)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function bytesToSize(bytes) {
+      if (!Number.isFinite(bytes) || bytes < 0) return "-";
+      const units = ["B", "KB", "MB", "GB"];
+      let value = bytes;
+      let idx = 0;
+      while (value >= 1024 && idx < units.length - 1) {
+        value /= 1024;
+        idx += 1;
+      }
+      return `${value.toFixed(value >= 100 || idx === 0 ? 0 : 2)} ${units[idx]}`;
+    }
+
+    function formatDate(ts) {
+      if (!ts) return "-";
+      const d = new Date(ts);
+      return Number.isNaN(d.getTime()) ? "-" : d.toLocaleString("ko-KR");
+    }
+
+    function typeName(type) {
+      return {
+        1: "BYTE",
+        2: "ASCII",
+        3: "SHORT",
+        4: "LONG",
+        5: "RATIONAL",
+        7: "UNDEFINED",
+        9: "SLONG",
+        10: "SRATIONAL"
+      }[type] || `TYPE_${type}`;
+    }
+
+    function readAscii(view, start, length) {
+      let out = "";
+      const end = Math.min(start + length, view.byteLength);
+      for (let i = start; i < end; i += 1) {
+        out += String.fromCharCode(view.getUint8(i));
+      }
+      return out;
+    }
+
+    function lookupTag(group, id) {
+      const source = group === "EXIF" ? EXIF_TAGS : group === "GPS" ? GPS_TAGS : IFD0_TAGS;
+      return source[id] || null;
+    }
+
+    function toHex(id) {
+      return `0x${id.toString(16).toUpperCase().padStart(4, "0")}`;
+    }
+
+    function formatRational(r) {
+      if (!r || typeof r !== "object") return "-";
+      if (!Number.isFinite(r.den) || r.den === 0) return `${r.num}/0`;
+      const v = r.num / r.den;
+      if (Math.abs(v) >= 1000 || Number.isInteger(v)) return `${r.num}/${r.den} (${v})`;
+      return `${r.num}/${r.den} (${v.toFixed(4)})`;
+    }
+
+    function simplifyRaw(raw) {
+      if (raw == null) return raw;
+      if (Array.isArray(raw)) return raw.map(simplifyRaw);
+      if (typeof raw === "object") {
+        const out = {};
+        for (const [k, v] of Object.entries(raw)) out[k] = simplifyRaw(v);
+        return out;
+      }
+      return raw;
+    }
+
+    function displayValue(tag) {
+      const raw = tag.raw;
+      if (raw == null) return "-";
+
+      if (tag.key === "Orientation") {
+        const map = {
+          1: "1 (기본)",
+          2: "2 (좌우 반전)",
+          3: "3 (180° 회전)",
+          4: "4 (상하 반전)",
+          5: "5 (좌우 반전 + 90°)",
+          6: "6 (90° 시계)",
+          7: "7 (좌우 반전 + 270°)",
+          8: "8 (270° 시계)"
+        };
+        return map[raw] || String(raw);
+      }
+
+      if (tag.key === "Flash") {
+        return raw === 0 ? "발광 안함 (0)" : `발광 정보 코드 ${raw}`;
+      }
+
+      if (tag.key === "FNumber" && raw && raw.num != null && raw.den != null) {
+        const f = raw.den ? raw.num / raw.den : NaN;
+        return Number.isFinite(f) ? `f/${f.toFixed(1)}` : formatRational(raw);
+      }
+
+      if (tag.key === "ExposureTime" && raw && raw.num != null && raw.den != null) {
+        const value = raw.den ? raw.num / raw.den : NaN;
+        if (!Number.isFinite(value)) return formatRational(raw);
+        if (value >= 1) return `${value.toFixed(2)}초`;
+        const reciprocal = Math.round(1 / value);
+        return `1/${reciprocal}초 (${value.toFixed(4)}초)`;
+      }
+
+      if (tag.key === "FocalLength" && raw && raw.num != null && raw.den != null) {
+        const mm = raw.den ? raw.num / raw.den : NaN;
+        return Number.isFinite(mm) ? `${mm.toFixed(1)} mm` : formatRational(raw);
+      }
+
+      if (tag.key === "ISO") return String(raw);
+
+      if (typeof raw === "string") return raw.trim() || "-";
+      if (typeof raw === "number") return String(raw);
+      if (Array.isArray(raw)) {
+        return raw.map((v) => (v && v.num != null ? formatRational(v) : String(v))).join(", ");
+      }
+      if (raw && raw.previewHex) return `${raw.previewHex} (${raw.length}바이트)`;
+      if (raw && raw.num != null && raw.den != null) return formatRational(raw);
+      return JSON.stringify(raw);
+    }
+
+    function parseExif(buffer) {
+      const view = new DataView(buffer);
+      if (view.byteLength < 8) throw new Error("파일이 너무 작습니다.");
+
+      if (view.getUint16(0, false) === 0xFFD8) {
+        let offset = 2;
+        while (offset + 4 <= view.byteLength) {
+          if (view.getUint8(offset) !== 0xFF) {
+            offset += 1;
+            continue;
+          }
+          const marker = view.getUint16(offset, false);
+          if (marker === 0xFFDA || marker === 0xFFD9) break;
+          if (offset + 4 > view.byteLength) break;
+          const segLen = view.getUint16(offset + 2, false);
+          if (segLen < 2) break;
+
+          if (marker === 0xFFE1 && offset + 4 + 6 <= view.byteLength) {
+            const signature = readAscii(view, offset + 4, 6);
+            if (signature === "Exif\u0000\u0000") {
+              return parseTiff(view, offset + 10);
+            }
+          }
+          offset += 2 + segLen;
+        }
+        throw new Error("JPEG APP1(EXIF) 세그먼트를 찾지 못했습니다.");
+      }
+
+      const bo = readAscii(view, 0, 2);
+      if (bo === "II" || bo === "MM") return parseTiff(view, 0);
+
+      throw new Error("현재는 JPEG/TIFF EXIF만 지원합니다.");
+    }
+
+    function parseTiff(view, tiffStart) {
+      const bo = readAscii(view, tiffStart, 2);
+      if (bo !== "II" && bo !== "MM") throw new Error("TIFF 바이트 오더를 해석할 수 없습니다.");
+      const little = bo === "II";
+
+      const get16 = (off) => view.getUint16(off, little);
+      const get32 = (off) => view.getUint32(off, little);
+      const getS32 = (off) => view.getInt32(off, little);
+
+      if (get16(tiffStart + 2) !== 0x002A) throw new Error("유효한 TIFF 헤더가 아닙니다.");
+      const ifd0Offset = get32(tiffStart + 4);
+      if (!ifd0Offset) throw new Error("IFD0 오프셋이 없습니다.");
+
+      const groups = { IFD0: [], EXIF: [], GPS: [], IFD1: [] };
+      const allTags = [];
+      const visited = new Set();
+
+      const TYPE_SIZE = { 1: 1, 2: 1, 3: 2, 4: 4, 5: 8, 7: 1, 9: 4, 10: 8 };
+
+      function readTagValue(type, count, valueOffsetPos) {
+        const unit = TYPE_SIZE[type];
+        if (!unit || count < 0) return null;
+        const bytes = unit * count;
+
+        let dataPos;
+        if (bytes <= 4) {
+          dataPos = valueOffsetPos;
+        } else {
+          const pointer = get32(valueOffsetPos);
+          dataPos = tiffStart + pointer;
+        }
+
+        if (dataPos < 0 || dataPos > view.byteLength) return null;
+
+        const safeCount = Math.min(count, 2048);
+
+        if (type === 1) {
+          if (count === 1) return view.getUint8(dataPos);
+          const arr = [];
+          for (let i = 0; i < safeCount; i += 1) arr.push(view.getUint8(dataPos + i));
+          return arr;
+        }
+
+        if (type === 2) {
+          let txt = "";
+          for (let i = 0; i < safeCount; i += 1) {
+            const c = view.getUint8(dataPos + i);
+            if (c === 0) break;
+            txt += String.fromCharCode(c);
+          }
+          return txt;
+        }
+
+        if (type === 3) {
+          if (count === 1) return get16(dataPos);
+          const arr = [];
+          for (let i = 0; i < safeCount; i += 1) arr.push(get16(dataPos + i * 2));
+          return arr;
+        }
+
+        if (type === 4) {
+          if (count === 1) return get32(dataPos);
+          const arr = [];
+          for (let i = 0; i < safeCount; i += 1) arr.push(get32(dataPos + i * 4));
+          return arr;
+        }
+
+        if (type === 5 || type === 10) {
+          const signed = type === 10;
+          const readPair = (p) => {
+            const num = signed ? getS32(p) : get32(p);
+            const den = signed ? getS32(p + 4) : get32(p + 4);
+            return { num, den };
+          };
+          if (count === 1) return readPair(dataPos);
+          const arr = [];
+          for (let i = 0; i < safeCount; i += 1) arr.push(readPair(dataPos + i * 8));
+          return arr;
+        }
+
+        if (type === 7) {
+          const show = Math.min(count, 24);
+          const parts = [];
+          for (let i = 0; i < show; i += 1) {
+            parts.push(view.getUint8(dataPos + i).toString(16).toUpperCase().padStart(2, "0"));
+          }
+          return {
+            previewHex: parts.join(" "),
+            length: count,
+            truncated: count > show
+          };
+        }
+
+        if (type === 9) {
+          if (count === 1) return getS32(dataPos);
+          const arr = [];
+          for (let i = 0; i < safeCount; i += 1) arr.push(getS32(dataPos + i * 4));
+          return arr;
+        }
+
+        return null;
+      }
+
+      function parseIFD(relativeOffset, groupName) {
+        if (!relativeOffset) return { next: 0, exifPtr: 0, gpsPtr: 0 };
+        const abs = tiffStart + relativeOffset;
+        if (visited.has(abs) || abs < 0 || abs + 2 > view.byteLength) {
+          return { next: 0, exifPtr: 0, gpsPtr: 0 };
+        }
+        visited.add(abs);
+
+        const entryCount = get16(abs);
+        const ifdEnd = abs + 2 + entryCount * 12;
+        if (ifdEnd + 4 > view.byteLength) {
+          return { next: 0, exifPtr: 0, gpsPtr: 0 };
+        }
+
+        let exifPtr = 0;
+        let gpsPtr = 0;
+
+        for (let i = 0; i < entryCount; i += 1) {
+          const e = abs + 2 + i * 12;
+          const tagId = get16(e);
+          const type = get16(e + 2);
+          const count = get32(e + 4);
+          const raw = readTagValue(type, count, e + 8);
+
+          const key = lookupTag(groupName, tagId);
+          const name = LABEL_KO[key] || key || `알 수 없는 태그 ${toHex(tagId)}`;
+          const known = Boolean(key);
+          const item = {
+            group: groupName,
+            tagId,
+            tagHex: toHex(tagId),
+            key: key || "",
+            name,
+            type: typeName(type),
+            count,
+            known,
+            raw,
+            display: ""
+          };
+          item.display = displayValue(item);
+
+          groups[groupName].push(item);
+          allTags.push(item);
+
+          if (groupName === "IFD0" && tagId === 0x8769) exifPtr = Number(raw) || 0;
+          if (groupName === "IFD0" && tagId === 0x8825) gpsPtr = Number(raw) || 0;
+        }
+
+        const next = get32(ifdEnd);
+        return { next, exifPtr, gpsPtr };
+      }
+
+      const base = parseIFD(ifd0Offset, "IFD0");
+      if (base.exifPtr) parseIFD(base.exifPtr, "EXIF");
+      if (base.gpsPtr) parseIFD(base.gpsPtr, "GPS");
+      if (base.next) parseIFD(base.next, "IFD1");
+
+      return { groups, allTags };
+    }
+
+    function findTagValue(tags, group, key) {
+      const found = tags.find((t) => t.group === group && t.key === key);
+      return found ? found.raw : null;
+    }
+
+    function rationalToNumber(r) {
+      if (!r || typeof r !== "object") return null;
+      if (!Number.isFinite(r.num) || !Number.isFinite(r.den) || r.den === 0) return null;
+      return r.num / r.den;
+    }
+
+    function formatGpsDms(value, pos, neg) {
+      if (!Number.isFinite(value)) return "-";
+      const abs = Math.abs(value);
+      const deg = Math.floor(abs);
+      const minFloat = (abs - deg) * 60;
+      const min = Math.floor(minFloat);
+      const sec = (minFloat - min) * 60;
+      const dir = value >= 0 ? pos : neg;
+      return `${deg}° ${min}' ${sec.toFixed(2)}\" ${dir}`;
+    }
+
+    function computeGps(tags) {
+      const latRef = String(findTagValue(tags, "GPS", "GPSLatitudeRef") || "").trim().toUpperCase();
+      const lonRef = String(findTagValue(tags, "GPS", "GPSLongitudeRef") || "").trim().toUpperCase();
+      const latData = findTagValue(tags, "GPS", "GPSLatitude");
+      const lonData = findTagValue(tags, "GPS", "GPSLongitude");
+      const altData = findTagValue(tags, "GPS", "GPSAltitude");
+
+      function convert(coords, ref) {
+        if (!Array.isArray(coords) || coords.length < 3) return null;
+        const d = rationalToNumber(coords[0]);
+        const m = rationalToNumber(coords[1]);
+        const s = rationalToNumber(coords[2]);
+        if (![d, m, s].every(Number.isFinite)) return null;
+        let value = d + m / 60 + s / 3600;
+        if (ref === "S" || ref === "W") value *= -1;
+        return value;
+      }
+
+      const latitude = convert(latData, latRef);
+      const longitude = convert(lonData, lonRef);
+      const altitude = rationalToNumber(altData);
+
+      return {
+        latitude,
+        longitude,
+        altitude,
+        hasGps: Number.isFinite(latitude) && Number.isFinite(longitude)
+      };
+    }
+
+    function buildSummary(allTags, gpsInfo) {
+      const pick = (...keys) => {
+        for (const key of keys) {
+          const found = allTags.find((t) => t.key === key);
+          if (found) return found.display;
+        }
+        return "-";
+      };
+
+      return [
+        { label: "제조사", value: pick("Make") },
+        { label: "카메라", value: pick("Model") },
+        { label: "렌즈", value: pick("LensModel", "LensMake") },
+        { label: "촬영 시각", value: pick("DateTimeOriginal", "DateTime") },
+        { label: "ISO", value: pick("ISO") },
+        { label: "셔터", value: pick("ExposureTime") },
+        { label: "조리개", value: pick("FNumber") },
+        { label: "초점거리", value: pick("FocalLength", "FocalLengthIn35mmFilm") },
+        {
+          label: "GPS",
+          value: gpsInfo.hasGps
+            ? (state.settings.coordFormat === "dms"
+              ? `${formatGpsDms(gpsInfo.latitude, "N", "S")}, ${formatGpsDms(gpsInfo.longitude, "E", "W")}`
+              : `${gpsInfo.latitude.toFixed(6)}, ${gpsInfo.longitude.toFixed(6)}`)
+            : "없음"
+        }
+      ];
+    }
+
+    function renderFileMeta(file) {
+      const meta = [
+        { k: "파일명", v: file ? file.name : "-" },
+        { k: "형식", v: file ? (file.type || "알 수 없음") : "-" },
+        { k: "크기", v: file ? bytesToSize(file.size) : "-" },
+        { k: "수정 시각", v: file ? formatDate(file.lastModified) : "-" }
+      ];
+      $("fileMeta").innerHTML = meta.map((m) => (
+        `<div class="meta-item"><div class="k">${htmlEscape(m.k)}</div><div class="v">${htmlEscape(m.v)}</div></div>`
+      )).join("");
+    }
+
+    function renderSummary(summary) {
+      $("summaryGrid").innerHTML = summary.map((s) => (
+        `<div class="summary-pill"><div class="label">${htmlEscape(s.label)}</div><div class="value">${htmlEscape(s.value)}</div></div>`
+      )).join("");
+    }
+
+    function renderGps(gps) {
+      if (!gps || !gps.hasGps) {
+        $("gpsMeta").innerHTML = '<div class="meta-item"><div class="k">위치</div><div class="v">GPS 정보 없음</div></div>';
+        return;
+      }
+
+      const latText = state.settings.coordFormat === "dms"
+        ? formatGpsDms(gps.latitude, "N", "S")
+        : gps.latitude.toFixed(6);
+      const lonText = state.settings.coordFormat === "dms"
+        ? formatGpsDms(gps.longitude, "E", "W")
+        : gps.longitude.toFixed(6);
+      const altText = Number.isFinite(gps.altitude) ? `${gps.altitude.toFixed(2)} m` : "-";
+      const mapUrl = `https://maps.google.com/?q=${gps.latitude},${gps.longitude}`;
+
+      $("gpsMeta").innerHTML = `
+        <div class="meta-item"><div class="k">위도</div><div class="v">${htmlEscape(latText)}</div></div>
+        <div class="meta-item"><div class="k">경도</div><div class="v">${htmlEscape(lonText)}</div></div>
+        <div class="meta-item"><div class="k">고도</div><div class="v">${htmlEscape(altText)}</div></div>
+        <div class="meta-item"><div class="k">지도 링크</div><div class="v"><a href="${htmlEscape(mapUrl)}" target="_blank" rel="noopener" style="color:var(--accent)">Google Maps 열기</a></div></div>
+      `;
+    }
+
+    function renderTagTable() {
+      const body = $("tagTableBody");
+      if (!state.parsed || !state.parsed.allTags.length) {
+        body.innerHTML = '<tr><td colspan="4" class="subtle">EXIF 데이터가 여기에 표시됩니다.</td></tr>';
+        $("tagCount").textContent = "0";
+        return;
+      }
+
+      const query = $("searchInput").value.trim().toLowerCase();
+      const rows = state.parsed.allTags.filter((t) => {
+        if (!state.settings.showUnknown && !t.known) return false;
+        if (!query) return true;
+        const hay = `${t.group} ${t.tagHex} ${t.name} ${t.display}`.toLowerCase();
+        return hay.includes(query);
+      });
+
+      $("tagCount").textContent = String(rows.length);
+      if (!rows.length) {
+        body.innerHTML = '<tr><td colspan="4" class="subtle">조건에 맞는 태그가 없습니다.</td></tr>';
+        return;
+      }
+
+      body.innerHTML = rows.map((t) => `
+        <tr>
+          <td><span class="tag-badge">${htmlEscape(t.group)}</span></td>
+          <td><code>${htmlEscape(t.tagHex)}</code></td>
+          <td>${htmlEscape(t.name)}</td>
+          <td>${htmlEscape(t.display)}</td>
+        </tr>
+      `).join("");
+    }
+
+    function buildExportPayload(file, gps, summary) {
+      return {
+        exportedAt: new Date().toISOString(),
+        file: {
+          name: file.name,
+          type: file.type,
+          size: file.size,
+          lastModified: file.lastModified
+        },
+        settings: state.settings,
+        summary,
+        gps,
+        tags: state.parsed.allTags.map((t) => ({
+          group: t.group,
+          tagHex: t.tagHex,
+          key: t.key,
+          name: t.name,
+          type: t.type,
+          count: t.count,
+          value: t.display,
+          raw: simplifyRaw(t.raw)
+        }))
+      };
+    }
+
+    function updateButtons(enabled) {
+      $("copyJsonBtn").disabled = !enabled;
+      $("downloadJsonBtn").disabled = !enabled;
+      $("clearBtn").disabled = !enabled;
+    }
+
+    function resetAll() {
+      if (state.objectUrl) URL.revokeObjectURL(state.objectUrl);
+      state.objectUrl = "";
+      state.parsed = null;
+      $("fileInput").value = "";
+      $("previewImg").style.display = "none";
+      $("previewEmpty").style.display = "block";
+      renderFileMeta(null);
+      renderSummary([]);
+      renderGps(null);
+      renderTagTable();
+      setStatus("초기화되었습니다.", "warn");
+      updateButtons(false);
+    }
+
+    async function handleFile(file) {
+      if (!file) return;
+      renderFileMeta(file);
+      setStatus("파일을 분석 중입니다...", "warn");
+
+      if (state.objectUrl) URL.revokeObjectURL(state.objectUrl);
+      state.objectUrl = URL.createObjectURL(file);
+      const preview = $("previewImg");
+      preview.src = state.objectUrl;
+      preview.style.display = "block";
+      $("previewEmpty").style.display = "none";
+
+      try {
+        const buffer = await file.arrayBuffer();
+        const parsed = parseExif(buffer);
+        state.parsed = parsed;
+
+        const gps = computeGps(parsed.allTags);
+        const summary = buildSummary(parsed.allTags, gps);
+
+        renderSummary(summary);
+        renderGps(gps);
+        renderTagTable();
+        updateButtons(true);
+
+        setStatus(`분석 완료: 총 ${parsed.allTags.length}개 태그를 읽었습니다.`, "good");
+
+        const payload = buildExportPayload(file, gps, summary);
+
+        $("copyJsonBtn").onclick = async () => {
+          try {
+            await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+            setStatus("JSON을 클립보드에 복사했습니다.", "good");
+          } catch (_) {
+            setStatus("클립보드 복사에 실패했습니다. 다운로드를 이용해 주세요.", "danger");
+          }
+        };
+
+        $("downloadJsonBtn").onclick = () => {
+          const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `${file.name.replace(/\.[^.]+$/, "") || "exif"}-metadata.json`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+          setStatus("JSON 파일을 다운로드했습니다.", "good");
+        };
+
+      } catch (err) {
+        state.parsed = null;
+        renderSummary([]);
+        renderGps(null);
+        renderTagTable();
+        updateButtons(false);
+        const message = err && err.message ? err.message : "알 수 없는 오류";
+        setStatus(`분석 실패: ${message}`, "danger");
+      }
+    }
+
+    function init() {
+      $("coordFormat").value = state.settings.coordFormat;
+      $("showUnknown").checked = state.settings.showUnknown;
+
+      $("coordFormat").addEventListener("change", () => {
+        state.settings.coordFormat = $("coordFormat").value;
+        saveSettings();
+        if (state.parsed) {
+          const gps = computeGps(state.parsed.allTags);
+          const summary = buildSummary(state.parsed.allTags, gps);
+          renderSummary(summary);
+          renderGps(gps);
+        }
+      });
+
+      $("showUnknown").addEventListener("change", () => {
+        state.settings.showUnknown = $("showUnknown").checked;
+        saveSettings();
+        renderTagTable();
+      });
+
+      $("searchInput").addEventListener("input", renderTagTable);
+
+      $("clearBtn").addEventListener("click", resetAll);
+
+      const fileInput = $("fileInput");
+      fileInput.addEventListener("change", () => {
+        const f = fileInput.files && fileInput.files[0];
+        handleFile(f);
+      });
+
+      const dropZone = $("dropZone");
+      ["dragenter", "dragover"].forEach((eventName) => {
+        dropZone.addEventListener(eventName, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dropZone.classList.add("dragover");
+        });
+      });
+
+      ["dragleave", "drop"].forEach((eventName) => {
+        dropZone.addEventListener(eventName, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dropZone.classList.remove("dragover");
+        });
+      });
+
+      dropZone.addEventListener("drop", (e) => {
+        const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+        handleFile(f);
+      });
+
+      renderSummary([]);
+      renderGps(null);
+      updateButtons(false);
+    }
+
+    init();
+  </script>
+</body>
+</html>

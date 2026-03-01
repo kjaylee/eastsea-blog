@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Constellation Knot Forge</title>
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0a0a1a;
+      --panel: #111a30;
+      --line: #2c4682;
+      --text: #eef3ff;
+      --muted: #9bafd6;
+      --good: #69f9ff;
+      --warn: #ffd57e;
+      font-family: "Pretendard", "Noto Sans KR", system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      background: radial-gradient(circle at 50% -10%, #1b2b58, var(--bg) 60%);
+      color: var(--text);
+      display: flex;
+      justify-content: center;
+      padding: 12px;
+    }
+    .app { width: min(560px, 100%); display: grid; gap: 10px; }
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      font-size: 12px;
+    }
+    .card {
+      text-align: center;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 8px 6px;
+      background: linear-gradient(180deg, #17284c, #101835);
+    }
+    .boards {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: 1fr 1fr;
+    }
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 10px;
+      background: linear-gradient(180deg, #0f1732, #0a1127);
+    }
+    h2 {
+      margin: 0 0 8px;
+      font-size: 14px;
+      color: var(--muted);
+      text-align: center;
+      letter-spacing: 0.02em;
+    }
+    .grid {
+      display: grid;
+      gap: 6px;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      aspect-ratio: 1;
+    }
+    .cell {
+      border: 1px solid #2d4478;
+      border-radius: 10px;
+      background: #101a37;
+      position: relative;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .cell.on {
+      background: radial-gradient(circle at 50% 40%, #83ffff, #34aac7 70%);
+      box-shadow: 0 0 12px #66f9ff66;
+      border-color: #89f9ff;
+    }
+    .cell.cursor::after {
+      content: "";
+      position: absolute;
+      inset: -4px;
+      border: 2px solid #ffd57e;
+      border-radius: 12px;
+      pointer-events: none;
+    }
+    .controls {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    button {
+      appearance: none;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel);
+      color: var(--text);
+      font-weight: 700;
+      padding: 12px 10px;
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    button:active,
+    button.on {
+      border-color: var(--good);
+      box-shadow: 0 0 0 1px #69f9ff66 inset;
+      transform: translateY(1px) scale(0.99);
+    }
+    .hint {
+      margin: 0;
+      text-align: center;
+      font-size: 12px;
+      line-height: 1.45;
+      color: var(--muted);
+    }
+    @media (max-width: 540px) {
+      .boards { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 420px) {
+      .hud { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="hud">
+      <div class="card">ROUND<br><strong id="round">1</strong></div>
+      <div class="card">MOVES<br><strong id="moves">12</strong></div>
+      <div class="card">MATCH<br><strong id="match">0%</strong></div>
+      <div class="card">BEST<br><strong id="best">1</strong></div>
+    </section>
+
+    <section class="boards">
+      <article class="panel">
+        <h2>TARGET CONSTELLATION</h2>
+        <div id="targetGrid" class="grid" aria-label="target constellation"></div>
+      </article>
+      <article class="panel">
+        <h2>FORGE GRID</h2>
+        <div id="playGrid" class="grid" aria-label="play constellation"></div>
+      </article>
+    </section>
+
+    <section class="controls" aria-label="controls">
+      <button id="up">▲ UP</button>
+      <button id="act">FORGE (Space)</button>
+      <button id="restart">RESTART</button>
+      <button id="left">◀ LEFT</button>
+      <button id="down">▼ DOWN</button>
+      <button id="right">RIGHT ▶</button>
+    </section>
+    <p class="hint">화살표로 커서 이동, Space/Enter 또는 셀 탭으로 행+열 매듭 반전. 목표 패턴과 일치하면 다음 라운드.</p>
+  </main>
+
+  <script>
+    (() => {
+      const SIZE = 5;
+      const BASE_MOVES = 12;
+      const KEY = 'best-constellation-knot-forge';
+
+      const targetGridEl = document.getElementById('targetGrid');
+      const playGridEl = document.getElementById('playGrid');
+      const roundEl = document.getElementById('round');
+      const movesEl = document.getElementById('moves');
+      const matchEl = document.getElementById('match');
+      const bestEl = document.getElementById('best');
+
+      const controls = {
+        up: document.getElementById('up'),
+        down: document.getElementById('down'),
+        left: document.getElementById('left'),
+        right: document.getElementById('right'),
+        act: document.getElementById('act'),
+        restart: document.getElementById('restart')
+      };
+
+      let audio;
+      let best = Number(localStorage.getItem(KEY) || 1);
+      let state;
+      let playCells = [];
+      let targetCells = [];
+
+      function beep(freq = 440, dur = 0.06, type = 'triangle', vol = 0.028) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        if (!audio) audio = new AC();
+        if (audio.state === 'suspended') audio.resume();
+        const osc = audio.createOscillator();
+        const gain = audio.createGain();
+        osc.type = type;
+        osc.frequency.value = freq;
+        gain.gain.value = vol;
+        osc.connect(gain).connect(audio.destination);
+        osc.start();
+        osc.stop(audio.currentTime + dur);
+      }
+
+      function makeGrid(el, clickable = false) {
+        el.innerHTML = '';
+        const cells = [];
+        for (let y = 0; y < SIZE; y += 1) {
+          for (let x = 0; x < SIZE; x += 1) {
+            const btn = document.createElement('button');
+            btn.className = 'cell';
+            btn.type = 'button';
+            btn.dataset.x = x;
+            btn.dataset.y = y;
+            if (clickable) {
+              btn.addEventListener('pointerdown', (e) => {
+                e.preventDefault();
+                state.cursor = { x, y };
+                forgeAt(x, y);
+              });
+            } else {
+              btn.disabled = true;
+            }
+            el.appendChild(btn);
+            cells.push(btn);
+          }
+        }
+        return cells;
+      }
+
+      function idx(x, y) {
+        return y * SIZE + x;
+      }
+
+      function randomPattern(round) {
+        const arr = Array(SIZE * SIZE).fill(false);
+        const lights = 6 + Math.min(10, round * 2);
+        for (let i = 0; i < lights; i += 1) arr[Math.floor(Math.random() * arr.length)] = true;
+        return arr;
+      }
+
+      function toggleCross(board, x, y) {
+        for (let i = 0; i < SIZE; i += 1) {
+          board[idx(i, y)] = !board[idx(i, y)];
+          if (i !== y) board[idx(x, i)] = !board[idx(x, i)];
+        }
+      }
+
+      function syncBoardUI() {
+        for (let i = 0; i < SIZE * SIZE; i += 1) {
+          playCells[i].classList.toggle('on', state.board[i]);
+          targetCells[i].classList.toggle('on', state.target[i]);
+          playCells[i].classList.remove('cursor');
+        }
+        playCells[idx(state.cursor.x, state.cursor.y)].classList.add('cursor');
+      }
+
+      function matchPercent() {
+        let same = 0;
+        for (let i = 0; i < SIZE * SIZE; i += 1) if (state.board[i] === state.target[i]) same += 1;
+        return Math.round((same / (SIZE * SIZE)) * 100);
+      }
+
+      function startRound(round = 1) {
+        state = {
+          round,
+          moves: Math.max(6, BASE_MOVES - Math.floor(round / 2)),
+          board: Array(SIZE * SIZE).fill(false),
+          target: randomPattern(round),
+          cursor: { x: 2, y: 2 },
+          locked: false
+        };
+        for (let i = 0; i < round + 2; i += 1) {
+          const x = Math.floor(Math.random() * SIZE);
+          const y = Math.floor(Math.random() * SIZE);
+          toggleCross(state.board, x, y);
+        }
+        syncBoardUI();
+        updateHud();
+      }
+
+      function updateHud() {
+        roundEl.textContent = state.round;
+        movesEl.textContent = state.moves;
+        matchEl.textContent = matchPercent() + '%';
+        bestEl.textContent = best;
+      }
+
+      function forgeAt(x, y) {
+        if (state.locked || state.moves <= 0) return;
+        toggleCross(state.board, x, y);
+        state.moves -= 1;
+        beep(480 + state.round * 14, 0.05, 'triangle', 0.03);
+        syncBoardUI();
+
+        const matched = matchPercent() === 100;
+        if (matched) {
+          state.locked = true;
+          const nextRound = state.round + 1;
+          best = Math.max(best, nextRound);
+          localStorage.setItem(KEY, String(best));
+          beep(760, 0.08, 'sine', 0.03);
+          setTimeout(() => startRound(nextRound), 450);
+          return;
+        }
+
+        if (state.moves <= 0) {
+          state.locked = true;
+          beep(170, 0.16, 'square', 0.04);
+        }
+        updateHud();
+      }
+
+      function moveCursor(dx, dy) {
+        state.cursor.x = (state.cursor.x + dx + SIZE) % SIZE;
+        state.cursor.y = (state.cursor.y + dy + SIZE) % SIZE;
+        beep(320, 0.025, 'sine', 0.012);
+        syncBoardUI();
+      }
+
+      function pulseButton(btn) {
+        btn.classList.add('on');
+        setTimeout(() => btn.classList.remove('on'), 120);
+      }
+
+      controls.up.addEventListener('click', () => moveCursor(0, -1));
+      controls.down.addEventListener('click', () => moveCursor(0, 1));
+      controls.left.addEventListener('click', () => moveCursor(-1, 0));
+      controls.right.addEventListener('click', () => moveCursor(1, 0));
+      controls.act.addEventListener('click', () => forgeAt(state.cursor.x, state.cursor.y));
+      controls.restart.addEventListener('click', () => {
+        beep(550, 0.05, 'triangle', 0.02);
+        startRound(1);
+      });
+
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowUp' || e.key.toLowerCase() === 'w') {
+          moveCursor(0, -1);
+          pulseButton(controls.up);
+        }
+        if (e.key === 'ArrowDown' || e.key.toLowerCase() === 's') {
+          moveCursor(0, 1);
+          pulseButton(controls.down);
+        }
+        if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') {
+          moveCursor(-1, 0);
+          pulseButton(controls.left);
+        }
+        if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') {
+          moveCursor(1, 0);
+          pulseButton(controls.right);
+        }
+        if (e.key === ' ' || e.key === 'Enter') {
+          e.preventDefault();
+          pulseButton(controls.act);
+          forgeAt(state.cursor.x, state.cursor.y);
+        }
+        if (e.key.toLowerCase() === 'r') {
+          pulseButton(controls.restart);
+          startRound(1);
+        }
+      });
+
+      targetCells = makeGrid(targetGridEl, false);
+      playCells = makeGrid(playGridEl, true);
+      startRound(1);
+    })();
+  </script>
+</body>
+</html>

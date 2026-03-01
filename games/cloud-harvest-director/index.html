@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Cloud Harvest Director</title>
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0a0a1a;
+      --panel: #101932;
+      --line: #2e4a84;
+      --text: #eef4ff;
+      --muted: #9eb3dc;
+      --good: #67f7ff;
+      --warn: #ffd56e;
+      --bad: #ff6ea6;
+      font-family: "Pretendard", "Noto Sans KR", system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      background: radial-gradient(circle at 50% -12%, #1c2d5f, var(--bg) 62%);
+      color: var(--text);
+      display: flex;
+      justify-content: center;
+      padding: 12px;
+    }
+    .app { width: min(560px, 100%); display: grid; gap: 10px; }
+    .hud {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      font-size: 12px;
+    }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 8px 6px;
+      text-align: center;
+      background: linear-gradient(180deg, #15264e, #101834);
+    }
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 12px;
+      background: linear-gradient(180deg, #0f1834, #0a1126);
+      display: grid;
+      gap: 10px;
+    }
+    .meter {
+      display: grid;
+      gap: 4px;
+    }
+    .meter-head {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .track {
+      height: 14px;
+      border-radius: 999px;
+      border: 1px solid #2f4a82;
+      background: #0d1530;
+      overflow: hidden;
+    }
+    .fill {
+      height: 100%;
+      width: 50%;
+      background: linear-gradient(90deg, #2e7eff, #67f7ff);
+      box-shadow: 0 0 10px #67f7ff55;
+      transition: width 100ms linear;
+    }
+    .fill.warn { background: linear-gradient(90deg, #ff7d9a, #ffd56e); }
+    .controls {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    button {
+      appearance: none;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel);
+      color: var(--text);
+      font-weight: 700;
+      padding: 12px 10px;
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    button small { display: block; font-size: 11px; opacity: 0.75; font-weight: 600; }
+    button:active,
+    button.on {
+      border-color: var(--good);
+      box-shadow: 0 0 0 1px #67f7ff66 inset;
+      transform: translateY(1px) scale(0.99);
+    }
+    .restart { width: 100%; }
+    .hint {
+      margin: 0;
+      font-size: 12px;
+      color: var(--muted);
+      text-align: center;
+      line-height: 1.45;
+    }
+    @media (max-width: 440px) {
+      .hud { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="hud">
+      <div class="card">SCORE<br><strong id="score">0</strong></div>
+      <div class="card">BEST<br><strong id="best">0</strong></div>
+      <div class="card">WAVE<br><strong id="wave">1</strong></div>
+      <div class="card">DEMAND<br><strong id="demand">50</strong></div>
+    </section>
+
+    <section class="panel" aria-label="resource panel">
+      <article class="meter">
+        <div class="meter-head"><span>CONDENSE</span><strong id="condenseVal">50</strong></div>
+        <div class="track"><div id="condenseFill" class="fill"></div></div>
+      </article>
+      <article class="meter">
+        <div class="meter-head"><span>RESERVOIR</span><strong id="reservoirVal">50</strong></div>
+        <div class="track"><div id="reservoirFill" class="fill"></div></div>
+      </article>
+      <article class="meter">
+        <div class="meter-head"><span>DISTRIBUTION</span><strong id="distributionVal">50</strong></div>
+        <div class="track"><div id="distributionFill" class="fill"></div></div>
+      </article>
+    </section>
+
+    <section class="controls" aria-label="controls">
+      <button id="boostCondense">1 / Q<br><small>냉각 안개 주입</small></button>
+      <button id="boostReservoir">2 / W<br><small>저수 버퍼 확장</small></button>
+      <button id="boostDistribution">3 / E<br><small>배급 펄스 송출</small></button>
+    </section>
+    <button id="restart" class="restart">RESTART</button>
+    <p class="hint">1/2/3 또는 Q/W/E, 터치 버튼으로 채널을 유지하세요. 한 채널이 0 또는 100에 닿으면 실패합니다.</p>
+  </main>
+
+  <script>
+    (() => {
+      const KEY = 'best-cloud-harvest-director';
+      const scoreEl = document.getElementById('score');
+      const bestEl = document.getElementById('best');
+      const waveEl = document.getElementById('wave');
+      const demandEl = document.getElementById('demand');
+
+      const elements = {
+        condense: {
+          value: document.getElementById('condenseVal'),
+          fill: document.getElementById('condenseFill'),
+          button: document.getElementById('boostCondense')
+        },
+        reservoir: {
+          value: document.getElementById('reservoirVal'),
+          fill: document.getElementById('reservoirFill'),
+          button: document.getElementById('boostReservoir')
+        },
+        distribution: {
+          value: document.getElementById('distributionVal'),
+          fill: document.getElementById('distributionFill'),
+          button: document.getElementById('boostDistribution')
+        }
+      };
+      const restartBtn = document.getElementById('restart');
+
+      let audio;
+      let best = Number(localStorage.getItem(KEY) || 0);
+      let last = performance.now();
+      let state;
+
+      function beep(freq = 440, dur = 0.05, type = 'triangle', vol = 0.03) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        if (!audio) audio = new AC();
+        if (audio.state === 'suspended') audio.resume();
+        const osc = audio.createOscillator();
+        const gain = audio.createGain();
+        osc.type = type;
+        osc.frequency.value = freq;
+        gain.gain.value = vol;
+        osc.connect(gain).connect(audio.destination);
+        osc.start();
+        osc.stop(audio.currentTime + dur);
+      }
+
+      function reset() {
+        state = {
+          active: true,
+          score: 0,
+          time: 0,
+          wave: 1,
+          demand: 50,
+          channels: {
+            condense: 56,
+            reservoir: 50,
+            distribution: 52
+          },
+          cooldown: {
+            condense: 0,
+            reservoir: 0,
+            distribution: 0
+          }
+        };
+        updateHud();
+      }
+
+      function clamp(v, min = 0, max = 100) {
+        return Math.max(min, Math.min(max, v));
+      }
+
+      function trigger(channel) {
+        if (!state.active) return;
+        if (state.cooldown[channel] > 0) return;
+        state.cooldown[channel] = 0.35;
+        const burst = 14 + Math.random() * 3;
+        state.channels[channel] = clamp(state.channels[channel] + burst);
+        if (channel === 'condense') state.channels.reservoir = clamp(state.channels.reservoir + 4);
+        if (channel === 'reservoir') state.channels.distribution = clamp(state.channels.distribution + 4);
+        if (channel === 'distribution') state.channels.condense = clamp(state.channels.condense + 3);
+        beep(channel === 'condense' ? 520 : channel === 'reservoir' ? 610 : 700, 0.06, 'triangle', 0.028);
+      }
+
+      function fail() {
+        state.active = false;
+        if (state.score > best) {
+          best = Math.floor(state.score);
+          localStorage.setItem(KEY, String(best));
+        }
+        beep(160, 0.18, 'square', 0.045);
+      }
+
+      function update(dt) {
+        if (!state.active) return;
+
+        state.time += dt;
+        state.wave = 1 + Math.floor(state.time / 15);
+        const drift = 3.8 + state.wave * 0.75;
+        const demandWave = Math.sin(state.time * 0.9) * 11 + Math.cos(state.time * 0.33) * 7;
+        state.demand = clamp(50 + demandWave + state.wave * 2.5, 20, 95);
+
+        state.channels.condense = clamp(state.channels.condense - dt * (drift + state.demand * 0.015));
+        state.channels.reservoir = clamp(
+          state.channels.reservoir + dt * (state.channels.condense - state.channels.distribution) * 0.24 - dt * 1.8
+        );
+        state.channels.distribution = clamp(
+          state.channels.distribution - dt * (drift * 0.45) + dt * (state.demand - state.channels.distribution) * 0.18
+        );
+
+        for (const key of Object.keys(state.cooldown)) {
+          state.cooldown[key] = Math.max(0, state.cooldown[key] - dt);
+        }
+
+        const tension =
+          Math.abs(state.channels.condense - 55) +
+          Math.abs(state.channels.reservoir - 55) +
+          Math.abs(state.channels.distribution - state.demand);
+
+        state.score += dt * Math.max(8, 40 - tension * 0.18 + state.wave * 2);
+
+        const outOfRange = Object.values(state.channels).some((v) => v <= 0 || v >= 100);
+        if (outOfRange) fail();
+
+        if (Math.min(...Object.values(state.channels)) < 18 || Math.max(...Object.values(state.channels)) > 86) {
+          if (Math.random() < dt * 1.9) beep(220, 0.03, 'sawtooth', 0.012);
+        }
+      }
+
+      function paintMeter(name, value) {
+        const meter = elements[name];
+        meter.value.textContent = value.toFixed(0);
+        meter.fill.style.width = `${value}%`;
+        const warn = value < 20 || value > 85;
+        meter.fill.classList.toggle('warn', warn);
+        meter.button.classList.toggle('on', state.cooldown[name] > 0.18);
+      }
+
+      function updateHud() {
+        scoreEl.textContent = Math.floor(state.score);
+        bestEl.textContent = best;
+        waveEl.textContent = state.wave;
+        demandEl.textContent = state.demand.toFixed(0);
+        paintMeter('condense', state.channels.condense);
+        paintMeter('reservoir', state.channels.reservoir);
+        paintMeter('distribution', state.channels.distribution);
+      }
+
+      function loop(now) {
+        const dt = Math.min(0.033, (now - last) / 1000);
+        last = now;
+        update(dt);
+        updateHud();
+        requestAnimationFrame(loop);
+      }
+
+      elements.condense.button.addEventListener('pointerdown', (e) => { e.preventDefault(); trigger('condense'); });
+      elements.reservoir.button.addEventListener('pointerdown', (e) => { e.preventDefault(); trigger('reservoir'); });
+      elements.distribution.button.addEventListener('pointerdown', (e) => { e.preventDefault(); trigger('distribution'); });
+
+      document.addEventListener('keydown', (e) => {
+        const k = e.key.toLowerCase();
+        if (k === '1' || k === 'q') trigger('condense');
+        if (k === '2' || k === 'w') trigger('reservoir');
+        if (k === '3' || k === 'e') trigger('distribution');
+        if (k === 'r') {
+          beep(520, 0.05, 'triangle', 0.02);
+          reset();
+        }
+      });
+
+      restartBtn.addEventListener('click', () => {
+        beep(520, 0.05, 'triangle', 0.02);
+        reset();
+      });
+
+      reset();
+      requestAnimationFrame(loop);
+    })();
+  </script>
+</body>
+</html>

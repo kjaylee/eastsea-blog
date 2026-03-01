@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Sonar Trench Sweeper</title>
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0a0a1a;
+      --panel: #111a32;
+      --line: #2e4a86;
+      --text: #eef3ff;
+      --muted: #9cb2de;
+      --good: #68f8ff;
+      --warn: #ffd877;
+      --bad: #ff6ea8;
+      font-family: "Pretendard", "Noto Sans KR", system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      background: radial-gradient(circle at 50% -15%, #1b2b5f 0%, var(--bg) 62%);
+      color: var(--text);
+      display: flex;
+      justify-content: center;
+      padding: 12px;
+    }
+    .app { width: min(520px, 100%); display: grid; gap: 10px; }
+    .hud {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      font-size: 12px;
+    }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      text-align: center;
+      padding: 8px 6px;
+      background: linear-gradient(180deg, #17274f, #101935);
+    }
+    canvas {
+      width: 100%;
+      aspect-ratio: 9 / 15;
+      border-radius: 16px;
+      border: 1px solid #32549a;
+      background: linear-gradient(180deg, #0f1940, #070d20 68%);
+      box-shadow: 0 0 26px #66f8ff2e;
+      touch-action: none;
+    }
+    .controls {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: 1fr 1fr 1fr;
+    }
+    button {
+      appearance: none;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel);
+      color: var(--text);
+      font-weight: 700;
+      padding: 12px 10px;
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    button:active,
+    button.on {
+      border-color: var(--good);
+      box-shadow: 0 0 0 1px #68f8ff66 inset;
+      transform: translateY(1px) scale(0.99);
+    }
+    .restart { width: 100%; }
+    .hint {
+      margin: 0;
+      font-size: 12px;
+      line-height: 1.45;
+      color: var(--muted);
+      text-align: center;
+    }
+    @media (max-width: 440px) {
+      .hud { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="hud">
+      <div class="card">SCORE<br><strong id="score">0</strong></div>
+      <div class="card">BEST<br><strong id="best">0</strong></div>
+      <div class="card">HP<br><strong id="hp">5</strong></div>
+      <div class="card">COMBO<br><strong id="combo">0</strong></div>
+      <div class="card">PING<br><strong id="ping">100%</strong></div>
+    </section>
+
+    <canvas id="game" width="360" height="600" aria-label="Sonar Trench Sweeper canvas"></canvas>
+
+    <section class="controls" aria-label="controls">
+      <button id="left">◀ LEFT</button>
+      <button id="pingBtn">PING (Space)</button>
+      <button id="right">RIGHT ▶</button>
+    </section>
+    <button id="restart" class="restart">RESTART</button>
+    <p class="hint">←/→ 이동 · Space 소나 핑. 구조 포드(청록)는 회수하고 기뢰(분홍)는 피하세요.</p>
+  </main>
+
+  <script>
+    (() => {
+      const KEY = 'best-sonar-trench-sweeper';
+      const canvas = document.getElementById('game');
+      const ctx = canvas.getContext('2d');
+      const scoreEl = document.getElementById('score');
+      const bestEl = document.getElementById('best');
+      const hpEl = document.getElementById('hp');
+      const comboEl = document.getElementById('combo');
+      const pingEl = document.getElementById('ping');
+      const leftBtn = document.getElementById('left');
+      const rightBtn = document.getElementById('right');
+      const pingBtn = document.getElementById('pingBtn');
+      const restartBtn = document.getElementById('restart');
+
+      const input = { left: false, right: false };
+      let audio;
+      let best = Number(localStorage.getItem(KEY) || 0);
+      let last = performance.now();
+      let spawnPod = 0;
+      let spawnMine = 0;
+      let state;
+
+      function beep(freq = 440, dur = 0.08, type = 'sine', vol = 0.03) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        if (!audio) audio = new AC();
+        if (audio.state === 'suspended') audio.resume();
+        const osc = audio.createOscillator();
+        const gain = audio.createGain();
+        osc.type = type;
+        osc.frequency.value = freq;
+        gain.gain.value = vol;
+        osc.connect(gain).connect(audio.destination);
+        osc.start();
+        osc.stop(audio.currentTime + dur);
+      }
+
+      function reset() {
+        state = {
+          score: 0,
+          hp: 5,
+          combo: 0,
+          active: true,
+          ping: 1,
+          pingWave: 0,
+          pods: [],
+          mines: [],
+          player: { x: canvas.width / 2, y: 535, r: 15, speed: 230, invuln: 0 }
+        };
+        spawnPod = 0.3;
+        spawnMine = 0.7;
+        updateHud();
+      }
+
+      function updateHud() {
+        scoreEl.textContent = Math.floor(state.score);
+        bestEl.textContent = best;
+        hpEl.textContent = state.hp;
+        comboEl.textContent = state.combo;
+        pingEl.textContent = Math.round(state.ping * 100) + '%';
+      }
+
+      function spawn(type) {
+        const obj = {
+          x: 26 + Math.random() * (canvas.width - 52),
+          y: -20,
+          r: type === 'pod' ? 10 : 12,
+          vy: type === 'pod' ? 140 + Math.random() * 70 : 170 + Math.random() * 90,
+          drift: (Math.random() - 0.5) * 30
+        };
+        if (type === 'pod') state.pods.push(obj);
+        else state.mines.push(obj);
+      }
+
+      function dist(a, b) {
+        return Math.hypot(a.x - b.x, a.y - b.y);
+      }
+
+      function triggerPing() {
+        if (!state.active || state.ping < 0.35) return;
+        state.ping -= 0.35;
+        state.pingWave = 170;
+        beep(760, 0.07, 'triangle', 0.03);
+      }
+
+      function takeHit() {
+        if (state.player.invuln > 0) return;
+        state.player.invuln = 0.8;
+        state.hp -= 1;
+        state.combo = 0;
+        beep(170, 0.14, 'sawtooth', 0.045);
+        if (state.hp <= 0) {
+          state.active = false;
+          if (state.score > best) {
+            best = Math.floor(state.score);
+            localStorage.setItem(KEY, String(best));
+          }
+          beep(120, 0.2, 'square', 0.05);
+        }
+      }
+
+      function bindHold(btn, key) {
+        btn.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          input[key] = true;
+          btn.classList.add('on');
+          beep(420, 0.025, 'sine', 0.015);
+        });
+        const off = () => {
+          input[key] = false;
+          btn.classList.remove('on');
+        };
+        ['pointerup', 'pointercancel', 'pointerleave'].forEach((ev) => btn.addEventListener(ev, off));
+      }
+
+      bindHold(leftBtn, 'left');
+      bindHold(rightBtn, 'right');
+      pingBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        pingBtn.classList.add('on');
+        triggerPing();
+      });
+      ['pointerup', 'pointercancel', 'pointerleave'].forEach((ev) => pingBtn.addEventListener(ev, () => pingBtn.classList.remove('on')));
+
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') input.left = true;
+        if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') input.right = true;
+        if (e.key === ' ') {
+          e.preventDefault();
+          triggerPing();
+        }
+      });
+
+      document.addEventListener('keyup', (e) => {
+        if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') input.left = false;
+        if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') input.right = false;
+      });
+
+      restartBtn.addEventListener('click', () => {
+        beep(520, 0.05, 'triangle', 0.02);
+        reset();
+      });
+
+      function update(dt) {
+        if (!state.active) return;
+
+        const p = state.player;
+        const move = (input.left ? -1 : 0) + (input.right ? 1 : 0);
+        p.x += move * p.speed * dt;
+        p.x = Math.max(20, Math.min(canvas.width - 20, p.x));
+        p.invuln = Math.max(0, p.invuln - dt);
+
+        state.ping = Math.min(1, state.ping + dt * 0.17);
+        state.pingWave = Math.max(0, state.pingWave - dt * 240);
+
+        spawnPod -= dt;
+        spawnMine -= dt;
+        if (spawnPod <= 0) {
+          spawn('pod');
+          spawnPod = 0.35 + Math.random() * 0.55;
+        }
+        if (spawnMine <= 0) {
+          spawn('mine');
+          spawnMine = Math.max(0.22, 0.62 - state.score / 9500) + Math.random() * 0.4;
+        }
+
+        state.pods.forEach((obj) => {
+          obj.y += obj.vy * dt;
+          obj.x += obj.drift * dt;
+          if (obj.x < 14 || obj.x > canvas.width - 14) obj.drift *= -1;
+        });
+        state.mines.forEach((obj) => {
+          obj.y += obj.vy * dt;
+          obj.x += obj.drift * dt;
+          if (obj.x < 14 || obj.x > canvas.width - 14) obj.drift *= -1;
+        });
+
+        for (let i = state.pods.length - 1; i >= 0; i -= 1) {
+          const pod = state.pods[i];
+          if (dist(pod, p) < pod.r + p.r + 2) {
+            state.pods.splice(i, 1);
+            state.combo += 1;
+            state.score += 18 + state.combo * 2;
+            beep(630 + state.combo * 8, 0.045, 'triangle', 0.03);
+            continue;
+          }
+          if (pod.y > canvas.height + 30) {
+            state.pods.splice(i, 1);
+            state.combo = 0;
+          }
+        }
+
+        for (let i = state.mines.length - 1; i >= 0; i -= 1) {
+          const mine = state.mines[i];
+          const sonarHit = state.pingWave > 0 && dist(mine, p) < state.pingWave;
+          if (sonarHit) {
+            state.mines.splice(i, 1);
+            state.score += 10;
+            beep(280, 0.04, 'square', 0.025);
+            continue;
+          }
+          if (dist(mine, p) < mine.r + p.r) {
+            state.mines.splice(i, 1);
+            takeHit();
+            continue;
+          }
+          if (mine.y > canvas.height + 32) state.mines.splice(i, 1);
+        }
+
+        state.score += dt * (7 + state.combo * 0.5);
+      }
+
+      function drawBackground() {
+        ctx.fillStyle = '#08102a';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        for (let i = 0; i < 36; i += 1) {
+          const y = (i * 46 + performance.now() * 0.02) % (canvas.height + 40) - 20;
+          ctx.fillStyle = i % 3 === 0 ? '#16356f' : '#10244f';
+          ctx.fillRect(0, y, canvas.width, 1);
+        }
+      }
+
+      function draw() {
+        drawBackground();
+
+        if (state.pingWave > 0) {
+          ctx.beginPath();
+          ctx.arc(state.player.x, state.player.y, state.pingWave, 0, Math.PI * 2);
+          ctx.strokeStyle = '#68f8ff66';
+          ctx.lineWidth = 3;
+          ctx.stroke();
+        }
+
+        state.pods.forEach((pod) => {
+          ctx.beginPath();
+          ctx.arc(pod.x, pod.y, pod.r, 0, Math.PI * 2);
+          ctx.fillStyle = '#63f6ff';
+          ctx.fill();
+          ctx.strokeStyle = '#b8ffff';
+          ctx.stroke();
+        });
+
+        state.mines.forEach((mine) => {
+          ctx.beginPath();
+          ctx.arc(mine.x, mine.y, mine.r, 0, Math.PI * 2);
+          ctx.fillStyle = '#ff6ea8';
+          ctx.fill();
+          for (let i = 0; i < 6; i += 1) {
+            const a = (Math.PI * 2 * i) / 6;
+            ctx.beginPath();
+            ctx.moveTo(mine.x + Math.cos(a) * mine.r, mine.y + Math.sin(a) * mine.r);
+            ctx.lineTo(mine.x + Math.cos(a) * (mine.r + 6), mine.y + Math.sin(a) * (mine.r + 6));
+            ctx.strokeStyle = '#ffd2e4';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+          }
+        });
+
+        const p = state.player;
+        ctx.save();
+        if (p.invuln > 0 && Math.floor(performance.now() / 90) % 2 === 0) ctx.globalAlpha = 0.4;
+        ctx.beginPath();
+        ctx.ellipse(p.x, p.y, 18, 14, 0, 0, Math.PI * 2);
+        ctx.fillStyle = '#6aa4ff';
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(p.x + 7, p.y - 3, 4, 0, Math.PI * 2);
+        ctx.fillStyle = '#cbecff';
+        ctx.fill();
+        ctx.restore();
+
+        if (!state.active) {
+          ctx.fillStyle = '#0a0a1add';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = '#ecf3ff';
+          ctx.font = '700 28px system-ui';
+          ctx.textAlign = 'center';
+          ctx.fillText('MISSION OVER', canvas.width / 2, 260);
+          ctx.font = '500 17px system-ui';
+          ctx.fillStyle = '#a8b8db';
+          ctx.fillText('Restart로 재출항하세요', canvas.width / 2, 300);
+        }
+      }
+
+      function loop(now) {
+        const dt = Math.min(0.033, (now - last) / 1000);
+        last = now;
+        update(dt);
+        draw();
+        updateHud();
+        requestAnimationFrame(loop);
+      }
+
+      reset();
+      requestAnimationFrame(loop);
+    })();
+  </script>
+</body>
+</html>

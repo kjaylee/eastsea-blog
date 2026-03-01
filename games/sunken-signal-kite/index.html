@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Sunken Signal Kite — 선큰 시그널 카이트</title>
+  <meta name="description" content="심해 신호 연을 조종해 비컨을 수집하고 폭뢰를 회피하는 네온 아케이드" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <style>
+    :root {
+      --bg: #0a0a1a;
+      --panel: #13132a;
+      --line: #2d2d54;
+      --text: #e8ecff;
+      --cyan: #43e7ff;
+      --pink: #ff4fd8;
+      --lime: #9dff6b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Pretendard", "Noto Sans KR", system-ui, -apple-system, sans-serif;
+      background: radial-gradient(circle at top, #171740 0%, var(--bg) 55%);
+      color: var(--text);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 12px;
+    }
+    .app {
+      width: min(100%, 460px);
+      background: rgba(12, 12, 28, 0.92);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: 0 0 26px rgba(67, 231, 255, 0.12);
+      padding: 14px;
+    }
+    h1 {
+      margin: 0 0 6px;
+      font-size: clamp(1.1rem, 2.5vw, 1.45rem);
+      color: var(--cyan);
+      letter-spacing: 0.02em;
+    }
+    .desc { margin: 0 0 10px; opacity: 0.9; font-size: 0.92rem; line-height: 1.45; }
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 8px;
+      text-align: center;
+      font-size: 0.85rem;
+    }
+    .card b { display: block; color: var(--cyan); font-size: 1rem; margin-top: 3px; }
+    canvas {
+      width: 100%;
+      aspect-ratio: 3 / 4;
+      background: linear-gradient(180deg, #0f1c45 0%, #090919 75%);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      display: block;
+      touch-action: none;
+    }
+    .row { display: flex; gap: 8px; margin-top: 10px; }
+    button {
+      border: 1px solid var(--line);
+      background: #19193a;
+      color: var(--text);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 0.95rem;
+    }
+    button.primary {
+      background: linear-gradient(135deg, #1f4660, #22326b);
+      border-color: #3ca9d0;
+      box-shadow: 0 0 14px rgba(67, 231, 255, 0.2) inset;
+      color: #dbf7ff;
+      flex: 1;
+    }
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .controls button {
+      min-height: 48px;
+      font-size: 1.05rem;
+      font-weight: 700;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+    .tip { margin-top: 8px; opacity: 0.78; font-size: 0.8rem; }
+    @media (max-width: 420px) {
+      .app { padding: 12px; border-radius: 12px; }
+      .hud { gap: 6px; }
+      .card { padding: 7px 4px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>🌊 Sunken Signal Kite</h1>
+    <p class="desc">비컨(청록)을 모으고 폭뢰(자홍)를 피하세요. 방향키/A,D + 터치 버튼 지원.</p>
+    <section class="hud">
+      <div class="card">Score<b id="score">0</b></div>
+      <div class="card">Best<b id="best">0</b></div>
+      <div class="card">Hull<b id="hull">3</b></div>
+    </section>
+    <canvas id="game" width="360" height="480" aria-label="sunken signal kite game"></canvas>
+    <div class="row">
+      <button id="startBtn" class="primary">Start / Restart</button>
+    </div>
+    <div class="controls">
+      <button data-dir="left">◀</button>
+      <button data-dir="boost">▲</button>
+      <button data-dir="right">▶</button>
+    </div>
+    <p class="tip">Enter로 시작 · ←/→ 이동 · Space 부스트</p>
+  </main>
+
+  <script>
+    (() => {
+      const canvas = document.getElementById('game');
+      const ctx = canvas.getContext('2d');
+      const scoreEl = document.getElementById('score');
+      const bestEl = document.getElementById('best');
+      const hullEl = document.getElementById('hull');
+      const startBtn = document.getElementById('startBtn');
+      const controlButtons = [...document.querySelectorAll('.controls button')];
+
+      const storageKey = 'sunken_signal_kite_best';
+      let best = Number(localStorage.getItem(storageKey) || 0);
+      bestEl.textContent = String(best);
+
+      let audioCtx;
+      const beep = (freq = 480, duration = 0.06, type = 'sine', gain = 0.03) => {
+        if (!audioCtx) return;
+        const osc = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        osc.frequency.value = freq;
+        osc.type = type;
+        g.gain.value = gain;
+        osc.connect(g).connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+      };
+      const initAudio = () => {
+        if (!audioCtx) {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+      };
+
+      const input = { left: false, right: false, boost: false };
+      let player, items, score, hull, speed, running, rafId, spawnT;
+
+      const reset = () => {
+        player = { x: canvas.width / 2, y: canvas.height - 48, w: 34, h: 26, vx: 0 };
+        items = [];
+        score = 0;
+        hull = 3;
+        speed = 2.2;
+        spawnT = 0;
+        running = true;
+        updateHud();
+      };
+
+      const spawnItem = () => {
+        const isMine = Math.random() < 0.33;
+        items.push({
+          x: 16 + Math.random() * (canvas.width - 32),
+          y: -12,
+          vy: speed + Math.random() * 1.4,
+          r: isMine ? 10 : 8,
+          kind: isMine ? 'mine' : 'beacon'
+        });
+      };
+
+      const updateHud = () => {
+        scoreEl.textContent = String(score);
+        hullEl.textContent = String(hull);
+        bestEl.textContent = String(best);
+      };
+
+      const drawBackground = () => {
+        ctx.fillStyle = '#0a0a1a';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        for (let i = 0; i < 45; i++) {
+          const x = (i * 61 + (performance.now() * 0.03 * (i % 4 + 1))) % canvas.width;
+          const y = (i * 37) % canvas.height;
+          ctx.fillStyle = `rgba(67,231,255,${0.08 + (i % 4) * 0.03})`;
+          ctx.fillRect(x, y, 1.6, 1.6);
+        }
+      };
+
+      const drawPlayer = () => {
+        ctx.save();
+        ctx.translate(player.x, player.y);
+        ctx.fillStyle = '#43e7ff';
+        ctx.shadowColor = '#43e7ff';
+        ctx.shadowBlur = 12;
+        ctx.beginPath();
+        ctx.moveTo(0, -16);
+        ctx.lineTo(17, 12);
+        ctx.lineTo(-17, 12);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = input.boost ? '#9dff6b' : '#58a3ff';
+        ctx.beginPath();
+        ctx.arc(0, 6, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      };
+
+      const drawItems = () => {
+        for (const item of items) {
+          ctx.beginPath();
+          if (item.kind === 'mine') {
+            ctx.fillStyle = '#ff4fd8';
+            ctx.shadowColor = '#ff4fd8';
+          } else {
+            ctx.fillStyle = '#43e7ff';
+            ctx.shadowColor = '#43e7ff';
+          }
+          ctx.shadowBlur = 10;
+          ctx.arc(item.x, item.y, item.r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.shadowBlur = 0;
+      };
+
+      const collide = (obj) => {
+        const dx = Math.abs(obj.x - player.x);
+        const dy = Math.abs(obj.y - player.y);
+        return dx < player.w * 0.54 + obj.r && dy < player.h * 0.5 + obj.r;
+      };
+
+      const endGame = () => {
+        running = false;
+        if (score > best) {
+          best = score;
+          localStorage.setItem(storageKey, String(best));
+        }
+        beep(180, 0.22, 'sawtooth', 0.05);
+        updateHud();
+        drawOverlay(`GAME OVER\nScore ${score}`);
+      };
+
+      const drawOverlay = (text) => {
+        ctx.fillStyle = 'rgba(5,5,20,0.62)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#e8ecff';
+        ctx.textAlign = 'center';
+        ctx.font = '700 28px system-ui';
+        const lines = text.split('\n');
+        lines.forEach((line, i) => ctx.fillText(line, canvas.width / 2, canvas.height / 2 - 10 + i * 34));
+        ctx.font = '500 15px system-ui';
+        ctx.fillText('Enter 또는 Start로 재시작', canvas.width / 2, canvas.height / 2 + 56);
+      };
+
+      const tick = () => {
+        drawBackground();
+        if (!running) {
+          rafId = requestAnimationFrame(tick);
+          return;
+        }
+
+        const accel = input.boost ? 0.85 : 0.5;
+        if (input.left) player.vx -= accel;
+        if (input.right) player.vx += accel;
+        player.vx *= input.boost ? 0.86 : 0.9;
+        const maxSpeed = input.boost ? 9.5 : 7;
+        player.vx = Math.max(-maxSpeed, Math.min(maxSpeed, player.vx));
+        player.x += player.vx;
+        player.x = Math.max(18, Math.min(canvas.width - 18, player.x));
+
+        spawnT += 1;
+        const interval = Math.max(14, 36 - Math.floor(score / 120));
+        if (spawnT >= interval) {
+          spawnT = 0;
+          spawnItem();
+          speed = Math.min(6.2, speed + 0.01);
+        }
+
+        for (let i = items.length - 1; i >= 0; i--) {
+          const it = items[i];
+          it.y += it.vy;
+          if (collide(it)) {
+            if (it.kind === 'mine') {
+              hull -= 1;
+              beep(210, 0.12, 'square', 0.05);
+              if (hull <= 0) {
+                items.splice(i, 1);
+                endGame();
+                break;
+              }
+            } else {
+              score += input.boost ? 16 : 12;
+              beep(720, 0.06, 'triangle', 0.03);
+            }
+            items.splice(i, 1);
+          } else if (it.y > canvas.height + 18) {
+            items.splice(i, 1);
+          }
+        }
+
+        score += 1;
+        updateHud();
+        drawItems();
+        drawPlayer();
+
+        rafId = requestAnimationFrame(tick);
+      };
+
+      const start = () => {
+        initAudio();
+        beep(560, 0.08, 'triangle', 0.04);
+        reset();
+      };
+
+      startBtn.addEventListener('click', start);
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') input.left = true;
+        if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') input.right = true;
+        if (e.key === ' ' || e.key === 'Spacebar') { input.boost = true; e.preventDefault(); }
+        if (e.key === 'Enter') start();
+      });
+      window.addEventListener('keyup', (e) => {
+        if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') input.left = false;
+        if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') input.right = false;
+        if (e.key === ' ' || e.key === 'Spacebar') input.boost = false;
+      });
+
+      const hold = (name, on) => {
+        if (name === 'left') input.left = on;
+        if (name === 'right') input.right = on;
+        if (name === 'boost') input.boost = on;
+      };
+      controlButtons.forEach(btn => {
+        const dir = btn.dataset.dir;
+        const down = (ev) => { ev.preventDefault(); initAudio(); hold(dir, true); };
+        const up = (ev) => { ev.preventDefault(); hold(dir, false); };
+        btn.addEventListener('pointerdown', down);
+        btn.addEventListener('pointerup', up);
+        btn.addEventListener('pointercancel', up);
+        btn.addEventListener('pointerleave', up);
+      });
+
+      reset();
+      drawBackground();
+      drawPlayer();
+      drawOverlay('Press Start');
+      tick();
+
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').catch(() => {});
+        });
+      }
+    })();
+  </script>
+</body>
+</html>

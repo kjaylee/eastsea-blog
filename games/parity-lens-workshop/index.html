@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Parity Lens Workshop — 패리티 렌즈 워크숍</title>
+  <meta name="description" content="행/열 파리티 반전으로 목표 렌즈 패턴을 맞추는 논리 퍼즐" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <style>
+    :root {
+      --bg: #0a0a1a;
+      --panel: #14142d;
+      --line: #2f2f5a;
+      --txt: #eef0ff;
+      --on: #5ff0ff;
+      --off: #1d2448;
+      --target: #b06cff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(circle at center top, #1f1f46 0%, var(--bg) 62%);
+      color: var(--txt);
+      font-family: "Pretendard", "Noto Sans KR", system-ui, -apple-system, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px;
+    }
+    .app {
+      width: min(100%, 470px);
+      background: rgba(10, 10, 28, 0.94);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 14px;
+      box-shadow: 0 0 24px rgba(176, 108, 255, 0.2);
+    }
+    h1 { margin: 0 0 5px; color: var(--on); font-size: clamp(1.1rem, 2.6vw, 1.45rem); }
+    .desc { margin: 0 0 8px; font-size: 0.92rem; opacity: 0.9; line-height: 1.44; }
+
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .tile {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      text-align: center;
+      font-size: 0.8rem;
+      padding: 6px 3px;
+    }
+    .tile b { display: block; margin-top: 2px; font-size: 1rem; color: #fff; }
+
+    .boards {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px;
+    }
+    .panel h2 { margin: 0 0 8px; font-size: 0.9rem; color: #d8d9ff; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 5px;
+    }
+    .cell {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      border-radius: 8px;
+      border: 1px solid #3a3a66;
+      background: var(--off);
+      box-shadow: inset 0 0 8px rgba(0,0,0,0.35);
+      touch-action: manipulation;
+    }
+    .cell.on {
+      background: linear-gradient(145deg, #58e3ff, #6bf7ff);
+      box-shadow: 0 0 10px rgba(95,240,255,0.45);
+      border-color: #8ff4ff;
+    }
+    .cell.target {
+      background: linear-gradient(145deg, #b06cff, #8f56f1);
+      border-color: #d0a8ff;
+      box-shadow: 0 0 10px rgba(176,108,255,0.45);
+    }
+    .cell.cursor {
+      outline: 2px solid #ffdd88;
+      outline-offset: 1px;
+    }
+    .row {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    button {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #1a1a3c;
+      color: var(--txt);
+      min-height: 42px;
+      font-weight: 700;
+      padding: 10px;
+      font-size: 0.95rem;
+      flex: 1;
+    }
+    .touchpad {
+      margin-top: 8px;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+    }
+    .touchpad button { min-height: 46px; }
+    .tip { margin: 8px 0 0; font-size: 0.8rem; opacity: 0.75; }
+
+    @media (max-width: 430px) {
+      .boards { grid-template-columns: 1fr; }
+      .hud { gap: 6px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>🧠 Parity Lens Workshop</h1>
+    <p class="desc">셀을 누르면 해당 행·열이 반전됩니다. 제한 이동 안에 목표 패턴을 맞추세요.</p>
+
+    <section class="hud">
+      <div class="tile">Stage<b id="stage">1</b></div>
+      <div class="tile">Moves<b id="moves">12</b></div>
+      <div class="tile">Best<b id="best">1</b></div>
+      <div class="tile">Score<b id="score">0</b></div>
+    </section>
+
+    <section class="boards">
+      <article class="panel">
+        <h2>현재 렌즈</h2>
+        <div id="board" class="grid" role="grid" aria-label="current board"></div>
+      </article>
+      <article class="panel">
+        <h2>목표 패턴</h2>
+        <div id="target" class="grid" aria-label="target board"></div>
+      </article>
+    </section>
+
+    <div class="row">
+      <button id="startBtn">Start / Restart</button>
+      <button id="pulseBtn">Pulse (Space)</button>
+    </div>
+
+    <div class="touchpad">
+      <button data-nav="up">▲</button>
+      <button data-nav="pulse">●</button>
+      <button data-nav="right">▶</button>
+      <button data-nav="left">◀</button>
+      <button data-nav="down">▼</button>
+      <button data-nav="restart">↺</button>
+    </div>
+    <p class="tip">키보드: 화살표 이동, Space/Enter 펄스, R 재시작</p>
+  </main>
+
+  <script>
+    (() => {
+      const N = 5;
+      const boardEl = document.getElementById('board');
+      const targetEl = document.getElementById('target');
+      const stageEl = document.getElementById('stage');
+      const movesEl = document.getElementById('moves');
+      const bestEl = document.getElementById('best');
+      const scoreEl = document.getElementById('score');
+      const startBtn = document.getElementById('startBtn');
+      const pulseBtn = document.getElementById('pulseBtn');
+      const navBtns = [...document.querySelectorAll('[data-nav]')];
+
+      const storageKey = 'parity_lens_workshop_best';
+      let best = Number(localStorage.getItem(storageKey) || 1);
+      bestEl.textContent = String(best);
+
+      let audioCtx;
+      const initAudio = () => {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+      };
+      const tone = (f, d = 0.07, type = 'triangle', g = 0.03) => {
+        if (!audioCtx) return;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.frequency.value = f;
+        osc.type = type;
+        gain.gain.value = g;
+        osc.connect(gain).connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + d);
+      };
+
+      const makeGrid = (root, target = false) => {
+        root.innerHTML = '';
+        const arr = [];
+        for (let i = 0; i < N * N; i++) {
+          const b = document.createElement('button');
+          b.className = 'cell' + (target ? ' target' : '');
+          b.type = 'button';
+          if (!target) b.dataset.idx = String(i);
+          root.appendChild(b);
+          arr.push(b);
+        }
+        return arr;
+      };
+
+      const cells = makeGrid(boardEl, false);
+      const tCells = makeGrid(targetEl, true);
+
+      let board = [];
+      let target = [];
+      let stage = 1;
+      let moves = 12;
+      let score = 0;
+      let cursor = 12;
+      let active = false;
+
+      const idxToRC = (idx) => [Math.floor(idx / N), idx % N];
+      const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+      const draw = () => {
+        cells.forEach((c, i) => {
+          c.classList.toggle('on', board[i] === 1);
+          c.classList.toggle('cursor', i === cursor);
+        });
+        tCells.forEach((c, i) => c.classList.toggle('on', target[i] === 1));
+        stageEl.textContent = String(stage);
+        movesEl.textContent = String(moves);
+        scoreEl.textContent = String(score);
+        bestEl.textContent = String(best);
+      };
+
+      const randomPattern = (density = 0.4) => Array.from({ length: N * N }, () => (Math.random() < density ? 1 : 0));
+      const same = () => board.every((v, i) => v === target[i]);
+
+      const setupStage = () => {
+        const level = clamp(stage, 1, 30);
+        target = randomPattern(0.3 + level * 0.01);
+        board = randomPattern(0.34 + level * 0.006);
+        moves = Math.max(8, 13 - Math.floor(level / 2));
+        cursor = 12;
+        active = true;
+        draw();
+      };
+
+      const pulse = (idx) => {
+        if (!active) return;
+        initAudio();
+        const [r, c] = idxToRC(idx);
+        const set = new Set();
+        for (let x = 0; x < N; x++) set.add(r * N + x);
+        for (let y = 0; y < N; y++) set.add(y * N + c);
+        set.forEach(i => { board[i] = board[i] ? 0 : 1; });
+
+        moves -= 1;
+        tone(420 + stage * 8, 0.06, 'sine', 0.03);
+
+        if (same()) {
+          score += 60 + moves * 8;
+          stage += 1;
+          if (stage > best) {
+            best = stage;
+            localStorage.setItem(storageKey, String(best));
+          }
+          tone(760, 0.14, 'triangle', 0.04);
+          setupStage();
+          return;
+        }
+
+        if (moves <= 0) {
+          active = false;
+          tone(180, 0.2, 'sawtooth', 0.045);
+        }
+        draw();
+      };
+
+      const start = () => {
+        initAudio();
+        stage = 1;
+        score = 0;
+        setupStage();
+        tone(620, 0.09, 'triangle', 0.04);
+      };
+
+      cells.forEach(c => {
+        c.addEventListener('click', () => {
+          cursor = Number(c.dataset.idx);
+          pulse(cursor);
+        });
+        c.addEventListener('touchstart', (e) => {
+          e.preventDefault();
+          cursor = Number(c.dataset.idx);
+          pulse(cursor);
+        }, { passive: false });
+      });
+
+      startBtn.addEventListener('click', start);
+      pulseBtn.addEventListener('click', () => pulse(cursor));
+
+      window.addEventListener('keydown', (e) => {
+        const [r, c] = idxToRC(cursor);
+        if (e.key === 'ArrowUp') cursor = clamp(r - 1, 0, N - 1) * N + c;
+        if (e.key === 'ArrowDown') cursor = clamp(r + 1, 0, N - 1) * N + c;
+        if (e.key === 'ArrowLeft') cursor = r * N + clamp(c - 1, 0, N - 1);
+        if (e.key === 'ArrowRight') cursor = r * N + clamp(c + 1, 0, N - 1);
+        if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); pulse(cursor); }
+        if (e.key.toLowerCase() === 'r') start();
+        draw();
+      });
+
+      navBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          const act = btn.dataset.nav;
+          const [r, c] = idxToRC(cursor);
+          if (act === 'up') cursor = clamp(r - 1, 0, N - 1) * N + c;
+          else if (act === 'down') cursor = clamp(r + 1, 0, N - 1) * N + c;
+          else if (act === 'left') cursor = r * N + clamp(c - 1, 0, N - 1);
+          else if (act === 'right') cursor = r * N + clamp(c + 1, 0, N - 1);
+          else if (act === 'pulse') pulse(cursor);
+          else if (act === 'restart') start();
+          draw();
+        });
+      });
+
+      start();
+
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').catch(() => {});
+        });
+      }
+    })();
+  </script>
+</body>
+</html>

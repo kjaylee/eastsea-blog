@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Teahouse Rush Director — 티하우스 러시 디렉터</title>
+  <meta name="description" content="3개 티하우스 스테이션을 안정화하는 실시간 운영 시뮬레이션" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <style>
+    :root {
+      --bg: #0a0a1a;
+      --panel: #141428;
+      --line: #2f2f54;
+      --txt: #eff2ff;
+      --mint: #65f4e4;
+      --amber: #ffc857;
+      --rose: #ff628f;
+      --violet: #8a7dff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(circle at 50% -10%, #1a1a3c, var(--bg) 64%);
+      color: var(--txt);
+      font-family: "Pretendard", "Noto Sans KR", system-ui, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px;
+    }
+    .app {
+      width: min(100%, 480px);
+      background: rgba(10, 10, 26, 0.95);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 14px;
+      box-shadow: 0 0 24px rgba(138, 125, 255, 0.18);
+    }
+    h1 { margin: 0 0 4px; color: var(--mint); font-size: clamp(1.1rem, 2.4vw, 1.5rem); }
+    .desc { margin: 0 0 10px; font-size: 0.92rem; opacity: 0.9; line-height: 1.45; }
+
+    .top {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .stat {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      text-align: center;
+      padding: 7px 4px;
+      font-size: 0.82rem;
+    }
+    .stat b { display: block; margin-top: 2px; font-size: 1rem; color: #fff; }
+
+    .station {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px;
+      margin-top: 8px;
+    }
+    .stationHeader {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.95rem;
+      margin-bottom: 7px;
+    }
+    .tag {
+      font-size: 0.78rem;
+      padding: 3px 7px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      color: var(--mint);
+    }
+    .bar {
+      height: 12px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: #0d0d1f;
+      border: 1px solid #2a2a4c;
+    }
+    .fill {
+      height: 100%;
+      width: 65%;
+      background: linear-gradient(90deg, #3ce8d0, #74ffd0);
+      transition: width 0.15s linear;
+      box-shadow: 0 0 10px rgba(101, 244, 228, 0.35);
+    }
+
+    .actions {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 12px;
+    }
+    button {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #1a1a37;
+      color: var(--txt);
+      min-height: 48px;
+      font-size: 0.92rem;
+      font-weight: 700;
+      touch-action: manipulation;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    button.primary {
+      width: 100%;
+      margin-top: 10px;
+      min-height: 42px;
+      background: linear-gradient(135deg, #222963, #334ca0);
+      color: #eef4ff;
+    }
+    .log {
+      margin-top: 10px;
+      min-height: 30px;
+      font-size: 0.86rem;
+      color: #cad2ff;
+      opacity: 0.92;
+    }
+    .tip { margin: 6px 0 0; font-size: 0.8rem; opacity: 0.75; }
+    @media (max-width: 420px) {
+      .app { padding: 12px; border-radius: 12px; }
+      .actions { gap: 6px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>🍵 Teahouse Rush Director</h1>
+    <p class="desc">Boil·Brew·Serve 3개 스테이션을 관리해 90초를 버티세요. 키보드 1/2/3, 터치 버튼 지원.</p>
+
+    <section class="top">
+      <div class="stat">Score<b id="score">0</b></div>
+      <div class="stat">Best<b id="best">0</b></div>
+      <div class="stat">Time<b id="time">90</b></div>
+    </section>
+
+    <section id="stations"></section>
+
+    <section class="actions">
+      <button data-act="0">1) Boil</button>
+      <button data-act="1">2) Brew</button>
+      <button data-act="2">3) Serve</button>
+    </section>
+    <button id="startBtn" class="primary">Start / Restart</button>
+    <div class="log" id="log">대기 중… Enter 또는 버튼으로 시작</div>
+    <p class="tip">상태 바가 0이 되면 게임 오버 · 안정 구간 유지 시 보너스</p>
+  </main>
+
+  <script>
+    (() => {
+      const stationsRoot = document.getElementById('stations');
+      const scoreEl = document.getElementById('score');
+      const bestEl = document.getElementById('best');
+      const timeEl = document.getElementById('time');
+      const logEl = document.getElementById('log');
+      const startBtn = document.getElementById('startBtn');
+      const actionBtns = [...document.querySelectorAll('[data-act]')];
+
+      const defs = [
+        { name: 'Boil', color: '#65f4e4' },
+        { name: 'Brew', color: '#ffc857' },
+        { name: 'Serve', color: '#ff628f' }
+      ];
+
+      let html = '';
+      defs.forEach((d, i) => {
+        html += `<article class="station"><div class="stationHeader"><strong>${d.name}</strong><span class="tag">Key ${i + 1}</span></div><div class="bar"><div class="fill" id="fill-${i}"></div></div></article>`;
+      });
+      stationsRoot.innerHTML = html;
+
+      const fills = defs.map((_, i) => document.getElementById(`fill-${i}`));
+      const storageKey = 'teahouse_rush_director_best';
+      let best = Number(localStorage.getItem(storageKey) || 0);
+      bestEl.textContent = String(best);
+
+      let audioCtx;
+      const initAudio = () => {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+      };
+      const sound = (freq, dur = 0.07, type = 'triangle', gain = 0.03) => {
+        if (!audioCtx) return;
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.frequency.value = freq;
+        o.type = type;
+        g.gain.value = gain;
+        o.connect(g).connect(audioCtx.destination);
+        o.start();
+        o.stop(audioCtx.currentTime + dur);
+      };
+
+      let level = [74, 68, 71];
+      let score = 0;
+      let timeLeft = 90;
+      let running = false;
+      let timerId;
+      let lastTick = 0;
+
+      const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+      const render = () => {
+        scoreEl.textContent = String(score);
+        bestEl.textContent = String(best);
+        timeEl.textContent = String(Math.max(0, Math.ceil(timeLeft)));
+        level.forEach((v, i) => {
+          fills[i].style.width = `${clamp(v, 0, 100)}%`;
+          const c = v < 30 ? '#ff5f7d' : v < 55 ? '#ffc857' : defs[i].color;
+          fills[i].style.background = `linear-gradient(90deg, ${c}, #d9f7ff)`;
+        });
+      };
+
+      const setLog = (text) => { logEl.textContent = text; };
+
+      const applyAction = (idx) => {
+        if (!running) return;
+        initAudio();
+
+        level[idx] += 26;
+        const side = (idx + 1) % 3;
+        level[side] -= 6;
+        level[(idx + 2) % 3] -= 4;
+
+        score += 14;
+        sound(460 + idx * 80, 0.08, 'triangle', 0.035);
+        setLog(`${defs[idx].name} 스테이션 조치 완료 (+14)`);
+      };
+
+      const finish = (reason) => {
+        running = false;
+        cancelAnimationFrame(timerId);
+        if (score > best) {
+          best = score;
+          localStorage.setItem(storageKey, String(best));
+        }
+        render();
+        setLog(reason + ` · 최종 점수 ${score}`);
+        sound(reason.includes('성공') ? 760 : 170, 0.22, reason.includes('성공') ? 'sine' : 'sawtooth', 0.05);
+      };
+
+      const loop = (t) => {
+        if (!running) return;
+        if (!lastTick) lastTick = t;
+        const dt = (t - lastTick) / 1000;
+        lastTick = t;
+
+        timeLeft -= dt;
+        level = level.map((v, i) => v - (8 + i * 1.1 + Math.random() * 6.2) * dt);
+
+        if (level.every(v => v > 60)) {
+          score += 2;
+        }
+
+        if (level.some(v => v <= 0)) {
+          finish('운영 실패: 스테이션 붕괴');
+          return;
+        }
+        if (timeLeft <= 0) {
+          score += level.reduce((a, b) => a + Math.round(clamp(b, 0, 100)), 0);
+          finish('운영 성공: 피크 타임 방어 완료');
+          return;
+        }
+
+        render();
+        timerId = requestAnimationFrame(loop);
+      };
+
+      const start = () => {
+        initAudio();
+        level = [74, 68, 71];
+        score = 0;
+        timeLeft = 90;
+        running = true;
+        lastTick = 0;
+        setLog('서비스 시작 — 균형을 유지하세요');
+        sound(620, 0.1, 'sine', 0.04);
+        render();
+        cancelAnimationFrame(timerId);
+        timerId = requestAnimationFrame(loop);
+      };
+
+      actionBtns.forEach(btn => {
+        btn.addEventListener('click', () => applyAction(Number(btn.dataset.act)));
+        btn.addEventListener('touchstart', (e) => { e.preventDefault(); applyAction(Number(btn.dataset.act)); }, { passive: false });
+      });
+
+      startBtn.addEventListener('click', start);
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') start();
+        if (e.key === '1') applyAction(0);
+        if (e.key === '2') applyAction(1);
+        if (e.key === '3') applyAction(2);
+      });
+
+      render();
+
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').catch(() => {});
+        });
+      }
+    })();
+  </script>
+</body>
+</html>

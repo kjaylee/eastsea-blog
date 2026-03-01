@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0a1a" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <title>Relic Auction Rush</title>
+  <style>
+    :root {
+      --bg: #0a0a1a;
+      --panel: #12122a;
+      --line: #4de2ff;
+      --accent: #ff67d8;
+      --gold: #ffd166;
+      --ok: #7dffbd;
+      --warn: #ff6f91;
+      --text: #ecf8ff;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(circle at 20% 0%, #19193d, var(--bg) 56%);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 12px;
+    }
+    .app {
+      width: min(920px, 100%);
+      display: grid;
+      gap: 10px;
+      background: rgba(10, 10, 26, .94);
+      border: 1px solid #2f2f66;
+      border-radius: 18px;
+      padding: 14px;
+      box-shadow: 0 0 24px rgba(77, 226, 255, 0.16);
+    }
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid #2a2a54;
+      border-radius: 10px;
+      padding: 8px;
+      text-align: center;
+      font-size: .88rem;
+    }
+    .card strong { display: block; margin-top: 3px; color: var(--line); font-size: 1.03rem; }
+    .lots {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .lot {
+      border: 1px solid #31407a;
+      border-radius: 12px;
+      background: #111736;
+      padding: 10px;
+      display: grid;
+      gap: 6px;
+      min-height: 150px;
+    }
+    .lot.selected {
+      border-color: var(--accent);
+      box-shadow: 0 0 14px rgba(255, 103, 216, 0.28);
+    }
+    .lot h3 { margin: 0; font-size: 1rem; color: #d8ebff; }
+    .meta { font-size: .85rem; opacity: .85; }
+    .rarity { color: var(--gold); font-weight: 700; }
+    .controls {
+      display: grid;
+      grid-template-columns: 1.4fr 1.1fr 1fr;
+      gap: 8px;
+      align-items: stretch;
+    }
+    .group {
+      border: 1px solid #2c2c58;
+      border-radius: 10px;
+      background: #11152f;
+      padding: 8px;
+      display: grid;
+      gap: 8px;
+    }
+    .row {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 6px;
+    }
+    button {
+      border: 1px solid #3a3a72;
+      background: #18183d;
+      color: var(--text);
+      border-radius: 9px;
+      padding: 10px 8px;
+      font-weight: 700;
+      cursor: pointer;
+      font-size: .92rem;
+    }
+    button:active { transform: scale(0.98); }
+    button.active {
+      border-color: var(--line);
+      box-shadow: 0 0 10px rgba(77, 226, 255, 0.27);
+    }
+    #confirmBtn { background: linear-gradient(90deg, #224f83, #59397d); }
+    #restartBtn { background: #2b2343; }
+    .log {
+      min-height: 62px;
+      border: 1px solid #2a2a54;
+      border-radius: 10px;
+      background: #0f132b;
+      padding: 9px;
+      font-size: .9rem;
+      line-height: 1.4;
+    }
+    .good { color: var(--ok); }
+    .bad { color: var(--warn); }
+    .hint { font-size: .88rem; opacity: .85; text-align: center; }
+    @media (max-width: 820px) {
+      .hud { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .lots { grid-template-columns: 1fr; }
+      .controls { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="hud">
+      <div class="card">Round<strong id="round">1</strong></div>
+      <div class="card">Net Worth<strong id="worth">1200</strong></div>
+      <div class="card">Reputation<strong id="rep">60</strong></div>
+      <div class="card">Selected Lot<strong id="selLot">1</strong></div>
+      <div class="card">Bid Tier<strong id="selBid">Scout</strong></div>
+      <div class="card">Best Worth<strong id="bestWorth">1200</strong></div>
+    </section>
+
+    <section class="lots" id="lots"></section>
+
+    <section class="controls">
+      <div class="group">
+        <strong>Lot 선택 (1/2/3)</strong>
+        <div class="row" id="lotButtons"></div>
+      </div>
+      <div class="group">
+        <strong>Bid 선택 (Q/W/E)</strong>
+        <div class="row" id="bidButtons"></div>
+      </div>
+      <div class="group">
+        <button id="confirmBtn">Confirm Bid (Enter)</button>
+        <button id="restartBtn">Restart (R)</button>
+      </div>
+    </section>
+
+    <div class="log" id="log">경매를 시작하세요. 높은 입찰은 수익도 크지만 가짜 리스크도 큽니다.</div>
+    <div class="hint">키보드: 1/2/3 lot · Q/W/E bid · Enter confirm · R restart | 터치 버튼 동일 지원</div>
+  </main>
+
+  <script>
+    (() => {
+      const $ = (id) => document.getElementById(id);
+      const lotsWrap = $('lots');
+      const lotButtonsWrap = $('lotButtons');
+      const bidButtonsWrap = $('bidButtons');
+
+      const roundEl = $('round');
+      const worthEl = $('worth');
+      const repEl = $('rep');
+      const selLotEl = $('selLot');
+      const selBidEl = $('selBid');
+      const bestWorthEl = $('bestWorth');
+      const logEl = $('log');
+
+      const LS_BEST_WORTH = 'relicAuctionRush.bestWorth';
+      const LS_BEST_ROUND = 'relicAuctionRush.bestRound';
+      let bestWorth = Number(localStorage.getItem(LS_BEST_WORTH) || 1200);
+      let bestRound = Number(localStorage.getItem(LS_BEST_ROUND) || 1);
+      bestWorthEl.textContent = bestWorth;
+
+      let audioCtx;
+      const initAudio = async () => {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') await audioCtx.resume();
+      };
+      const beep = (f = 320, d = 0.06, g = 0.03, type = 'sine') => {
+        if (!audioCtx) return;
+        const t0 = audioCtx.currentTime;
+        const o = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        o.type = type; o.frequency.value = f;
+        gain.gain.value = g;
+        o.connect(gain); gain.connect(audioCtx.destination);
+        o.start(t0);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t0 + d);
+        o.stop(t0 + d);
+      };
+
+      const relicPool = [
+        { name: 'Bronze Tide Compass', rarity: 1.05, base: 220, fake: 0.24 },
+        { name: 'Celestial Ink Seal', rarity: 1.22, base: 260, fake: 0.29 },
+        { name: 'Obsidian Mask Fragment', rarity: 1.35, base: 300, fake: 0.33 },
+        { name: 'Marble Oracle Lens', rarity: 1.48, base: 335, fake: 0.37 },
+        { name: 'Echo Bell of Han', rarity: 1.62, base: 380, fake: 0.41 },
+        { name: 'Aurora Royal Coin', rarity: 1.75, base: 420, fake: 0.45 }
+      ];
+
+      const bids = [
+        { key: 'q', label: 'Scout', cost: 120, mul: 0.92, riskAdj: 0.04 },
+        { key: 'w', label: 'Balanced', cost: 230, mul: 1.0, riskAdj: 0.0 },
+        { key: 'e', label: 'Aggro', cost: 360, mul: 1.14, riskAdj: -0.05 }
+      ];
+
+      const state = {
+        running: true,
+        round: 1,
+        worth: 1200,
+        rep: 60,
+        selectedLot: 0,
+        selectedBid: 1,
+        lots: []
+      };
+
+      function drawLots() {
+        lotsWrap.innerHTML = '';
+        state.lots.forEach((lot, i) => {
+          const div = document.createElement('div');
+          div.className = 'lot' + (i === state.selectedLot ? ' selected' : '');
+          div.innerHTML = `
+            <h3>${i + 1}. ${lot.name}</h3>
+            <div class="meta">Base Value: ${lot.base} cr</div>
+            <div class="meta">Rarity: <span class="rarity">x${lot.rarity.toFixed(2)}</span></div>
+            <div class="meta">Inspector Note: ${lot.note}</div>
+            <button data-lot="${i}">Select ${i + 1}</button>
+          `;
+          lotsWrap.appendChild(div);
+        });
+
+        lotsWrap.querySelectorAll('button[data-lot]').forEach((btn) => {
+          btn.addEventListener('click', async () => {
+            await initAudio();
+            state.selectedLot = Number(btn.dataset.lot);
+            beep(300, 0.04, 0.025, 'triangle');
+            render();
+          });
+        });
+      }
+
+      function drawControlButtons() {
+        lotButtonsWrap.innerHTML = '';
+        [0, 1, 2].forEach((idx) => {
+          const b = document.createElement('button');
+          b.textContent = `Lot ${idx + 1}`;
+          b.className = state.selectedLot === idx ? 'active' : '';
+          b.addEventListener('click', async () => {
+            await initAudio();
+            state.selectedLot = idx;
+            beep(290, 0.035, 0.02);
+            render();
+          });
+          lotButtonsWrap.appendChild(b);
+        });
+
+        bidButtonsWrap.innerHTML = '';
+        bids.forEach((bid, idx) => {
+          const b = document.createElement('button');
+          b.textContent = `${bid.label}\n${bid.cost}`;
+          b.className = state.selectedBid === idx ? 'active' : '';
+          b.addEventListener('click', async () => {
+            await initAudio();
+            state.selectedBid = idx;
+            beep(360 + idx * 50, 0.04, 0.025);
+            render();
+          });
+          bidButtonsWrap.appendChild(b);
+        });
+      }
+
+      function randomLot() {
+        const base = relicPool[Math.floor(Math.random() * relicPool.length)];
+        const drift = 0.88 + Math.random() * 0.28;
+        const fakeDrift = (Math.random() - 0.5) * 0.08;
+        const note = ['edge wear', 'sealed provenance', 'urgent estate lot', 'museum rumor', 'mint finish', 'uncertain lineage'][Math.floor(Math.random() * 6)];
+        return {
+          name: base.name,
+          rarity: Math.max(1, base.rarity * (0.95 + Math.random() * 0.1)),
+          base: Math.round(base.base * drift),
+          fake: Math.min(0.68, Math.max(0.12, base.fake + fakeDrift + state.round * 0.006)),
+          note
+        };
+      }
+
+      function genRoundLots() {
+        state.lots = [randomLot(), randomLot(), randomLot()];
+      }
+
+      function clamp(v, lo, hi) {
+        return Math.max(lo, Math.min(hi, v));
+      }
+
+      function resolveRound() {
+        if (!state.running) return;
+        const lot = state.lots[state.selectedLot];
+        const bid = bids[state.selectedBid];
+
+        let fakeChance = clamp(lot.fake - bid.riskAdj, 0.08, 0.78);
+        const authentic = Math.random() > fakeChance;
+
+        state.worth -= bid.cost;
+        let delta = -bid.cost;
+
+        if (authentic) {
+          const sale = Math.round(lot.base * lot.rarity * bid.mul * (1.02 + Math.random() * 0.28));
+          const gain = sale;
+          state.worth += gain;
+          delta += gain;
+          state.rep = clamp(state.rep + 4 + Math.floor(state.selectedBid / 2), 0, 100);
+          logEl.innerHTML = `<span class="good">정품 낙찰!</span> ${lot.name} 재판매 +${gain}cr (순변동 ${delta >= 0 ? '+' : ''}${delta})`;
+          beep(620, 0.08, 0.04);
+          setTimeout(() => beep(760, 0.08, 0.03), 70);
+        } else {
+          const penalty = Math.round(lot.base * (0.28 + Math.random() * 0.25));
+          state.worth -= penalty;
+          delta -= penalty;
+          state.rep = clamp(state.rep - (8 + Math.floor(fakeChance * 18)), 0, 100);
+          logEl.innerHTML = `<span class="bad">가짜 감정!</span> ${lot.name} 손실 -${penalty}cr (순변동 ${delta})`;
+          beep(180, 0.13, 0.05, 'sawtooth');
+        }
+
+        // 운영 비용
+        const upkeep = 30 + Math.floor(state.round * 2.4);
+        state.worth -= upkeep;
+        logEl.innerHTML += ` · 운영비 -${upkeep}cr`;
+
+        state.round += 1;
+        if (state.worth > bestWorth) {
+          bestWorth = state.worth;
+          localStorage.setItem(LS_BEST_WORTH, String(bestWorth));
+        }
+        if (state.round > bestRound) {
+          bestRound = state.round;
+          localStorage.setItem(LS_BEST_ROUND, String(bestRound));
+        }
+
+        if (state.rep <= 0) {
+          state.running = false;
+          logEl.innerHTML = `<span class="bad">명성 붕괴!</span> 라운드 ${state.round - 1}, 최종 자산 ${state.worth}cr. Restart로 재도전하세요.`;
+          beep(130, 0.22, 0.06, 'square');
+        } else {
+          if (state.worth <= 0) {
+            state.rep = clamp(state.rep - 8, 0, 100);
+            logEl.innerHTML += ' · 유동성 경고!';
+          }
+          genRoundLots();
+          state.selectedLot = 0;
+        }
+        render();
+      }
+
+      function render() {
+        roundEl.textContent = state.round;
+        worthEl.textContent = state.worth;
+        repEl.textContent = state.rep;
+        selLotEl.textContent = String(state.selectedLot + 1);
+        selBidEl.textContent = bids[state.selectedBid].label;
+        bestWorthEl.textContent = bestWorth;
+        drawLots();
+        drawControlButtons();
+        $('confirmBtn').disabled = !state.running;
+      }
+
+      function reset() {
+        state.running = true;
+        state.round = 1;
+        state.worth = 1200;
+        state.rep = 60;
+        state.selectedLot = 0;
+        state.selectedBid = 1;
+        genRoundLots();
+        logEl.textContent = '경매를 시작하세요. 높은 입찰은 수익도 크지만 가짜 리스크도 큽니다.';
+        render();
+      }
+
+      $('confirmBtn').addEventListener('click', async () => {
+        await initAudio();
+        beep(320, 0.04, 0.03);
+        resolveRound();
+      });
+
+      $('restartBtn').addEventListener('click', async () => {
+        await initAudio();
+        beep(200, 0.05, 0.03, 'triangle');
+        reset();
+      });
+
+      document.addEventListener('keydown', async (e) => {
+        const keys = ['1', '2', '3', 'q', 'w', 'e', 'Q', 'W', 'E', 'Enter', 'r', 'R'];
+        if (keys.includes(e.key)) e.preventDefault();
+        if (e.repeat && e.key === 'Enter') return;
+        await initAudio();
+
+        if (e.key === '1') state.selectedLot = 0;
+        if (e.key === '2') state.selectedLot = 1;
+        if (e.key === '3') state.selectedLot = 2;
+        if (e.key === 'q' || e.key === 'Q') state.selectedBid = 0;
+        if (e.key === 'w' || e.key === 'W') state.selectedBid = 1;
+        if (e.key === 'e' || e.key === 'E') state.selectedBid = 2;
+
+        if (['1','2','3','q','Q','w','W','e','E'].includes(e.key)) {
+          beep(290 + state.selectedBid * 60, 0.03, 0.022, 'triangle');
+          render();
+        }
+        if (e.key === 'Enter') {
+          beep(320, 0.04, 0.03);
+          resolveRound();
+        }
+        if (e.key === 'r' || e.key === 'R') {
+          beep(190, 0.05, 0.03);
+          reset();
+        }
+      });
+
+      reset();
+    })();
+  </script>
+</body>
+</html>

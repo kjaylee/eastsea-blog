@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0a1a" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <title>Lighthouse Lens Labyrinth</title>
+  <style>
+    :root {
+      --bg: #0a0a1a;
+      --panel: #12122a;
+      --line: #4de2ff;
+      --accent: #ff67d8;
+      --ok: #7dffbd;
+      --warn: #ff6f91;
+      --text: #e9f6ff;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: radial-gradient(circle at 20% 0%, #19193d, var(--bg) 55%);
+      color: var(--text);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 12px;
+    }
+    .app {
+      width: min(880px, 100%);
+      display: grid;
+      gap: 10px;
+      background: rgba(10, 10, 26, 0.94);
+      border: 1px solid #2f2f66;
+      border-radius: 18px;
+      padding: 14px;
+      box-shadow: 0 0 26px rgba(77, 226, 255, 0.18);
+    }
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .card {
+      border: 1px solid #2b2b56;
+      border-radius: 10px;
+      background: var(--panel);
+      padding: 8px;
+      text-align: center;
+      font-size: .9rem;
+    }
+    .card strong { display: block; margin-top: 3px; color: var(--line); font-size: 1.05rem; }
+    canvas {
+      width: 100%;
+      height: min(58vh, 520px);
+      background: linear-gradient(180deg, #080815, #0d1030);
+      border-radius: 12px;
+      border: 1px solid #2a2a54;
+      touch-action: none;
+    }
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+    button {
+      border: 1px solid #3a3a72;
+      background: #18183d;
+      color: var(--text);
+      border-radius: 10px;
+      padding: 11px 8px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button:active { transform: scale(0.98); }
+    .rotate { background: linear-gradient(90deg, #224f84, #55317b); }
+    .hint { opacity: .86; text-align: center; font-size: .92rem; }
+    .warn { color: var(--warn); }
+    @media (max-width: 720px) {
+      .hud { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .controls { grid-template-columns: 1fr 1fr; }
+      canvas { height: 50vh; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="hud">
+      <div class="card">Stage<strong id="stage">1 / 5</strong></div>
+      <div class="card">Score<strong id="score">0</strong></div>
+      <div class="card">Moves<strong id="moves">0</strong></div>
+      <div class="card">Best Stage<strong id="bestStage">1</strong></div>
+      <div class="card">Best Score<strong id="bestScore">0</strong></div>
+    </section>
+
+    <canvas id="board" width="800" height="560" aria-label="Lighthouse puzzle board"></canvas>
+
+    <section class="controls">
+      <button id="prevBtn">◀ Cursor (←)</button>
+      <button id="nextBtn">Cursor (→) ▶</button>
+      <button id="rotateBtn" class="rotate">Rotate (Space)</button>
+      <button id="restartBtn">Restart Stage</button>
+    </section>
+
+    <div class="hint" id="status">등대 광선을 모든 부표 타겟으로 유도하세요. (화살표 이동, Space 회전, 터치 탭 회전)</div>
+  </main>
+
+  <script>
+    (() => {
+      const $ = (id) => document.getElementById(id);
+      const canvas = $('board');
+      const ctx = canvas.getContext('2d');
+      const stageEl = $('stage');
+      const scoreEl = $('score');
+      const movesEl = $('moves');
+      const bestStageEl = $('bestStage');
+      const bestScoreEl = $('bestScore');
+      const statusEl = $('status');
+
+      const LS_STAGE = 'lighthouseLensLabyrinth.bestStage';
+      const LS_SCORE = 'lighthouseLensLabyrinth.bestScore';
+      let bestStage = Number(localStorage.getItem(LS_STAGE) || 1);
+      let bestScore = Number(localStorage.getItem(LS_SCORE) || 0);
+      bestStageEl.textContent = bestStage;
+      bestScoreEl.textContent = bestScore;
+
+      let audioCtx;
+      const initAudio = async () => {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') await audioCtx.resume();
+      };
+      const beep = (f = 320, d = 0.06, g = 0.03, type = 'sine') => {
+        if (!audioCtx) return;
+        const t0 = audioCtx.currentTime;
+        const o = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        o.type = type;
+        o.frequency.value = f;
+        gain.gain.value = g;
+        o.connect(gain);
+        gain.connect(audioCtx.destination);
+        o.start(t0);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t0 + d);
+        o.stop(t0 + d);
+      };
+
+      const stages = [
+        {
+          size: 6,
+          source: { x: 0, y: 4, dir: 1 },
+          targets: [{ x: 5, y: 1 }],
+          pieces: [
+            { x: 2, y: 4, rot: 1, rotatable: true },
+            { x: 2, y: 1, rot: 0, rotatable: true }
+          ]
+        },
+        {
+          size: 7,
+          source: { x: 0, y: 5, dir: 1 },
+          targets: [{ x: 6, y: 0 }],
+          pieces: [
+            { x: 2, y: 5, rot: 1, rotatable: true },
+            { x: 2, y: 2, rot: 0, rotatable: true },
+            { x: 5, y: 2, rot: 1, rotatable: true },
+            { x: 5, y: 0, rot: 0, rotatable: true }
+          ]
+        },
+        {
+          size: 7,
+          source: { x: 6, y: 6, dir: 3 },
+          targets: [{ x: 0, y: 1 }],
+          pieces: [
+            { x: 4, y: 6, rot: 1, rotatable: true },
+            { x: 4, y: 3, rot: 0, rotatable: true },
+            { x: 1, y: 3, rot: 1, rotatable: true },
+            { x: 1, y: 1, rot: 0, rotatable: true }
+          ]
+        },
+        {
+          size: 8,
+          source: { x: 0, y: 7, dir: 1 },
+          targets: [{ x: 7, y: 2 }],
+          pieces: [
+            { x: 3, y: 7, rot: 1, rotatable: true },
+            { x: 3, y: 4, rot: 0, rotatable: true },
+            { x: 6, y: 4, rot: 1, rotatable: true },
+            { x: 6, y: 2, rot: 0, rotatable: true }
+          ]
+        },
+        {
+          size: 8,
+          source: { x: 7, y: 7, dir: 3 },
+          targets: [{ x: 0, y: 0 }],
+          pieces: [
+            { x: 5, y: 7, rot: 0, rotatable: true },
+            { x: 5, y: 3, rot: 1, rotatable: true },
+            { x: 2, y: 3, rot: 0, rotatable: true },
+            { x: 2, y: 0, rot: 1, rotatable: true }
+          ]
+        }
+      ];
+
+      const state = {
+        stageIdx: 0,
+        score: 0,
+        moves: 0,
+        cursor: 0,
+        pieces: [],
+        lit: new Set(),
+        beamPath: []
+      };
+
+      const dirVec = [
+        [0, -1], [1, 0], [0, 1], [-1, 0]
+      ];
+
+      const mirrorReflect = (dir, rot) => {
+        if (rot === 0) {
+          // '/'
+          return [1, 0, 3, 2][dir];
+        }
+        // '\\'
+        return [3, 2, 1, 0][dir];
+      };
+
+      const clonePieces = (arr) => arr.map(p => ({ ...p }));
+
+      function startStage(index, keepScore = true) {
+        const i = Math.max(0, Math.min(stages.length - 1, index));
+        state.stageIdx = i;
+        if (!keepScore) state.score = 0;
+        state.moves = 0;
+        state.pieces = clonePieces(stages[i].pieces);
+        state.cursor = 0;
+        updateBeam();
+        renderHUD();
+        statusEl.textContent = `Stage ${i + 1}: 광선을 타겟 부표로 연결하세요.`;
+        statusEl.classList.remove('warn');
+      }
+
+      function getCellPiece(x, y) {
+        return state.pieces.find(p => p.x === x && p.y === y);
+      }
+
+      function updateBeam() {
+        const stage = stages[state.stageIdx];
+        const lit = new Set();
+        const path = [];
+        let x = stage.source.x;
+        let y = stage.source.y;
+        let dir = stage.source.dir;
+        const maxSteps = stage.size * stage.size * 4;
+
+        for (let step = 0; step < maxSteps; step++) {
+          const [dx, dy] = dirVec[dir];
+          x += dx;
+          y += dy;
+          if (x < 0 || y < 0 || x >= stage.size || y >= stage.size) break;
+          path.push({ x, y });
+
+          const targetHit = stage.targets.some(t => t.x === x && t.y === y);
+          if (targetHit) lit.add(`${x},${y}`);
+
+          const piece = getCellPiece(x, y);
+          if (piece) {
+            dir = mirrorReflect(dir, piece.rot);
+          }
+        }
+
+        state.lit = lit;
+        state.beamPath = path;
+      }
+
+      function isStageClear() {
+        const stage = stages[state.stageIdx];
+        return stage.targets.every(t => state.lit.has(`${t.x},${t.y}`));
+      }
+
+      function rotatePieceAt(x, y) {
+        const p = getCellPiece(x, y);
+        if (!p || !p.rotatable) return false;
+        p.rot = (p.rot + 1) % 2;
+        state.moves += 1;
+        updateBeam();
+        beep(340 + Math.random() * 90, 0.05, 0.025, 'triangle');
+        renderHUD();
+
+        if (isStageClear()) {
+          const reward = Math.max(40, 130 - state.moves * 5) + (state.stageIdx + 1) * 25;
+          state.score += reward;
+          beep(540, 0.08, 0.04);
+          setTimeout(() => beep(680, 0.11, 0.04), 70);
+
+          if (state.score > bestScore) {
+            bestScore = state.score;
+            localStorage.setItem(LS_SCORE, String(bestScore));
+          }
+          const cleared = state.stageIdx + 2;
+          if (cleared > bestStage) {
+            bestStage = Math.min(stages.length, cleared);
+            localStorage.setItem(LS_STAGE, String(bestStage));
+          }
+          bestStageEl.textContent = bestStage;
+          bestScoreEl.textContent = bestScore;
+
+          if (state.stageIdx >= stages.length - 1) {
+            statusEl.textContent = `완주! 총 점수 ${state.score}. R 또는 Restart로 재도전하세요.`;
+            statusEl.classList.remove('warn');
+          } else {
+            statusEl.textContent = `Stage ${state.stageIdx + 1} Clear! +${reward}점`;
+            statusEl.classList.remove('warn');
+            setTimeout(() => startStage(state.stageIdx + 1, true), 650);
+          }
+        }
+        return true;
+      }
+
+      function renderHUD() {
+        stageEl.textContent = `${state.stageIdx + 1} / ${stages.length}`;
+        scoreEl.textContent = state.score;
+        movesEl.textContent = state.moves;
+      }
+
+      function draw() {
+        const stage = stages[state.stageIdx];
+        const n = stage.size;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const pad = 30;
+        const boardSize = Math.min(canvas.width - pad * 2, canvas.height - pad * 2);
+        const cell = boardSize / n;
+        const bx = (canvas.width - boardSize) / 2;
+        const by = (canvas.height - boardSize) / 2;
+
+        ctx.fillStyle = '#0b1028';
+        ctx.fillRect(bx - 6, by - 6, boardSize + 12, boardSize + 12);
+
+        for (let y = 0; y < n; y++) {
+          for (let x = 0; x < n; x++) {
+            const px = bx + x * cell;
+            const py = by + y * cell;
+            ctx.fillStyle = (x + y) % 2 ? '#111739' : '#0f1433';
+            ctx.fillRect(px, py, cell, cell);
+            ctx.strokeStyle = '#26315f';
+            ctx.strokeRect(px, py, cell, cell);
+          }
+        }
+
+        // source
+        const s = stage.source;
+        const sx = bx + s.x * cell + cell * 0.5;
+        const sy = by + s.y * cell + cell * 0.5;
+        ctx.fillStyle = '#7dffbd';
+        ctx.beginPath();
+        ctx.arc(sx, sy, cell * 0.23, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#0c1b1f';
+        ctx.font = `${Math.floor(cell * 0.26)}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('⚓', sx, sy + 1);
+
+        // targets
+        stage.targets.forEach((t) => {
+          const tx = bx + t.x * cell + cell * 0.5;
+          const ty = by + t.y * cell + cell * 0.5;
+          const on = state.lit.has(`${t.x},${t.y}`);
+          ctx.fillStyle = on ? '#ff67d8' : '#2b2b52';
+          ctx.beginPath();
+          ctx.arc(tx, ty, cell * 0.2, 0, Math.PI * 2);
+          ctx.fill();
+          if (on) {
+            ctx.shadowColor = '#ff67d8';
+            ctx.shadowBlur = 14;
+            ctx.strokeStyle = '#ffd3f3';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+          }
+        });
+
+        // pieces
+        state.pieces.forEach((p, idx) => {
+          const px = bx + p.x * cell;
+          const py = by + p.y * cell;
+          const selected = idx === state.cursor;
+
+          ctx.fillStyle = selected ? 'rgba(255, 103, 216, 0.14)' : 'rgba(77, 226, 255, 0.08)';
+          ctx.fillRect(px + 1, py + 1, cell - 2, cell - 2);
+          ctx.strokeStyle = selected ? '#ff67d8' : '#4de2ff';
+          ctx.lineWidth = selected ? 2.4 : 1.8;
+          ctx.strokeRect(px + 4, py + 4, cell - 8, cell - 8);
+
+          ctx.strokeStyle = '#9ff0ff';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          if (p.rot === 0) {
+            ctx.moveTo(px + cell * 0.2, py + cell * 0.8);
+            ctx.lineTo(px + cell * 0.8, py + cell * 0.2);
+          } else {
+            ctx.moveTo(px + cell * 0.2, py + cell * 0.2);
+            ctx.lineTo(px + cell * 0.8, py + cell * 0.8);
+          }
+          ctx.stroke();
+        });
+
+        // beam
+        const pts = [{ x: stage.source.x, y: stage.source.y }, ...state.beamPath];
+        if (pts.length > 1) {
+          ctx.strokeStyle = '#4de2ff';
+          ctx.lineWidth = 4;
+          ctx.shadowColor = '#4de2ff';
+          ctx.shadowBlur = 11;
+          ctx.beginPath();
+          pts.forEach((p, i) => {
+            const px = bx + p.x * cell + cell * 0.5;
+            const py = by + p.y * cell + cell * 0.5;
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          });
+          ctx.stroke();
+          ctx.shadowBlur = 0;
+        }
+
+        requestAnimationFrame(draw);
+      }
+
+      function pointerToCell(clientX, clientY) {
+        const r = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / r.width;
+        const scaleY = canvas.height / r.height;
+        const x = (clientX - r.left) * scaleX;
+        const y = (clientY - r.top) * scaleY;
+
+        const stage = stages[state.stageIdx];
+        const n = stage.size;
+        const pad = 30;
+        const boardSize = Math.min(canvas.width - pad * 2, canvas.height - pad * 2);
+        const bx = (canvas.width - boardSize) / 2;
+        const by = (canvas.height - boardSize) / 2;
+        const cell = boardSize / n;
+
+        const gx = Math.floor((x - bx) / cell);
+        const gy = Math.floor((y - by) / cell);
+        if (gx < 0 || gy < 0 || gx >= n || gy >= n) return null;
+        return { gx, gy };
+      }
+
+      function selectNext(step = 1) {
+        if (!state.pieces.length) return;
+        state.cursor = (state.cursor + step + state.pieces.length) % state.pieces.length;
+        beep(260, 0.03, 0.02, 'square');
+      }
+
+      canvas.addEventListener('pointerdown', async (e) => {
+        await initAudio();
+        const cell = pointerToCell(e.clientX, e.clientY);
+        if (!cell) return;
+        const idx = state.pieces.findIndex(p => p.x === cell.gx && p.y === cell.gy);
+        if (idx >= 0) {
+          state.cursor = idx;
+          rotatePieceAt(cell.gx, cell.gy);
+        }
+      });
+
+      document.addEventListener('keydown', async (e) => {
+        if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", " ", "Enter", "r", "R"].includes(e.key)) e.preventDefault();
+        if (e.repeat && (e.key === ' ' || e.key === 'Enter')) return;
+        await initAudio();
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') selectNext(-1);
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') selectNext(1);
+        if (e.key === ' ' || e.key === 'Enter') {
+          const cur = state.pieces[state.cursor];
+          if (cur) rotatePieceAt(cur.x, cur.y);
+        }
+        if (e.key === 'r' || e.key === 'R') startStage(state.stageIdx, true);
+      });
+
+      $('prevBtn').addEventListener('click', async () => { await initAudio(); selectNext(-1); });
+      $('nextBtn').addEventListener('click', async () => { await initAudio(); selectNext(1); });
+      $('rotateBtn').addEventListener('click', async () => {
+        await initAudio();
+        const cur = state.pieces[state.cursor];
+        if (cur) rotatePieceAt(cur.x, cur.y);
+      });
+      $('restartBtn').addEventListener('click', async () => {
+        await initAudio();
+        startStage(state.stageIdx, true);
+        beep(190, 0.05, 0.03, 'square');
+      });
+
+      startStage(0, false);
+      draw();
+    })();
+  </script>
+</body>
+</html>

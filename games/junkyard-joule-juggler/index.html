@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0a1a" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <title>Junkyard Joule Juggler</title>
+  <style>
+    :root {
+      --bg: #0a0a1a;
+      --panel: #12122a;
+      --line: #4de2ff;
+      --amber: #ffd166;
+      --warn: #ff6f91;
+      --ok: #85ffbf;
+      --text: #eaf7ff;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(circle at 20% 0%, #18183f, var(--bg) 58%);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 12px;
+    }
+    .app {
+      width: min(860px, 100%);
+      background: rgba(10, 10, 26, 0.94);
+      border: 1px solid #2e2e66;
+      border-radius: 18px;
+      padding: 14px;
+      display: grid;
+      gap: 10px;
+      box-shadow: 0 0 24px rgba(77, 226, 255, 0.16);
+    }
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .card {
+      border: 1px solid #2a2a55;
+      border-radius: 10px;
+      background: var(--panel);
+      padding: 8px;
+      text-align: center;
+      font-size: .88rem;
+    }
+    .card strong { display: block; margin-top: 3px; color: var(--line); font-size: 1.02rem; }
+    .mode-blue { color: #6ee3ff !important; }
+    .mode-amber { color: var(--amber) !important; }
+    canvas {
+      width: 100%;
+      height: min(56vh, 500px);
+      border-radius: 12px;
+      border: 1px solid #2a2a54;
+      background: linear-gradient(180deg, #090917, #0e1031);
+      touch-action: none;
+    }
+    .controls {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: 1fr 1fr 1fr 1fr;
+    }
+    button {
+      border: 1px solid #3a3a72;
+      background: #18183d;
+      color: var(--text);
+      border-radius: 10px;
+      padding: 11px 8px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button:active { transform: scale(0.98); }
+    .toggle { background: linear-gradient(90deg, #284a7f, #61407f); }
+    .hint { text-align: center; font-size: .92rem; opacity: .87; }
+    .warn { color: var(--warn); }
+    @media (max-width: 760px) {
+      .hud { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .controls { grid-template-columns: 1fr 1fr; }
+      canvas { height: 48vh; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="hud">
+      <div class="card">Score<strong id="score">0</strong></div>
+      <div class="card">Lives<strong id="lives">3</strong></div>
+      <div class="card">Streak<strong id="streak">0</strong></div>
+      <div class="card">Mode<strong id="mode" class="mode-blue">BLUE</strong></div>
+      <div class="card">Best Score<strong id="bestScore">0</strong></div>
+      <div class="card">Best Streak<strong id="bestStreak">0</strong></div>
+    </section>
+
+    <canvas id="stage" width="840" height="520" aria-label="Junkyard joule playfield"></canvas>
+
+    <section class="controls">
+      <button id="leftBtn">◀ Move (A/←)</button>
+      <button id="rightBtn">Move (D/→) ▶</button>
+      <button id="toggleBtn" class="toggle">Toggle Polarity (Space)</button>
+      <button id="restartBtn">Restart</button>
+    </section>
+
+    <div class="hint" id="status">배터리를 같은 극성으로 받아 점수를 올리세요. 폭탄은 피하세요.</div>
+  </main>
+
+  <script>
+    (() => {
+      const $ = (id) => document.getElementById(id);
+      const canvas = $('stage');
+      const ctx = canvas.getContext('2d');
+      const scoreEl = $('score');
+      const livesEl = $('lives');
+      const streakEl = $('streak');
+      const modeEl = $('mode');
+      const bestScoreEl = $('bestScore');
+      const bestStreakEl = $('bestStreak');
+      const statusEl = $('status');
+
+      const LS_BEST_SCORE = 'junkyardJouleJuggler.bestScore';
+      const LS_BEST_STREAK = 'junkyardJouleJuggler.bestStreak';
+      let bestScore = Number(localStorage.getItem(LS_BEST_SCORE) || 0);
+      let bestStreak = Number(localStorage.getItem(LS_BEST_STREAK) || 0);
+      bestScoreEl.textContent = bestScore;
+      bestStreakEl.textContent = bestStreak;
+
+      let audioCtx;
+      const initAudio = async () => {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') await audioCtx.resume();
+      };
+      const beep = (f = 320, d = 0.05, g = 0.03, type = 'sine') => {
+        if (!audioCtx) return;
+        const t0 = audioCtx.currentTime;
+        const o = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        o.type = type;
+        o.frequency.value = f;
+        gain.gain.value = g;
+        o.connect(gain); gain.connect(audioCtx.destination);
+        o.start(t0);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t0 + d);
+        o.stop(t0 + d);
+      };
+
+      const state = {
+        running: true,
+        score: 0,
+        lives: 3,
+        streak: 0,
+        mode: 'blue',
+        x: canvas.width / 2,
+        vx: 0,
+        speed: 380,
+        left: false,
+        right: false,
+        objects: [],
+        spawn: 0,
+        elapsed: 0,
+        shake: 0
+      };
+
+      function reset() {
+        state.running = true;
+        state.score = 0;
+        state.lives = 3;
+        state.streak = 0;
+        state.mode = 'blue';
+        state.x = canvas.width / 2;
+        state.vx = 0;
+        state.left = false;
+        state.right = false;
+        state.objects = [];
+        state.spawn = 0;
+        state.elapsed = 0;
+        state.shake = 0;
+        statusEl.textContent = '스크랩 비를 돌파하세요. 모드 토글이 핵심입니다.';
+        statusEl.classList.remove('warn');
+        renderHUD();
+      }
+
+      function renderHUD() {
+        scoreEl.textContent = state.score;
+        livesEl.textContent = state.lives;
+        streakEl.textContent = state.streak;
+        modeEl.textContent = state.mode.toUpperCase();
+        modeEl.className = state.mode === 'blue' ? 'mode-blue' : 'mode-amber';
+        bestScoreEl.textContent = bestScore;
+        bestStreakEl.textContent = bestStreak;
+      }
+
+      function endGame() {
+        state.running = false;
+        if (state.score > bestScore) {
+          bestScore = state.score;
+          localStorage.setItem(LS_BEST_SCORE, String(bestScore));
+        }
+        if (state.streak > bestStreak) {
+          bestStreak = state.streak;
+          localStorage.setItem(LS_BEST_STREAK, String(bestStreak));
+        }
+        renderHUD();
+        statusEl.textContent = `GAME OVER — 점수 ${state.score}. Restart로 재시작하세요.`;
+        statusEl.classList.add('warn');
+        beep(140, 0.2, 0.06, 'sawtooth');
+      }
+
+      function spawnObject() {
+        const r = Math.random();
+        let kind = 'blue';
+        if (r < 0.18) kind = 'bomb';
+        else if (r < 0.58) kind = 'blue';
+        else kind = 'amber';
+
+        state.objects.push({
+          x: 30 + Math.random() * (canvas.width - 60),
+          y: -18,
+          vy: 115 + Math.random() * 90 + state.elapsed * 3.5,
+          size: kind === 'bomb' ? 17 : 14,
+          kind
+        });
+      }
+
+      function toggleMode() {
+        state.mode = state.mode === 'blue' ? 'amber' : 'blue';
+        beep(state.mode === 'blue' ? 360 : 520, 0.04, 0.03, 'triangle');
+        renderHUD();
+      }
+
+      function update(dt) {
+        if (!state.running) return;
+        state.elapsed += dt;
+        state.spawn -= dt;
+        const spawnRate = Math.max(0.22, 0.75 - state.elapsed * 0.006);
+        if (state.spawn <= 0) {
+          state.spawn = spawnRate;
+          spawnObject();
+        }
+
+        state.vx = 0;
+        if (state.left) state.vx -= state.speed;
+        if (state.right) state.vx += state.speed;
+        state.x += state.vx * dt;
+        state.x = Math.max(42, Math.min(canvas.width - 42, state.x));
+
+        const catchY = canvas.height - 86;
+        for (let i = state.objects.length - 1; i >= 0; i--) {
+          const o = state.objects[i];
+          o.y += o.vy * dt;
+
+          const caught = Math.abs(o.x - state.x) < 44 && o.y >= catchY - 8 && o.y <= catchY + 30;
+          if (caught) {
+            if (o.kind === 'bomb') {
+              state.lives -= 1;
+              state.streak = 0;
+              state.shake = 1;
+              beep(170, 0.1, 0.05, 'square');
+            } else if (o.kind === state.mode) {
+              state.streak += 1;
+              state.score += 10 + Math.floor(state.streak / 4);
+              beep(o.kind === 'blue' ? 430 : 620, 0.045, 0.03);
+            } else {
+              state.lives -= 1;
+              state.streak = 0;
+              beep(130, 0.09, 0.05, 'sawtooth');
+            }
+            state.objects.splice(i, 1);
+            renderHUD();
+            if (state.lives <= 0) {
+              endGame();
+              return;
+            }
+            continue;
+          }
+
+          if (o.y > canvas.height + 30) {
+            if (o.kind !== 'bomb') {
+              state.streak = 0;
+            }
+            state.objects.splice(i, 1);
+            renderHUD();
+          }
+        }
+
+        if (state.score > bestScore) {
+          bestScore = state.score;
+          localStorage.setItem(LS_BEST_SCORE, String(bestScore));
+        }
+        if (state.streak > bestStreak) {
+          bestStreak = state.streak;
+          localStorage.setItem(LS_BEST_STREAK, String(bestStreak));
+        }
+      }
+
+      function draw() {
+        const shakeX = state.shake > 0 ? (Math.random() - 0.5) * 7 : 0;
+        if (state.shake > 0) state.shake *= 0.82;
+
+        ctx.save();
+        ctx.translate(shakeX, 0);
+        ctx.clearRect(-10, 0, canvas.width + 20, canvas.height);
+
+        ctx.fillStyle = '#0a112a';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // bins
+        ctx.fillStyle = 'rgba(90, 227, 255, 0.16)';
+        ctx.fillRect(28, canvas.height - 72, canvas.width / 2 - 34, 58);
+        ctx.fillStyle = 'rgba(255, 209, 102, 0.16)';
+        ctx.fillRect(canvas.width / 2 + 6, canvas.height - 72, canvas.width / 2 - 34, 58);
+        ctx.strokeStyle = '#5de1ff';
+        ctx.strokeRect(28, canvas.height - 72, canvas.width / 2 - 34, 58);
+        ctx.strokeStyle = '#ffd166';
+        ctx.strokeRect(canvas.width / 2 + 6, canvas.height - 72, canvas.width / 2 - 34, 58);
+
+        ctx.fillStyle = '#cfefff';
+        ctx.font = '15px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('BLUE BIN', 38, canvas.height - 36);
+        ctx.textAlign = 'right';
+        ctx.fillText('AMBER BIN', canvas.width - 38, canvas.height - 36);
+
+        // player magnet
+        const py = canvas.height - 96;
+        ctx.fillStyle = state.mode === 'blue' ? '#66e6ff' : '#ffd166';
+        ctx.beginPath();
+        ctx.roundRect(state.x - 44, py, 88, 24, 10);
+        ctx.fill();
+        ctx.fillStyle = '#0d1b22';
+        ctx.textAlign = 'center';
+        ctx.font = 'bold 13px sans-serif';
+        ctx.fillText(state.mode === 'blue' ? 'N+' : 'S-', state.x, py + 16);
+
+        // objects
+        state.objects.forEach((o) => {
+          if (o.kind === 'bomb') {
+            ctx.fillStyle = '#ff6f91';
+            ctx.beginPath();
+            ctx.arc(o.x, o.y, o.size, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#220814';
+            ctx.font = 'bold 14px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('✕', o.x, o.y + 5);
+          } else {
+            ctx.fillStyle = o.kind === 'blue' ? '#58ddff' : '#ffd166';
+            ctx.beginPath();
+            ctx.roundRect(o.x - 12, o.y - 10, 24, 20, 6);
+            ctx.fill();
+            ctx.fillStyle = '#18222d';
+            ctx.font = 'bold 11px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(o.kind === 'blue' ? '+' : '-', o.x, o.y + 4);
+          }
+        });
+
+        // top rail effect
+        ctx.strokeStyle = '#2e4f8a';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(18, 20);
+        ctx.lineTo(canvas.width - 18, 20);
+        ctx.stroke();
+
+        ctx.restore();
+        requestAnimationFrame(draw);
+      }
+
+      let last = performance.now();
+      function frame(now) {
+        const dt = Math.min(0.033, (now - last) / 1000);
+        last = now;
+        update(dt);
+        requestAnimationFrame(frame);
+      }
+
+      document.addEventListener('keydown', async (e) => {
+        if (["ArrowLeft", "ArrowRight", "a", "A", "d", "D", " ", "r", "R"].includes(e.key)) e.preventDefault();
+        await initAudio();
+        if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') state.left = true;
+        if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') state.right = true;
+        if (e.key === ' ' && !e.repeat) toggleMode();
+        if ((e.key === 'r' || e.key === 'R') && !e.repeat) reset();
+      });
+      document.addEventListener('keyup', (e) => {
+        if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') state.left = false;
+        if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') state.right = false;
+      });
+
+      function holdButton(el, onDown, onUp) {
+        ['pointerdown', 'touchstart'].forEach(ev => el.addEventListener(ev, async (e) => {
+          e.preventDefault();
+          await initAudio();
+          onDown();
+        }, { passive: false }));
+        ['pointerup', 'pointercancel', 'pointerleave', 'touchend', 'touchcancel'].forEach(ev => el.addEventListener(ev, (e) => {
+          e.preventDefault();
+          onUp();
+        }, { passive: false }));
+      }
+
+      holdButton($('leftBtn'), () => state.left = true, () => state.left = false);
+      holdButton($('rightBtn'), () => state.right = true, () => state.right = false);
+      $('toggleBtn').addEventListener('click', async () => { await initAudio(); toggleMode(); });
+      $('restartBtn').addEventListener('click', async () => {
+        await initAudio();
+        beep(190, 0.05, 0.04, 'square');
+        reset();
+      });
+
+      canvas.addEventListener('pointerdown', async (e) => {
+        await initAudio();
+        const r = canvas.getBoundingClientRect();
+        const x = e.clientX - r.left;
+        if (x < r.width * 0.33) state.left = true;
+        else if (x > r.width * 0.66) state.right = true;
+        else toggleMode();
+      });
+      canvas.addEventListener('pointerup', () => { state.left = false; state.right = false; });
+      canvas.addEventListener('pointercancel', () => { state.left = false; state.right = false; });
+
+      reset();
+      draw();
+      frame(performance.now());
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover" />
+  <title>Prism Split</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <style>
+    :root{--bg:#0a0a1a;--panel:#11142a;--txt:#ebf7ff;--cyan:#37e7ff}
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    body{margin:0;min-height:100vh;background:radial-gradient(circle at 15% 0,#181a3f,var(--bg) 40%);color:var(--txt);font-family:system-ui,sans-serif;display:flex;justify-content:center;padding:12px}
+    .app{width:min(860px,100%);display:grid;gap:10px}
+    .hud{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+    .card{background:rgba(17,20,42,.92);border:1px solid #29346a;border-radius:12px;padding:8px;text-align:center;box-shadow:0 0 14px #0ff2}
+    .v{font-weight:800;color:var(--cyan)}
+    .panel{background:var(--panel);border:1px solid #2a356a;border-radius:14px;padding:10px;box-shadow:0 0 18px #00f3}
+    canvas{display:block;width:100%;height:auto;aspect-ratio:4/3;background:#050611;border-radius:10px}
+    .controls{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+    button{border:none;border-radius:12px;padding:11px 8px;background:#1b2552;color:#ecf7ff;font-weight:700;box-shadow:0 0 10px #0ff4;touch-action:manipulation}
+    button:active{transform:translateY(1px);filter:brightness(1.12)}
+    .hint{font-size:12px;opacity:.83;text-align:center}
+    @media (max-width:700px){.hud{grid-template-columns:repeat(2,minmax(0,1fr));}.controls{grid-template-columns:repeat(3,minmax(0,1fr));}}
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="hud">
+      <div class="card">Level<div id="level" class="v">1/6</div></div>
+      <div class="card">Best<div id="best" class="v">1</div></div>
+      <div class="card">Prism<div id="prismA" class="v">0°</div></div>
+      <div class="card">Mirror<div id="mirrorA" class="v">0°</div></div>
+      <div class="card">Status<div id="status" class="v">Align RGB</div></div>
+    </section>
+
+    <section class="panel"><canvas id="game" width="960" height="720"></canvas></section>
+
+    <section class="controls">
+      <button data-act="p-">Prism -</button>
+      <button data-act="p+">Prism +</button>
+      <button data-act="m-">Mirror -</button>
+      <button data-act="m+">Mirror +</button>
+      <button data-act="reset">Reset</button>
+    </section>
+    <p class="hint">키보드: A/D 프리즘 · J/L 미러 · R 리셋</p>
+  </main>
+
+<script>
+(() => {
+  const c = document.getElementById('game');
+  const ctx = c.getContext('2d');
+  const bestKey = 'prismSplitBestLevel';
+  const els = {
+    level: document.getElementById('level'),
+    best: document.getElementById('best'),
+    prismA: document.getElementById('prismA'),
+    mirrorA: document.getElementById('mirrorA'),
+    status: document.getElementById('status')
+  };
+
+  let ac;
+  const beep = (f=480,d=0.06,t='sine',v=0.03) => {
+    try{
+      ac = ac || new (window.AudioContext||window.webkitAudioContext)();
+      const o = ac.createOscillator();
+      const g = ac.createGain();
+      o.type=t; o.frequency.value=f; g.gain.value=v;
+      o.connect(g).connect(ac.destination);
+      o.start(); o.stop(ac.currentTime + d);
+    }catch(_){ }
+  };
+
+  const levels = [
+    { mirror:{x:640,y:360,base:-18}, spread:0.22, tol:18, solution:{p:0,m:15} },
+    { mirror:{x:620,y:290,base:6}, spread:0.25, tol:18, solution:{p:2,m:-30} },
+    { mirror:{x:600,y:420,base:12}, spread:0.28, tol:19, solution:{p:-5,m:8} },
+    { mirror:{x:670,y:270,base:-24}, spread:0.20, tol:18, solution:{p:10,m:-12} },
+    { mirror:{x:590,y:360,base:20}, spread:0.24, tol:18, solution:{p:-14,m:6} },
+    { mirror:{x:650,y:440,base:-8}, spread:0.27, tol:19, solution:{p:-1,m:32} }
+  ];
+
+  const state = {
+    i: 0,
+    prismAngle: 0,
+    mirrorDelta: 0,
+    best: Math.max(1, Number(localStorage.getItem(bestKey) || 1)),
+    solved: false,
+    targets: null
+  };
+
+  const prismPos = {x:290,y:360};
+  const source = {x:80,y:360};
+  const mirrorLen = 160;
+
+  const v2=(x,y)=>({x,y});
+  const add=(a,b)=>v2(a.x+b.x,a.y+b.y);
+  const sub=(a,b)=>v2(a.x-b.x,a.y-b.y);
+  const mul=(a,s)=>v2(a.x*s,a.y*s);
+  const dot=(a,b)=>a.x*b.x+a.y*b.y;
+  const len=(a)=>Math.hypot(a.x,a.y);
+  const norm=(a)=>{const l=len(a)||1;return v2(a.x/l,a.y/l);};
+
+  function raySegIntersect(o,d,a,b){
+    const s = sub(b,a);
+    const den = d.x*s.y - d.y*s.x;
+    if(Math.abs(den) < 1e-6) return null;
+    const ao = sub(a,o);
+    const t = (ao.x*s.y - ao.y*s.x) / den;
+    const u = (ao.x*d.y - ao.y*d.x) / den;
+    if(t > 0 && u >= 0 && u <= 1) return {t,p:add(o,mul(d,t))};
+    return null;
+  }
+
+  function rayBounds(o,d,w,h){
+    const ts=[];
+    if(d.x>0) ts.push((w-o.x)/d.x);
+    if(d.x<0) ts.push((0-o.x)/d.x);
+    if(d.y>0) ts.push((h-o.y)/d.y);
+    if(d.y<0) ts.push((0-o.y)/d.y);
+    const t = ts.filter(v=>v>0.001).sort((a,b)=>a-b)[0] || 1;
+    return add(o,mul(d,t));
+  }
+
+  function reflect(d,ang){
+    const n = norm(v2(-Math.sin(ang), Math.cos(ang)));
+    return norm(sub(d, mul(n, 2 * dot(d,n))));
+  }
+
+  function getMirror(lv, mirrorDelta){
+    const ang = (lv.mirror.base + mirrorDelta) * Math.PI / 180;
+    const t = v2(Math.cos(ang), Math.sin(ang));
+    return {
+      a: add(lv.mirror, mul(t,-mirrorLen/2)),
+      b: add(lv.mirror, mul(t, mirrorLen/2)),
+      angle: ang
+    };
+  }
+
+  function traceRay(lv, prismDeg, mirrorDelta, rayAng){
+    const d0 = norm(v2(Math.cos(rayAng), Math.sin(rayAng)));
+    const o0 = prismPos;
+    const m = getMirror(lv, mirrorDelta);
+    const hitM = raySegIntersect(o0,d0,m.a,m.b);
+    const hitB0 = rayBounds(o0,d0,c.width,c.height);
+    const tB0 = len(sub(hitB0,o0));
+    if(hitM && hitM.t < tB0){
+      const d1 = reflect(d0,m.angle);
+      const o1 = add(hitM.p, mul(d1,0.5));
+      const p2 = rayBounds(o1,d1,c.width,c.height);
+      return {points:[o0,hitM.p,p2]};
+    }
+    return {points:[o0,hitB0]};
+  }
+
+  function pointOnLastSegment(points, ratio){
+    const a = points[points.length - 2];
+    const b = points[points.length - 1];
+    const p = add(a, mul(sub(b,a), ratio));
+    return {x:Math.max(24,Math.min(c.width-24,p.x)), y:Math.max(24,Math.min(c.height-24,p.y))};
+  }
+
+  function distPointToSegment(p,a,b){
+    const ab = sub(b,a);
+    const t = Math.max(0, Math.min(1, dot(sub(p,a),ab) / (dot(ab,ab) || 1)));
+    const q = add(a, mul(ab,t));
+    return len(sub(p,q));
+  }
+
+  function pathHitsTarget(path,target,tol){
+    for(let i=0;i<path.length-1;i++){
+      if(distPointToSegment(target,path[i],path[i+1]) <= tol) return true;
+    }
+    return false;
+  }
+
+  function computeRays(prismDeg, mirrorDelta){
+    const lv = levels[state.i];
+    const base = prismDeg * Math.PI / 180;
+    return {
+      r: traceRay(lv, prismDeg, mirrorDelta, base - lv.spread),
+      g: traceRay(lv, prismDeg, mirrorDelta, base),
+      b: traceRay(lv, prismDeg, mirrorDelta, base + lv.spread)
+    };
+  }
+
+  function buildTargets(){
+    const lv = levels[state.i];
+    const rays = computeRays(lv.solution.p, lv.solution.m);
+    state.targets = {
+      r: pointOnLastSegment(rays.r.points, 0.68),
+      g: pointOnLastSegment(rays.g.points, 0.72),
+      b: pointOnLastSegment(rays.b.points, 0.76)
+    };
+  }
+
+  function solvedNow(rays){
+    const lv = levels[state.i];
+    return pathHitsTarget(rays.r.points, state.targets.r, lv.tol)
+      && pathHitsTarget(rays.g.points, state.targets.g, lv.tol)
+      && pathHitsTarget(rays.b.points, state.targets.b, lv.tol);
+  }
+
+  function resetAngles(){
+    state.prismAngle = 0;
+    state.mirrorDelta = 0;
+    state.solved = false;
+    buildTargets();
+    els.status.textContent = 'Align RGB';
+  }
+
+  function nextLevel(){
+    if(state.i < levels.length - 1){
+      state.i += 1;
+      resetAngles();
+      beep(900,.1,'triangle',.05);
+    } else {
+      alert('Spectrum Master! All 6 levels complete.');
+      state.i = 0;
+      resetAngles();
+    }
+  }
+
+  function act(a){
+    if(a==='p-') state.prismAngle -= 2;
+    if(a==='p+') state.prismAngle += 2;
+    if(a==='m-') state.mirrorDelta -= 2;
+    if(a==='m+') state.mirrorDelta += 2;
+    if(a==='reset') resetAngles();
+    state.prismAngle = Math.max(-70, Math.min(70, state.prismAngle));
+    state.mirrorDelta = Math.max(-70, Math.min(70, state.mirrorDelta));
+    if(a!=='reset') beep(360 + state.prismAngle * 2 + state.mirrorDelta * 2,.03,'triangle',.018);
+  }
+
+  function render(){
+    const lv = levels[state.i];
+    ctx.fillStyle = '#050611';
+    ctx.fillRect(0,0,c.width,c.height);
+
+    ctx.strokeStyle = '#1f2a5f';
+    ctx.lineWidth = 1;
+    for(let x=0;x<c.width;x+=60){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,c.height); ctx.stroke(); }
+    for(let y=0;y<c.height;y+=60){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(c.width,y); ctx.stroke(); }
+
+    // Source beam to prism
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.shadowBlur = 12; ctx.shadowColor = '#fff';
+    ctx.beginPath();
+    ctx.moveTo(source.x,source.y);
+    ctx.lineTo(prismPos.x,prismPos.y);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Prism triangle
+    const pa = state.prismAngle * Math.PI / 180;
+    const tri = [v2(0,-34),v2(30,24),v2(-30,24)].map(p=>v2(
+      prismPos.x + p.x*Math.cos(pa) - p.y*Math.sin(pa),
+      prismPos.y + p.x*Math.sin(pa) + p.y*Math.cos(pa)
+    ));
+    ctx.beginPath();
+    ctx.moveTo(tri[0].x,tri[0].y);
+    ctx.lineTo(tri[1].x,tri[1].y);
+    ctx.lineTo(tri[2].x,tri[2].y);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(55,231,255,.15)';
+    ctx.fill();
+    ctx.strokeStyle = '#37e7ff';
+    ctx.lineWidth = 3;
+    ctx.shadowBlur = 10; ctx.shadowColor = '#37e7ff';
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Mirror
+    const m = getMirror(lv,state.mirrorDelta);
+    ctx.strokeStyle = '#d4dbff';
+    ctx.lineWidth = 5;
+    ctx.shadowBlur = 14; ctx.shadowColor = '#d4dbff';
+    ctx.beginPath();
+    ctx.moveTo(m.a.x,m.a.y);
+    ctx.lineTo(m.b.x,m.b.y);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    const drawTarget=(p,col,label)=>{
+      ctx.beginPath();
+      ctx.arc(p.x,p.y,lv.tol,0,Math.PI*2);
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 3;
+      ctx.shadowBlur = 10; ctx.shadowColor = col;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = col;
+      ctx.font = '700 18px system-ui';
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(label,p.x,p.y);
+    };
+
+    drawTarget(state.targets.r,'#ff4a66','R');
+    drawTarget(state.targets.g,'#75ff9b','G');
+    drawTarget(state.targets.b,'#4f98ff','B');
+
+    // Rays
+    const rays = computeRays(state.prismAngle, state.mirrorDelta);
+    const drawRay=(pts,col)=>{
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 3;
+      ctx.shadowBlur = 12; ctx.shadowColor = col;
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x,pts[0].y);
+      for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x,pts[i].y);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    };
+
+    drawRay(rays.r.points,'#ff4a66');
+    drawRay(rays.g.points,'#75ff9b');
+    drawRay(rays.b.points,'#4f98ff');
+
+    const ok = solvedNow(rays);
+    if(ok && !state.solved){
+      state.solved = true;
+      state.best = Math.max(state.best, state.i + 2);
+      localStorage.setItem(bestKey, String(Math.min(levels.length, state.best)));
+      els.status.textContent = 'Perfect Split!';
+      beep(920,.1,'triangle',.05);
+      setTimeout(() => beep(1240,.12,'triangle',.04), 80);
+      setTimeout(nextLevel, 500);
+    }
+    if(!ok) els.status.textContent = 'Align RGB';
+
+    els.level.textContent = `${state.i + 1}/${levels.length}`;
+    els.best.textContent = String(state.best);
+    els.prismA.textContent = `${Math.round(state.prismAngle)}°`;
+    els.mirrorA.textContent = `${Math.round(lv.mirror.base + state.mirrorDelta)}°`;
+  }
+
+  function loop(){ render(); requestAnimationFrame(loop); }
+
+  document.querySelectorAll('button[data-act]').forEach(btn => {
+    const a = btn.dataset.act;
+    btn.addEventListener('click', () => act(a));
+    btn.addEventListener('pointerdown', () => beep(280,.02,'sine',.01));
+    btn.addEventListener('touchstart', () => {}, {passive:true});
+  });
+
+  document.addEventListener('keydown', (e) => {
+    const k = e.key.toLowerCase();
+    if(k==='a'){ e.preventDefault(); act('p-'); }
+    else if(k==='d'){ e.preventDefault(); act('p+'); }
+    else if(k==='j'){ e.preventDefault(); act('m-'); }
+    else if(k==='l'){ e.preventDefault(); act('m+'); }
+    else if(k==='r'){ e.preventDefault(); act('reset'); }
+  }, {passive:false});
+
+  resetAngles();
+  loop();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>Signal Scramble — 신호 해독 퍼즐</title>
+  <meta name="theme-color" content="#0a0a1a" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230a0a1a'/%3E%3Ccircle cx='16' cy='16' r='9' fill='none' stroke='%2334f3ff' stroke-width='3'/%3E%3C/svg%3E" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <style>
+    :root {
+      --bg: #0a0a1a;
+      --panel: #11142a;
+      --line: #1d2550;
+      --cyan: #34f3ff;
+      --pink: #ff4fd8;
+      --text: #e9f1ff;
+      --ok: #68ff9a;
+      --bad: #ff6b7f;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+      margin: 0;
+      background: radial-gradient(circle at top, #111636 0%, var(--bg) 55%);
+      color: var(--text);
+      font-family: Inter, Pretendard, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      padding: 16px;
+    }
+    .app {
+      width: min(960px, 100%);
+      background: linear-gradient(180deg, rgba(23, 28, 58, 0.85), rgba(11, 13, 29, 0.95));
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: 0 0 24px rgba(52, 243, 255, 0.14), inset 0 0 18px rgba(255, 79, 216, 0.08);
+      padding: 14px;
+    }
+    h1 {
+      margin: 4px 0 8px;
+      font-size: clamp(1.2rem, 3vw, 1.7rem);
+      letter-spacing: 0.02em;
+      color: var(--cyan);
+      text-shadow: 0 0 12px rgba(52, 243, 255, 0.65);
+    }
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .chip {
+      background: rgba(13, 18, 40, 0.9);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 8px;
+      text-align: center;
+      font-size: .92rem;
+    }
+    canvas {
+      width: 100%;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: #090d21;
+      display: block;
+      margin: 8px 0;
+      touch-action: none;
+    }
+    .choices {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 8px;
+    }
+    button {
+      border: 1px solid var(--line);
+      background: #161c3f;
+      color: var(--text);
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button:active { transform: translateY(1px) scale(0.99); }
+    .choice.active {
+      outline: 2px solid var(--cyan);
+      box-shadow: 0 0 16px rgba(52, 243, 255, 0.35);
+    }
+    .controls {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+    .start { background: #193c4a; color: #adfbff; }
+    .reset { background: #412042; color: #ffd6f4; }
+    .msg {
+      margin: 8px 0 2px;
+      min-height: 1.4em;
+      font-weight: 700;
+      color: #c9d7ff;
+    }
+    .hint { opacity: .86; font-size: .87rem; line-height: 1.35; margin-top: 6px; }
+    @media (max-width: 700px) {
+      .hud { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .choices { grid-template-columns: 1fr; }
+      button { padding: 11px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>📡 Signal Scramble</h1>
+    <section class="hud">
+      <div class="chip">레벨 <strong id="level">1</strong></div>
+      <div class="chip">점수 <strong id="score">0</strong></div>
+      <div class="chip">최고점수 <strong id="best">0</strong></div>
+      <div class="chip">라이프 <strong id="lives">3</strong></div>
+    </section>
+    <canvas id="scope" width="900" height="320" aria-label="signal scope"></canvas>
+    <div class="msg" id="msg">START를 누른 후 진짜 신호 채널을 골라주세요.</div>
+    <section class="choices" id="choices">
+      <button class="choice active" data-idx="0">① 채널 A</button>
+      <button class="choice" data-idx="1">② 채널 B</button>
+      <button class="choice" data-idx="2">③ 채널 C</button>
+    </section>
+    <section class="controls">
+      <button class="start" id="startBtn">START / NEXT</button>
+      <button class="reset" id="resetBtn">RESET</button>
+    </section>
+    <p class="hint">키보드: 1/2/3 선택, ←/→ 이동, Enter 제출. 터치/클릭 모두 지원.</p>
+  </main>
+
+  <script>
+    (() => {
+      const scope = document.getElementById('scope');
+      const ctx = scope.getContext('2d');
+      const scoreEl = document.getElementById('score');
+      const levelEl = document.getElementById('level');
+      const bestEl = document.getElementById('best');
+      const livesEl = document.getElementById('lives');
+      const msgEl = document.getElementById('msg');
+      const choiceEls = [...document.querySelectorAll('.choice')];
+      const startBtn = document.getElementById('startBtn');
+      const resetBtn = document.getElementById('resetBtn');
+
+      let audioCtx;
+      const audio = (f, t = 0.08, type = 'sine', v = 0.03) => {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.type = type;
+        o.frequency.value = f;
+        g.gain.value = v;
+        o.connect(g).connect(audioCtx.destination);
+        o.start();
+        o.stop(audioCtx.currentTime + t);
+      };
+
+      const BEST_KEY = 'signalScrambleBest';
+      let best = Number(localStorage.getItem(BEST_KEY) || 0);
+      let score = 0;
+      let level = 1;
+      let lives = 3;
+      let active = false;
+      let answer = 0;
+      let selected = 0;
+      let channels = [[], [], []];
+      let frame = 0;
+
+      bestEl.textContent = best;
+
+      function setMessage(text, tone) {
+        msgEl.textContent = text;
+        if (tone === 'ok') msgEl.style.color = '#68ff9a';
+        else if (tone === 'bad') msgEl.style.color = '#ff6b7f';
+        else msgEl.style.color = '#c9d7ff';
+      }
+
+      function syncHUD() {
+        scoreEl.textContent = score;
+        levelEl.textContent = level;
+        livesEl.textContent = lives;
+        choiceEls.forEach((el, i) => el.classList.toggle('active', i === selected));
+      }
+
+      function noiseBit(bit, p) {
+        return Math.random() < p ? 1 - bit : bit;
+      }
+
+      function makeSequence(levelN, type) {
+        const patLen = 4 + Math.min(8, Math.floor((levelN - 1) / 2));
+        const repeat = 6;
+        const pattern = Array.from({ length: patLen }, () => (Math.random() > 0.5 ? 1 : 0));
+        const seq = [];
+        const baseNoise = Math.max(0.02, 0.22 - levelN * 0.012);
+        const fakeNoise = Math.min(0.5, 0.40 + levelN * 0.01);
+        for (let i = 0; i < patLen * repeat; i++) {
+          const clean = pattern[i % patLen];
+          if (type === 'real') seq.push(noiseBit(clean, baseNoise));
+          else if (type === 'decoy') seq.push(noiseBit(clean, fakeNoise));
+          else seq.push(Math.random() > 0.5 ? 1 : 0);
+        }
+        return seq;
+      }
+
+      function buildRound() {
+        answer = Math.floor(Math.random() * 3);
+        const decoy = (answer + 1 + Math.floor(Math.random() * 2)) % 3;
+        channels = [0, 1, 2].map(i => {
+          if (i === answer) return makeSequence(level, 'real');
+          if (i === decoy) return makeSequence(level, 'decoy');
+          return makeSequence(level, 'random');
+        });
+        active = true;
+        setMessage('노이즈 패턴을 읽고 진짜 신호를 선택하세요.', '');
+      }
+
+      function endGame() {
+        active = false;
+        if (score > best) {
+          best = score;
+          localStorage.setItem(BEST_KEY, String(best));
+          bestEl.textContent = best;
+        }
+        setMessage('게임 종료. START로 재도전!', 'bad');
+      }
+
+      function choose(idx) {
+        if (!active) return;
+        active = false;
+        selected = idx;
+        syncHUD();
+        if (idx === answer) {
+          score += 80 + level * 25;
+          level++;
+          audio(580, 0.07, 'triangle', 0.04);
+          setTimeout(() => audio(860, 0.08, 'sine', 0.03), 55);
+          setMessage('정답! 다음 레벨로 이동합니다.', 'ok');
+        } else {
+          lives--;
+          audio(170, 0.14, 'sawtooth', 0.05);
+          setMessage(`오답! 정답은 채널 ${String.fromCharCode(65 + answer)}.`, 'bad');
+        }
+        syncHUD();
+
+        if (lives <= 0) {
+          setTimeout(endGame, 450);
+        } else {
+          setTimeout(buildRound, 700);
+        }
+      }
+
+      function resetGame() {
+        score = 0;
+        level = 1;
+        lives = 3;
+        selected = 0;
+        channels = [[], [], []];
+        active = false;
+        syncHUD();
+        setMessage('RESET 완료. START를 누르세요.', '');
+      }
+
+      function draw() {
+        frame++;
+        const w = scope.width;
+        const h = scope.height;
+        ctx.fillStyle = '#070a19';
+        ctx.fillRect(0, 0, w, h);
+
+        for (let i = 0; i < 42; i++) {
+          ctx.strokeStyle = `rgba(52,243,255,${0.03 + Math.random() * 0.03})`;
+          const y = (i / 42) * h;
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(w, y + (Math.random() - 0.5) * 2);
+          ctx.stroke();
+        }
+
+        const rowH = h / 3;
+        channels.forEach((seq, row) => {
+          const y0 = row * rowH;
+          const cy = y0 + rowH / 2;
+          ctx.fillStyle = 'rgba(16,26,58,0.75)';
+          ctx.fillRect(6, y0 + 6, w - 12, rowH - 12);
+          ctx.strokeStyle = row === selected ? 'rgba(255,79,216,0.7)' : 'rgba(29,37,80,0.8)';
+          ctx.strokeRect(6, y0 + 6, w - 12, rowH - 12);
+
+          const label = `CH ${String.fromCharCode(65 + row)}`;
+          ctx.fillStyle = '#c7d7ff';
+          ctx.font = 'bold 15px system-ui';
+          ctx.fillText(label, 16, y0 + 24);
+
+          const usableW = w - 100;
+          const x0 = 84;
+          const step = usableW / Math.max(1, seq.length - 1);
+          ctx.beginPath();
+          seq.forEach((bit, i) => {
+            const flicker = Math.sin((frame + i * 2 + row * 13) * 0.1) * 3;
+            const y = cy + (bit ? -22 : 22) + flicker;
+            const x = x0 + i * step;
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          });
+          ctx.strokeStyle = 'rgba(160,201,255,0.85)';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        });
+
+        const scanX = (frame * 6) % (w + 100) - 100;
+        const grad = ctx.createLinearGradient(scanX, 0, scanX + 100, 0);
+        grad.addColorStop(0, 'rgba(52,243,255,0)');
+        grad.addColorStop(0.5, 'rgba(52,243,255,0.09)');
+        grad.addColorStop(1, 'rgba(52,243,255,0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, w, h);
+
+        requestAnimationFrame(draw);
+      }
+
+      function startGame() {
+        if (score === 0 && level === 1 && lives === 3 && !active) {
+          buildRound();
+          syncHUD();
+          audio(440, 0.07, 'sine', 0.02);
+          return;
+        }
+        if (!active && lives > 0) buildRound();
+      }
+
+      choiceEls.forEach((el, i) => {
+        el.addEventListener('click', () => choose(i));
+        el.addEventListener('touchstart', e => {
+          e.preventDefault();
+          choose(i);
+        }, { passive: false });
+      });
+
+      document.addEventListener('keydown', e => {
+        const key = e.key;
+        if (['1', '2', '3'].includes(key)) {
+          choose(Number(key) - 1);
+          return;
+        }
+        if (key === 'ArrowLeft') {
+          selected = (selected + 2) % 3;
+          syncHUD();
+          audio(340, 0.04, 'square', 0.013);
+          e.preventDefault();
+        } else if (key === 'ArrowRight') {
+          selected = (selected + 1) % 3;
+          syncHUD();
+          audio(360, 0.04, 'square', 0.013);
+          e.preventDefault();
+        } else if (key === 'Enter' || key === ' ') {
+          choose(selected);
+          e.preventDefault();
+        } else if (key.toLowerCase() === 'r') {
+          resetGame();
+        }
+      });
+
+      startBtn.addEventListener('click', startGame);
+      resetBtn.addEventListener('click', resetGame);
+
+      syncHUD();
+      draw();
+    })();
+  </script>
+</body>
+</html>

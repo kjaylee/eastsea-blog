@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover" />
+  <title>Waveform Rider</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <style>
+    :root{--bg:#0a0a1a;--panel:#101328;--cyan:#28e5ff;--pink:#ff4fd8;--lime:#8dffb3;--txt:#ecf8ff}
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    body{margin:0;background:radial-gradient(circle at 15% 0,#181a3a,var(--bg) 42%);color:var(--txt);font-family:system-ui,sans-serif;min-height:100vh;display:flex;justify-content:center;padding:12px}
+    .app{width:min(820px,100%);display:grid;gap:10px}
+    .hud{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+    .card{background:rgba(16,19,40,.92);border:1px solid #263264;border-radius:12px;padding:8px;text-align:center;box-shadow:0 0 14px #0ff2}
+    .v{font-weight:800;color:var(--cyan)}
+    .panel{background:var(--panel);border:1px solid #2a3468;border-radius:14px;padding:10px;box-shadow:0 0 18px #00f3}
+    canvas{display:block;width:100%;height:auto;aspect-ratio:16/9;background:#060711;border-radius:10px}
+    .controls{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+    button{border:none;border-radius:12px;padding:11px 8px;background:#1b2451;color:var(--txt);font-weight:700;box-shadow:0 0 10px #0ff4;touch-action:manipulation}
+    button:active{transform:translateY(1px);filter:brightness(1.12)}
+    .hint{font-size:12px;opacity:.82;text-align:center}
+    @media (max-width:680px){.hud{grid-template-columns:repeat(2,minmax(0,1fr));}.controls{grid-template-columns:repeat(3,minmax(0,1fr));}}
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="hud">
+      <div class="card">Score<div id="score" class="v">0</div></div>
+      <div class="card">Best<div id="best" class="v">0</div></div>
+      <div class="card">Amp<div id="amp" class="v">70</div></div>
+      <div class="card">Freq<div id="freq" class="v">1.6</div></div>
+      <div class="card">Speed<div id="speed" class="v">1.0x</div></div>
+    </section>
+
+    <section class="panel"><canvas id="game" width="960" height="540"></canvas></section>
+
+    <section class="controls">
+      <button data-act="ampUp">Amp +</button>
+      <button data-act="ampDown">Amp -</button>
+      <button data-act="freqUp">Freq +</button>
+      <button data-act="freqDown">Freq -</button>
+      <button data-act="restart">Restart</button>
+    </section>
+    <p class="hint">키보드: ↑↓ 진폭 · ←→ 주파수 · Space 재시작</p>
+  </main>
+
+<script>
+(() => {
+  const c = document.getElementById('game');
+  const ctx = c.getContext('2d');
+  const els = {
+    score: document.getElementById('score'),
+    best: document.getElementById('best'),
+    amp: document.getElementById('amp'),
+    freq: document.getElementById('freq'),
+    speed: document.getElementById('speed')
+  };
+
+  const bestKey = 'waveformRiderBest';
+  let audio;
+  const beep = (f=440,d=0.05,t='sine',v=0.03) => {
+    try{
+      audio = audio || new (window.AudioContext||window.webkitAudioContext)();
+      const o = audio.createOscillator();
+      const g = audio.createGain();
+      o.type = t; o.frequency.value = f; g.gain.value = v;
+      o.connect(g).connect(audio.destination);
+      o.start(); o.stop(audio.currentTime + d);
+    }catch(_){ }
+  };
+
+  const state = {
+    t: 0,
+    amp: 70,
+    freq: 1.6,
+    speed: 3.3,
+    obstacles: [],
+    spawnTick: 0,
+    score: 0,
+    best: Number(localStorage.getItem(bestKey) || 0),
+    alive: true
+  };
+
+  const W = () => c.width;
+  const H = () => c.height;
+
+  function reset(){
+    state.t = 0;
+    state.amp = 70;
+    state.freq = 1.6;
+    state.speed = 3.3;
+    state.obstacles = [];
+    state.spawnTick = 0;
+    state.score = 0;
+    state.alive = true;
+    beep(540,.06,'triangle',.03);
+  }
+
+  function playerPos(){
+    const x = W() * 0.14;
+    const yMid = H() * 0.52;
+    const y = yMid + Math.sin(state.t * 0.03 * state.freq) * state.amp;
+    return {x, y};
+  }
+
+  function spawnObstacle(){
+    const r = 14 + Math.random() * 16;
+    const y = 60 + Math.random() * (H() - 120);
+    state.obstacles.push({x: W() + 30, y, r, passed: false});
+  }
+
+  function step(){
+    if(state.alive){
+      state.t += state.speed;
+      state.spawnTick += 1;
+      const pacing = Math.max(40, 95 - Math.floor(state.score / 130));
+      if(state.spawnTick >= pacing){
+        state.spawnTick = 0;
+        spawnObstacle();
+      }
+
+      const p = playerPos();
+      const velocity = 2.2 + Math.min(7.5, state.score / 260);
+      state.speed = 3.3 + Math.min(3.8, state.score / 380);
+
+      for(const o of state.obstacles){
+        o.x -= velocity;
+        const dist = Math.hypot(o.x - p.x, o.y - p.y);
+        if(dist < o.r + 10){
+          state.alive = false;
+          beep(130,.2,'sawtooth',.06);
+          state.best = Math.max(state.best, Math.floor(state.score));
+          localStorage.setItem(bestKey, String(state.best));
+        }
+        if(!o.passed && o.x < p.x){
+          o.passed = true;
+          state.score += 10;
+          beep(760,.03,'sine',.018);
+        }
+      }
+
+      state.score += 0.18 + state.speed * 0.05;
+      state.obstacles = state.obstacles.filter(o => o.x > -50);
+    }
+
+    render();
+    requestAnimationFrame(step);
+  }
+
+  function render(){
+    const g = ctx.createLinearGradient(0,0,0,H());
+    g.addColorStop(0,'#060a1f');
+    g.addColorStop(1,'#070612');
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,W(),H());
+
+    const mid = H()*0.52;
+    ctx.strokeStyle = '#182860';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0,mid);
+    ctx.lineTo(W(),mid);
+    ctx.stroke();
+
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#27e5ff';
+    ctx.shadowBlur = 16;
+    ctx.shadowColor = '#27e5ff';
+    ctx.beginPath();
+    for(let x=0;x<=W();x+=4){
+      const y = mid + Math.sin((state.t + x)*0.03*state.freq) * state.amp;
+      if(x===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    const p = playerPos();
+    ctx.beginPath();
+    ctx.fillStyle = '#ff4fd8';
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = '#ff4fd8';
+    ctx.arc(p.x,p.y,10,0,Math.PI*2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    for(const o of state.obstacles){
+      ctx.beginPath();
+      ctx.arc(o.x,o.y,o.r,0,Math.PI*2);
+      ctx.fillStyle = '#8dffb3';
+      ctx.shadowBlur = 14;
+      ctx.shadowColor = '#8dffb3';
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+
+    if(!state.alive){
+      ctx.fillStyle = 'rgba(5,8,20,.72)';
+      ctx.fillRect(0,0,W(),H());
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'center';
+      ctx.font = '700 44px system-ui';
+      ctx.fillText('CRASH', W()/2, H()/2 - 18);
+      ctx.font = '600 22px system-ui';
+      ctx.fillStyle = '#27e5ff';
+      ctx.fillText('Space / Restart to ride again', W()/2, H()/2 + 24);
+    }
+
+    els.score.textContent = Math.floor(state.score);
+    els.best.textContent = String(state.best);
+    els.amp.textContent = String(state.amp);
+    els.freq.textContent = state.freq.toFixed(2);
+    els.speed.textContent = `${state.speed.toFixed(1)}x`;
+  }
+
+  function clamp(){
+    state.amp = Math.max(25, Math.min(180, state.amp));
+    state.freq = Math.max(0.5, Math.min(3.5, state.freq));
+  }
+
+  function adjust(type, delta){
+    if(!state.alive && type !== 'restart') return;
+    if(type === 'amp'){ state.amp += delta; beep(420 + state.amp,.03,'triangle',.018); }
+    if(type === 'freq'){ state.freq += delta; beep(350 + state.freq*120,.03,'triangle',.018); }
+    clamp();
+  }
+
+  function act(action){
+    if(action === 'ampUp') adjust('amp', 6);
+    else if(action === 'ampDown') adjust('amp', -6);
+    else if(action === 'freqUp') adjust('freq', 0.08);
+    else if(action === 'freqDown') adjust('freq', -0.08);
+    else if(action === 'restart') reset();
+  }
+
+  document.querySelectorAll('button[data-act]').forEach(btn => {
+    const a = btn.dataset.act;
+    btn.addEventListener('click', () => act(a));
+    btn.addEventListener('pointerdown', () => beep(260,.02,'sine',.01));
+    btn.addEventListener('touchstart', () => {}, {passive:true});
+  });
+
+  document.addEventListener('keydown', (e) => {
+    const k = e.key;
+    if(k === 'ArrowUp'){ e.preventDefault(); act('ampUp'); }
+    else if(k === 'ArrowDown'){ e.preventDefault(); act('ampDown'); }
+    else if(k === 'ArrowRight'){ e.preventDefault(); act('freqUp'); }
+    else if(k === 'ArrowLeft'){ e.preventDefault(); act('freqDown'); }
+    else if(k === ' '){ e.preventDefault(); reset(); }
+  }, {passive:false});
+
+  reset();
+  step();
+})();
+</script>
+</body>
+</html>

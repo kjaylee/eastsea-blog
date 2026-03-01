@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover" />
+  <title>Tempo Tiles</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <style>
+    :root{--bg:#0a0a1a;--panel:#111733;--ink:#edf7ff;--cyan:#45e9ff;--pink:#ff4bc6;--lime:#90ff9f;--amber:#ffd166}
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
+    body{margin:0;min-height:100vh;background:radial-gradient(circle at 22% 0,#1c1f4d,var(--bg) 45%);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;display:flex;justify-content:center;padding:12px}
+    .app{width:min(920px,100%);display:grid;gap:10px}
+    .hud{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+    .card{background:rgba(17,23,51,.92);border:1px solid #2e4286;border-radius:12px;padding:8px;text-align:center;box-shadow:0 0 14px #00eeff33}
+    .v{font-weight:800;color:var(--cyan)}
+    .panel{background:var(--panel);border:1px solid #2d4388;border-radius:14px;padding:10px;box-shadow:0 0 18px #00a7ff33}
+    canvas{display:block;width:100%;height:auto;aspect-ratio:3/2;background:#040616;border-radius:10px;touch-action:none}
+    .controls{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+    button{border:1px solid #3551a8;border-radius:12px;background:linear-gradient(180deg,#1f2d67,#17224f);color:#eaf6ff;padding:10px 8px;font-weight:800;box-shadow:0 0 12px #2ce9ff55;touch-action:manipulation}
+    button:active,.hot{transform:translateY(1px);filter:brightness(1.2)}
+    .hint{margin:0;text-align:center;font-size:12px;opacity:.86}
+    @media (max-width:760px){
+      .hud{grid-template-columns:repeat(3,minmax(0,1fr))}
+      .controls{grid-template-columns:repeat(3,minmax(0,1fr))}
+    }
+  </style>
+</head>
+<body>
+<main class="app">
+  <section class="hud">
+    <div class="card">Score<div id="score" class="v">0</div></div>
+    <div class="card">Combo<div id="combo" class="v">0</div></div>
+    <div class="card">Acc<div id="acc" class="v">100%</div></div>
+    <div class="card">BPM<div id="bpm" class="v">96</div></div>
+    <div class="card">HP<div id="hp" class="v">100</div></div>
+    <div class="card">Best<div id="best" class="v">0</div></div>
+  </section>
+
+  <section class="panel">
+    <canvas id="game" width="900" height="600" aria-label="Tempo Tiles game canvas"></canvas>
+  </section>
+
+  <section class="controls">
+    <button id="startBtn">▶ Start / Restart</button>
+    <button data-lane="0">D</button>
+    <button data-lane="1">F</button>
+    <button data-lane="2">J</button>
+    <button data-lane="3">K</button>
+  </section>
+  <p class="hint">무한 모드 · 키보드 D F J K 또는 터치 레인 · BPM이 점점 빨라집니다</p>
+</main>
+
+<script>
+(() => {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const startBtn = document.getElementById('startBtn');
+  const laneButtons = [...document.querySelectorAll('button[data-lane]')];
+
+  const ui = {
+    score: document.getElementById('score'),
+    combo: document.getElementById('combo'),
+    acc: document.getElementById('acc'),
+    bpm: document.getElementById('bpm'),
+    hp: document.getElementById('hp'),
+    best: document.getElementById('best')
+  };
+
+  const bestScoreKey = 'tempoTilesBestScore';
+  const bestComboKey = 'tempoTilesBestCombo';
+
+  const lanes = 4;
+  const laneW = canvas.width / lanes;
+  const topY = 52;
+  const hitY = 500;
+  const approach = 1.65;
+
+  const state = {
+    running: false,
+    over: false,
+    time: 0,
+    bpm: 96,
+    beatCount: 0,
+    nextBeat: 0.8,
+    notes: [],
+    beatQueue: [],
+    score: 0,
+    combo: 0,
+    maxCombo: 0,
+    perfect: 0,
+    good: 0,
+    miss: 0,
+    hp: 100,
+    bestScore: Number(localStorage.getItem(bestScoreKey) || 0),
+    bestCombo: Number(localStorage.getItem(bestComboKey) || 0),
+    lastMs: 0,
+    flash: {text:'',color:'#45e9ff',ttl:0},
+    rng: 1
+  };
+
+  let ac;
+  const clamp = (n,min,max) => Math.max(min, Math.min(max,n));
+
+  function beep(freq=440,dur=0.05,type='sine',vol=0.03){
+    try{
+      ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+      const o = ac.createOscillator();
+      const g = ac.createGain();
+      o.type = type;
+      o.frequency.value = freq;
+      g.gain.value = vol;
+      o.connect(g).connect(ac.destination);
+      o.start();
+      o.stop(ac.currentTime + dur);
+    }catch(_){ }
+  }
+
+  function rand(){
+    state.rng = (1664525 * state.rng + 1013904223) >>> 0;
+    return state.rng / 4294967296;
+  }
+
+  function resetRun(){
+    state.running = true;
+    state.over = false;
+    state.time = 0;
+    state.bpm = 96;
+    state.beatCount = 0;
+    state.nextBeat = 0.8;
+    state.notes = [];
+    state.beatQueue = [];
+    state.score = 0;
+    state.combo = 0;
+    state.maxCombo = 0;
+    state.perfect = 0;
+    state.good = 0;
+    state.miss = 0;
+    state.hp = 100;
+    state.flash = {text:'GO!', color:'#8dff9f', ttl:0.7};
+    state.rng = (Date.now() & 0xffffffff) ^ 0x92ab3411;
+    beep(540,0.06,'triangle',0.04);
+  }
+
+  function gameOver(){
+    state.running = false;
+    state.over = true;
+    state.bestScore = Math.max(state.bestScore, Math.floor(state.score));
+    state.bestCombo = Math.max(state.bestCombo, state.maxCombo);
+    localStorage.setItem(bestScoreKey, String(state.bestScore));
+    localStorage.setItem(bestComboKey, String(state.bestCombo));
+    state.flash = {text:'GAME OVER', color:'#ff5f83', ttl:2.2};
+    beep(190,0.2,'sawtooth',0.045);
+  }
+
+  function scheduleNotes(){
+    while(state.nextBeat - state.time < 2.3){
+      let lane = Math.floor(rand() * lanes);
+      const prev = state.notes.length ? state.notes[state.notes.length-1] : null;
+      if(prev && prev.lane === lane && rand() > 0.55) lane = (lane + 1 + Math.floor(rand()*3)) % lanes;
+      state.notes.push({lane, hitTime: state.nextBeat, judged:false, result:''});
+      state.beatQueue.push(state.nextBeat);
+      state.beatCount += 1;
+
+      if(state.beatCount % 16 === 0){
+        state.bpm = clamp(state.bpm + 4, 96, 240);
+      }
+      state.nextBeat += 60 / state.bpm;
+    }
+  }
+
+  function judge(lane){
+    if(!state.running) return;
+    let best = null;
+    for(const n of state.notes){
+      if(n.judged || n.lane !== lane) continue;
+      const delta = n.hitTime - state.time;
+      const ad = Math.abs(delta);
+      if(ad > 0.20) continue;
+      if(!best || ad < best.ad) best = {note:n, ad, delta};
+    }
+
+    if(!best){
+      miss(false);
+      return;
+    }
+
+    best.note.judged = true;
+    const ad = best.ad;
+    if(ad <= 0.06){
+      state.perfect += 1;
+      state.combo += 1;
+      state.maxCombo = Math.max(state.maxCombo, state.combo);
+      const mul = 1 + Math.min(3, Math.floor(state.combo / 12) * 0.3);
+      state.score += 110 * mul;
+      state.hp = clamp(state.hp + 1.4, 0, 100);
+      state.flash = {text:'PERFECT', color:'#8dff9f', ttl:0.28};
+      beep(780,0.05,'triangle',0.03);
+    } else if(ad <= 0.12){
+      state.good += 1;
+      state.combo += 1;
+      state.maxCombo = Math.max(state.maxCombo, state.combo);
+      const mul = 1 + Math.min(2.2, Math.floor(state.combo / 15) * 0.25);
+      state.score += 68 * mul;
+      state.hp = clamp(state.hp + 0.4, 0, 100);
+      state.flash = {text:'GOOD', color:'#45e9ff', ttl:0.24};
+      beep(620,0.04,'sine',0.028);
+    } else {
+      miss(true);
+    }
+  }
+
+  function miss(fromLate){
+    state.miss += 1;
+    state.combo = 0;
+    state.hp -= fromLate ? 8 : 10;
+    state.flash = {text:'MISS', color:'#ff6c93', ttl:0.2};
+    beep(220,0.07,'square',0.03);
+    if(state.hp <= 0) gameOver();
+  }
+
+  function update(dt){
+    if(state.running){
+      state.time += dt;
+      scheduleNotes();
+
+      while(state.beatQueue.length && state.beatQueue[0] <= state.time){
+        state.beatQueue.shift();
+        beep(300 + state.bpm*0.7, 0.012, 'square', 0.012);
+      }
+
+      for(const n of state.notes){
+        if(n.judged) continue;
+        if(state.time - n.hitTime > 0.14){
+          n.judged = true;
+          miss(true);
+          if(state.over) break;
+        }
+      }
+
+      if(state.hp <= 0 && !state.over) gameOver();
+    }
+
+    if(state.flash.ttl > 0) state.flash.ttl -= dt;
+
+    const total = state.perfect + state.good + state.miss;
+    const acc = total ? ((state.perfect + state.good*0.65) / total) * 100 : 100;
+    ui.score.textContent = String(Math.floor(state.score));
+    ui.combo.textContent = `${state.combo}`;
+    ui.acc.textContent = `${acc.toFixed(1)}%`;
+    ui.bpm.textContent = String(Math.round(state.bpm));
+    ui.hp.textContent = String(Math.max(0, Math.round(state.hp)));
+    ui.best.textContent = `${state.bestScore}`;
+  }
+
+  function drawRoundRect(x,y,w,h,r,color,stroke){
+    ctx.beginPath();
+    ctx.moveTo(x+r,y);
+    ctx.lineTo(x+w-r,y);
+    ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+    ctx.lineTo(x+w,y+h-r);
+    ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+    ctx.lineTo(x+r,y+h);
+    ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+    ctx.lineTo(x,y+r);
+    ctx.quadraticCurveTo(x,y,x+r,y);
+    if(color){ ctx.fillStyle = color; ctx.fill(); }
+    if(stroke){ ctx.strokeStyle = stroke; ctx.stroke(); }
+  }
+
+  function render(){
+    ctx.fillStyle = '#040616';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    for(let i=0;i<lanes;i++){
+      const x = i*laneW;
+      const laneCol = i%2 ? '#0f1531' : '#111a3b';
+      drawRoundRect(x+8, topY, laneW-16, 470, 14, laneCol, '#2b3f85');
+      ctx.fillStyle = '#9bb8ff';
+      ctx.font = '700 18px system-ui';
+      ctx.textAlign = 'center';
+      ctx.fillText(['D','F','J','K'][i], x + laneW/2, 548);
+    }
+
+    ctx.strokeStyle = '#45e9ff';
+    ctx.lineWidth = 3;
+    ctx.shadowBlur = 14;
+    ctx.shadowColor = '#45e9ff';
+    ctx.beginPath();
+    ctx.moveTo(12, hitY);
+    ctx.lineTo(canvas.width-12, hitY);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    const visibleNotes = state.notes;
+    for(const n of visibleNotes){
+      if(n.judged) continue;
+      const dt = n.hitTime - state.time;
+      const y = hitY - (dt / approach) * (hitY - (topY + 25));
+      if(y < topY-24 || y > hitY+30) continue;
+      const x = n.lane * laneW + 18;
+      const w = laneW - 36;
+      const h = 24;
+      drawRoundRect(x, y-h/2, w, h, 9, '#ff4bc6', '#ffd8f2');
+      ctx.shadowBlur = 14;
+      ctx.shadowColor = '#ff4bc6';
+      ctx.strokeStyle = '#ff9ae3';
+      ctx.strokeRect(x+4,y-h/2+4,w-8,h-8);
+      ctx.shadowBlur = 0;
+    }
+
+    const hpW = 220;
+    const hpX = 20;
+    const hpY = 16;
+    drawRoundRect(hpX,hpY,hpW,18,8,'#1c2550','#3e58a8');
+    drawRoundRect(hpX,hpY,hpW*(state.hp/100),18,8,'#8dff9f',null);
+
+    ctx.fillStyle = '#dff4ff';
+    ctx.font = '700 14px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Infinite Mode', 258, 30);
+
+    if(state.flash.ttl > 0){
+      ctx.fillStyle = state.flash.color;
+      ctx.font = '800 34px system-ui';
+      ctx.textAlign = 'center';
+      ctx.shadowBlur = 16;
+      ctx.shadowColor = state.flash.color;
+      ctx.fillText(state.flash.text, canvas.width/2, 38);
+      ctx.shadowBlur = 0;
+    }
+
+    if(!state.running && !state.over){
+      ctx.fillStyle = '#e6f6ff';
+      ctx.font = '700 28px system-ui';
+      ctx.textAlign = 'center';
+      ctx.fillText('Press Start to begin', canvas.width/2, canvas.height/2);
+    }
+
+    if(state.over){
+      ctx.fillStyle = 'rgba(5,8,22,.75)';
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.fillStyle = '#ff7398';
+      ctx.font = '800 44px system-ui';
+      ctx.textAlign = 'center';
+      ctx.fillText('GAME OVER', canvas.width/2, canvas.height/2 - 10);
+      ctx.fillStyle = '#eaf6ff';
+      ctx.font = '700 20px system-ui';
+      ctx.fillText(`Score ${Math.floor(state.score)} · Max Combo ${state.maxCombo}`, canvas.width/2, canvas.height/2 + 26);
+      ctx.fillText('Tap Start to retry', canvas.width/2, canvas.height/2 + 56);
+    }
+  }
+
+  function handleLaneInput(lane){
+    lane = Number(lane);
+    if(Number.isNaN(lane) || lane < 0 || lane >= lanes) return;
+    if(!state.running){
+      if(state.over) return;
+      resetRun();
+    }
+    laneButtons[lane].classList.add('hot');
+    setTimeout(() => laneButtons[lane].classList.remove('hot'), 80);
+    judge(lane);
+  }
+
+  startBtn.addEventListener('click', () => resetRun());
+  startBtn.addEventListener('pointerdown', () => beep(320,0.02,'sine',0.012));
+
+  laneButtons.forEach(btn => {
+    btn.addEventListener('click', () => handleLaneInput(btn.dataset.lane));
+    btn.addEventListener('pointerdown', () => handleLaneInput(btn.dataset.lane));
+    btn.addEventListener('touchstart', () => {}, {passive:true});
+  });
+
+  canvas.addEventListener('pointerdown', (e) => {
+    const r = canvas.getBoundingClientRect();
+    const x = (e.clientX - r.left) * canvas.width / r.width;
+    const lane = clamp(Math.floor(x / laneW), 0, lanes-1);
+    handleLaneInput(lane);
+  });
+
+  document.addEventListener('keydown', (e) => {
+    const k = e.key.toLowerCase();
+    if(k === 'd'){ e.preventDefault(); handleLaneInput(0); }
+    else if(k === 'f'){ e.preventDefault(); handleLaneInput(1); }
+    else if(k === 'j'){ e.preventDefault(); handleLaneInput(2); }
+    else if(k === 'k'){ e.preventDefault(); handleLaneInput(3); }
+    else if(k === 'r'){ e.preventDefault(); resetRun(); }
+  }, {passive:false});
+
+  function loop(ts){
+    const dt = Math.min(0.033, (ts - (state.lastMs || ts)) / 1000);
+    state.lastMs = ts;
+    update(dt);
+    render();
+    requestAnimationFrame(loop);
+  }
+
+  ui.best.textContent = String(state.bestScore);
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

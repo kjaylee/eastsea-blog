@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Chain Reaction — 연쇄 폭발 전략</title>
   <meta name="theme-color" content="#0a0a1a" />
+  <link rel="manifest" href="/games/manifest.json" />
   <style>
     :root {
       --bg: #0a0a1a;
@@ -329,7 +330,7 @@
     </section>
 
     <section class="panel help">
-      한 번의 탭으로 연쇄 폭발을 설계하세요. 전기 구체는 십자 번개를 뿜고, 방패 구체는 두 번 맞아야 터집니다. 목표 제거 수를 넘기면 다음 레벨이 열립니다.
+      한 번의 탭으로 연쇄 폭발을 설계하세요. 전기 구체는 십자 번개를 뿜고, 방패 구체는 두 번 맞아야 터집니다. 목표 제거 수를 넘기면 다음 레벨이 열립니다. 키보드(방향키/WASD + Space/Enter)도 지원합니다.
     </section>
   </main>
 
@@ -414,7 +415,8 @@
         effectId: 1,
         pointerHint: 0,
         lastTime: performance.now(),
-        stars: []
+        stars: [],
+        cursor: { x: 0, y: 0, active: false }
       };
 
       const world = {
@@ -778,8 +780,12 @@
         world.lightnings = [];
         world.particles = [];
 
+        game.cursor.x = game.width * 0.5;
+        game.cursor.y = game.height * 0.5;
+        game.cursor.active = false;
+
         hideResult();
-        setStatus("한 지점을 탭해 첫 폭발을 만들어 주세요.");
+        setStatus("탭/클릭 또는 키보드 조준 후 Space/Enter로 첫 폭발을 시작하세요.");
         updateHud();
         updateButtons();
       }
@@ -807,7 +813,41 @@
         const rect = canvas.getBoundingClientRect();
         const x = ((ev.clientX - rect.left) / rect.width) * game.width;
         const y = ((ev.clientY - rect.top) / rect.height) * game.height;
+        game.cursor.x = x;
+        game.cursor.y = y;
+        game.cursor.active = false;
         triggerTapExplosion(x, y);
+      }
+
+      function onKeyDown(ev) {
+        if (game.phase !== "aim") return;
+
+        const key = ev.key;
+        const isAction = key === " " || key === "Enter";
+        const isMove = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "w", "a", "s", "d", "W", "A", "S", "D"].includes(key);
+        if (!isAction && !isMove) return;
+
+        ev.preventDefault();
+        safeResumeAudio();
+
+        const step = Math.max(18, Math.floor(Math.min(game.width, game.height) * 0.055));
+
+        if (isMove) {
+          if (key === "ArrowUp" || key === "w" || key === "W") game.cursor.y -= step;
+          if (key === "ArrowDown" || key === "s" || key === "S") game.cursor.y += step;
+          if (key === "ArrowLeft" || key === "a" || key === "A") game.cursor.x -= step;
+          if (key === "ArrowRight" || key === "d" || key === "D") game.cursor.x += step;
+
+          game.cursor.x = Math.max(18, Math.min(game.width - 18, game.cursor.x));
+          game.cursor.y = Math.max(18, Math.min(game.height - 18, game.cursor.y));
+          game.cursor.active = true;
+          setStatus("키보드 조준 중 · Space/Enter로 폭발 시작");
+          return;
+        }
+
+        const tx = game.cursor.active ? game.cursor.x : game.width * 0.5;
+        const ty = game.cursor.active ? game.cursor.y : game.height * 0.5;
+        triggerTapExplosion(tx, ty);
       }
 
       function resizeCanvas() {
@@ -983,6 +1023,33 @@
         ctx.fillText("탭 위치가 곧 전략입니다", game.width * 0.5, game.height * 0.5 + r + 24);
       }
 
+      function drawKeyboardCursor(time) {
+        if (game.phase !== "aim" || !game.cursor.active) return;
+        const pulse = 1 + Math.sin(time * 0.01) * 0.12;
+        const r = 18 * pulse;
+
+        ctx.save();
+        ctx.strokeStyle = "rgba(255, 228, 142, 0.92)";
+        ctx.shadowColor = "rgba(255, 210, 110, 0.85)";
+        ctx.shadowBlur = 10;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(game.cursor.x, game.cursor.y, r, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(game.cursor.x - 26, game.cursor.y);
+        ctx.lineTo(game.cursor.x - 10, game.cursor.y);
+        ctx.moveTo(game.cursor.x + 10, game.cursor.y);
+        ctx.lineTo(game.cursor.x + 26, game.cursor.y);
+        ctx.moveTo(game.cursor.x, game.cursor.y - 26);
+        ctx.lineTo(game.cursor.x, game.cursor.y - 10);
+        ctx.moveTo(game.cursor.x, game.cursor.y + 10);
+        ctx.lineTo(game.cursor.x, game.cursor.y + 26);
+        ctx.stroke();
+        ctx.restore();
+      }
+
       function drawComboText() {
         if (game.comboPulse <= 0 || !game.comboText) return;
         const a = Math.min(1, game.comboPulse);
@@ -1090,6 +1157,7 @@
         drawParticles();
         for (const orb of world.orbs) if (orb.alive) drawOrb(orb, now);
         drawAimHint(now);
+        drawKeyboardCursor(now);
         drawComboText();
 
         ctx.restore();
@@ -1127,6 +1195,7 @@
       });
 
       canvas.addEventListener("pointerdown", onPointerDown, { passive: true });
+      window.addEventListener("keydown", onKeyDown, { passive: false });
       window.addEventListener("resize", resizeCanvas);
 
       resizeCanvas();

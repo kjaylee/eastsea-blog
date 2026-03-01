@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover" />
+  <title>Magnet Maze</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <style>
+    :root{--bg:#0a0a1a;--panel:#11142a;--cyan:#37e7ff;--pink:#ff4fd8;--lime:#85ff9b;--text:#eaf6ff}
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    body{margin:0;min-height:100vh;background:radial-gradient(circle at 20% 0%,#17193a,var(--bg) 40%);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;display:flex;justify-content:center;padding:12px}
+    .app{width:min(760px,100%);display:grid;gap:10px}
+    .hud{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+    .card{background:rgba(17,20,42,.9);border:1px solid #25315f;border-radius:12px;padding:8px;text-align:center;box-shadow:0 0 14px #0ff2}
+    .v{font-weight:700;color:var(--cyan)}
+    .boardWrap{background:var(--panel);border:1px solid #2b3469;border-radius:16px;padding:10px;box-shadow:0 0 20px #00f3}
+    canvas{width:100%;height:auto;aspect-ratio:1/1;border-radius:10px;background:#05050f;display:block}
+    .controls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+    button{appearance:none;border:none;border-radius:12px;padding:12px 8px;background:#1b2550;color:var(--text);font-weight:700;box-shadow:0 0 10px #0ff4;touch-action:manipulation}
+    button:active{transform:translateY(1px);filter:brightness(1.15)}
+    .hint{font-size:12px;opacity:.82;text-align:center}
+    @media (max-width:560px){.hud{grid-template-columns:repeat(2,minmax(0,1fr));}}
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="hud">
+      <div class="card">Level<div id="level" class="v">1/6</div></div>
+      <div class="card">Score<div id="score" class="v">0</div></div>
+      <div class="card">Best Level<div id="best" class="v">1</div></div>
+      <div class="card">Polarity<div id="pol" class="v">N</div></div>
+    </section>
+
+    <section class="boardWrap">
+      <canvas id="game" width="560" height="560"></canvas>
+    </section>
+
+    <section class="controls">
+      <button data-act="up">↑</button>
+      <button data-act="toggle">N/S</button>
+      <button data-act="restart">↺</button>
+      <button data-act="right">→</button>
+      <button data-act="left">←</button>
+      <button data-act="down">↓</button>
+      <button data-act="up">↑</button>
+      <button data-act="left">←</button>
+    </section>
+    <p class="hint">키보드: 방향키/WASD 이동 · Space 극성 토글 · R 재시작</p>
+  </main>
+
+<script>
+(() => {
+  const levels = [
+    [
+      "##########",
+      "#S..N....#",
+      "#.##.###.#",
+      "#..#...#.#",
+      "##.#.#.#.#",
+      "#..#.#...#",
+      "#.##.###.#",
+      "#....s..E#",
+      "#..X.....#",
+      "##########"
+    ],
+    [
+      "##########",
+      "#S..#..N.#",
+      "#.##.#.#.#",
+      "#....#...#",
+      "#.####.###",
+      "#..s...#E#",
+      "##.###.#.#",
+      "#....X...#",
+      "#..N.....#",
+      "##########"
+    ],
+    [
+      "##########",
+      "#S...#...#",
+      "###N.#.#.#",
+      "#...##.#.#",
+      "#.X....#.#",
+      "#.####.#.#",
+      "#...s..#E#",
+      "#.###.##.#",
+      "#.....N..#",
+      "##########"
+    ],
+    [
+      "##########",
+      "#S..#....#",
+      "#.##.#.###",
+      "#N...#...#",
+      "###.###.#E",
+      "#...X...##",
+      "#.###.#..#",
+      "#...s.#..#",
+      "#..N.....#",
+      "##########"
+    ],
+    [
+      "##########",
+      "#S.#...N.#",
+      "#..#.###.#",
+      "##.#...#.#",
+      "#..###.#.#",
+      "#.X...#..#",
+      "#.###.##.#",
+      "#s....#E.#",
+      "#..N.....#",
+      "##########"
+    ],
+    [
+      "##########",
+      "#S..#..N.#",
+      "#.##.#.#.#",
+      "#....#.#.#",
+      "###X##.#.#",
+      "#..s...#.#",
+      "#.###.##.#",
+      "#...N...E#",
+      "#..#.....#",
+      "##########"
+    ]
+  ];
+
+  const c = document.getElementById('game');
+  const ctx = c.getContext('2d');
+  const levelEl = document.getElementById('level');
+  const scoreEl = document.getElementById('score');
+  const bestEl = document.getElementById('best');
+  const polEl = document.getElementById('pol');
+  const bestKey = 'magnetMazeBestLevel';
+
+  let ac;
+  const beep = (f = 440, d = 0.06, t = 'sine', g = 0.03) => {
+    try {
+      ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+      const o = ac.createOscillator();
+      const gain = ac.createGain();
+      o.type = t; o.frequency.value = f;
+      gain.gain.value = g;
+      o.connect(gain).connect(ac.destination);
+      o.start();
+      o.stop(ac.currentTime + d);
+    } catch (_) {}
+  };
+
+  const state = {
+    i: 0,
+    map: [],
+    w: 0,
+    h: 0,
+    player: {x:1,y:1,pol:'N'},
+    start: {x:1,y:1},
+    exit: {x:8,y:8},
+    magnets: [],
+    steps: 0,
+    score: 0,
+    best: Math.max(1, Number(localStorage.getItem(bestKey) || 1))
+  };
+
+  const dirs = {up:[0,-1],down:[0,1],left:[-1,0],right:[1,0]};
+
+  function loadLevel(i){
+    state.i = i;
+    state.map = levels[i].map(r => r.split(''));
+    state.h = state.map.length;
+    state.w = state.map[0].length;
+    state.magnets = [];
+    for(let y=0;y<state.h;y++){
+      for(let x=0;x<state.w;x++){
+        const ch = state.map[y][x];
+        if(ch === 'S'){ state.start = {x,y}; state.player.x = x; state.player.y = y; state.map[y][x]='.'; }
+        if(ch === 'E'){ state.exit = {x,y}; }
+        if(ch === 'N' || ch === 's'){ state.magnets.push({x,y,pol:ch==='N'?'N':'S'}); }
+      }
+    }
+    state.player.pol = 'N';
+    state.steps = 0;
+    render();
+    hud();
+  }
+
+  const passable = (x,y) => x>=0 && y>=0 && x<state.w && y<state.h && state.map[y][x] !== '#';
+
+  function applyMagnetForce(){
+    let best = null;
+    for(const m of state.magnets){
+      const dx = m.x - state.player.x;
+      const dy = m.y - state.player.y;
+      const man = Math.abs(dx)+Math.abs(dy);
+      if(man === 0 || man > 3) continue;
+      if(!best || man < best.man) best = {m, dx, dy, man};
+    }
+    if(!best) return;
+    const towardX = Math.abs(best.dx) >= Math.abs(best.dy);
+    const pull = best.m.pol !== state.player.pol;
+    let sx = 0, sy = 0;
+    if(towardX){ sx = Math.sign(best.dx); }
+    else { sy = Math.sign(best.dy); }
+    if(!pull){ sx *= -1; sy *= -1; }
+    const nx = state.player.x + sx;
+    const ny = state.player.y + sy;
+    if(passable(nx, ny)){
+      state.player.x = nx;
+      state.player.y = ny;
+      beep(pull ? 520 : 300, .04, 'triangle', .02);
+    }
+  }
+
+  function step(dir){
+    const d = dirs[dir];
+    if(!d) return;
+    const nx = state.player.x + d[0];
+    const ny = state.player.y + d[1];
+    if(!passable(nx, ny)){ beep(180, .05, 'square', .02); return; }
+    state.player.x = nx;
+    state.player.y = ny;
+    state.steps += 1;
+    beep(360, .04, 'sine', .018);
+    applyMagnetForce();
+
+    if(state.map[state.player.y][state.player.x] === 'X'){
+      state.player.x = state.start.x;
+      state.player.y = state.start.y;
+      state.steps += 2;
+      beep(120, .16, 'sawtooth', .04);
+    }
+
+    if(state.player.x === state.exit.x && state.player.y === state.exit.y){
+      const gain = Math.max(20, 120 - state.steps * 2) + (state.i+1) * 25;
+      state.score += gain;
+      state.best = Math.max(state.best, state.i + 2);
+      localStorage.setItem(bestKey, String(Math.min(levels.length, state.best)));
+      beep(880,.1,'triangle',.05);
+      setTimeout(() => beep(1175,.12,'triangle',.04), 90);
+      if(state.i < levels.length - 1) loadLevel(state.i + 1);
+      else {
+        state.score += 300;
+        alert('All levels cleared! +300 bonus');
+        loadLevel(0);
+      }
+    }
+    hud();
+    render();
+  }
+
+  function togglePol(){
+    state.player.pol = state.player.pol === 'N' ? 'S' : 'N';
+    beep(state.player.pol === 'N' ? 640 : 430, .06, 'triangle', .025);
+    hud();
+    render();
+  }
+
+  function hud(){
+    levelEl.textContent = `${state.i + 1}/${levels.length}`;
+    scoreEl.textContent = String(state.score);
+    bestEl.textContent = String(state.best);
+    polEl.textContent = state.player.pol;
+    polEl.style.color = state.player.pol === 'N' ? '#37e7ff' : '#ff4fd8';
+  }
+
+  function render(){
+    const cell = c.width / state.w;
+    ctx.clearRect(0,0,c.width,c.height);
+
+    for(let y=0;y<state.h;y++){
+      for(let x=0;x<state.w;x++){
+        const ch = state.map[y][x];
+        const px = x*cell, py = y*cell;
+        ctx.fillStyle = ch === '#' ? '#1a1f43' : '#090c1f';
+        ctx.fillRect(px,py,cell,cell);
+        ctx.strokeStyle = '#13204a';
+        ctx.strokeRect(px+.5,py+.5,cell-1,cell-1);
+        if(ch === 'X'){
+          ctx.fillStyle = '#ff3864';
+          ctx.fillRect(px+cell*.25,py+cell*.25,cell*.5,cell*.5);
+        }
+      }
+    }
+
+    for(const m of state.magnets){
+      const cx = m.x*cell + cell/2;
+      const cy = m.y*cell + cell/2;
+      ctx.beginPath();
+      ctx.arc(cx,cy,cell*.32,0,Math.PI*2);
+      ctx.fillStyle = m.pol === 'N' ? '#29d9ff' : '#ff4fd8';
+      ctx.shadowBlur = 18;
+      ctx.shadowColor = ctx.fillStyle;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#fff';
+      ctx.font = `${cell*.26}px system-ui`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(m.pol, cx, cy+1);
+    }
+
+    const ex = state.exit.x*cell + cell/2;
+    const ey = state.exit.y*cell + cell/2;
+    ctx.strokeStyle = '#85ff9b';
+    ctx.lineWidth = 4;
+    ctx.shadowBlur = 16;
+    ctx.shadowColor = '#85ff9b';
+    ctx.strokeRect(ex-cell*.28, ey-cell*.28, cell*.56, cell*.56);
+    ctx.shadowBlur = 0;
+
+    const px = state.player.x*cell + cell/2;
+    const py = state.player.y*cell + cell/2;
+    ctx.beginPath();
+    ctx.arc(px,py,cell*.3,0,Math.PI*2);
+    const pColor = state.player.pol === 'N' ? '#37e7ff' : '#ff4fd8';
+    ctx.fillStyle = pColor;
+    ctx.shadowBlur = 18;
+    ctx.shadowColor = pColor;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#fff';
+    ctx.font = `${cell*.24}px system-ui`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(state.player.pol, px, py+1);
+  }
+
+  document.addEventListener('keydown', (e) => {
+    const k = e.key.toLowerCase();
+    if(['arrowup','w'].includes(k)){ e.preventDefault(); step('up'); }
+    else if(['arrowdown','s'].includes(k)){ e.preventDefault(); step('down'); }
+    else if(['arrowleft','a'].includes(k)){ e.preventDefault(); step('left'); }
+    else if(['arrowright','d'].includes(k)){ e.preventDefault(); step('right'); }
+    else if(k === ' '){ e.preventDefault(); togglePol(); }
+    else if(k === 'r'){ loadLevel(state.i); }
+  }, {passive:false});
+
+  function handleAction(act){
+    if(act in dirs) step(act);
+    else if(act === 'toggle') togglePol();
+    else if(act === 'restart') loadLevel(state.i);
+  }
+
+  document.querySelectorAll('button[data-act]').forEach(btn => {
+    const act = btn.dataset.act;
+    btn.addEventListener('click', () => handleAction(act));
+    btn.addEventListener('pointerdown', () => beep(280,.02,'sine',.01));
+    btn.addEventListener('touchstart', () => {}, {passive:true});
+  });
+
+  loadLevel(0);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0a1a" />
+  <title>Lunar Terrace Irrigator</title>
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <style>
+    :root{
+      --bg:#0a0a1a;
+      --panel:#14142d;
+      --line:#72f7ff;
+      --line2:#ff77e9;
+      --good:#6fffba;
+      --warn:#ff7f9c;
+      --text:#ebf7ff;
+    }
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    body{margin:0;background:radial-gradient(circle at 80% -10%,#222253 0%,var(--bg) 55%);color:var(--text);font-family:"Pretendard","Noto Sans KR",system-ui,sans-serif;min-height:100vh;display:flex;justify-content:center}
+    .wrap{width:min(100vw,760px);padding:12px;display:flex;flex-direction:column;gap:10px}
+    .hud{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+    .card{background:linear-gradient(180deg,#1a1a3d,#121229);border:1px solid #2b2b62;border-radius:12px;padding:8px;text-align:center}
+    .label{font-size:11px;opacity:.78}
+    .value{font-size:17px;font-weight:800}
+    .boardWrap{background:#0e0e24;border:1px solid #2b2b62;border-radius:14px;padding:10px;position:relative}
+    canvas{display:block;width:100%;aspect-ratio:1/1;background:#090918;border-radius:10px}
+    .controls{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+    button{appearance:none;border:none;border-radius:10px;padding:12px 8px;background:linear-gradient(180deg,#2d2d72,#20204d);color:#fff;font-weight:700;cursor:pointer}
+    .aux{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .desc{font-size:13px;line-height:1.4;opacity:.88;background:#12122c;border:1px solid #2b2b62;border-radius:12px;padding:10px}
+    .overlay{position:absolute;inset:10px;border-radius:10px;background:#050512cc;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:20px}
+    .overlay.hidden{display:none}
+    @media (max-width:480px){
+      .hud{grid-template-columns:repeat(2,1fr)}
+      .value{font-size:15px}
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="hud">
+      <div class="card"><div class="label">STAGE</div><div id="stage" class="value">1</div></div>
+      <div class="card"><div class="label">SCORE</div><div id="score" class="value">0</div></div>
+      <div class="card"><div class="label">MOVES</div><div id="moves" class="value">0</div></div>
+      <div class="card"><div class="label">BEST</div><div id="best" class="value">1</div></div>
+    </section>
+
+    <section class="boardWrap">
+      <canvas id="board" width="560" height="560" aria-label="pipe puzzle board"></canvas>
+      <div id="overlay" class="overlay">
+        <h2 style="margin:0">Lunar Terrace Irrigator</h2>
+        <p style="margin:0;opacity:.86">타일을 회전해 물길을 시작점에서 목표 분화구까지 연결하세요.</p>
+        <button id="startBtn">Start Irrigation</button>
+      </div>
+    </section>
+
+    <section class="controls">
+      <button id="upBtn">↑</button>
+      <button id="rotBtn">⟳ Rotate</button>
+      <button id="rightBtn">→</button>
+      <button id="leftBtn">←</button>
+      <button id="newBtn">New Stage</button>
+      <button id="downBtn">↓</button>
+    </section>
+
+    <section class="aux">
+      <button id="restartBtn">Restart Run</button>
+      <button id="hintBtn">Flow Check</button>
+    </section>
+
+    <section class="desc">
+      키보드: <b>← ↑ ↓ →</b> 커서 이동, <b>Space / R</b> 회전, <b>N</b> 새 스테이지.
+      터치: 타일 탭 회전 또는 방향/Rotate 버튼 사용. 파이프가 연결되면 자동으로 다음 스테이지 진입합니다.
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const N = 5;
+      const canvas = document.getElementById('board');
+      const ctx = canvas.getContext('2d');
+
+      const stageEl = document.getElementById('stage');
+      const scoreEl = document.getElementById('score');
+      const movesEl = document.getElementById('moves');
+      const bestEl = document.getElementById('best');
+      const overlay = document.getElementById('overlay');
+      const startBtn = document.getElementById('startBtn');
+
+      const bestKey = 'lunarTerraceBestStage';
+      let bestStage = Number(localStorage.getItem(bestKey) || 1);
+      bestEl.textContent = bestStage;
+
+      let audioCtx;
+      function beep(freq, dur = 0.07, type = 'triangle', gain = 0.03) {
+        audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.value = freq;
+        g.gain.value = gain;
+        osc.connect(g).connect(audioCtx.destination);
+        osc.start();
+        g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
+        osc.stop(audioCtx.currentTime + dur);
+      }
+
+      const dirs = [
+        [0, -1], // N
+        [1, 0],  // E
+        [0, 1],  // S
+        [-1, 0]  // W
+      ];
+      const opposite = [2, 3, 0, 1];
+      const start = { x: 0, y: 2 };
+      const goal = { x: 4, y: 2 };
+
+      const state = {
+        running: false,
+        stage: 1,
+        score: 0,
+        moves: 0,
+        board: [],
+        cursor: { x: 2, y: 2 },
+        lit: new Set(),
+        solved: false
+      };
+
+      function connForType(type) {
+        if (type === 'straight') return [1, 0, 1, 0];
+        if (type === 'elbow') return [1, 1, 0, 0];
+        if (type === 'tee') return [1, 1, 1, 0];
+        if (type === 'cross') return [1, 1, 1, 1];
+        return [1, 0, 0, 0];
+      }
+
+      function rotateConn(base, r) {
+        const out = [0, 0, 0, 0];
+        for (let i = 0; i < 4; i++) out[(i + r) % 4] = base[i];
+        return out;
+      }
+
+      function getConn(tile) {
+        return rotateConn(tile.base, tile.rot);
+      }
+
+      function randomType() {
+        const bag = ['straight', 'elbow', 'elbow', 'tee', 'straight', 'elbow', 'cap'];
+        return bag[Math.floor(Math.random() * bag.length)];
+      }
+
+      function buildPath() {
+        const s = [start.x, start.y];
+        const g = [goal.x, goal.y];
+        const stack = [s];
+        const visited = new Set([s.join(',')]);
+        const maxSteps = 2500;
+        let steps = 0;
+
+        while (stack.length && steps < maxSteps) {
+          steps++;
+          const [x, y] = stack[stack.length - 1];
+          if (x === g[0] && y === g[1] && stack.length >= 7) return stack.map(([px, py]) => ({ x: px, y: py }));
+
+          const candidates = dirs
+            .map(([dx, dy]) => [x + dx, y + dy])
+            .filter(([nx, ny]) => nx >= 0 && ny >= 0 && nx < N && ny < N)
+            .filter(([nx, ny]) => {
+              const k = nx + ',' + ny;
+              if (visited.has(k)) return false;
+              if (nx === g[0] && ny === g[1] && stack.length < 6) return false;
+              return true;
+            })
+            .sort(() => Math.random() - 0.5)
+            .sort((a, b) => {
+              const da = Math.abs(a[0] - g[0]) + Math.abs(a[1] - g[1]);
+              const db = Math.abs(b[0] - g[0]) + Math.abs(b[1] - g[1]);
+              return da - db + (Math.random() - 0.5) * 2;
+            });
+
+          if (!candidates.length) {
+            const popped = stack.pop();
+            if (popped) visited.delete(popped.join(','));
+            continue;
+          }
+
+          const next = candidates[0];
+          stack.push(next);
+          visited.add(next.join(','));
+        }
+
+        return null;
+      }
+
+      function makeBoard() {
+        let path = null;
+        for (let i = 0; i < 20 && !path; i++) path = buildPath();
+        if (!path) {
+          path = [
+            { x: 0, y: 2 }, { x: 1, y: 2 }, { x: 1, y: 1 }, { x: 2, y: 1 },
+            { x: 3, y: 1 }, { x: 3, y: 2 }, { x: 4, y: 2 }
+          ];
+        }
+
+        const board = Array.from({ length: N }, () => Array.from({ length: N }, () => ({
+          base: connForType(randomType()),
+          rot: Math.floor(Math.random() * 4),
+          lock: false
+        })));
+
+        const pathSet = new Set(path.map(p => p.x + ',' + p.y));
+
+        for (let i = 0; i < path.length; i++) {
+          const curr = path[i];
+          const prev = path[i - 1];
+          const next = path[i + 1];
+          const conn = [0, 0, 0, 0];
+
+          for (let d = 0; d < 4; d++) {
+            const nx = curr.x + dirs[d][0];
+            const ny = curr.y + dirs[d][1];
+            if (prev && nx === prev.x && ny === prev.y) conn[d] = 1;
+            if (next && nx === next.x && ny === next.y) conn[d] = 1;
+          }
+
+          board[curr.y][curr.x] = {
+            base: conn,
+            rot: Math.floor(Math.random() * 4),
+            lock: false
+          };
+        }
+
+        board[start.y][start.x].rot = 0;
+        board[start.y][start.x].lock = true;
+        board[goal.y][goal.x].rot = 0;
+        board[goal.y][goal.x].lock = true;
+
+        for (let y = 0; y < N; y++) {
+          for (let x = 0; x < N; x++) {
+            if (pathSet.has(x + ',' + y)) continue;
+            if (Math.random() < 0.15) board[y][x] = { base: connForType('cross'), rot: 0, lock: false };
+          }
+        }
+
+        return board;
+      }
+
+      function traceFlow() {
+        const q = [[start.x, start.y]];
+        const seen = new Set([start.x + ',' + start.y]);
+
+        while (q.length) {
+          const [x, y] = q.shift();
+          const conn = getConn(state.board[y][x]);
+          for (let d = 0; d < 4; d++) {
+            if (!conn[d]) continue;
+            const nx = x + dirs[d][0];
+            const ny = y + dirs[d][1];
+            if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue;
+            const nConn = getConn(state.board[ny][nx]);
+            if (!nConn[opposite[d]]) continue;
+            const key = nx + ',' + ny;
+            if (!seen.has(key)) {
+              seen.add(key);
+              q.push([nx, ny]);
+            }
+          }
+        }
+
+        state.lit = seen;
+        return seen.has(goal.x + ',' + goal.y);
+      }
+
+      function startRun() {
+        state.running = true;
+        state.stage = 1;
+        state.score = 0;
+        state.moves = 0;
+        state.solved = false;
+        state.cursor = { x: 2, y: 2 };
+        state.board = makeBoard();
+        traceFlow();
+        overlay.classList.add('hidden');
+        syncHud();
+        beep(500, 0.08);
+        draw();
+      }
+
+      function nextStage() {
+        state.stage += 1;
+        state.moves = 0;
+        state.solved = false;
+        state.board = makeBoard();
+        state.cursor = { x: 2, y: 2 };
+        traceFlow();
+        if (state.stage > bestStage) {
+          bestStage = state.stage;
+          localStorage.setItem(bestKey, String(bestStage));
+        }
+        syncHud();
+        draw();
+      }
+
+      function rotateAt(x, y) {
+        if (!state.running || state.solved) return;
+        const tile = state.board[y][x];
+        if (tile.lock) return;
+        tile.rot = (tile.rot + 1) % 4;
+        state.moves += 1;
+        state.score += 2;
+        const solvedNow = traceFlow();
+        beep(300 + Math.random() * 120, 0.045);
+        if (solvedNow) {
+          state.solved = true;
+          const bonus = Math.max(40, 180 - state.moves * 4) + state.stage * 50;
+          state.score += bonus;
+          beep(740, 0.12, 'sine', 0.045);
+          setTimeout(() => {
+            if (!state.running) return;
+            nextStage();
+          }, 520);
+        }
+        syncHud();
+        draw();
+      }
+
+      function moveCursor(dx, dy) {
+        if (!state.running) return;
+        state.cursor.x = (state.cursor.x + dx + N) % N;
+        state.cursor.y = (state.cursor.y + dy + N) % N;
+        draw();
+      }
+
+      function syncHud() {
+        stageEl.textContent = state.stage;
+        scoreEl.textContent = state.score;
+        movesEl.textContent = state.moves;
+        bestEl.textContent = bestStage;
+      }
+
+      function drawTile(x, y, tile, size, ox, oy) {
+        const px = ox + x * size;
+        const py = oy + y * size;
+        const key = x + ',' + y;
+        const lit = state.lit.has(key);
+        const selected = state.cursor.x === x && state.cursor.y === y;
+
+        ctx.fillStyle = lit ? '#19384d' : '#12122c';
+        ctx.fillRect(px + 3, py + 3, size - 6, size - 6);
+        ctx.strokeStyle = selected ? '#ff77e9' : '#2b2b62';
+        ctx.lineWidth = selected ? 3 : 2;
+        ctx.strokeRect(px + 3, py + 3, size - 6, size - 6);
+
+        const conn = getConn(tile);
+        const cx = px + size / 2;
+        const cy = py + size / 2;
+        const len = size * 0.32;
+
+        ctx.strokeStyle = lit ? '#72f7ff' : '#5478a7';
+        ctx.lineWidth = Math.max(6, size * 0.12);
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        if (conn[0]) { ctx.moveTo(cx, cy); ctx.lineTo(cx, cy - len); }
+        if (conn[1]) { ctx.moveTo(cx, cy); ctx.lineTo(cx + len, cy); }
+        if (conn[2]) { ctx.moveTo(cx, cy); ctx.lineTo(cx, cy + len); }
+        if (conn[3]) { ctx.moveTo(cx, cy); ctx.lineTo(cx - len, cy); }
+        ctx.stroke();
+
+        ctx.fillStyle = tile.lock ? '#ffb86b' : (lit ? '#8ffff4' : '#d8e8ff');
+        ctx.beginPath();
+        ctx.arc(cx, cy, Math.max(4, size * 0.08), 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const pad = 20;
+        const size = (canvas.width - pad * 2) / N;
+        const ox = pad;
+        const oy = pad;
+
+        for (let y = 0; y < N; y++) {
+          for (let x = 0; x < N; x++) {
+            drawTile(x, y, state.board[y][x], size, ox, oy);
+          }
+        }
+
+        const sx = ox + start.x * size + size / 2;
+        const sy = oy + start.y * size + size / 2;
+        const gx = ox + goal.x * size + size / 2;
+        const gy = oy + goal.y * size + size / 2;
+
+        ctx.fillStyle = '#6fffba';
+        ctx.font = 'bold 14px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText('START', sx, sy - size * 0.42);
+
+        ctx.fillStyle = '#ff7f9c';
+        ctx.fillText('GOAL', gx, gy - size * 0.42);
+      }
+
+      function boardPosFromEvent(e) {
+        const rect = canvas.getBoundingClientRect();
+        const rx = (e.clientX - rect.left) / rect.width;
+        const ry = (e.clientY - rect.top) / rect.height;
+        const x = Math.floor(rx * N);
+        const y = Math.floor(ry * N);
+        if (x < 0 || y < 0 || x >= N || y >= N) return null;
+        return { x, y };
+      }
+
+      canvas.addEventListener('pointerdown', (e) => {
+        if (!state.running) return;
+        const p = boardPosFromEvent(e);
+        if (!p) return;
+        state.cursor = p;
+        rotateAt(p.x, p.y);
+      });
+
+      document.addEventListener('keydown', (e) => {
+        if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' ','r','R','n','N','Enter'].includes(e.key)) e.preventDefault();
+        if (!state.running && e.key === 'Enter') return startRun();
+        if (e.key === 'ArrowLeft') moveCursor(-1, 0);
+        if (e.key === 'ArrowRight') moveCursor(1, 0);
+        if (e.key === 'ArrowUp') moveCursor(0, -1);
+        if (e.key === 'ArrowDown') moveCursor(0, 1);
+        if (e.key === ' ' || e.key === 'r' || e.key === 'R') rotateAt(state.cursor.x, state.cursor.y);
+        if (e.key === 'n' || e.key === 'N') { state.board = makeBoard(); state.moves = 0; traceFlow(); draw(); syncHud(); }
+      });
+
+      function bind(id, fn) {
+        document.getElementById(id).addEventListener('click', fn);
+      }
+      bind('leftBtn', () => moveCursor(-1, 0));
+      bind('rightBtn', () => moveCursor(1, 0));
+      bind('upBtn', () => moveCursor(0, -1));
+      bind('downBtn', () => moveCursor(0, 1));
+      bind('rotBtn', () => rotateAt(state.cursor.x, state.cursor.y));
+      bind('newBtn', () => { if (state.running) { state.board = makeBoard(); state.moves = 0; traceFlow(); syncHud(); draw(); } });
+      bind('hintBtn', () => { if (state.running) { traceFlow(); beep(420, 0.04); draw(); } });
+      bind('restartBtn', startRun);
+      startBtn.addEventListener('click', startRun);
+
+      state.board = makeBoard();
+      traceFlow();
+      syncHud();
+      draw();
+    })();
+  </script>
+</body>
+</html>

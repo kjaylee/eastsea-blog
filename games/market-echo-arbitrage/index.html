@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0a1a" />
+  <title>Market Echo Arbitrage</title>
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <style>
+    :root{
+      --bg:#0a0a1a;
+      --panel:#14142c;
+      --line:#73f4ff;
+      --line2:#ff72ea;
+      --good:#6dffbb;
+      --bad:#ff7895;
+      --text:#ecf8ff;
+    }
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    body{margin:0;min-height:100vh;background:radial-gradient(circle at 10% -20%,#212152 0%,#0a0a1a 58%);font-family:"Pretendard","Noto Sans KR",system-ui,sans-serif;color:var(--text);display:flex;justify-content:center}
+    .wrap{width:min(100vw,860px);padding:12px;display:flex;flex-direction:column;gap:10px}
+    .hud{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+    .card{background:linear-gradient(180deg,#1a1a3f,#121228);border:1px solid #2a2a60;border-radius:12px;padding:8px;text-align:center}
+    .label{font-size:11px;opacity:.78}
+    .value{font-size:16px;font-weight:800}
+    .board{position:relative;background:#0f0f24;border:1px solid #2a2a60;border-radius:14px;padding:10px;display:grid;gap:8px}
+    .markets{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+    .market{background:#13132b;border:1px solid #2b2b5f;border-radius:12px;padding:10px;min-height:116px}
+    .market.sel{border-color:#ff72ea;box-shadow:0 0 0 1px #ff72ea66 inset}
+    .m-title{font-weight:800;margin-bottom:6px;font-size:14px}
+    .price{font-size:24px;font-weight:900;color:#7af5ff}
+    .delta.up{color:var(--good)}
+    .delta.down{color:var(--bad)}
+    .spark{height:32px;margin-top:8px;display:flex;align-items:flex-end;gap:3px}
+    .spark i{display:block;flex:1;background:#33467b;border-radius:2px}
+    .actions{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+    button{appearance:none;border:none;border-radius:10px;padding:12px 8px;background:linear-gradient(180deg,#2d2d72,#21214f);color:#fff;font-weight:800;cursor:pointer}
+    .marketBtns{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+    .log{background:#101027;border:1px solid #2b2b5f;border-radius:10px;padding:8px;font-size:12px;min-height:52px;line-height:1.45;color:#d6ebff}
+    .overlay{position:absolute;inset:10px;border-radius:10px;background:#050512cc;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:20px}
+    .overlay.hidden{display:none}
+    .desc{font-size:13px;line-height:1.45;opacity:.9;background:#12122b;border:1px solid #2b2b5f;border-radius:12px;padding:10px}
+    @media (max-width:640px){
+      .hud{grid-template-columns:repeat(2,1fr)}
+      .markets{grid-template-columns:1fr}
+      .actions{grid-template-columns:1fr 1fr}
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="hud">
+      <div class="card"><div class="label">TIME</div><div id="time" class="value">90</div></div>
+      <div class="card"><div class="label">CASH</div><div id="cash" class="value">1200</div></div>
+      <div class="card"><div class="label">CARGO</div><div id="cargo" class="value">0</div></div>
+      <div class="card"><div class="label">NET</div><div id="net" class="value">1200</div></div>
+      <div class="card"><div class="label">BEST</div><div id="best" class="value">1200</div></div>
+    </section>
+
+    <section class="board">
+      <div class="markets" id="markets"></div>
+      <div class="marketBtns">
+        <button data-select="0">1: AETHER</button>
+        <button data-select="1">2: LAGOON</button>
+        <button data-select="2">3: CINDER</button>
+      </div>
+      <div class="actions">
+        <button id="buy1">B Buy x1</button>
+        <button id="sell1">S Sell x1</button>
+        <button id="hold">Hold Tick</button>
+        <button id="buy5">Q Buy x5</button>
+        <button id="sell5">W Sell x5</button>
+        <button id="restart">Restart</button>
+      </div>
+      <div class="log" id="log">가격 스프레드를 읽고 저가 매수·고가 매도로 90초 내 순자산을 극대화하세요.</div>
+
+      <div id="overlay" class="overlay">
+        <h2 style="margin:0">Market Echo Arbitrage</h2>
+        <p style="margin:0;opacity:.86">3개 시장의 변동 가격을 이용해 자산을 증식하세요.</p>
+        <button id="startBtn">Start Trading</button>
+      </div>
+    </section>
+
+    <section class="desc">
+      키보드: <b>1/2/3</b> 시장 선택, <b>B</b> 1매수, <b>S</b> 1매도, <b>Q</b> 5매수, <b>W</b> 5매도, <b>Enter</b> 시작/재시작.
+      터치: 시장 버튼 + 매수/매도 버튼 사용. Web Audio 알림으로 거래 이벤트를 즉시 피드백합니다.
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const marketsEl = document.getElementById('markets');
+      const timeEl = document.getElementById('time');
+      const cashEl = document.getElementById('cash');
+      const cargoEl = document.getElementById('cargo');
+      const netEl = document.getElementById('net');
+      const bestEl = document.getElementById('best');
+      const logEl = document.getElementById('log');
+      const overlay = document.getElementById('overlay');
+      const startBtn = document.getElementById('startBtn');
+
+      let audioCtx;
+      function ping(freq, dur = 0.06, type = 'triangle', gain = 0.03) {
+        audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.type = type;
+        o.frequency.value = freq;
+        g.gain.value = gain;
+        o.connect(g).connect(audioCtx.destination);
+        o.start();
+        g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
+        o.stop(audioCtx.currentTime + dur);
+      }
+
+      const bestKey = 'marketEchoArbitrageBest';
+      let best = Number(localStorage.getItem(bestKey) || 1200);
+      bestEl.textContent = Math.floor(best);
+
+      const state = {
+        running: false,
+        time: 90,
+        cash: 1200,
+        cargo: 0,
+        selected: 0,
+        tickClock: 0,
+        shockClock: 0,
+        markets: []
+      };
+
+      function seedMarkets() {
+        return [
+          { name: 'AETHER', price: 56, hist: [56], drift: 0.4 },
+          { name: 'LAGOON', price: 64, hist: [64], drift: -0.2 },
+          { name: 'CINDER', price: 71, hist: [71], drift: 0.1 }
+        ];
+      }
+
+      function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
+
+      function bindTap(el, fn) {
+        el.addEventListener('click', fn);
+        el.addEventListener('touchstart', (e) => {
+          e.preventDefault();
+          fn();
+        }, { passive: false });
+      }
+
+      function addLog(msg) {
+        logEl.textContent = msg;
+      }
+
+      function getNetWorth() {
+        const mark = state.markets[state.selected]?.price || 0;
+        return state.cash + state.cargo * mark;
+      }
+
+      function syncHud() {
+        timeEl.textContent = Math.max(0, Math.ceil(state.time));
+        cashEl.textContent = Math.floor(state.cash);
+        cargoEl.textContent = state.cargo;
+        netEl.textContent = Math.floor(getNetWorth());
+        bestEl.textContent = Math.floor(best);
+      }
+
+      function renderMarkets() {
+        marketsEl.innerHTML = '';
+        state.markets.forEach((m, i) => {
+          const prev = m.hist.length > 1 ? m.hist[m.hist.length - 2] : m.price;
+          const d = m.price - prev;
+          const div = document.createElement('article');
+          div.className = 'market' + (i === state.selected ? ' sel' : '');
+
+          const sparkBars = m.hist.slice(-14).map(v => `<i style="height:${clamp((v / 110) * 100, 10, 95)}%"></i>`).join('');
+          div.innerHTML = `
+            <div class="m-title">${i + 1}. ${m.name}</div>
+            <div class="price">${m.price.toFixed(1)}</div>
+            <div class="delta ${d >= 0 ? 'up' : 'down'}">${d >= 0 ? '▲' : '▼'} ${Math.abs(d).toFixed(2)}</div>
+            <div class="spark">${sparkBars}</div>
+          `;
+          bindTap(div, () => selectMarket(i));
+          marketsEl.appendChild(div);
+        });
+      }
+
+      function selectMarket(i) {
+        if (!state.running) return;
+        state.selected = i;
+        renderMarkets();
+        syncHud();
+        ping(420 + i * 90, 0.04);
+      }
+
+      function applyTrade(isBuy, qty) {
+        if (!state.running) return;
+        const m = state.markets[state.selected];
+        const cost = m.price * qty;
+        if (isBuy) {
+          if (state.cash < cost) {
+            addLog('현금이 부족합니다. 더 저렴한 시점을 기다리세요.');
+            ping(170, 0.08, 'sawtooth', 0.04);
+            return;
+          }
+          state.cash -= cost;
+          state.cargo += qty;
+          addLog(`${m.name} ${qty} 유닛 매수 @ ${m.price.toFixed(1)}`);
+          ping(580, 0.045, 'triangle', 0.03);
+        } else {
+          if (state.cargo < qty) {
+            addLog('보유 재고가 부족합니다.');
+            ping(170, 0.08, 'sawtooth', 0.04);
+            return;
+          }
+          state.cash += cost;
+          state.cargo -= qty;
+          addLog(`${m.name} ${qty} 유닛 매도 @ ${m.price.toFixed(1)}`);
+          ping(700, 0.05, 'sine', 0.035);
+        }
+        syncHud();
+      }
+
+      function tickMarket(dt) {
+        state.tickClock += dt;
+        state.shockClock += dt;
+
+        if (state.tickClock >= 0.65) {
+          state.tickClock = 0;
+          state.markets.forEach(m => {
+            const noise = (Math.random() - 0.5) * 3.8;
+            const meanPull = (62 - m.price) * 0.04;
+            m.price = clamp(m.price + m.drift + noise + meanPull, 14, 120);
+            m.hist.push(m.price);
+            if (m.hist.length > 24) m.hist.shift();
+            m.drift = clamp(m.drift + (Math.random() - 0.5) * 0.18, -0.9, 0.9);
+          });
+          renderMarkets();
+          syncHud();
+        }
+
+        if (state.shockClock > 8 + Math.random() * 6) {
+          state.shockClock = 0;
+          const idx = Math.floor(Math.random() * state.markets.length);
+          const m = state.markets[idx];
+          const jump = (Math.random() < 0.5 ? -1 : 1) * (6 + Math.random() * 8);
+          m.price = clamp(m.price + jump, 12, 130);
+          m.hist.push(m.price);
+          if (m.hist.length > 24) m.hist.shift();
+          addLog(`⚠️ Echo Shock: ${m.name} ${jump > 0 ? '급등' : '급락'} (${jump.toFixed(1)})`);
+          ping(jump > 0 ? 880 : 210, 0.12, jump > 0 ? 'square' : 'sawtooth', 0.05);
+          renderMarkets();
+          syncHud();
+        }
+      }
+
+      function finish() {
+        state.running = false;
+        const finalNet = getNetWorth();
+        if (finalNet > best) {
+          best = finalNet;
+          localStorage.setItem(bestKey, String(best));
+        }
+        syncHud();
+        overlay.classList.remove('hidden');
+        overlay.innerHTML = `<h2 style="margin:0">Session Closed</h2>
+          <p style="margin:0;opacity:.9">Final Net <b>${Math.floor(finalNet)}</b> · Best <b>${Math.floor(best)}</b></p>
+          <button id="startBtn">Trade Again</button>`;
+        bindTap(document.getElementById('startBtn'), startRun);
+        addLog('세션 종료. Enter 또는 버튼으로 재시작하세요.');
+        ping(240, 0.18, 'triangle', 0.05);
+      }
+
+      function startRun() {
+        state.running = true;
+        state.time = 90;
+        state.cash = 1200;
+        state.cargo = 0;
+        state.selected = 0;
+        state.tickClock = 0;
+        state.shockClock = 0;
+        state.markets = seedMarkets();
+        overlay.classList.add('hidden');
+        addLog('세션 시작: 가격 스프레드 추적 후 저점 매수, 고점 매도!');
+        renderMarkets();
+        syncHud();
+        ping(520, 0.08, 'triangle', 0.035);
+      }
+
+      function holdTick() {
+        if (!state.running) return;
+        addLog('대기 전략: 다음 변동을 관찰합니다.');
+        ping(380, 0.03, 'sine', 0.02);
+      }
+
+      let last = performance.now();
+      function loop(now) {
+        const dt = Math.min(0.05, (now - last) / 1000);
+        last = now;
+        if (state.running) {
+          state.time -= dt;
+          tickMarket(dt);
+          if (state.time <= 0) {
+            state.time = 0;
+            finish();
+          }
+        }
+        syncHud();
+        requestAnimationFrame(loop);
+      }
+
+      document.querySelectorAll('[data-select]').forEach(btn => {
+        bindTap(btn, () => selectMarket(Number(btn.dataset.select)));
+      });
+      bindTap(document.getElementById('buy1'), () => applyTrade(true, 1));
+      bindTap(document.getElementById('sell1'), () => applyTrade(false, 1));
+      bindTap(document.getElementById('buy5'), () => applyTrade(true, 5));
+      bindTap(document.getElementById('sell5'), () => applyTrade(false, 5));
+      bindTap(document.getElementById('hold'), holdTick);
+      bindTap(document.getElementById('restart'), startRun);
+      bindTap(startBtn, startRun);
+
+      document.addEventListener('keydown', (e) => {
+        if (['1','2','3','b','B','s','S','q','Q','w','W','Enter'].includes(e.key)) e.preventDefault();
+        if (!state.running && e.key === 'Enter') return startRun();
+        if (e.key === '1') selectMarket(0);
+        if (e.key === '2') selectMarket(1);
+        if (e.key === '3') selectMarket(2);
+        if (e.key === 'b' || e.key === 'B') applyTrade(true, 1);
+        if (e.key === 's' || e.key === 'S') applyTrade(false, 1);
+        if (e.key === 'q' || e.key === 'Q') applyTrade(true, 5);
+        if (e.key === 'w' || e.key === 'W') applyTrade(false, 5);
+        if (e.key === 'Enter' && state.running) holdTick();
+      });
+
+      state.markets = seedMarkets();
+      renderMarkets();
+      syncHud();
+      requestAnimationFrame(loop);
+    })();
+  </script>
+</body>
+</html>

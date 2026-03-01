@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Comet Kite Harbor</title>
+  <meta name="theme-color" content="#0a0a1a" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <style>
+    :root {
+      --bg: #0a0a1a;
+      --panel: #121230;
+      --ink: #ecf3ff;
+      --muted: #95a2cc;
+      --cyan: #47eaff;
+      --pink: #ff68cb;
+      --lime: #8cff97;
+      --warn: #ff7878;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background: radial-gradient(circle at 50% -10%, #21275b 0%, var(--bg) 56%);
+      color: var(--ink);
+      font-family: "Pretendard", "Noto Sans KR", system-ui, -apple-system, Segoe UI, sans-serif;
+    }
+    .app {
+      width: min(540px, 100%);
+      margin: 0 auto;
+      padding: clamp(10px, 3.2vw, 18px);
+      display: grid;
+      gap: 10px;
+    }
+    .card {
+      background: linear-gradient(160deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015));
+      border: 1px solid rgba(71, 234, 255, 0.28);
+      border-radius: 14px;
+      padding: 10px;
+      box-shadow: 0 0 22px rgba(71, 234, 255, 0.12), inset 0 0 14px rgba(0,0,0,0.3);
+    }
+    h1 { margin: 0; font-size: clamp(1.14rem, 3.8vw, 1.38rem); }
+    .sub { margin: 3px 0 0; color: var(--muted); font-size: 0.88rem; }
+    .hud {
+      display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 7px;
+      font-size: 0.86rem;
+    }
+    .hud div { background: rgba(255,255,255,0.03); border-radius: 9px; padding: 7px; }
+    .hud b { float: right; color: var(--cyan); }
+    canvas {
+      width: 100%;
+      aspect-ratio: 9 / 14;
+      border-radius: 12px;
+      display: block;
+      background: linear-gradient(180deg, rgba(22,26,68,.85) 0%, #0a0a1a 100%);
+      border: 1px solid rgba(255,255,255,0.13);
+    }
+    .controls { display: grid; gap: 8px; }
+    .row { display: flex; gap: 8px; }
+    button {
+      flex: 1;
+      appearance: none;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.2);
+      color: #fff;
+      background: #1f224e;
+      font-weight: 700;
+      padding: 10px 12px;
+      font-size: 0.9rem;
+    }
+    button.primary { background: linear-gradient(90deg, #2e5eff, #875bff); border: none; }
+    .status { min-height: 20px; color: var(--muted); font-size: 0.9rem; }
+    .good { color: var(--lime); }
+    .bad { color: var(--warn); }
+    @media (max-width: 430px) {
+      .hud { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="card">
+      <h1>☄️ Comet Kite Harbor</h1>
+      <p class="sub">4개 레인을 오가며 파편을 피하고 오브를 수거하세요. (←/→, A/D, Space Boost 또는 터치)</p>
+    </section>
+
+    <section class="hud card">
+      <div>Distance <b id="distance">0</b></div>
+      <div>Streak <b id="streak">0</b></div>
+      <div>Lives <b id="lives">3</b></div>
+      <div>Best <b id="best">0</b></div>
+    </section>
+
+    <canvas id="game" width="540" height="840" aria-label="Comet Kite Harbor game field"></canvas>
+
+    <section class="card controls">
+      <div class="row">
+        <button id="leftBtn">◀ Left</button>
+        <button class="primary" id="startBtn">Start / Restart</button>
+        <button id="rightBtn">Right ▶</button>
+      </div>
+      <div class="row">
+        <button id="boostBtn">Boost (Space)</button>
+      </div>
+      <div class="status" id="status">Start를 누르면 비행이 시작됩니다.</div>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const canvas = document.getElementById('game');
+      const ctx = canvas.getContext('2d');
+      const laneCount = 4;
+
+      const state = {
+        running: false,
+        distance: 0,
+        streak: 0,
+        maxStreak: 0,
+        lives: 3,
+        lane: 1,
+        boost: 0,
+        speed: 180,
+        spawnTimer: 0,
+        objects: [],
+        particles: [],
+        t: 0,
+        last: 0,
+        best: Number(localStorage.getItem('cometKiteHarbor.best') || 0),
+        bestStreak: Number(localStorage.getItem('cometKiteHarbor.bestStreak') || 0)
+      };
+
+      let audio;
+      const initAudio = () => {
+        if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
+        if (audio.state === 'suspended') audio.resume();
+      };
+      const beep = (freq = 480, duration = 0.08, type = 'triangle', gain = 0.06) => {
+        if (!audio) return;
+        const o = audio.createOscillator();
+        const g = audio.createGain();
+        o.frequency.value = freq;
+        o.type = type;
+        g.gain.value = gain;
+        o.connect(g).connect(audio.destination);
+        o.start();
+        g.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + duration);
+        o.stop(audio.currentTime + duration);
+      };
+
+      const els = {
+        distance: document.getElementById('distance'),
+        streak: document.getElementById('streak'),
+        lives: document.getElementById('lives'),
+        best: document.getElementById('best'),
+        status: document.getElementById('status'),
+        leftBtn: document.getElementById('leftBtn'),
+        rightBtn: document.getElementById('rightBtn'),
+        boostBtn: document.getElementById('boostBtn'),
+        startBtn: document.getElementById('startBtn')
+      };
+
+      const setStatus = (txt, cls = '') => {
+        els.status.textContent = txt;
+        els.status.className = `status ${cls}`.trim();
+      };
+
+      const laneX = (lane) => ((lane + 0.5) * canvas.width) / laneCount;
+
+      const syncHud = () => {
+        els.distance.textContent = Math.floor(state.distance);
+        els.streak.textContent = state.streak;
+        els.lives.textContent = state.lives;
+        els.best.textContent = `${state.best} (x${state.bestStreak})`;
+      };
+
+      const reset = () => {
+        state.running = true;
+        state.distance = 0;
+        state.streak = 0;
+        state.maxStreak = 0;
+        state.lives = 3;
+        state.lane = 1;
+        state.boost = 0;
+        state.speed = 180;
+        state.spawnTimer = 0;
+        state.objects = [];
+        state.particles = [];
+        state.last = 0;
+        setStatus('항로 시작. 오브를 모으고 파편을 피하세요!');
+        syncHud();
+      };
+
+      const spawnObject = () => {
+        const lane = Math.floor(Math.random() * laneCount);
+        const isOrb = Math.random() < 0.58;
+        state.objects.push({
+          lane,
+          y: -30,
+          type: isOrb ? 'orb' : 'debris',
+          size: isOrb ? 12 + Math.random() * 8 : 15 + Math.random() * 10,
+          rot: Math.random() * Math.PI
+        });
+      };
+
+      const moveLane = (dir) => {
+        if (!state.running) return;
+        initAudio();
+        state.lane = Math.max(0, Math.min(laneCount - 1, state.lane + dir));
+        beep(350 + state.lane * 70, 0.06, 'triangle', 0.05);
+      };
+
+      const boost = () => {
+        if (!state.running) return;
+        initAudio();
+        state.boost = 0.8;
+        beep(980, 0.09, 'square', 0.055);
+        setStatus('Boost engaged!', 'good');
+      };
+
+      const burst = (x, y, color = '#47eaff', count = 10) => {
+        for (let i = 0; i < count; i++) {
+          state.particles.push({
+            x,
+            y,
+            vx: (Math.random() - 0.5) * 120,
+            vy: (Math.random() - 0.5) * 120,
+            life: 0.5 + Math.random() * 0.5,
+            color
+          });
+        }
+      };
+
+      const saveBest = () => {
+        const dist = Math.floor(state.distance);
+        if (dist > state.best) {
+          state.best = dist;
+          localStorage.setItem('cometKiteHarbor.best', String(state.best));
+        }
+        if (state.maxStreak > state.bestStreak) {
+          state.bestStreak = state.maxStreak;
+          localStorage.setItem('cometKiteHarbor.bestStreak', String(state.bestStreak));
+        }
+      };
+
+      const gameOver = () => {
+        state.running = false;
+        saveBest();
+        syncHud();
+        beep(140, 0.2, 'sawtooth', 0.08);
+        setStatus(`Game Over — Distance ${Math.floor(state.distance)}, Streak x${state.maxStreak}`, 'bad');
+      };
+
+      const draw = () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        grad.addColorStop(0, 'rgba(28,35,88,0.95)');
+        grad.addColorStop(1, '#0a0a1a');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.strokeStyle = 'rgba(71,234,255,0.2)';
+        ctx.lineWidth = 2;
+        for (let i = 1; i < laneCount; i++) {
+          const x = (i * canvas.width) / laneCount;
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, canvas.height);
+          ctx.stroke();
+        }
+
+        for (let i = 0; i < 60; i++) {
+          const y = (i * 97 + state.t * 90) % (canvas.height + 20);
+          const x = (i * 131) % canvas.width;
+          ctx.fillStyle = 'rgba(255,255,255,0.14)';
+          ctx.fillRect(x, y, 2, 2);
+        }
+
+        state.objects.forEach((o) => {
+          const x = laneX(o.lane);
+          if (o.type === 'orb') {
+            ctx.fillStyle = '#8cff97';
+            ctx.shadowBlur = 18;
+            ctx.shadowColor = '#8cff97';
+            ctx.beginPath();
+            ctx.arc(x, o.y, o.size, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+          } else {
+            ctx.save();
+            ctx.translate(x, o.y);
+            ctx.rotate(o.rot);
+            ctx.fillStyle = '#ff7878';
+            ctx.shadowBlur = 12;
+            ctx.shadowColor = '#ff7878';
+            ctx.fillRect(-o.size * 0.6, -o.size * 0.4, o.size * 1.2, o.size * 0.8);
+            ctx.restore();
+          }
+        });
+
+        state.particles.forEach((p) => {
+          ctx.fillStyle = p.color;
+          ctx.globalAlpha = Math.max(0, p.life);
+          ctx.fillRect(p.x, p.y, 3, 3);
+          ctx.globalAlpha = 1;
+        });
+
+        const px = laneX(state.lane);
+        const py = canvas.height - 86;
+        ctx.save();
+        ctx.translate(px, py);
+        ctx.fillStyle = '#47eaff';
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = '#47eaff';
+        ctx.beginPath();
+        ctx.moveTo(0, -24);
+        ctx.lineTo(20, 18);
+        ctx.lineTo(0, 10);
+        ctx.lineTo(-20, 18);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#ff68cb';
+        ctx.beginPath();
+        ctx.arc(0, 2, 6, 0, Math.PI * 2);
+        ctx.fill();
+        if (state.boost > 0) {
+          ctx.strokeStyle = 'rgba(140,255,151,0.9)';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(0, 20);
+          ctx.lineTo(0, 44 + Math.random() * 10);
+          ctx.stroke();
+        }
+        ctx.restore();
+      };
+
+      const update = (ts) => {
+        if (!state.last) state.last = ts;
+        const dt = Math.min(0.033, (ts - state.last) / 1000);
+        state.last = ts;
+        state.t += dt;
+
+        if (state.running) {
+          state.speed += dt * 2.8;
+          state.spawnTimer -= dt;
+          const spawnRate = Math.max(0.22, 0.65 - state.distance / 2600);
+          if (state.spawnTimer <= 0) {
+            state.spawnTimer = spawnRate;
+            spawnObject();
+          }
+
+          const travel = state.speed * (1 + (state.boost > 0 ? 0.8 : 0)) * dt;
+          state.distance += travel * 0.1;
+          if (state.boost > 0) state.boost = Math.max(0, state.boost - dt);
+
+          const playerY = canvas.height - 86;
+          state.objects.forEach((o) => {
+            o.y += travel;
+            o.rot += dt * 3;
+
+            if (Math.abs(o.y - playerY) < 28 && o.lane === state.lane) {
+              if (o.type === 'orb') {
+                state.streak += 1;
+                state.maxStreak = Math.max(state.maxStreak, state.streak);
+                state.distance += 12 + state.streak * 0.8;
+                burst(laneX(o.lane), o.y, '#8cff97', 9);
+                beep(740 + Math.min(state.streak, 8) * 35, 0.07, 'sine', 0.06);
+                o.hit = true;
+                setStatus(`Great catch! streak x${state.streak}`, 'good');
+              } else if (state.boost <= 0.01) {
+                state.lives -= 1;
+                state.streak = 0;
+                burst(laneX(o.lane), o.y, '#ff7878', 15);
+                beep(180, 0.16, 'sawtooth', 0.08);
+                o.hit = true;
+                if (state.lives <= 0) {
+                  gameOver();
+                } else {
+                  setStatus(`충돌! 남은 라이프 ${state.lives}`, 'bad');
+                }
+              } else {
+                burst(laneX(o.lane), o.y, '#47eaff', 12);
+                beep(560, 0.05, 'triangle', 0.05);
+                o.hit = true;
+              }
+            }
+          });
+
+          state.objects = state.objects.filter((o) => !o.hit && o.y < canvas.height + 40);
+        }
+
+        state.particles.forEach((p) => {
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+          p.life -= dt;
+        });
+        state.particles = state.particles.filter((p) => p.life > 0);
+
+        saveBest();
+        syncHud();
+        draw();
+        requestAnimationFrame(update);
+      };
+
+      document.getElementById('startBtn').addEventListener('click', () => {
+        initAudio();
+        reset();
+      });
+      document.getElementById('leftBtn').addEventListener('pointerdown', () => moveLane(-1));
+      document.getElementById('rightBtn').addEventListener('pointerdown', () => moveLane(1));
+      document.getElementById('boostBtn').addEventListener('pointerdown', boost);
+
+      window.addEventListener('keydown', (e) => {
+        const k = e.key.toLowerCase();
+        if (k === 'arrowleft' || k === 'a') {
+          e.preventDefault();
+          moveLane(-1);
+        }
+        if (k === 'arrowright' || k === 'd') {
+          e.preventDefault();
+          moveLane(1);
+        }
+        if (k === ' ' || k === 'spacebar') {
+          e.preventDefault();
+          boost();
+        }
+        if (k === 'r') {
+          initAudio();
+          reset();
+        }
+      });
+
+      syncHud();
+      requestAnimationFrame(update);
+    })();
+  </script>
+</body>
+</html>

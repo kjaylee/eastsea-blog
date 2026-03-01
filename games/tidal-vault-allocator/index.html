@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Tidal Vault Allocator</title>
+  <meta name="theme-color" content="#0a0a1a" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <style>
+    :root {
+      --bg: #0a0a1a;
+      --panel: #12122c;
+      --ink: #edf3ff;
+      --muted: #98a5cf;
+      --cyan: #45e7ff;
+      --violet: #8f69ff;
+      --lime: #70ff9b;
+      --warn: #ff7171;
+      --amber: #ffd36e;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      margin: 0; min-height: 100%;
+      background: radial-gradient(circle at 20% 0%, #1f2252 0%, var(--bg) 56%);
+      color: var(--ink);
+      font-family: "Pretendard", "Noto Sans KR", system-ui, -apple-system, Segoe UI, sans-serif;
+    }
+    .app {
+      width: min(760px, 100%); margin: 0 auto;
+      padding: clamp(12px, 3vw, 22px); display: grid; gap: 12px;
+    }
+    .card {
+      background: linear-gradient(160deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015));
+      border: 1px solid rgba(143, 105, 255, 0.35);
+      border-radius: 14px; padding: 12px;
+      box-shadow: 0 0 24px rgba(69, 231, 255, 0.12), inset 0 0 16px rgba(0,0,0,0.34);
+    }
+    h1 { margin: 0 0 4px; font-size: clamp(1.14rem, 3.2vw, 1.42rem); }
+    .muted { margin: 0; color: var(--muted); font-size: 0.9rem; }
+    .hud {
+      display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 8px;
+      font-size: 0.92rem;
+    }
+    .metric { background: rgba(255,255,255,0.03); border-radius: 10px; padding: 8px; }
+    .metric b { color: var(--cyan); float: right; }
+    .districts { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 9px; }
+    .district {
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px; padding: 10px; display: grid; gap: 8px;
+    }
+    .district.active { border-color: var(--cyan); box-shadow: 0 0 15px rgba(69,231,255,.28); }
+    .district h3 { margin: 0; font-size: 0.95rem; display: flex; justify-content: space-between; }
+    .bars { display: grid; gap: 6px; font-size: 0.8rem; }
+    .bar { height: 8px; border-radius: 999px; background: rgba(255,255,255,0.08); overflow: hidden; }
+    .bar > i { display: block; height: 100%; }
+    .flood i { background: linear-gradient(90deg, #ff8e8e, var(--warn)); }
+    .stability i { background: linear-gradient(90deg, #64f4ff, var(--cyan)); }
+    .energy i { background: linear-gradient(90deg, #ffda6f, var(--amber)); }
+    .controls { display: grid; gap: 8px; }
+    .group { display: flex; gap: 8px; flex-wrap: wrap; }
+    button {
+      appearance: none; border-radius: 10px; border: 1px solid rgba(255,255,255,0.18);
+      background: #1f224d; color: #fff; padding: 9px 12px; font-weight: 700; font-size: 0.9rem;
+    }
+    button.primary { background: linear-gradient(90deg, #2f5dff, #8f69ff); border: none; }
+    button.selected { box-shadow: 0 0 14px rgba(69,231,255,.42); border-color: var(--cyan); }
+    .log {
+      max-height: 150px; overflow: auto; font-size: 0.84rem; color: #c2d2ff;
+      padding-right: 4px;
+    }
+    .log p { margin: 4px 0; }
+    .status { min-height: 20px; color: var(--muted); font-size: 0.9rem; }
+    .bad { color: var(--warn); }
+    .good { color: var(--lime); }
+    @media (max-width: 680px) {
+      .hud { grid-template-columns: repeat(2, minmax(0,1fr)); }
+      .districts { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="card">
+      <h1>🌊 Tidal Vault Allocator</h1>
+      <p class="muted">3개 구역의 <b>Flood / Stability / Energy</b>를 관리하세요. (1/2/3 선택, Q/W/E 할당, Enter 턴 진행)</p>
+    </section>
+
+    <section class="card hud">
+      <div class="metric">Round <b id="round">1</b></div>
+      <div class="metric">Score <b id="score">0</b></div>
+      <div class="metric">Best Round <b id="bestRound">0</b></div>
+      <div class="metric">Best Score <b id="bestScore">0</b></div>
+    </section>
+
+    <section class="districts" id="districts"></section>
+
+    <section class="card controls">
+      <div class="group" id="districtBtns"></div>
+      <div class="group" id="actionBtns"></div>
+      <div class="group">
+        <button class="primary" id="endTurnBtn">End Turn (Enter)</button>
+        <button id="restartBtn">Restart (R)</button>
+      </div>
+      <div class="status" id="status">구역을 선택하고 액션을 배정하세요.</div>
+      <div class="log" id="log"></div>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const ACTIONS = {
+        drain: { name: 'Drain', key: 'Q', delta: { flood: -18, stability: -4, energy: -8 }, tone: 300 },
+        store: { name: 'Store', key: 'W', delta: { flood: +6, stability: +2, energy: +18 }, tone: 520 },
+        shield: { name: 'Shield', key: 'E', delta: { flood: -8, stability: +16, energy: -10 }, tone: 760 }
+      };
+      const DISTRICT_NAMES = ['North Dock', 'Mid Vault', 'South Basin'];
+
+      const state = {
+        running: true,
+        round: 1,
+        score: 0,
+        selected: 0,
+        assign: ['drain', 'store', 'shield'],
+        bestRound: Number(localStorage.getItem('tidalVaultAllocator.bestRound') || 0),
+        bestScore: Number(localStorage.getItem('tidalVaultAllocator.bestScore') || 0),
+        districts: DISTRICT_NAMES.map((name) => ({
+          name,
+          flood: 32 + Math.floor(Math.random() * 22),
+          stability: 72 + Math.floor(Math.random() * 16),
+          energy: 54 + Math.floor(Math.random() * 25)
+        }))
+      };
+
+      let audio;
+      const initAudio = () => {
+        if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
+        if (audio.state === 'suspended') audio.resume();
+      };
+      const beep = (freq = 440, duration = 0.08, type = 'triangle', gain = 0.07) => {
+        if (!audio) return;
+        const o = audio.createOscillator();
+        const g = audio.createGain();
+        o.frequency.value = freq;
+        o.type = type;
+        g.gain.value = gain;
+        o.connect(g).connect(audio.destination);
+        o.start();
+        g.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + duration);
+        o.stop(audio.currentTime + duration);
+      };
+
+      const els = {
+        round: document.getElementById('round'),
+        score: document.getElementById('score'),
+        bestRound: document.getElementById('bestRound'),
+        bestScore: document.getElementById('bestScore'),
+        districts: document.getElementById('districts'),
+        districtBtns: document.getElementById('districtBtns'),
+        actionBtns: document.getElementById('actionBtns'),
+        status: document.getElementById('status'),
+        log: document.getElementById('log'),
+        endTurnBtn: document.getElementById('endTurnBtn'),
+        restartBtn: document.getElementById('restartBtn')
+      };
+
+      const clamp = (v, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, v));
+
+      const saveBest = () => {
+        if (state.round > state.bestRound) {
+          state.bestRound = state.round;
+          localStorage.setItem('tidalVaultAllocator.bestRound', String(state.bestRound));
+        }
+        if (state.score > state.bestScore) {
+          state.bestScore = state.score;
+          localStorage.setItem('tidalVaultAllocator.bestScore', String(state.bestScore));
+        }
+      };
+
+      const logLine = (txt) => {
+        const p = document.createElement('p');
+        p.textContent = txt;
+        els.log.prepend(p);
+      };
+
+      const setStatus = (txt, cls = '') => {
+        els.status.textContent = txt;
+        els.status.className = `status ${cls}`.trim();
+      };
+
+      const renderDistricts = () => {
+        els.districts.innerHTML = '';
+        state.districts.forEach((d, i) => {
+          const el = document.createElement('article');
+          el.className = `district ${state.selected === i ? 'active' : ''}`;
+          el.innerHTML = `
+            <h3>${d.name}<span>${state.assign[i].toUpperCase()}</span></h3>
+            <div class="bars">
+              <div>Flood ${Math.round(d.flood)}
+                <div class="bar flood"><i style="width:${clamp(d.flood)}%"></i></div>
+              </div>
+              <div>Stability ${Math.round(d.stability)}
+                <div class="bar stability"><i style="width:${clamp(d.stability)}%"></i></div>
+              </div>
+              <div>Energy ${Math.round(d.energy)}
+                <div class="bar energy"><i style="width:${clamp(d.energy)}%"></i></div>
+              </div>
+            </div>
+          `;
+          el.addEventListener('pointerdown', () => selectDistrict(i));
+          els.districts.appendChild(el);
+        });
+      };
+
+      const renderButtons = () => {
+        els.districtBtns.innerHTML = '';
+        DISTRICT_NAMES.forEach((_, i) => {
+          const b = document.createElement('button');
+          b.textContent = `${i + 1} 구역`;
+          if (state.selected === i) b.classList.add('selected');
+          b.addEventListener('click', () => selectDistrict(i));
+          els.districtBtns.appendChild(b);
+        });
+
+        els.actionBtns.innerHTML = '';
+        Object.entries(ACTIONS).forEach(([key, info]) => {
+          const b = document.createElement('button');
+          b.textContent = `${info.key}: ${info.name}`;
+          if (state.assign[state.selected] === key) b.classList.add('selected');
+          b.addEventListener('click', () => assignAction(key));
+          els.actionBtns.appendChild(b);
+        });
+      };
+
+      const updateHud = () => {
+        els.round.textContent = state.round;
+        els.score.textContent = state.score;
+        els.bestRound.textContent = state.bestRound;
+        els.bestScore.textContent = state.bestScore;
+      };
+
+      const selectDistrict = (idx) => {
+        if (!state.running) return;
+        state.selected = idx;
+        initAudio();
+        beep(420 + idx * 70, 0.05, 'sine', 0.045);
+        render();
+      };
+
+      const assignAction = (key) => {
+        if (!state.running) return;
+        initAudio();
+        state.assign[state.selected] = key;
+        beep(ACTIONS[key].tone, 0.07, 'triangle', 0.06);
+        setStatus(`${DISTRICT_NAMES[state.selected]} → ${ACTIONS[key].name} 배정`, 'good');
+        render();
+      };
+
+      const simulateTurn = () => {
+        if (!state.running) return;
+        initAudio();
+
+        const tidePulse = 5 + Math.random() * 10 + state.round * 0.4;
+        const weatherShift = (Math.random() - 0.5) * 8;
+        let totalStability = 0;
+        let totalFlood = 0;
+
+        state.districts.forEach((d, i) => {
+          const act = ACTIONS[state.assign[i]];
+          d.flood += act.delta.flood + tidePulse + Math.random() * 7;
+          d.stability += act.delta.stability - 1.5 + weatherShift * 0.3;
+          d.energy += act.delta.energy - 1 + Math.random() * 4;
+
+          if (state.assign[i] === 'drain' && d.flood < 25) d.stability -= 4;
+          if (state.assign[i] === 'store' && d.energy > 85) d.flood += 4;
+          if (state.assign[i] === 'shield' && d.energy < 20) d.stability -= 5;
+
+          d.flood = clamp(d.flood);
+          d.stability = clamp(d.stability);
+          d.energy = clamp(d.energy);
+
+          totalStability += d.stability;
+          totalFlood += d.flood;
+        });
+
+        const avgStability = totalStability / 3;
+        const avgFlood = totalFlood / 3;
+        const turnGain = Math.max(8, Math.round(avgStability - avgFlood * 0.55 + state.round * 3));
+        state.score += turnGain;
+        state.round += 1;
+
+        beep(260, 0.05, 'sine', 0.05);
+        beep(340, 0.05, 'sine', 0.05);
+        beep(430, 0.06, 'sine', 0.05);
+
+        logLine(`R${state.round - 1}: Tide +${tidePulse.toFixed(1)}, Shift ${weatherShift.toFixed(1)}, +${turnGain}pts`);
+
+        const critical = state.districts.find((d) => d.flood >= 100 || d.stability <= 0);
+        const blackOut = state.districts.every((d) => d.energy < 8);
+        if (critical || blackOut) {
+          state.running = false;
+          saveBest();
+          updateHud();
+          beep(120, 0.22, 'sawtooth', 0.09);
+          setStatus(`운영 붕괴! 라운드 ${state.round - 1} / 점수 ${state.score}`, 'bad');
+          logLine('⚠️ 시스템 실패. R 키 또는 Restart로 재시작하세요.');
+          render();
+          return;
+        }
+
+        saveBest();
+        setStatus(`턴 완료: +${turnGain}점`, 'good');
+        render();
+      };
+
+      const restart = () => {
+        initAudio();
+        state.running = true;
+        state.round = 1;
+        state.score = 0;
+        state.selected = 0;
+        state.assign = ['drain', 'store', 'shield'];
+        state.districts = DISTRICT_NAMES.map((name) => ({
+          name,
+          flood: 30 + Math.random() * 20,
+          stability: 70 + Math.random() * 20,
+          energy: 52 + Math.random() * 26
+        }));
+        els.log.innerHTML = '';
+        logLine('새 시뮬레이션 시작');
+        beep(640, 0.07, 'triangle', 0.06);
+        setStatus('구역별 액션을 배정하고 End Turn을 누르세요.');
+        render();
+      };
+
+      const render = () => {
+        updateHud();
+        renderDistricts();
+        renderButtons();
+      };
+
+      els.endTurnBtn.addEventListener('click', simulateTurn);
+      els.restartBtn.addEventListener('click', restart);
+
+      window.addEventListener('keydown', (e) => {
+        const k = e.key.toLowerCase();
+        if (k === '1' || k === '2' || k === '3') {
+          e.preventDefault();
+          selectDistrict(Number(k) - 1);
+        }
+        if (k === 'q') assignAction('drain');
+        if (k === 'w') assignAction('store');
+        if (k === 'e') assignAction('shield');
+        if (k === 'enter') simulateTurn();
+        if (k === 'r') restart();
+      });
+
+      logLine('작전 시작: 각 구역의 계획을 고르세요.');
+      setStatus('구역을 선택하고 액션을 배정하세요.');
+      render();
+    })();
+  </script>
+</body>
+</html>

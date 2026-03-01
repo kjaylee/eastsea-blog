@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0a1a" />
+  <title>Cipher Garden Weaver</title>
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <style>
+    :root{--bg:#0a0a1a;--panel:#12122a;--ink:#eef2ff;--sub:#96a0d6;--on:#69ffcb;--off:#1f2453;--goal:#ffc85a;--focus:#5cb8ff}
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100vh;display:grid;place-items:center;background:radial-gradient(circle at 50% -20%,#1f2257 0%,#0a0a1a 50%,#060611 100%);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:12px}
+    .wrap{width:min(100%,520px);background:linear-gradient(180deg,#151535,#0d0d22);border:1px solid #2d2d67;border-radius:18px;padding:14px;box-shadow:0 0 24px rgba(92,184,255,.18)}
+    h1{margin:0 0 8px;font-size:1.05rem}
+    .hud{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:10px}
+    .card{background:#11112b;border:1px solid #2a2a5a;border-radius:10px;padding:8px;text-align:center}
+    .k{display:block;color:var(--sub);font-size:.72rem}
+    .v{font-weight:700}
+    .boards{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .panel{background:#0d0f24;border:1px solid #2a2a59;border-radius:12px;padding:10px}
+    .panel h2{font-size:.86rem;margin:0 0 8px;color:#cad4ff}
+    .grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+    .cell{aspect-ratio:1;border-radius:8px;border:1px solid #2e366f;background:var(--off)}
+    .cell.on{background:radial-gradient(circle at 40% 35%,#9dffe1 0%,var(--on) 45%,#30be93 100%);box-shadow:0 0 10px rgba(105,255,203,.35)}
+    .goal{background:var(--off);opacity:.9}
+    .goal.on{background:linear-gradient(145deg,#ffe7a5,#ffc85a 60%,#d89017);box-shadow:0 0 8px rgba(255,200,90,.25)}
+    .cell.focus{outline:2px solid var(--focus);outline-offset:-2px}
+    .controls{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+    .controls button{appearance:none;border:1px solid #2f3569;background:#171a3c;color:#e9edff;padding:10px;border-radius:10px;font-weight:700}
+    .controls .wide{grid-column:span 3}
+    .tip{font-size:.8rem;color:var(--sub);line-height:1.4;margin-top:8px}
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <h1>🌱 Cipher Garden Weaver</h1>
+    <section class="hud">
+      <div class="card"><span class="k">STAGE</span><span id="stage" class="v">1</span></div>
+      <div class="card"><span class="k">BEST</span><span id="best" class="v">1</span></div>
+      <div class="card"><span class="k">MOVES</span><span id="moves" class="v">0</span></div>
+      <div class="card"><span class="k">STATUS</span><span id="status" class="v">Ready</span></div>
+    </section>
+
+    <section class="boards">
+      <div class="panel">
+        <h2>현재 정원</h2>
+        <div id="board" class="grid" aria-label="current board"></div>
+      </div>
+      <div class="panel">
+        <h2>목표 패턴</h2>
+        <div id="goal" class="grid" aria-label="target board"></div>
+      </div>
+    </section>
+
+    <div class="controls">
+      <button id="upBtn">⬆</button>
+      <button id="toggleBtn">TOGGLE</button>
+      <button id="resetBtn">RESET</button>
+      <button id="leftBtn">⬅</button>
+      <button id="downBtn">⬇</button>
+      <button id="rightBtn">➡</button>
+      <button id="startBtn" class="wide">Start / Restart</button>
+    </div>
+
+    <p class="tip">키보드: 방향키로 커서 이동, Space/Enter 토글, R 리셋. 규칙: 선택 칸 + 상하좌우 동시 반전.</p>
+  </main>
+
+  <script>
+    (() => {
+      const N = 5;
+      const boardEl = document.getElementById('board');
+      const goalEl = document.getElementById('goal');
+      const stageEl = document.getElementById('stage');
+      const bestEl = document.getElementById('best');
+      const movesEl = document.getElementById('moves');
+      const statusEl = document.getElementById('status');
+
+      const upBtn = document.getElementById('upBtn');
+      const downBtn = document.getElementById('downBtn');
+      const leftBtn = document.getElementById('leftBtn');
+      const rightBtn = document.getElementById('rightBtn');
+      const toggleBtn = document.getElementById('toggleBtn');
+      const resetBtn = document.getElementById('resetBtn');
+      const startBtn = document.getElementById('startBtn');
+
+      const keyBest = 'cgw_best_stage';
+      let best = Number(localStorage.getItem(keyBest) || 1);
+      bestEl.textContent = best;
+
+      let ac;
+      function beep(f = 480, d = 0.05, type = 'sine', gain = 0.04) {
+        try {
+          ac ||= new (window.AudioContext || window.webkitAudioContext)();
+          if (ac.state === 'suspended') ac.resume();
+          const o = ac.createOscillator();
+          const g = ac.createGain();
+          o.type = type;
+          o.frequency.value = f;
+          g.gain.value = gain;
+          o.connect(g); g.connect(ac.destination);
+          o.start();
+          g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + d);
+          o.stop(ac.currentTime + d);
+        } catch {}
+      }
+
+      const S = {
+        running: false,
+        stage: 1,
+        moves: 0,
+        board: [],
+        goal: [],
+        cursor: 0
+      };
+
+      function blank() { return Array.from({ length: N * N }, () => 0); }
+      function idx(r, c) { return r * N + c; }
+      function rc(i) { return [Math.floor(i / N), i % N]; }
+
+      function toggleCell(arr, i) { arr[i] = arr[i] ? 0 : 1; }
+      function applyWeave(arr, i) {
+        const [r, c] = rc(i);
+        toggleCell(arr, i);
+        if (r > 0) toggleCell(arr, idx(r - 1, c));
+        if (r < N - 1) toggleCell(arr, idx(r + 1, c));
+        if (c > 0) toggleCell(arr, idx(r, c - 1));
+        if (c < N - 1) toggleCell(arr, idx(r, c + 1));
+      }
+
+      function makeGoal(stage) {
+        const arr = blank();
+        const seeds = Math.min(3 + stage, 11);
+        for (let i = 0; i < seeds; i++) {
+          const p = (Math.random() * arr.length) | 0;
+          applyWeave(arr, p);
+        }
+        if (!arr.some(Boolean)) arr[(Math.random() * arr.length) | 0] = 1;
+        return arr;
+      }
+
+      function build() {
+        boardEl.innerHTML = '';
+        goalEl.innerHTML = '';
+        for (let i = 0; i < N * N; i++) {
+          const b = document.createElement('button');
+          b.className = 'cell';
+          b.type = 'button';
+          b.dataset.i = i;
+          b.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            if (!S.running) return;
+            S.cursor = i;
+            actionToggle();
+          }, { passive: false });
+          boardEl.appendChild(b);
+
+          const g = document.createElement('div');
+          g.className = 'cell goal';
+          goalEl.appendChild(g);
+        }
+      }
+
+      function render() {
+        const bCells = boardEl.children;
+        const gCells = goalEl.children;
+        for (let i = 0; i < N * N; i++) {
+          bCells[i].classList.toggle('on', !!S.board[i]);
+          bCells[i].classList.toggle('focus', i === S.cursor);
+          gCells[i].classList.toggle('on', !!S.goal[i]);
+        }
+        stageEl.textContent = S.stage;
+        movesEl.textContent = S.moves;
+        bestEl.textContent = best;
+      }
+
+      function samePattern() {
+        for (let i = 0; i < N * N; i++) if (S.board[i] !== S.goal[i]) return false;
+        return true;
+      }
+
+      function setStatus(t) { statusEl.textContent = t; }
+
+      function newStage(stage = 1) {
+        S.running = true;
+        S.stage = stage;
+        S.moves = 0;
+        S.board = blank();
+        S.goal = makeGoal(stage);
+        S.cursor = 12;
+        setStatus('Solving');
+        render();
+      }
+
+      function resetBoard() {
+        if (!S.running) return;
+        S.board = blank();
+        S.moves = 0;
+        setStatus('Reset');
+        beep(320, 0.07, 'triangle', 0.04);
+        render();
+      }
+
+      function moveCursor(dr, dc) {
+        if (!S.running) return;
+        let [r, c] = rc(S.cursor);
+        r = Math.max(0, Math.min(N - 1, r + dr));
+        c = Math.max(0, Math.min(N - 1, c + dc));
+        S.cursor = idx(r, c);
+        beep(560, 0.03, 'triangle', 0.025);
+        render();
+      }
+
+      function actionToggle() {
+        if (!S.running) return;
+        applyWeave(S.board, S.cursor);
+        S.moves++;
+        beep(700, 0.05, 'sine', 0.04);
+        if (samePattern()) {
+          const cleared = S.stage;
+          setStatus('Stage Clear!');
+          beep(980, 0.09, 'sawtooth', 0.05);
+          if (cleared + 1 > best) {
+            best = cleared + 1;
+            localStorage.setItem(keyBest, String(best));
+          }
+          setTimeout(() => newStage(cleared + 1), 420);
+        }
+        render();
+      }
+
+      document.addEventListener('keydown', (e) => {
+        const k = e.key;
+        if (k === 'ArrowUp') moveCursor(-1, 0);
+        else if (k === 'ArrowDown') moveCursor(1, 0);
+        else if (k === 'ArrowLeft') moveCursor(0, -1);
+        else if (k === 'ArrowRight') moveCursor(0, 1);
+        else if (k === ' ' || k === 'Enter') { e.preventDefault(); actionToggle(); }
+        else if (k.toLowerCase() === 'r') resetBoard();
+      }, { passive: false });
+
+      const bind = (el, fn) => el.addEventListener('pointerdown', (e) => { e.preventDefault(); fn(); }, { passive: false });
+      bind(upBtn, () => moveCursor(-1, 0));
+      bind(downBtn, () => moveCursor(1, 0));
+      bind(leftBtn, () => moveCursor(0, -1));
+      bind(rightBtn, () => moveCursor(0, 1));
+      bind(toggleBtn, actionToggle);
+      bind(resetBtn, resetBoard);
+      bind(startBtn, () => { beep(520, 0.06, 'triangle', 0.04); newStage(1); });
+
+      build();
+      newStage(1);
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0a0a1a" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <title>Frostbite Freight Fix</title>
+  <style>
+    :root {
+      --bg: #0a0a1a;
+      --panel: #151531;
+      --ice: #75e8ff;
+      --dock: #b38cff;
+      --cargo: #ffd166;
+      --drone: #7dff9a;
+      --text: #e8f8ff;
+      --line: rgba(117, 232, 255, 0.35);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      font-family: "Pretendard", "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: radial-gradient(circle at top, #1b1b3e 0%, var(--bg) 60%);
+      color: var(--text);
+      display: flex;
+      justify-content: center;
+      padding: 10px;
+    }
+    .app {
+      width: min(860px, 100%);
+      display: grid;
+      gap: 10px;
+    }
+    .panel {
+      background: linear-gradient(145deg, rgba(21,21,49,.95), rgba(10,10,26,.96));
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 10px;
+      box-shadow: 0 0 18px rgba(117,232,255,.18);
+    }
+    h1 {
+      margin: 0 0 6px;
+      color: var(--ice);
+      font-size: clamp(1.08rem, 3.5vw, 1.45rem);
+    }
+    .hint { margin: 0; opacity: .88; font-size: .92rem; }
+
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+      text-align: center;
+    }
+    .hud .k {
+      background: rgba(255,255,255,.03);
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 10px;
+      padding: 7px;
+      font-size: .85rem;
+    }
+    .hud b { display: block; font-size: .74rem; opacity: .8; margin-bottom: 3px; }
+
+    .grid {
+      --size: min(76vw, 460px);
+      width: var(--size);
+      height: var(--size);
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      grid-template-rows: repeat(7, 1fr);
+      gap: 2px;
+      touch-action: manipulation;
+    }
+    .cell {
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      font-size: clamp(.62rem, 2.2vw, .8rem);
+      border: 1px solid rgba(255,255,255,.05);
+    }
+    .wall { background: #232341; border-color: rgba(255,255,255,.09); }
+    .ice { background: linear-gradient(145deg, rgba(117,232,255,.16), rgba(117,232,255,.05)); }
+    .goal { outline: 2px dashed rgba(179,140,255,.7); outline-offset: -3px; }
+    .cargo { background: linear-gradient(145deg, #ffd166, #ffac33); color: #402400; font-weight: 800; }
+    .player { background: linear-gradient(145deg, #7dff9a, #24d17d); color: #03351f; font-weight: 900; }
+
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      max-width: 340px;
+      margin: 0 auto;
+    }
+    button {
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,.2);
+      background: #1e1e3a;
+      color: var(--text);
+      padding: 10px;
+      font-weight: 700;
+      cursor: pointer;
+      min-height: 44px;
+    }
+    .wide { grid-column: span 3; }
+    .info { min-height: 30px; font-size: .9rem; color: #cbf6ff; text-align: center; }
+
+    @media (max-width: 640px) {
+      .hud { grid-template-columns: repeat(2, minmax(0,1fr)); }
+      .grid { --size: min(92vw, 420px); }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="panel">
+      <h1>🧊 Frostbite Freight Fix</h1>
+      <p class="hint">얼음 격자에서 화물을 도크로 이동시키세요. Arrow/WASD 이동 · R 리셋 · N 다음 스테이지</p>
+    </section>
+
+    <section class="panel hud">
+      <div class="k"><b>Stage</b><span id="stage">1</span></div>
+      <div class="k"><b>Moves</b><span id="moves">0</span></div>
+      <div class="k"><b>Move Cap</b><span id="cap">0</span></div>
+      <div class="k"><b>Best Stage</b><span id="bestStage">0</span></div>
+      <div class="k"><b>Best Eff.</b><span id="bestEff">0</span></div>
+    </section>
+
+    <section class="panel">
+      <div class="grid" id="grid"></div>
+      <p class="info" id="info">도크(◇) 위에 모든 화물(■)을 올려두세요.</p>
+    </section>
+
+    <section class="panel">
+      <div class="controls">
+        <button data-dir="up">⬆️ Up</button>
+        <button id="resetBtn">🔁 Reset</button>
+        <button data-dir="right">➡️ Right</button>
+        <button data-dir="left">⬅️ Left</button>
+        <button id="nextBtn">⏭️ Next</button>
+        <button data-dir="down">⬇️ Down</button>
+        <button class="wide" id="muteBtn">🔊 Audio On</button>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const LS_KEY = 'frostbite-freight-fix-best-v1';
+      const WALL = '#';
+      const FLOOR = '.';
+      const GOAL = 'G';
+
+      const levels = [
+        [
+          '#######',
+          '#..G..#',
+          '#..C..#',
+          '#..P..#',
+          '#..C.G#',
+          '#.....#',
+          '#######'
+        ],
+        [
+          '#######',
+          '#..G..#',
+          '#.###.#',
+          '#.CPC.#',
+          '#.###.#',
+          '#..G..#',
+          '#######'
+        ],
+        [
+          '#######',
+          '#G...C#',
+          '#.###.#',
+          '#..P..#',
+          '#.###.#',
+          '#C...G#',
+          '#######'
+        ],
+        [
+          '#######',
+          '#G.C..#',
+          '#..#..#',
+          '#.P#C.#',
+          '#..#..#',
+          '#..C.G#',
+          '#######'
+        ],
+        [
+          '#######',
+          '#G.CC.#',
+          '#.#.#.#',
+          '#..P..#',
+          '#.#.#.#',
+          '#.CC.G#',
+          '#######'
+        ]
+      ];
+
+      const state = {
+        stage: 0,
+        map: [],
+        goals: [],
+        crates: [],
+        player: { x: 0, y: 0 },
+        moves: 0,
+        moveCap: 0,
+        bestStage: 0,
+        bestEff: 0,
+        muted: false,
+        solved: false,
+      };
+
+      const dirs = {
+        up: [0, -1],
+        down: [0, 1],
+        left: [-1, 0],
+        right: [1, 0],
+      };
+
+      const el = {
+        grid: document.getElementById('grid'),
+        info: document.getElementById('info'),
+        stage: document.getElementById('stage'),
+        moves: document.getElementById('moves'),
+        cap: document.getElementById('cap'),
+        bestStage: document.getElementById('bestStage'),
+        bestEff: document.getElementById('bestEff'),
+        resetBtn: document.getElementById('resetBtn'),
+        nextBtn: document.getElementById('nextBtn'),
+        muteBtn: document.getElementById('muteBtn'),
+      };
+
+      let audioCtx;
+      const ensureAudio = () => {
+        if (state.muted) return;
+        if (!audioCtx) {
+          const Ctx = window.AudioContext || window.webkitAudioContext;
+          if (Ctx) audioCtx = new Ctx();
+        }
+      };
+      const beep = (f = 500, len = .07, type = 'sine', v = .03) => {
+        ensureAudio();
+        if (!audioCtx || state.muted) return;
+        const t = audioCtx.currentTime;
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.type = type;
+        o.frequency.setValueAtTime(f, t);
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(v, t + .01);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+        o.connect(g).connect(audioCtx.destination);
+        o.start(t);
+        o.stop(t + len);
+      };
+
+      const loadBest = () => {
+        try {
+          const d = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
+          state.bestStage = Number(d.bestStage || 0);
+          state.bestEff = Number(d.bestEff || 0);
+        } catch (_) {}
+      };
+
+      const saveBest = () => {
+        localStorage.setItem(LS_KEY, JSON.stringify({ bestStage: state.bestStage, bestEff: state.bestEff }));
+      };
+
+      const posEq = (a, b) => a.x === b.x && a.y === b.y;
+      const hasCrate = (x, y) => state.crates.findIndex(c => c.x === x && c.y === y);
+      const isGoal = (x, y) => state.goals.some(g => g.x === x && g.y === y);
+      const inWall = (x, y) => state.map[y][x] === WALL;
+
+      function parseLevel(index) {
+        const raw = levels[index % levels.length];
+        state.map = raw.map(r => r.split('').map(c => (c === WALL ? WALL : FLOOR)));
+        state.goals = [];
+        state.crates = [];
+        state.solved = false;
+
+        raw.forEach((row, y) => {
+          [...row].forEach((c, x) => {
+            if (c === 'P') state.player = { x, y };
+            if (c === 'C') state.crates.push({ x, y });
+            if (c === GOAL) state.goals.push({ x, y });
+          });
+        });
+
+        state.moves = 0;
+        state.moveCap = 20 + Math.min(30, state.stage * 4);
+        message(`Stage ${state.stage + 1} 시작`);
+      }
+
+      function message(txt, danger = false) {
+        el.info.textContent = txt;
+        el.info.style.color = danger ? '#ff9ab0' : '#cbf6ff';
+      }
+
+      function render() {
+        el.grid.innerHTML = '';
+        for (let y = 0; y < 7; y++) {
+          for (let x = 0; x < 7; x++) {
+            const d = document.createElement('div');
+            d.className = 'cell ' + (inWall(x, y) ? 'wall' : 'ice');
+
+            if (isGoal(x, y)) {
+              d.classList.add('goal');
+              d.textContent = '◇';
+            }
+
+            const ci = hasCrate(x, y);
+            if (ci !== -1) {
+              d.className = 'cell cargo';
+              d.textContent = '■';
+              if (isGoal(x, y)) d.style.outline = '2px solid rgba(179,140,255,.8)';
+            }
+
+            if (state.player.x === x && state.player.y === y) {
+              d.className = 'cell player';
+              d.textContent = '▲';
+            }
+            el.grid.appendChild(d);
+          }
+        }
+
+        el.stage.textContent = state.stage + 1;
+        el.moves.textContent = state.moves;
+        el.cap.textContent = state.moveCap;
+        el.bestStage.textContent = state.bestStage;
+        el.bestEff.textContent = state.bestEff;
+      }
+
+      function slideUntilBlock(x, y, dx, dy, treatCratesAsBlock = true) {
+        let nx = x;
+        let ny = y;
+        while (true) {
+          const tx = nx + dx;
+          const ty = ny + dy;
+          if (inWall(tx, ty)) break;
+          if (treatCratesAsBlock && hasCrate(tx, ty) !== -1) break;
+          nx = tx;
+          ny = ty;
+        }
+        return { x: nx, y: ny };
+      }
+
+      function allCratesDocked() {
+        return state.crates.every(c => isGoal(c.x, c.y));
+      }
+
+      function registerClear() {
+        const stageNum = state.stage + 1;
+        const eff = Math.max(0, state.moveCap - state.moves) + stageNum * 50;
+        state.bestStage = Math.max(state.bestStage, stageNum);
+        state.bestEff = Math.max(state.bestEff, eff);
+        saveBest();
+        message(`스테이지 클리어! 효율 +${eff} (N 또는 Next)`);
+        beep(690, .08, 'triangle');
+        beep(930, .08, 'sine');
+      }
+
+      function failStage() {
+        message('Move cap 초과! R로 재시작하세요.', true);
+        beep(180, .2, 'sawtooth', .05);
+      }
+
+      function move(dir) {
+        if (state.solved) return;
+        const [dx, dy] = dirs[dir];
+        const fx = state.player.x + dx;
+        const fy = state.player.y + dy;
+
+        if (inWall(fx, fy)) {
+          beep(190, .06, 'square', .03);
+          return;
+        }
+
+        const crateIndex = hasCrate(fx, fy);
+
+        if (crateIndex !== -1) {
+          const crate = state.crates[crateIndex];
+          let cx = crate.x;
+          let cy = crate.y;
+          while (true) {
+            const tx = cx + dx;
+            const ty = cy + dy;
+            const blocked = inWall(tx, ty) || hasCrate(tx, ty) !== -1;
+            if (blocked) break;
+            cx = tx;
+            cy = ty;
+          }
+
+          if (cx === crate.x && cy === crate.y) {
+            beep(170, .06, 'square', .035);
+            return;
+          }
+
+          crate.x = cx;
+          crate.y = cy;
+          state.player.x = fx;
+          state.player.y = fy;
+          state.moves += 1;
+          beep(520, .07, 'triangle');
+        } else {
+          const target = slideUntilBlock(state.player.x, state.player.y, dx, dy, true);
+          if (target.x === state.player.x && target.y === state.player.y) {
+            beep(170, .06, 'square', .035);
+            return;
+          }
+          state.player = target;
+          state.moves += 1;
+          beep(430, .06, 'sine');
+        }
+
+        if (allCratesDocked()) {
+          state.solved = true;
+          registerClear();
+        } else if (state.moves > state.moveCap) {
+          failStage();
+        } else {
+          message('도크로 화물을 밀어 넣으세요.');
+        }
+
+        render();
+      }
+
+      function resetStage() {
+        parseLevel(state.stage);
+        beep(360, .06, 'triangle');
+        render();
+      }
+
+      function nextStage() {
+        if (!state.solved) {
+          message('현재 스테이지를 먼저 클리어하세요.', true);
+          beep(180, .06, 'square', .03);
+          return;
+        }
+        state.stage += 1;
+        parseLevel(state.stage);
+        render();
+      }
+
+      document.querySelectorAll('[data-dir]').forEach((btn) => {
+        btn.addEventListener('click', () => move(btn.dataset.dir));
+      });
+      el.resetBtn.addEventListener('click', resetStage);
+      el.nextBtn.addEventListener('click', nextStage);
+      el.muteBtn.addEventListener('click', () => {
+        state.muted = !state.muted;
+        el.muteBtn.textContent = state.muted ? '🔇 Audio Off' : '🔊 Audio On';
+      });
+
+      document.addEventListener('keydown', (e) => {
+        const k = e.key.toLowerCase();
+        if (k === 'arrowup' || k === 'w') move('up');
+        else if (k === 'arrowdown' || k === 's') move('down');
+        else if (k === 'arrowleft' || k === 'a') move('left');
+        else if (k === 'arrowright' || k === 'd') move('right');
+        else if (k === 'r') resetStage();
+        else if (k === 'n') nextStage();
+      });
+
+      loadBest();
+      parseLevel(0);
+      render();
+    })();
+  </script>
+</body>
+</html>

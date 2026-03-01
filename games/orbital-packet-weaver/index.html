@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Orbital Packet Weaver</title>
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0a0a1a;
+      --panel: #131a32;
+      --line: #2d4d8f;
+      --text: #ecf2ff;
+      --muted: #94aad8;
+      --c0: #60f0ff;
+      --c1: #ff74d4;
+      --c2: #ffd36b;
+      --good: #76ffb8;
+      --bad: #ff6e93;
+      font-family: "Pretendard", "Noto Sans KR", system-ui, -apple-system, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      display: flex;
+      justify-content: center;
+      background: radial-gradient(circle at 50% -20%, #1d2a52 0%, var(--bg) 58%);
+      color: var(--text);
+      padding: 12px;
+    }
+    .app { width: min(540px, 100%); display: grid; gap: 10px; }
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+      font-size: 12px;
+    }
+    .card {
+      background: linear-gradient(180deg, #182750, #101a35);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      text-align: center;
+      padding: 8px 6px;
+    }
+    canvas {
+      width: 100%;
+      aspect-ratio: 9 / 14;
+      border-radius: 16px;
+      border: 1px solid #32579f;
+      background: linear-gradient(180deg, #101b40, #080f23 70%);
+      box-shadow: 0 0 28px #6ef0ff30;
+      touch-action: none;
+    }
+    .row, .channels {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: repeat(3, minmax(0,1fr));
+    }
+    button {
+      appearance: none;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px 10px;
+      background: var(--panel);
+      color: var(--text);
+      font-weight: 800;
+      letter-spacing: .2px;
+      user-select: none;
+      -webkit-user-select: none;
+      cursor: pointer;
+    }
+    button:active, button.on {
+      transform: translateY(1px) scale(0.99);
+      box-shadow: 0 0 0 1px #ffffff3f inset;
+    }
+    #ch0.on { border-color: var(--c0); box-shadow: 0 0 0 1px #60f0ff70 inset; }
+    #ch1.on { border-color: var(--c1); box-shadow: 0 0 0 1px #ff74d470 inset; }
+    #ch2.on { border-color: var(--c2); box-shadow: 0 0 0 1px #ffd36b70 inset; }
+    .hint {
+      margin: 0;
+      font-size: 12px;
+      line-height: 1.45;
+      color: var(--muted);
+      text-align: center;
+    }
+    @media (max-width: 460px) {
+      .hud { grid-template-columns: repeat(3, minmax(0,1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="hud">
+      <div class="card">SCORE<br><strong id="score">0</strong></div>
+      <div class="card">BEST<br><strong id="best">0</strong></div>
+      <div class="card">SHIELD<br><strong id="shield">5</strong></div>
+      <div class="card">COMBO<br><strong id="combo">0</strong></div>
+      <div class="card">CH<br><strong id="channelText">AQUA</strong></div>
+    </section>
+
+    <canvas id="game" width="360" height="560" aria-label="Orbital Packet Weaver canvas"></canvas>
+
+    <section class="channels" aria-label="channel controls">
+      <button id="ch0">A / 1 · AQUA</button>
+      <button id="ch1">S / 2 · MAGENTA</button>
+      <button id="ch2">D / 3 · AMBER</button>
+    </section>
+
+    <section class="row" aria-label="move controls">
+      <button id="leftBtn">◀ LEFT</button>
+      <button id="restartBtn">RESTART</button>
+      <button id="rightBtn">RIGHT ▶</button>
+    </section>
+
+    <p class="hint">←/→ 또는 터치로 이동 · A/S/D(1/2/3)로 채널 전환. 같은 색 패킷만 수신하세요.</p>
+  </main>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = 'best-orbital-packet-weaver';
+      const CH_NAMES = ['AQUA', 'MAGENTA', 'AMBER'];
+      const CH_COLORS = ['#60f0ff', '#ff74d4', '#ffd36b'];
+
+      const canvas = document.getElementById('game');
+      const ctx = canvas.getContext('2d');
+      const scoreEl = document.getElementById('score');
+      const bestEl = document.getElementById('best');
+      const shieldEl = document.getElementById('shield');
+      const comboEl = document.getElementById('combo');
+      const channelTextEl = document.getElementById('channelText');
+
+      const leftBtn = document.getElementById('leftBtn');
+      const rightBtn = document.getElementById('rightBtn');
+      const restartBtn = document.getElementById('restartBtn');
+      const channelButtons = [
+        document.getElementById('ch0'),
+        document.getElementById('ch1'),
+        document.getElementById('ch2')
+      ];
+
+      const state = {
+        playerX: canvas.width / 2,
+        playerY: canvas.height - 58,
+        playerRadius: 18,
+        channel: 0,
+        score: 0,
+        best: Number(localStorage.getItem(STORAGE_KEY) || 0),
+        shield: 5,
+        combo: 0,
+        packets: [],
+        spawnTick: 0,
+        running: true,
+        moveLeft: false,
+        moveRight: false,
+        overFlash: 0,
+        speedScale: 1
+      };
+
+      bestEl.textContent = String(state.best);
+
+      let audioCtx = null;
+      function ensureAudio() {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+      }
+      function beep(freq = 440, duration = 0.08, type = 'sine', gain = 0.05) {
+        if (!audioCtx) return;
+        const t = audioCtx.currentTime;
+        const osc = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, t);
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(gain, t + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+        osc.connect(g).connect(audioCtx.destination);
+        osc.start(t);
+        osc.stop(t + duration + 0.02);
+      }
+
+      function setChannel(i) {
+        state.channel = i;
+        channelTextEl.textContent = CH_NAMES[i];
+        channelButtons.forEach((b, idx) => b.classList.toggle('on', idx === i));
+        beep(350 + i * 120, 0.06, 'triangle', 0.035);
+      }
+      setChannel(0);
+
+      function pressHold(btn, setter) {
+        const down = (e) => { e.preventDefault(); ensureAudio(); setter(true); btn.classList.add('on'); };
+        const up = (e) => { e.preventDefault(); setter(false); btn.classList.remove('on'); };
+        btn.addEventListener('pointerdown', down);
+        btn.addEventListener('pointerup', up);
+        btn.addEventListener('pointercancel', up);
+        btn.addEventListener('pointerleave', up);
+      }
+      pressHold(leftBtn, v => state.moveLeft = v);
+      pressHold(rightBtn, v => state.moveRight = v);
+
+      channelButtons.forEach((btn, idx) => {
+        btn.addEventListener('click', () => {
+          ensureAudio();
+          if (!state.running) return;
+          setChannel(idx);
+        });
+      });
+
+      restartBtn.addEventListener('click', () => {
+        ensureAudio();
+        reset();
+        beep(620, 0.08, 'sawtooth', 0.045);
+      });
+
+      window.addEventListener('keydown', (e) => {
+        const k = e.key.toLowerCase();
+        if (["arrowleft", "arrowright", "a", "s", "d", "1", "2", "3", " ", "spacebar", "r"].includes(k) || e.key === ' ') {
+          ensureAudio();
+        }
+
+        if (k === 'arrowleft') state.moveLeft = true;
+        else if (k === 'arrowright') state.moveRight = true;
+        else if ((k === 'a' || k === '1') && state.running) setChannel(0);
+        else if ((k === 's' || k === '2') && state.running) setChannel(1);
+        else if ((k === 'd' || k === '3') && state.running) setChannel(2);
+        else if ((k === 'r' || e.key === ' ') && !state.running) reset();
+      });
+
+      window.addEventListener('keyup', (e) => {
+        const k = e.key.toLowerCase();
+        if (k === 'arrowleft') state.moveLeft = false;
+        else if (k === 'arrowright') state.moveRight = false;
+      });
+
+      function reset() {
+        state.playerX = canvas.width / 2;
+        state.channel = 0;
+        state.score = 0;
+        state.shield = 5;
+        state.combo = 0;
+        state.packets = [];
+        state.spawnTick = 0;
+        state.running = true;
+        state.overFlash = 0;
+        state.speedScale = 1;
+        setChannel(0);
+        syncHud();
+      }
+
+      function syncHud() {
+        scoreEl.textContent = String(state.score);
+        bestEl.textContent = String(state.best);
+        shieldEl.textContent = String(state.shield);
+        comboEl.textContent = String(state.combo);
+      }
+
+      function spawnPacket() {
+        const margin = 24;
+        const packet = {
+          x: margin + Math.random() * (canvas.width - margin * 2),
+          y: -16,
+          radius: 11,
+          ch: Math.floor(Math.random() * 3),
+          speed: 2.1 + Math.random() * 1.8 + state.speedScale * 0.6
+        };
+        state.packets.push(packet);
+      }
+
+      function hurt() {
+        state.shield -= 1;
+        state.combo = 0;
+        state.overFlash = 8;
+        beep(160, 0.12, 'square', 0.05);
+        if (state.shield <= 0) {
+          state.running = false;
+          beep(110, 0.35, 'sawtooth', 0.07);
+        }
+      }
+
+      function succeed() {
+        state.combo += 1;
+        state.score += 8 + state.combo * 2;
+        beep(420 + Math.min(340, state.combo * 14), 0.06, 'triangle', 0.045);
+      }
+
+      function update() {
+        if (!state.running) return;
+
+        const speed = 3.8;
+        if (state.moveLeft) state.playerX -= speed;
+        if (state.moveRight) state.playerX += speed;
+        state.playerX = Math.max(24, Math.min(canvas.width - 24, state.playerX));
+
+        state.spawnTick += 1;
+        const spawnInterval = Math.max(20, 46 - Math.floor(state.score / 80));
+        if (state.spawnTick >= spawnInterval) {
+          state.spawnTick = 0;
+          spawnPacket();
+        }
+
+        state.speedScale = 1 + state.score / 900;
+
+        for (let i = state.packets.length - 1; i >= 0; i--) {
+          const p = state.packets[i];
+          p.y += p.speed;
+
+          const nearPlayerY = Math.abs(p.y - state.playerY) < 20;
+          const nearPlayerX = Math.abs(p.x - state.playerX) < state.playerRadius + p.radius;
+          if (nearPlayerY && nearPlayerX) {
+            state.packets.splice(i, 1);
+            if (p.ch === state.channel) succeed();
+            else hurt();
+            continue;
+          }
+
+          if (p.y > canvas.height + 20) {
+            state.packets.splice(i, 1);
+            hurt();
+          }
+        }
+
+        if (state.score > state.best) {
+          state.best = state.score;
+          localStorage.setItem(STORAGE_KEY, String(state.best));
+        }
+
+        syncHud();
+      }
+
+      function drawBackground() {
+        const g = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        g.addColorStop(0, '#101b40');
+        g.addColorStop(1, '#080f23');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        for (let i = 0; i < 22; i++) {
+          const y = (i * 31 + performance.now() * 0.03) % (canvas.height + 30) - 20;
+          ctx.strokeStyle = '#5fa6ff22';
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(canvas.width, y + 10);
+          ctx.stroke();
+        }
+      }
+
+      function drawPlayer() {
+        const x = state.playerX;
+        const y = state.playerY;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.shadowBlur = 16;
+        ctx.shadowColor = CH_COLORS[state.channel];
+        ctx.fillStyle = CH_COLORS[state.channel];
+        ctx.beginPath();
+        ctx.moveTo(0, -18);
+        ctx.lineTo(15, 14);
+        ctx.lineTo(-15, 14);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.strokeStyle = '#f2f5ff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 1, 8, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      function drawPackets() {
+        for (const p of state.packets) {
+          ctx.save();
+          ctx.shadowBlur = 12;
+          ctx.shadowColor = CH_COLORS[p.ch];
+          ctx.fillStyle = CH_COLORS[p.ch];
+          ctx.beginPath();
+          ctx.roundRect(p.x - 11, p.y - 9, 22, 18, 4);
+          ctx.fill();
+          ctx.strokeStyle = '#0b1022';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(p.x - 6, p.y - 4, 12, 8);
+          ctx.restore();
+        }
+      }
+
+      function drawOverlay() {
+        if (state.overFlash > 0) {
+          ctx.fillStyle = `rgba(255,80,120,${0.06 * state.overFlash})`;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          state.overFlash -= 1;
+        }
+
+        if (!state.running) {
+          ctx.fillStyle = '#060b16cc';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = '#ff8caf';
+          ctx.font = '700 30px system-ui';
+          ctx.textAlign = 'center';
+          ctx.fillText('LINK LOST', canvas.width / 2, canvas.height / 2 - 12);
+          ctx.fillStyle = '#d5ddf9';
+          ctx.font = '600 16px system-ui';
+          ctx.fillText('R 또는 RESTART로 재시작', canvas.width / 2, canvas.height / 2 + 24);
+        }
+      }
+
+      function loop() {
+        update();
+        drawBackground();
+        drawPackets();
+        drawPlayer();
+        drawOverlay();
+        requestAnimationFrame(loop);
+      }
+
+      syncHud();
+      loop();
+    })();
+  </script>
+</body>
+</html>

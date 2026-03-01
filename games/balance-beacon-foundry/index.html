@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Balance Beacon Foundry</title>
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0a0a1a;
+      --panel: #111a33;
+      --line: #2d4c8e;
+      --text: #ecf2ff;
+      --muted: #95acd9;
+      --good: #76ffc2;
+      --warn: #ffd57a;
+      --bad: #ff739a;
+      font-family: "Pretendard", "Noto Sans KR", system-ui, -apple-system, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      display: flex;
+      justify-content: center;
+      padding: 12px;
+      color: var(--text);
+      background: radial-gradient(circle at 50% -18%, #1a2a55 0%, var(--bg) 58%);
+    }
+    .app { width: min(540px, 100%); display: grid; gap: 10px; }
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+      font-size: 12px;
+    }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: linear-gradient(180deg, #17274f, #101935);
+      text-align: center;
+      padding: 8px 6px;
+    }
+    canvas {
+      width: 100%;
+      aspect-ratio: 9 / 14;
+      border-radius: 16px;
+      border: 1px solid #32579f;
+      background: linear-gradient(180deg, #101b40, #080f22 72%);
+      box-shadow: 0 0 30px #6fa8ff2c;
+      touch-action: none;
+    }
+    .controls {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: repeat(3, minmax(0,1fr));
+    }
+    button {
+      appearance: none;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel);
+      color: var(--text);
+      font-weight: 800;
+      padding: 12px 8px;
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    button:active, button.on {
+      transform: translateY(1px) scale(0.99);
+      box-shadow: 0 0 0 1px #ffffff3f inset;
+    }
+    .restart { width: 100%; }
+    .hint {
+      margin: 0;
+      text-align: center;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    @media (max-width: 460px) {
+      .hud { grid-template-columns: repeat(3, minmax(0,1fr)); }
+      .controls { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="hud">
+      <div class="card">SCORE<br><strong id="score">0</strong></div>
+      <div class="card">BEST<br><strong id="best">0</strong></div>
+      <div class="card">LEFT KG<br><strong id="leftMass">0</strong></div>
+      <div class="card">RIGHT KG<br><strong id="rightMass">0</strong></div>
+      <div class="card">TILT<br><strong id="tilt">0.00</strong></div>
+    </section>
+
+    <canvas id="game" width="360" height="560" aria-label="Balance Beacon Foundry canvas"></canvas>
+
+    <section class="controls" aria-label="controls">
+      <button id="leftBtn">◀ LEFT (←)</button>
+      <button id="dropBtn">DROP (SPACE)</button>
+      <button id="rightBtn">RIGHT (→)</button>
+    </section>
+
+    <button id="restartBtn" class="restart">RESTART</button>
+    <p class="hint">좌/우 위치 선택 후 DROP. 기울기 임계치를 오래 넘기면 구조물이 붕괴됩니다.</p>
+  </main>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = 'best-balance-beacon-foundry';
+      const canvas = document.getElementById('game');
+      const ctx = canvas.getContext('2d');
+
+      const scoreEl = document.getElementById('score');
+      const bestEl = document.getElementById('best');
+      const leftMassEl = document.getElementById('leftMass');
+      const rightMassEl = document.getElementById('rightMass');
+      const tiltEl = document.getElementById('tilt');
+
+      const leftBtn = document.getElementById('leftBtn');
+      const rightBtn = document.getElementById('rightBtn');
+      const dropBtn = document.getElementById('dropBtn');
+      const restartBtn = document.getElementById('restartBtn');
+
+      const state = {
+        best: Number(localStorage.getItem(STORAGE_KEY) || 0),
+        score: 0,
+        leftMass: 0,
+        rightMass: 0,
+        cursorSide: -1,
+        nextWeight: 1,
+        activeDrop: null,
+        running: true,
+        overloadTime: 0,
+        tilt: 0,
+        time: 0,
+        warningPulse: 0
+      };
+      bestEl.textContent = String(state.best);
+
+      let audioCtx = null;
+      function ensureAudio() {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+      }
+      function beep(freq = 420, duration = 0.08, type = 'sine', gain = 0.05) {
+        if (!audioCtx) return;
+        const t = audioCtx.currentTime;
+        const osc = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, t);
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(gain, t + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+        osc.connect(g).connect(audioCtx.destination);
+        osc.start(t);
+        osc.stop(t + duration + 0.02);
+      }
+
+      function randomWeight() {
+        return 1 + Math.floor(Math.random() * 4);
+      }
+
+      function clampCursor(side) {
+        state.cursorSide = side < 0 ? -1 : 1;
+      }
+
+      function startDrop() {
+        if (!state.running || state.activeDrop) return;
+        ensureAudio();
+        const targetX = state.cursorSide < 0 ? 120 : 240;
+        state.activeDrop = {
+          x: targetX,
+          y: 38,
+          w: state.nextWeight,
+          vy: 0
+        };
+        state.nextWeight = randomWeight();
+        beep(260 + state.activeDrop.w * 60, 0.06, 'triangle', 0.04);
+      }
+
+      function settleDrop(drop) {
+        if (state.cursorSide < 0) state.leftMass += drop.w;
+        else state.rightMass += drop.w;
+        state.score += 6 + drop.w * 2;
+        beep(400 + drop.w * 40, 0.08, 'sine', 0.04);
+      }
+
+      function syncHud() {
+        scoreEl.textContent = String(Math.floor(state.score));
+        bestEl.textContent = String(state.best);
+        leftMassEl.textContent = String(state.leftMass);
+        rightMassEl.textContent = String(state.rightMass);
+        tiltEl.textContent = state.tilt.toFixed(2);
+      }
+
+      function reset() {
+        state.score = 0;
+        state.leftMass = 0;
+        state.rightMass = 0;
+        state.cursorSide = -1;
+        state.nextWeight = randomWeight();
+        state.activeDrop = null;
+        state.running = true;
+        state.overloadTime = 0;
+        state.tilt = 0;
+        state.time = 0;
+        state.warningPulse = 0;
+        syncHud();
+      }
+
+      function endGame() {
+        state.running = false;
+        beep(110, 0.32, 'sawtooth', 0.08);
+      }
+
+      function update(dt) {
+        if (!state.running) return;
+
+        state.time += dt;
+        state.score += dt * 3;
+
+        if (state.activeDrop) {
+          state.activeDrop.vy += 220 * dt;
+          state.activeDrop.y += state.activeDrop.vy * dt;
+          const landY = 250;
+          if (state.activeDrop.y >= landY) {
+            state.activeDrop.y = landY;
+            settleDrop(state.activeDrop);
+            state.activeDrop = null;
+          }
+        }
+
+        const total = Math.max(1, state.leftMass + state.rightMass);
+        const massTilt = (state.leftMass - state.rightMass) / total;
+        const windAmp = Math.min(0.45, 0.08 + state.score / 1600);
+        const windTilt = Math.sin(state.time * 1.55) * windAmp;
+        state.tilt = massTilt + windTilt;
+
+        const threshold = Math.max(0.58, 0.9 - state.score / 2600);
+        if (Math.abs(state.tilt) > threshold) {
+          state.overloadTime += dt;
+          state.warningPulse += dt * 8;
+          if (Math.floor(state.warningPulse) % 2 === 0) beep(180, 0.05, 'square', 0.025);
+        } else {
+          state.overloadTime = Math.max(0, state.overloadTime - dt * 1.8);
+        }
+
+        if (state.overloadTime > 1.7) {
+          endGame();
+        }
+
+        if (state.score > state.best) {
+          state.best = Math.floor(state.score);
+          localStorage.setItem(STORAGE_KEY, String(state.best));
+        }
+
+        syncHud();
+      }
+
+      function drawBackground() {
+        const g = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        g.addColorStop(0, '#101b40');
+        g.addColorStop(1, '#080f22');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        for (let i = 0; i < 24; i++) {
+          ctx.strokeStyle = '#5f8cff21';
+          const y = ((i * 26) + (state.time * 24)) % (canvas.height + 30) - 15;
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(canvas.width, y + 8);
+          ctx.stroke();
+        }
+      }
+
+      function drawBeam() {
+        const centerX = canvas.width / 2;
+        const centerY = 300;
+        const beamLen = 220;
+        const angle = state.tilt * 0.45;
+
+        ctx.save();
+        ctx.translate(centerX, centerY);
+        ctx.rotate(angle);
+
+        ctx.strokeStyle = '#77e4ff';
+        ctx.lineWidth = 10;
+        ctx.lineCap = 'round';
+        ctx.shadowBlur = 16;
+        ctx.shadowColor = '#64ddff7a';
+        ctx.beginPath();
+        ctx.moveTo(-beamLen / 2, 0);
+        ctx.lineTo(beamLen / 2, 0);
+        ctx.stroke();
+
+        const plateW = 74;
+        const plateH = 16;
+        ctx.fillStyle = '#16274f';
+        ctx.strokeStyle = '#88c0ff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(-beamLen / 2 - plateW / 2 + 6, -plateH / 2, plateW, plateH, 8);
+        ctx.roundRect(beamLen / 2 - plateW / 2 - 6, -plateH / 2, plateW, plateH, 8);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.restore();
+
+        ctx.fillStyle = '#20345f';
+        ctx.beginPath();
+        ctx.moveTo(centerX - 24, centerY + 92);
+        ctx.lineTo(centerX + 24, centerY + 92);
+        ctx.lineTo(centerX, centerY + 18);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      function drawDrop() {
+        if (!state.activeDrop) return;
+        const d = state.activeDrop;
+        const color = ['#67f1ff', '#8dd7ff', '#ffd67e', '#ff8dba'][d.w - 1];
+        ctx.save();
+        ctx.shadowBlur = 14;
+        ctx.shadowColor = color;
+        ctx.fillStyle = color;
+        const size = 16 + d.w * 3;
+        ctx.beginPath();
+        ctx.roundRect(d.x - size / 2, d.y - size / 2, size, size, 5);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      function drawCursorAndNext() {
+        const x = state.cursorSide < 0 ? 120 : 240;
+        ctx.strokeStyle = '#9ef3ff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x, 18);
+        ctx.lineTo(x, 44);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(x - 8, 36);
+        ctx.lineTo(x, 44);
+        ctx.lineTo(x + 8, 36);
+        ctx.stroke();
+
+        ctx.fillStyle = '#d8e4ff';
+        ctx.font = '700 14px system-ui';
+        ctx.textAlign = 'left';
+        ctx.fillText(`NEXT ${state.nextWeight}kg`, 12, 26);
+
+        const overloadRatio = Math.min(1, state.overloadTime / 1.7);
+        ctx.fillStyle = '#0a1226';
+        ctx.fillRect(12, 38, 130, 8);
+        ctx.fillStyle = overloadRatio > 0.7 ? '#ff6f95' : '#ffd57a';
+        ctx.fillRect(12, 38, 130 * overloadRatio, 8);
+        ctx.strokeStyle = '#32579f';
+        ctx.strokeRect(12, 38, 130, 8);
+      }
+
+      function drawOverlay() {
+        if (state.overloadTime > 0.2 && state.running) {
+          const alpha = Math.min(0.18, state.overloadTime * 0.1);
+          ctx.fillStyle = `rgba(255,100,150,${alpha})`;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        if (!state.running) {
+          ctx.fillStyle = '#060b16cc';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.textAlign = 'center';
+          ctx.fillStyle = '#ff88ad';
+          ctx.font = '700 30px system-ui';
+          ctx.fillText('FOUNDRY COLLAPSE', canvas.width / 2, canvas.height / 2 - 10);
+          ctx.fillStyle = '#d8e3ff';
+          ctx.font = '600 16px system-ui';
+          ctx.fillText('RESTART 또는 Space로 재시작', canvas.width / 2, canvas.height / 2 + 24);
+        }
+      }
+
+      function holdButton(btn, side) {
+        btn.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          ensureAudio();
+          clampCursor(side);
+          btn.classList.add('on');
+          beep(300 + (side > 0 ? 80 : 0), 0.05, 'triangle', 0.03);
+        });
+        const off = () => btn.classList.remove('on');
+        btn.addEventListener('pointerup', off);
+        btn.addEventListener('pointercancel', off);
+        btn.addEventListener('pointerleave', off);
+      }
+
+      holdButton(leftBtn, -1);
+      holdButton(rightBtn, 1);
+
+      dropBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        startDrop();
+      });
+      dropBtn.addEventListener('pointerdown', () => dropBtn.classList.add('on'));
+      dropBtn.addEventListener('pointerup', () => dropBtn.classList.remove('on'));
+      dropBtn.addEventListener('pointercancel', () => dropBtn.classList.remove('on'));
+      dropBtn.addEventListener('pointerleave', () => dropBtn.classList.remove('on'));
+
+      restartBtn.addEventListener('click', () => {
+        ensureAudio();
+        reset();
+        beep(620, 0.08, 'triangle', 0.04);
+      });
+
+      window.addEventListener('keydown', (e) => {
+        if (["ArrowLeft", "ArrowRight", " ", "Spacebar", "r", "R"].includes(e.key)) ensureAudio();
+        if (e.key === 'ArrowLeft') {
+          clampCursor(-1);
+          beep(300, 0.05, 'triangle', 0.03);
+        } else if (e.key === 'ArrowRight') {
+          clampCursor(1);
+          beep(380, 0.05, 'triangle', 0.03);
+        } else if (e.key === ' ') {
+          if (state.running) startDrop();
+          else reset();
+        } else if ((e.key === 'r' || e.key === 'R') && !state.running) {
+          reset();
+        }
+      });
+
+      let last = performance.now();
+      function loop(now) {
+        const dt = Math.min(0.033, (now - last) / 1000);
+        last = now;
+        update(dt);
+        drawBackground();
+        drawCursorAndNext();
+        drawDrop();
+        drawBeam();
+        drawOverlay();
+        requestAnimationFrame(loop);
+      }
+
+      syncHud();
+      requestAnimationFrame(loop);
+    })();
+  </script>
+</body>
+</html>

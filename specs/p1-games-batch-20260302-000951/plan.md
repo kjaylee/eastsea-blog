@@ -24,9 +24,9 @@
 ## Phase 4. Registry + Git
 - [x] `games/manifest.json` 신규 3개 prepend
 - [x] `count` + `updatedAt` 갱신
-- [ ] 변경 파일만 git add
-- [ ] commit
-- [ ] push
+- [x] 변경 파일만 git add
+- [x] commit
+- [x] push
 
 ## Risk Controls
 - slug 충돌 방지: 생성 직전/직후 재확인

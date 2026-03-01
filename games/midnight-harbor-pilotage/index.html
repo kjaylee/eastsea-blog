@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>Midnight Harbor Pilotage</title>
+  <meta name="theme-color" content="#0a0a1a" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <style>
+    :root{--bg:#0a0a1a;--panel:#151530;--line:#3c3c7a;--ink:#edf4ff;--neon:#66f3ff;--pink:#ff79e8;--warn:#ffd166;--bad:#ff6b6b}
+    *{box-sizing:border-box}
+    body{margin:0;background:radial-gradient(circle at 80% 0,#1b1b44,#0a0a1a 62%,#050510);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;display:flex;justify-content:center;min-height:100vh}
+    .app{width:min(920px,100%);padding:12px;display:flex;flex-direction:column;gap:10px}
+    .hud{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+    .box{background:rgba(20,20,46,.86);border:1px solid var(--line);border-radius:12px;padding:8px;text-align:center}
+    .box b{display:block;color:var(--neon);font-size:1.04rem}
+    .panel{background:rgba(10,10,26,.84);border:1px solid #32326b;border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px}
+    canvas{width:100%;height:auto;aspect-ratio:16/10;border-radius:12px;border:1px solid #3f3f8c;background:linear-gradient(180deg,#0b1535,#081128 40%,#060f22)}
+    .controls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+    button{background:#1e1e4c;color:#fff;border:1px solid #4e4ea7;border-radius:11px;min-height:46px;font-weight:800;padding:10px;touch-action:manipulation}
+    .hint{font-size:.92rem;color:#c9ddff;line-height:1.45}
+    .overlay{position:fixed;inset:0;background:#040413e8;display:none;place-items:center;padding:20px}
+    .overlay.show{display:grid}
+    .card{width:min(430px,100%);background:#121231;border:1px solid #4f4fab;border-radius:14px;padding:18px;text-align:center}
+    .card h2{margin:0 0 8px;color:var(--pink)}
+    @media (max-width:760px){.hud{grid-template-columns:repeat(3,minmax(0,1fr))}.controls{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="hud">
+      <div class="box">Distance<b id="distance">0m</b></div>
+      <div class="box">Score<b id="score">0</b></div>
+      <div class="box">Hull<b id="hull">3</b></div>
+      <div class="box">Streak<b id="streak">0</b></div>
+      <div class="box">Speed<b id="speed">1.0x</b></div>
+      <div class="box">Best<b id="best">0m / 0</b></div>
+    </section>
+
+    <section class="panel">
+      <canvas id="game" width="900" height="560" aria-label="harbor navigation game"></canvas>
+      <div class="controls">
+        <button id="leftBtn">← Port</button>
+        <button id="boostBtn">Space · Boost</button>
+        <button id="rightBtn">Starboard →</button>
+        <button id="resetBtn">Restart Run</button>
+      </div>
+      <div class="hint" id="hint">좌/우 이동으로 암초를 피하고 부이를 수거하세요. Space(또는 Boost)로 순간 가속, 연속 수거로 스트릭 보너스.</div>
+    </section>
+  </main>
+
+  <div class="overlay" id="overlay" role="dialog" aria-modal="true">
+    <div class="card">
+      <h2>Harbor Run Ended</h2>
+      <p id="final"></p>
+      <button id="retryBtn">다시 출항</button>
+    </div>
+  </div>
+
+  <script>
+  (()=>{
+    const key='midnightHarborPilotage.v1';
+    const cvs=document.getElementById('game');
+    const ctx=cvs.getContext('2d');
+    const distanceEl=document.getElementById('distance');
+    const scoreEl=document.getElementById('score');
+    const hullEl=document.getElementById('hull');
+    const streakEl=document.getElementById('streak');
+    const speedEl=document.getElementById('speed');
+    const bestEl=document.getElementById('best');
+    const hintEl=document.getElementById('hint');
+    const overlay=document.getElementById('overlay');
+    const finalEl=document.getElementById('final');
+
+    let best={distance:0,score:0};
+    try{best=Object.assign(best,JSON.parse(localStorage.getItem(key)||'{}'));}catch{}
+
+    const audio={ctx:null};
+    function ensureAudio(){if(!audio.ctx){const C=window.AudioContext||window.webkitAudioContext;if(C)audio.ctx=new C();}}
+    function tone(freq=440,dur=.09,type='triangle',gain=.05){
+      if(!audio.ctx)return;
+      const t=audio.ctx.currentTime,o=audio.ctx.createOscillator(),g=audio.ctx.createGain();
+      o.type=type;o.frequency.setValueAtTime(freq,t);g.gain.setValueAtTime(gain,t);g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+      o.connect(g).connect(audio.ctx.destination);o.start(t);o.stop(t+dur);
+    }
+    ['keydown','pointerdown'].forEach(evt=>window.addEventListener(evt,ensureAudio,{once:true}));
+
+    const S={lane:1,hull:3,score:0,distance:0,streak:0,speed:1,boost:0,alive:true,t:0,last:0,spawnObs:0,spawnBuoy:0,objects:[]};
+    const laneX=[220,450,680];
+
+    function reset(){
+      S.lane=1;S.hull=3;S.score=0;S.distance=0;S.streak=0;S.speed=1;S.boost=0;S.alive=true;S.t=0;S.last=performance.now();S.spawnObs=0;S.spawnBuoy=0;S.objects=[];
+      overlay.classList.remove('show');
+      hintEl.textContent='좌/우 이동으로 암초를 피하고 부이를 수거하세요. Space(또는 Boost)로 순간 가속, 연속 수거로 스트릭 보너스.';
+      sync();
+      requestAnimationFrame(loop);
+    }
+
+    function saveBest(){
+      if(S.distance>best.distance||S.score>best.score){
+        best.distance=Math.max(best.distance,Math.floor(S.distance));
+        best.score=Math.max(best.score,S.score);
+        localStorage.setItem(key,JSON.stringify(best));
+      }
+    }
+
+    function sync(){
+      distanceEl.textContent=`${Math.floor(S.distance)}m`;
+      scoreEl.textContent=String(S.score);
+      hullEl.textContent=String(S.hull);
+      streakEl.textContent=String(S.streak);
+      speedEl.textContent=`${S.speed.toFixed(1)}x`;
+      bestEl.textContent=`${best.distance}m / ${best.score}`;
+    }
+
+    function spawn(type){
+      const lane=Math.floor(Math.random()*3);
+      const y=-40;
+      const sp=150+Math.random()*90+S.speed*45;
+      S.objects.push({type,lane,x:laneX[lane],y,w:type==='rock'?90:56,h:type==='rock'?72:56,sp,hit:false});
+    }
+
+    function moveLane(d){
+      if(!S.alive)return;
+      const old=S.lane;
+      S.lane=Math.max(0,Math.min(2,S.lane+d));
+      if(S.lane!==old)tone(320,0.06,'triangle',0.04);
+    }
+
+    function activateBoost(){
+      if(!S.alive)return;
+      if(S.boost>0.05)return;
+      S.boost=1.1;
+      tone(780,0.08,'sawtooth',0.05);setTimeout(()=>tone(980,0.06,'triangle',0.04),90);
+    }
+
+    function collide(a,b){
+      return Math.abs(a.x-b.x)<(a.w+b.w)*0.35 && Math.abs(a.y-b.y)<(a.h+b.h)*0.35;
+    }
+
+    function end(){
+      S.alive=false;
+      saveBest();sync();
+      finalEl.textContent=`Distance ${Math.floor(S.distance)}m · Score ${S.score} · Best ${best.distance}m/${best.score}`;
+      overlay.classList.add('show');
+      tone(170,0.2,'sawtooth',0.06);
+    }
+
+    function drawBoat(px,py){
+      ctx.save();
+      ctx.translate(px,py);
+      ctx.fillStyle='#6af3ff';
+      ctx.shadowColor='#66f3ff';ctx.shadowBlur=20;
+      ctx.beginPath();
+      ctx.moveTo(0,-36);ctx.lineTo(36,22);ctx.lineTo(0,30);ctx.lineTo(-36,22);ctx.closePath();ctx.fill();
+      ctx.fillStyle='#f6fbff';ctx.fillRect(-8,-12,16,18);
+      if(S.boost>0){ctx.fillStyle='#ff79e8';ctx.fillRect(-6,31,12,22+S.boost*12);}
+      ctx.restore();
+    }
+
+    function drawObj(o){
+      if(o.type==='rock'){
+        ctx.fillStyle='#6f7697';
+        ctx.strokeStyle='#b2bcdf';ctx.lineWidth=2;
+        ctx.beginPath();ctx.rect(o.x-40,o.y-30,80,60);ctx.fill();ctx.stroke();
+      }else{
+        ctx.fillStyle='#ffd166';ctx.shadowColor='#ffd166';ctx.shadowBlur=16;
+        ctx.beginPath();ctx.arc(o.x,o.y,20,0,Math.PI*2);ctx.fill();
+        ctx.shadowBlur=0;ctx.fillStyle='#3f2d07';ctx.fillRect(o.x-4,o.y-28,8,58);
+      }
+    }
+
+    function loop(now){
+      if(!S.alive)return;
+      const dt=Math.min(0.033,(now-S.last)/1000||0.016);S.last=now;S.t+=dt;
+      S.speed=Math.min(3.1,1+S.t*0.035+(S.streak*0.02));
+      if(S.boost>0)S.boost=Math.max(0,S.boost-dt*1.2);
+      const vel=(180+S.speed*110)*(1+S.boost*0.65);
+      S.distance+=vel*dt*0.06;
+      S.score+=Math.floor(dt*28*(1+S.streak*0.08));
+
+      S.spawnObs-=dt;S.spawnBuoy-=dt;
+      if(S.spawnObs<=0){spawn('rock');S.spawnObs=Math.max(0.42,1.05-S.speed*0.13+Math.random()*0.25);}
+      if(S.spawnBuoy<=0){spawn('buoy');S.spawnBuoy=Math.max(0.35,0.95-S.speed*0.14+Math.random()*0.3);}
+
+      for(const o of S.objects){o.y+=o.sp*dt*(1+S.boost*0.3);}
+
+      const boat={x:laneX[S.lane],y:472,w:76,h:84};
+      for(const o of S.objects){
+        if(o.hit)continue;
+        if(collide(boat,o)){
+          o.hit=true;
+          if(o.type==='rock'){
+            S.hull--;S.streak=0;
+            hintEl.textContent='암초 충돌! 선체 내구도가 감소했습니다.';
+            tone(150,0.16,'square',0.06);
+            if(S.hull<=0){end();return;}
+          }else{
+            S.streak++;S.score+=55+S.streak*18;
+            hintEl.textContent=`표지 부이 연결 성공! Streak x${S.streak}`;
+            tone(860,0.07,'triangle',0.045);
+          }
+        }
+      }
+
+      S.objects=S.objects.filter(o=>o.y<640 && !o.hit);
+
+      ctx.clearRect(0,0,cvs.width,cvs.height);
+      const g=ctx.createLinearGradient(0,0,0,cvs.height);g.addColorStop(0,'#0b1534');g.addColorStop(1,'#061022');ctx.fillStyle=g;ctx.fillRect(0,0,cvs.width,cvs.height);
+      for(let i=0;i<3;i++){
+        ctx.strokeStyle=i===S.lane?'#66f3ff88':'#4a5b8a66';ctx.lineWidth=i===S.lane?5:3;
+        ctx.beginPath();ctx.moveTo(laneX[i],0);ctx.lineTo(laneX[i],cvs.height);ctx.stroke();
+      }
+      ctx.strokeStyle='#8cc8ff';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(80,520);ctx.lineTo(820,520);ctx.stroke();
+      drawBoat(boat.x,boat.y);
+      for(const o of S.objects) drawObj(o);
+
+      sync();
+      requestAnimationFrame(loop);
+    }
+
+    document.getElementById('leftBtn').addEventListener('click',()=>moveLane(-1));
+    document.getElementById('rightBtn').addEventListener('click',()=>moveLane(1));
+    document.getElementById('boostBtn').addEventListener('click',activateBoost);
+    document.getElementById('resetBtn').addEventListener('click',reset);
+    document.getElementById('retryBtn').addEventListener('click',reset);
+
+    window.addEventListener('keydown',(e)=>{
+      const k=e.key.toLowerCase();
+      if(['arrowleft','arrowright',' ','a','d'].includes(k)||['ArrowLeft','ArrowRight'].includes(e.key)) e.preventDefault();
+      if(e.key==='ArrowLeft' || k==='a') moveLane(-1);
+      else if(e.key==='ArrowRight' || k==='d') moveLane(1);
+      else if(e.key===' ' || k==='spacebar') activateBoost();
+    });
+
+    sync();
+    requestAnimationFrame(loop);
+  })();
+  </script>
+</body>
+</html>

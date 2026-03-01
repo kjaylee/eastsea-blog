@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>Crystal Echo Luthier</title>
+  <meta name="theme-color" content="#0a0a1a" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <style>
+    :root{--bg:#0a0a1a;--panel:#151530;--line:#3b3b7a;--ink:#eef4ff;--neon:#66f3ff;--pink:#ff79e8;--good:#8cffb1;--warn:#ffd166;--bad:#ff6b6b}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:radial-gradient(circle at 18% 0,#20204a,#0a0a1a 58%,#050510);color:var(--ink);display:flex;justify-content:center;min-height:100vh}
+    .app{width:min(920px,100%);padding:12px;display:flex;flex-direction:column;gap:10px}
+    .hud{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+    .box{background:rgba(20,20,45,.86);border:1px solid var(--line);border-radius:12px;padding:8px;text-align:center}
+    .box b{display:block;color:var(--neon);font-size:1.05rem}
+    .panel{background:rgba(10,10,26,.84);border:1px solid #32326b;border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:12px}
+    .status{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+    .status .phase{font-weight:700;color:#cfe5ff}
+    .bar{height:12px;background:#1a1a3d;border:1px solid #3f3f8f;border-radius:999px;overflow:hidden}
+    .bar i{display:block;height:100%;width:100%;background:linear-gradient(90deg,#66f3ff,#7e9dff,#ff79e8)}
+    .pads{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+    .pad{min-height:100px;border-radius:14px;border:1px solid #41418f;background:linear-gradient(180deg,#1d1d48,#121231);color:var(--ink);font-size:1.1rem;font-weight:800;display:grid;place-items:center;touch-action:manipulation;box-shadow:0 8px 20px #0000003a}
+    .pad small{display:block;font-size:.75rem;opacity:.78;margin-top:6px}
+    .pad.hit{transform:translateY(1px) scale(.985);box-shadow:0 0 18px #66f3ffaa;border-color:#66f3ff;background:linear-gradient(180deg,#29417b,#18244c)}
+    .controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+    button{background:#1f1f4e;color:#fff;border:1px solid #4f4fab;border-radius:11px;min-height:46px;font-weight:700;padding:10px}
+    .hint{font-size:.92rem;color:#c8dcff;line-height:1.4}
+    .overlay{position:fixed;inset:0;background:#040413e9;display:none;place-items:center;padding:20px}
+    .overlay.show{display:grid}
+    .card{width:min(440px,100%);background:#121231;border:1px solid #4f4fab;border-radius:14px;padding:18px;text-align:center}
+    .card h2{margin:0 0 8px;color:var(--pink)}
+    @media (max-width:760px){.hud{grid-template-columns:repeat(3,minmax(0,1fr))}.pads{grid-template-columns:repeat(2,minmax(0,1fr))}.pad{min-height:84px}}
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="hud">
+      <div class="box">Round<b id="round">1</b></div>
+      <div class="box">Score<b id="score">0</b></div>
+      <div class="box">Combo<b id="combo">0</b></div>
+      <div class="box">Life<b id="life">3</b></div>
+      <div class="box">Time<b id="time">0.0s</b></div>
+      <div class="box">Best<b id="best">R1 / 0</b></div>
+    </section>
+
+    <section class="panel">
+      <div class="status">
+        <div class="phase" id="phase">Ready · Start to hear the crystal phrase.</div>
+        <div>Keys: <b>A S D F</b></div>
+      </div>
+      <div class="bar"><i id="timerBar"></i></div>
+      <div class="pads" id="pads"></div>
+      <div class="controls">
+        <button id="startBtn">Start / Next Round</button>
+        <button id="resetBtn">Reset Run</button>
+      </div>
+      <div class="hint" id="hint">4개 크리스털의 공명 순서를 듣고 재현하세요. 정확 입력으로 콤보를 쌓아 고득점을 기록합니다.</div>
+    </section>
+  </main>
+
+  <div class="overlay" id="overlay" role="dialog" aria-modal="true">
+    <div class="card">
+      <h2>Crystal Resonance Lost</h2>
+      <p id="final"></p>
+      <button id="retryBtn">다시 연주하기</button>
+    </div>
+  </div>
+
+  <script>
+  (()=>{
+    const key='crystalEchoLuthier.v1';
+    const freq=[294,370,440,554];
+    const labels=['A','S','D','F'];
+    const names=['Quartz','Opal','Lapis','Ruby'];
+    const padsEl=document.getElementById('pads');
+    const roundEl=document.getElementById('round');
+    const scoreEl=document.getElementById('score');
+    const comboEl=document.getElementById('combo');
+    const lifeEl=document.getElementById('life');
+    const timeEl=document.getElementById('time');
+    const bestEl=document.getElementById('best');
+    const phaseEl=document.getElementById('phase');
+    const timerBar=document.getElementById('timerBar');
+    const hintEl=document.getElementById('hint');
+    const overlay=document.getElementById('overlay');
+    const finalEl=document.getElementById('final');
+
+    const audio={ctx:null};
+    function ensureAudio(){if(!audio.ctx){const C=window.AudioContext||window.webkitAudioContext;if(C)audio.ctx=new C();}}
+    function beep(n,d=0.12,type='triangle',g=0.055){
+      if(!audio.ctx)return;
+      const t=audio.ctx.currentTime,o=audio.ctx.createOscillator(),gain=audio.ctx.createGain();
+      o.type=type;o.frequency.setValueAtTime(n,t);gain.gain.setValueAtTime(g,t);gain.gain.exponentialRampToValueAtTime(.0001,t+d);
+      o.connect(gain).connect(audio.ctx.destination);o.start(t);o.stop(t+d);
+    }
+    ['keydown','pointerdown'].forEach(evt=>window.addEventListener(evt,ensureAudio,{once:true}));
+
+    let best={round:1,score:0};
+    try{best=Object.assign(best,JSON.parse(localStorage.getItem(key)||'{}'));}catch{}
+
+    const S={round:1,score:0,combo:0,life:3,sequence:[],inputIndex:0,accepting:false,timer:0,timeLimit:0,running:true,raf:0};
+    const pads=[];
+
+    for(let i=0;i<4;i++){
+      const b=document.createElement('button');
+      b.className='pad';
+      b.innerHTML=`${names[i]}<small>${labels[i]}</small>`;
+      b.addEventListener('click',()=>pressPad(i));
+      padsEl.appendChild(b);
+      pads.push(b);
+    }
+
+    function flashPad(i,ms=190){
+      const el=pads[i];
+      if(!el)return;
+      el.classList.add('hit');
+      setTimeout(()=>el.classList.remove('hit'),ms);
+    }
+
+    function saveBest(){
+      if(S.round>best.round||S.score>best.score){
+        best.round=Math.max(best.round,S.round);
+        best.score=Math.max(best.score,S.score);
+        localStorage.setItem(key,JSON.stringify(best));
+      }
+    }
+
+    function sync(){
+      roundEl.textContent=String(S.round);
+      scoreEl.textContent=String(S.score);
+      comboEl.textContent=String(S.combo);
+      lifeEl.textContent=String(S.life);
+      timeEl.textContent=S.accepting?`${Math.max(0,S.timer).toFixed(1)}s`:'-';
+      bestEl.textContent=`R${best.round} / ${best.score}`;
+      timerBar.style.width=S.accepting?`${Math.max(0,(S.timer/S.timeLimit)*100)}%`:'100%';
+    }
+
+    function buildSequence(){
+      const len=Math.min(10,2+S.round);
+      S.sequence=Array.from({length:len},()=>Math.floor(Math.random()*4));
+      S.inputIndex=0;
+      S.timeLimit=Math.max(4.5,8.5-S.round*0.2);
+      S.timer=S.timeLimit;
+    }
+
+    async function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+
+    async function playSequence(){
+      S.accepting=false;
+      sync();
+      phaseEl.textContent='Listen...';
+      hintEl.textContent='시퀀스를 듣는 중입니다. 끝나면 입력하세요.';
+      for(let i=0;i<S.sequence.length;i++){
+        const note=S.sequence[i];
+        flashPad(note,220);
+        beep(freq[note],0.16,'sine',0.05);
+        await sleep(300);
+      }
+      S.accepting=true;
+      phaseEl.textContent='Your Turn';
+      hintEl.textContent='A/S/D/F 또는 터치로 순서를 재현하세요.';
+      loop();
+      sync();
+    }
+
+    function goodHit(){
+      S.combo++;
+      S.score+=40+S.combo*8;
+      beep(760,0.07,'triangle',0.04);
+      if(S.inputIndex>=S.sequence.length){
+        S.score+=Math.round(S.timer*18)+S.round*50;
+        S.round++;
+        S.combo+=2;
+        S.accepting=false;
+        phaseEl.textContent='Round Clear';
+        hintEl.textContent='좋아요! 다음 라운드로 진행하세요.';
+        beep(980,0.09,'triangle',0.05);setTimeout(()=>beep(1280,0.11,'sine',0.045),110);
+      }
+      sync();
+    }
+
+    function badHit(){
+      S.life--;
+      S.combo=0;
+      beep(170,0.16,'sawtooth',0.055);
+      if(S.life<=0){endGame();return;}
+      S.accepting=false;
+      phaseEl.textContent='Mismatch';
+      hintEl.textContent='틀렸습니다. 같은 라운드를 다시 시도하세요.';
+      sync();
+      setTimeout(()=>{buildSequence();playSequence();},650);
+    }
+
+    function pressPad(i){
+      if(!S.running||!S.accepting)return;
+      flashPad(i,170);
+      beep(freq[i],0.1,'triangle',0.05);
+      if(S.sequence[S.inputIndex]===i){
+        S.inputIndex++;
+        goodHit();
+      }else badHit();
+    }
+
+    function loop(){
+      cancelAnimationFrame(S.raf);
+      let last=performance.now();
+      const frame=(now)=>{
+        const dt=(now-last)/1000; last=now;
+        if(S.accepting){
+          S.timer-=dt;
+          if(S.timer<=0){
+            S.timer=0;S.accepting=false;S.life--;S.combo=0;beep(150,0.2,'square',0.055);
+            if(S.life<=0){endGame();return;}
+            phaseEl.textContent='Time Over';
+            hintEl.textContent='시간 초과! 같은 라운드를 재시도합니다.';
+            sync();
+            setTimeout(()=>{buildSequence();playSequence();},650);
+            return;
+          }
+          sync();
+        }
+        S.raf=requestAnimationFrame(frame);
+      };
+      S.raf=requestAnimationFrame(frame);
+    }
+
+    function startRound(){
+      if(!S.running)return;
+      if(S.accepting)return;
+      buildSequence();
+      playSequence();
+    }
+
+    function endGame(){
+      S.running=false;S.accepting=false;
+      cancelAnimationFrame(S.raf);
+      saveBest();sync();
+      finalEl.textContent=`Round ${S.round} · Score ${S.score} · Best R${best.round}/${best.score}`;
+      overlay.classList.add('show');
+    }
+
+    function resetRun(){
+      S.round=1;S.score=0;S.combo=0;S.life=3;S.sequence=[];S.inputIndex=0;S.accepting=false;S.timer=0;S.running=true;
+      overlay.classList.remove('show');
+      phaseEl.textContent='Ready · Start to hear the crystal phrase.';
+      hintEl.textContent='4개 크리스털의 공명 순서를 듣고 재현하세요. 정확 입력으로 콤보를 쌓아 고득점을 기록합니다.';
+      sync();
+    }
+
+    document.getElementById('startBtn').addEventListener('click',startRound);
+    document.getElementById('resetBtn').addEventListener('click',resetRun);
+    document.getElementById('retryBtn').addEventListener('click',resetRun);
+
+    const map={a:0,s:1,d:2,f:3};
+    window.addEventListener('keydown',(e)=>{
+      const k=e.key.toLowerCase();
+      if(['a','s','d','f','enter',' '].includes(k)) e.preventDefault();
+      if(map[k]!==undefined) pressPad(map[k]);
+      if(k==='enter' || k===' ') startRound();
+    });
+
+    sync();
+  })();
+  </script>
+</body>
+</html>

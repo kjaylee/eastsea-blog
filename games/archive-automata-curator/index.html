@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>Archive Automata Curator</title>
+  <meta name="theme-color" content="#0a0a1a" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <style>
+    :root{--bg:#0a0a1a;--panel:#151530;--line:#3a3a7b;--ink:#edf4ff;--neon:#66f3ff;--pink:#ff79e8;--good:#8cffb1;--warn:#ffd166;--bad:#ff6b6b}
+    *{box-sizing:border-box}
+    body{margin:0;background:radial-gradient(circle at 20% 0,#1f1f4b,#0a0a1a 58%,#050510);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;display:flex;justify-content:center;min-height:100vh}
+    .app{width:min(980px,100%);padding:12px;display:flex;flex-direction:column;gap:10px}
+    .hud{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+    .box{background:rgba(20,20,45,.86);border:1px solid var(--line);border-radius:12px;padding:8px;text-align:center}
+    .box b{display:block;color:var(--neon);font-size:1.04rem}
+    .panel{background:rgba(10,10,26,.84);border:1px solid #32326b;border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:12px}
+    .sectors{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+    .sector{background:linear-gradient(180deg,#1a1a42,#11112a);border:1px solid #41418f;border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:8px}
+    .sector.active{border-color:#66f3ff;box-shadow:0 0 0 1px #66f3ffaa,0 0 18px #66f3ff33}
+    .sector h3{margin:0;font-size:1rem;color:#d7e9ff}
+    .meter{display:grid;gap:4px}
+    .meter label{display:flex;justify-content:space-between;font-size:.83rem;color:#c8ddff}
+    .bar{height:9px;border-radius:999px;background:#1b1b41;border:1px solid #3f3f90;overflow:hidden}
+    .bar i{display:block;height:100%}
+    .integrity i{background:linear-gradient(90deg,#5df7d1,#8cffb1)}
+    .heat i{background:linear-gradient(90deg,#ffc271,#ff7f50)}
+    .clutter i{background:linear-gradient(90deg,#8ca3ff,#d38cff)}
+    .actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+    button{background:#1f1f4f;color:#fff;border:1px solid #5050ac;border-radius:11px;min-height:46px;font-weight:800;padding:10px;touch-action:manipulation}
+    .hint{font-size:.92rem;color:#c8ddff;line-height:1.45}
+    .overlay{position:fixed;inset:0;background:#040413e8;display:none;place-items:center;padding:20px}
+    .overlay.show{display:grid}
+    .card{width:min(440px,100%);background:#121231;border:1px solid #4f4fab;border-radius:14px;padding:18px;text-align:center}
+    .card h2{margin:0 0 8px;color:var(--pink)}
+    @media (max-width:840px){.hud{grid-template-columns:repeat(3,minmax(0,1fr))}.sectors{grid-template-columns:1fr}.actions{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="hud">
+      <div class="box">Wave<b id="wave">1</b></div>
+      <div class="box">Score<b id="score">0</b></div>
+      <div class="box">Power<b id="power">100</b></div>
+      <div class="box">Integrity<b id="integrity">100</b></div>
+      <div class="box">Heat Avg<b id="heat">0</b></div>
+      <div class="box">Best<b id="best">W1 / 0</b></div>
+    </section>
+
+    <section class="panel">
+      <div class="sectors" id="sectors"></div>
+      <div class="actions">
+        <button id="scanBtn">Q · Scan</button>
+        <button id="repairBtn">W · Repair</button>
+        <button id="coolBtn">E · Cool</button>
+        <button id="sortBtn">R · Reorder</button>
+      </div>
+      <div class="hint" id="hint">1/2/3으로 섹션 선택 후 액션(Q/W/E/R)을 실행하세요. 전력과 열을 조절하며 아카이브 무결성을 지키면 웨이브가 상승합니다.</div>
+      <button id="resetBtn">Restart Run</button>
+    </section>
+  </main>
+
+  <div class="overlay" id="overlay" role="dialog" aria-modal="true">
+    <div class="card">
+      <h2>Archive Collapse</h2>
+      <p id="final"></p>
+      <button id="retryBtn">다시 운영</button>
+    </div>
+  </div>
+
+  <script>
+  (()=>{
+    const key='archiveAutomataCurator.v1';
+    const sectorsEl=document.getElementById('sectors');
+    const waveEl=document.getElementById('wave');
+    const scoreEl=document.getElementById('score');
+    const powerEl=document.getElementById('power');
+    const integrityEl=document.getElementById('integrity');
+    const heatEl=document.getElementById('heat');
+    const bestEl=document.getElementById('best');
+    const hintEl=document.getElementById('hint');
+    const overlay=document.getElementById('overlay');
+    const finalEl=document.getElementById('final');
+
+    const audio={ctx:null};
+    function initAudio(){if(!audio.ctx){const C=window.AudioContext||window.webkitAudioContext;if(C)audio.ctx=new C();}}
+    function tone(freq=440,dur=.08,type='triangle',gain=.05){
+      if(!audio.ctx)return;
+      const t=audio.ctx.currentTime,o=audio.ctx.createOscillator(),g=audio.ctx.createGain();
+      o.type=type;o.frequency.setValueAtTime(freq,t);g.gain.setValueAtTime(gain,t);g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+      o.connect(g).connect(audio.ctx.destination);o.start(t);o.stop(t+dur);
+    }
+    ['pointerdown','keydown'].forEach(evt=>window.addEventListener(evt,initAudio,{once:true}));
+
+    let best={wave:1,score:0};
+    try{best=Object.assign(best,JSON.parse(localStorage.getItem(key)||'{}'));}catch{}
+
+    const names=['North Vault','Central Stacks','Deep Annex'];
+    const cards=[];
+    const S={
+      wave:1,score:0,power:100,selected:0,alive:true,last:0,elapsed:0,
+      sectors:names.map(()=>({integrity:100,heat:20,clutter:25}))
+    };
+
+    for(let i=0;i<3;i++){
+      const card=document.createElement('button');
+      card.className='sector';
+      card.addEventListener('click',()=>{if(!S.alive)return;S.selected=i;sync();tone(300,0.05,'triangle',0.035)});
+      sectorsEl.appendChild(card);
+      cards.push(card);
+    }
+
+    function clamp(v,min,max){return Math.max(min,Math.min(max,v));}
+    function avg(arr){return arr.reduce((a,b)=>a+b,0)/arr.length;}
+
+    function saveBest(){
+      if(S.wave>best.wave||S.score>best.score){
+        best.wave=Math.max(best.wave,S.wave);
+        best.score=Math.max(best.score,S.score);
+        localStorage.setItem(key,JSON.stringify(best));
+      }
+    }
+
+    function renderCard(i){
+      const s=S.sectors[i];
+      const c=cards[i];
+      c.classList.toggle('active',i===S.selected);
+      c.innerHTML=`
+        <h3>${i+1}. ${names[i]}</h3>
+        <div class="meter">
+          <label>Integrity <b>${Math.round(s.integrity)}</b></label>
+          <div class="bar integrity"><i style="width:${clamp(s.integrity,0,100)}%"></i></div>
+        </div>
+        <div class="meter">
+          <label>Heat <b>${Math.round(s.heat)}</b></label>
+          <div class="bar heat"><i style="width:${clamp(s.heat,0,100)}%"></i></div>
+        </div>
+        <div class="meter">
+          <label>Clutter <b>${Math.round(s.clutter)}</b></label>
+          <div class="bar clutter"><i style="width:${clamp(s.clutter,0,100)}%"></i></div>
+        </div>`;
+    }
+
+    function sync(){
+      S.sectors.forEach((_,i)=>renderCard(i));
+      const integrity=Math.round(avg(S.sectors.map(s=>s.integrity)));
+      const heatAvg=Math.round(avg(S.sectors.map(s=>s.heat)));
+      waveEl.textContent=String(S.wave);
+      scoreEl.textContent=String(S.score);
+      powerEl.textContent=Math.round(S.power);
+      integrityEl.textContent=String(integrity);
+      heatEl.textContent=String(heatAvg);
+      bestEl.textContent=`W${best.wave} / ${best.score}`;
+    }
+
+    function action(type){
+      if(!S.alive)return;
+      const s=S.sectors[S.selected];
+      if(type==='scan'){
+        if(S.power<8){hintEl.textContent='전력이 부족해 스캔 불가';tone(140,0.1,'square',0.05);return;}
+        S.power-=8;
+        s.clutter=clamp(s.clutter-8,0,100);
+        s.integrity=clamp(s.integrity+4,0,100);
+        S.score+=18+S.wave*2;
+        hintEl.textContent='스캔 완료: 문제 영역 식별, 혼잡 완화';
+        tone(760,0.08,'sine',0.04);
+      }else if(type==='repair'){
+        if(S.power<18){hintEl.textContent='전력이 부족해 수리 불가';tone(140,0.1,'square',0.05);return;}
+        S.power-=18;
+        s.integrity=clamp(s.integrity+18,0,100);
+        s.heat=clamp(s.heat+10,0,100);
+        S.score+=30+S.wave*3;
+        hintEl.textContent='수리 완료: 무결성 상승, 열 증가';
+        tone(680,0.09,'triangle',0.045);
+      }else if(type==='cool'){
+        if(S.power<12){hintEl.textContent='전력이 부족해 냉각 불가';tone(140,0.1,'square',0.05);return;}
+        S.power-=12;
+        s.heat=clamp(s.heat-20,0,100);
+        s.integrity=clamp(s.integrity+5,0,100);
+        S.score+=24+S.wave*2;
+        hintEl.textContent='냉각 완료: 열 하강, 안정 회복';
+        tone(520,0.08,'triangle',0.04);
+      }else if(type==='sort'){
+        if(S.power<10){hintEl.textContent='전력이 부족해 정리 불가';tone(140,0.1,'square',0.05);return;}
+        S.power-=10;
+        s.clutter=clamp(s.clutter-20,0,100);
+        s.heat=clamp(s.heat-5,0,100);
+        S.score+=20+S.wave*2;
+        hintEl.textContent='재정리 완료: 혼잡 해소';
+        tone(840,0.07,'triangle',0.04);
+      }
+      sync();
+    }
+
+    function decay(dt){
+      const pressure=0.85+S.wave*0.19;
+      for(const s of S.sectors){
+        s.heat=clamp(s.heat+(0.8+Math.random()*1.2)*dt*pressure,0,100);
+        s.clutter=clamp(s.clutter+(0.7+Math.random()*1.1)*dt*pressure,0,100);
+        const damage=(s.heat*0.07+s.clutter*0.06)*dt*pressure;
+        s.integrity=clamp(s.integrity-damage,0,100);
+      }
+      S.power=clamp(S.power+(6.5*dt),0,100);
+      const integrity=avg(S.sectors.map(s=>s.integrity));
+      S.score+=Math.max(0,Math.round(dt*10+integrity*0.03));
+    }
+
+    function checkWave(){
+      const nextWave=1+Math.floor(S.elapsed/20);
+      if(nextWave>S.wave){
+        S.wave=nextWave;
+        hintEl.textContent=`Wave ${S.wave}: 마모 압력이 증가합니다.`;
+        tone(930,0.09,'sine',0.04);setTimeout(()=>tone(1160,0.1,'triangle',0.04),90);
+      }
+    }
+
+    function end(){
+      S.alive=false;
+      saveBest();sync();
+      finalEl.textContent=`Wave ${S.wave} · Score ${S.score} · Best W${best.wave}/${best.score}`;
+      overlay.classList.add('show');
+      tone(170,0.2,'sawtooth',0.06);
+    }
+
+    function loop(now){
+      if(!S.alive)return;
+      const dt=Math.min(0.05,((now-S.last)/1000)||0.016);S.last=now;S.elapsed+=dt;
+      decay(dt);
+      checkWave();
+      const integrity=avg(S.sectors.map(s=>s.integrity));
+      if(integrity<18){hintEl.textContent='아카이브 임계 붕괴 발생';end();return;}
+      sync();
+      requestAnimationFrame(loop);
+    }
+
+    function reset(){
+      S.wave=1;S.score=0;S.power=100;S.selected=0;S.alive=true;S.elapsed=0;S.last=performance.now();
+      S.sectors=names.map(()=>({integrity:100,heat:20,clutter:25}));
+      overlay.classList.remove('show');
+      hintEl.textContent='1/2/3으로 섹션 선택 후 액션(Q/W/E/R)을 실행하세요. 전력과 열을 조절하며 아카이브 무결성을 지키면 웨이브가 상승합니다.';
+      sync();
+      requestAnimationFrame(loop);
+    }
+
+    document.getElementById('scanBtn').addEventListener('click',()=>action('scan'));
+    document.getElementById('repairBtn').addEventListener('click',()=>action('repair'));
+    document.getElementById('coolBtn').addEventListener('click',()=>action('cool'));
+    document.getElementById('sortBtn').addEventListener('click',()=>action('sort'));
+    document.getElementById('resetBtn').addEventListener('click',reset);
+    document.getElementById('retryBtn').addEventListener('click',reset);
+
+    window.addEventListener('keydown',(e)=>{
+      const k=e.key.toLowerCase();
+      if(['1','2','3','q','w','e','r'].includes(k)) e.preventDefault();
+      if(k==='1'||k==='2'||k==='3'){S.selected=Number(k)-1;sync();tone(300,0.05,'triangle',0.035);}
+      else if(k==='q')action('scan');
+      else if(k==='w')action('repair');
+      else if(k==='e')action('cool');
+      else if(k==='r')action('sort');
+    });
+
+    sync();
+    S.last=performance.now();
+    requestAnimationFrame(loop);
+  })();
+  </script>
+</body>
+</html>

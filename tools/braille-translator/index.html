@@ -1,0 +1,1007 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>점자 변환기 | Braille Translator</title>
+  <meta name="description" content="일반 텍스트를 유니코드 점자(Braille)로 변환하거나 점자를 다시 텍스트로 복원합니다. 로컬 저장, 터치/키보드 단축키, 사운드 피드백, PWA 설치 지원." />
+  <meta name="theme-color" content="#0a0a1a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <style>
+    :root {
+      --bg: #0a0a1a;
+      --bg-soft: #141430;
+      --panel: #12122a;
+      --panel-2: #1a1a38;
+      --line: #2d2d61;
+      --text: #eef1ff;
+      --muted: #9ca5cb;
+      --cyan: #2bd9ff;
+      --violet: #ba7bff;
+      --green: #39f8c3;
+      --orange: #ffbf5e;
+      --red: #ff6f92;
+      --shadow: 0 0 0 1px rgba(43, 217, 255, 0.16), 0 0 24px rgba(43, 217, 255, 0.12);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+      background: radial-gradient(circle at 0% 0%, #1a1a42 0%, var(--bg) 50%), var(--bg);
+      color: var(--text);
+      min-height: 100dvh;
+      padding: 16px 14px 40px;
+      line-height: 1.45;
+    }
+
+    .wrap { max-width: 920px; margin: 0 auto; }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .chip,
+    .back-link,
+    .install-btn {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 7px 12px;
+      min-height: 34px;
+      background: rgba(18, 18, 42, 0.86);
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.78rem;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      white-space: nowrap;
+    }
+
+    .install-btn {
+      cursor: pointer;
+      color: #d6f8ff;
+      border-color: rgba(43, 217, 255, 0.5);
+      background: rgba(43, 217, 255, 0.12);
+    }
+
+    h1 {
+      margin: 6px 0 8px;
+      font-size: clamp(1.36rem, 4.2vw, 2rem);
+      text-shadow: 0 0 14px rgba(43, 217, 255, 0.32);
+      letter-spacing: 0.01em;
+    }
+
+    .subtitle {
+      margin: 0 0 14px;
+      color: var(--muted);
+      font-size: 0.94rem;
+    }
+
+    .card {
+      background: linear-gradient(180deg, rgba(18, 18, 42, 0.95), rgba(10, 10, 26, 0.94));
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 14px;
+      box-shadow: var(--shadow);
+      margin-bottom: 11px;
+    }
+
+    .card h2 {
+      margin: 0 0 10px;
+      font-size: 1rem;
+      color: #dffaff;
+    }
+
+    .mode-toggle {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 10px;
+      touch-action: pan-y;
+    }
+
+    .mode-btn {
+      border: 1px solid rgba(43, 217, 255, 0.28);
+      border-radius: 12px;
+      background: rgba(43, 217, 255, 0.06);
+      color: var(--muted);
+      min-height: 44px;
+      font-size: 0.93rem;
+      font-weight: 700;
+      padding: 10px 12px;
+      cursor: pointer;
+    }
+
+    .mode-btn.active {
+      color: #07101b;
+      border-color: transparent;
+      background: linear-gradient(135deg, rgba(43, 217, 255, 0.95), rgba(186, 123, 255, 0.95));
+      box-shadow: 0 8px 18px rgba(43, 217, 255, 0.22);
+    }
+
+    .hint {
+      color: var(--muted);
+      font-size: 0.76rem;
+      margin: 4px 2px 10px;
+    }
+
+    textarea,
+    input,
+    select,
+    button {
+      width: 100%;
+      min-height: 44px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: var(--panel-2);
+      color: var(--text);
+      padding: 10px 12px;
+      font-size: 0.95rem;
+    }
+
+    textarea {
+      min-height: 118px;
+      resize: vertical;
+      line-height: 1.4;
+    }
+
+    textarea:focus,
+    input:focus,
+    select:focus,
+    button:focus {
+      outline: 2px solid var(--cyan);
+      outline-offset: 1px;
+      border-color: var(--cyan);
+    }
+
+    .field-grid {
+      margin-top: 10px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .field label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--muted);
+    }
+
+    .toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.82rem;
+      color: var(--muted);
+      font-weight: 700;
+      user-select: none;
+      margin-top: 8px;
+    }
+
+    .toggle input {
+      width: 20px;
+      min-height: 20px;
+      accent-color: var(--cyan);
+      margin: 0;
+      padding: 0;
+    }
+
+    .actions {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .btn-primary {
+      border: none;
+      color: #050511;
+      font-weight: 800;
+      background: linear-gradient(135deg, rgba(43, 217, 255, 0.98), rgba(186, 123, 255, 0.95));
+    }
+
+    .btn-secondary {
+      color: #f0e4ff;
+      font-weight: 700;
+      background: rgba(186, 123, 255, 0.18);
+      border-color: rgba(186, 123, 255, 0.55);
+    }
+
+    .btn-ghost {
+      color: var(--muted);
+      font-weight: 700;
+      background: rgba(156, 165, 203, 0.09);
+    }
+
+    .output {
+      margin-top: 10px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: rgba(10, 10, 26, 0.8);
+      min-height: 110px;
+      padding: 12px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      font-size: 0.94rem;
+      line-height: 1.55;
+      touch-action: pan-y;
+    }
+
+    .msg {
+      min-height: 1.2em;
+      margin-top: 8px;
+      font-size: 0.82rem;
+      color: var(--red);
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px;
+      background: rgba(24, 24, 52, 0.74);
+      min-height: 78px;
+    }
+
+    .metric .k {
+      display: block;
+      color: var(--muted);
+      font-size: 0.76rem;
+      margin-bottom: 4px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .metric .v {
+      color: var(--cyan);
+      font-weight: 800;
+      font-size: clamp(0.98rem, 3vw, 1.2rem);
+    }
+
+    .history-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .history-item {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 9px;
+      background: rgba(16, 16, 38, 0.78);
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .history-main {
+      min-width: 0;
+      cursor: pointer;
+    }
+
+    .history-mode {
+      font-size: 0.74rem;
+      color: #c7f8ff;
+      margin-bottom: 2px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .history-input,
+    .history-output {
+      font-size: 0.82rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .history-input { color: #dbe4ff; }
+    .history-output { color: var(--muted); }
+
+    .history-actions {
+      display: grid;
+      grid-template-columns: repeat(2, auto);
+      gap: 6px;
+    }
+
+    .mini-btn {
+      min-height: 34px;
+      border-radius: 10px;
+      padding: 6px 9px;
+      font-size: 0.77rem;
+      font-weight: 700;
+      cursor: pointer;
+      background: rgba(43, 217, 255, 0.08);
+      border: 1px solid rgba(43, 217, 255, 0.26);
+      color: #d7f6ff;
+    }
+
+    .mini-btn.danger {
+      background: rgba(255, 111, 146, 0.12);
+      border-color: rgba(255, 111, 146, 0.44);
+      color: #ffd0dc;
+    }
+
+    .legend {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 0.78rem;
+      line-height: 1.4;
+    }
+
+    @media (max-width: 760px) {
+      .actions {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .field-grid,
+      .summary {
+        grid-template-columns: 1fr;
+      }
+
+      .history-item {
+        grid-template-columns: 1fr;
+      }
+
+      .history-actions {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+  </style>
+  <!-- Analytics: GA4 + Clarity -->
+  <script src="/assets/analytics.js"></script>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <a class="back-link" href="../">← 도구 목록</a>
+      <span class="chip">Braille · Unicode</span>
+      <button id="installBtn" class="install-btn" hidden>앱 설치</button>
+    </div>
+
+    <h1>점자 변환기</h1>
+    <p class="subtitle">영문 텍스트 ↔ 유니코드 점자(Braille)를 상호 변환하세요. (단축키: Ctrl/⌘+Enter 변환, Ctrl/⌘+Shift+C 복사, Alt+M 모드 전환)</p>
+
+    <section class="card" id="modeCard">
+      <h2>변환 모드</h2>
+      <div class="mode-toggle" role="tablist" aria-label="변환 모드 선택">
+        <button class="mode-btn active" id="modeEncode" data-mode="encode" role="tab" aria-selected="true">문자 → 점자</button>
+        <button class="mode-btn" id="modeDecode" data-mode="decode" role="tab" aria-selected="false">점자 → 문자</button>
+      </div>
+      <p class="hint">터치: 모드 카드에서 좌우 스와이프로 전환</p>
+
+      <textarea id="inputText" placeholder="예: OpenClaw 2026!\n또는 점자 입력: ⠠⠕⠏⠑⠝⠠⠉⠇⠁⠺ ⠼⠃⠚⠃⠋⠖"></textarea>
+
+      <div class="field-grid">
+        <div class="field">
+          <label for="joinMode">점자 출력 형식</label>
+          <select id="joinMode">
+            <option value="tight">연속 출력</option>
+            <option value="spaced">문자 사이 공백</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="letterCase">복원 문자 표기</label>
+          <select id="letterCase">
+            <option value="keep">원문 유지</option>
+            <option value="upper">대문자</option>
+            <option value="lower">소문자</option>
+          </select>
+        </div>
+      </div>
+
+      <label class="toggle"><input id="keepUnknown" type="checkbox" checked /> 미지원 문자 유지</label>
+      <label class="toggle"><input id="capitalSign" type="checkbox" checked /> 대문자 표기(⠠) 사용</label>
+      <label class="toggle"><input id="soundEnabled" type="checkbox" checked /> 사운드 피드백</label>
+
+      <div class="actions">
+        <button id="convertBtn" class="btn-primary">변환</button>
+        <button id="copyBtn" class="btn-secondary">결과 복사</button>
+        <button id="swapBtn" class="btn-ghost">모드 전환</button>
+        <button id="clearBtn" class="btn-ghost">입력 지우기</button>
+      </div>
+
+      <div class="output" id="output" tabindex="0" aria-live="polite">결과가 여기에 표시됩니다.</div>
+      <div id="msg" class="msg"></div>
+
+      <div class="summary">
+        <article class="metric"><span class="k">입력 길이</span><span class="v" id="inputLen">0</span></article>
+        <article class="metric"><span class="k">변환 토큰</span><span class="v" id="tokenLen">0</span></article>
+        <article class="metric"><span class="k">히스토리</span><span class="v" id="historyLen">0</span></article>
+      </div>
+
+      <p class="legend">지원: 영문 A-Z, 숫자 0-9(숫자기호 ⠼), 기본 문장부호(.,!?;:-'"/() 등). 점자 복원 시 대문자기호(⠠)·숫자기호(⠼)를 해석합니다.</p>
+    </section>
+
+    <section class="card">
+      <h2>최근 변환</h2>
+      <div id="history" class="history-list"></div>
+    </section>
+  </div>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = "braille_translator_v1";
+      const HISTORY_LIMIT = 12;
+      const BRAILLE_RANGE = /[\u2800-\u28FF]/;
+      const numberSign = "⠼";
+      const capitalSign = "⠠";
+
+      const letterToBraille = {
+        a: "⠁", b: "⠃", c: "⠉", d: "⠙", e: "⠑", f: "⠋", g: "⠛", h: "⠓", i: "⠊", j: "⠚",
+        k: "⠅", l: "⠇", m: "⠍", n: "⠝", o: "⠕", p: "⠏", q: "⠟", r: "⠗", s: "⠎", t: "⠞",
+        u: "⠥", v: "⠧", w: "⠺", x: "⠭", y: "⠽", z: "⠵"
+      };
+
+      const punctuationToBraille = {
+        ",": "⠂", ";": "⠆", ":": "⠒", ".": "⠲", "?": "⠦", "!": "⠖", "'": "⠄",
+        "-": "⠤", "/": "⠌", "(": "⠶", ")": "⠶", '"': "⠶", "@": "⠈", "#": "⠼", "&": "⠯"
+      };
+
+      const digitToBraille = {
+        "1": "⠁", "2": "⠃", "3": "⠉", "4": "⠙", "5": "⠑", "6": "⠋", "7": "⠛", "8": "⠓", "9": "⠊", "0": "⠚"
+      };
+
+      const brailleToLetter = Object.entries(letterToBraille).reduce((acc, [k, v]) => {
+        acc[v] = k;
+        return acc;
+      }, {});
+
+      const brailleToDigit = Object.entries(digitToBraille).reduce((acc, [k, v]) => {
+        acc[v] = k;
+        return acc;
+      }, {});
+
+      const brailleToPunctuation = Object.entries(punctuationToBraille).reduce((acc, [k, v]) => {
+        if (!acc[v]) acc[v] = k;
+        return acc;
+      }, {});
+
+      const el = {
+        modeEncode: document.getElementById("modeEncode"),
+        modeDecode: document.getElementById("modeDecode"),
+        modeCard: document.getElementById("modeCard"),
+        inputText: document.getElementById("inputText"),
+        joinMode: document.getElementById("joinMode"),
+        letterCase: document.getElementById("letterCase"),
+        keepUnknown: document.getElementById("keepUnknown"),
+        capitalSign: document.getElementById("capitalSign"),
+        soundEnabled: document.getElementById("soundEnabled"),
+        convertBtn: document.getElementById("convertBtn"),
+        copyBtn: document.getElementById("copyBtn"),
+        swapBtn: document.getElementById("swapBtn"),
+        clearBtn: document.getElementById("clearBtn"),
+        output: document.getElementById("output"),
+        msg: document.getElementById("msg"),
+        history: document.getElementById("history"),
+        inputLen: document.getElementById("inputLen"),
+        tokenLen: document.getElementById("tokenLen"),
+        historyLen: document.getElementById("historyLen"),
+        installBtn: document.getElementById("installBtn")
+      };
+
+      let mode = "encode";
+      let history = [];
+      let deferredPrompt = null;
+      let audioCtx = null;
+      let lastOutput = "";
+
+      function saveState() {
+        const state = {
+          mode,
+          input: el.inputText.value,
+          joinMode: el.joinMode.value,
+          letterCase: el.letterCase.value,
+          keepUnknown: el.keepUnknown.checked,
+          capitalSign: el.capitalSign.checked,
+          soundEnabled: el.soundEnabled.checked,
+          history
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      }
+
+      function loadState() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return;
+          const state = JSON.parse(raw);
+          if (state.mode === "encode" || state.mode === "decode") mode = state.mode;
+          if (typeof state.input === "string") el.inputText.value = state.input;
+          if (["tight", "spaced"].includes(state.joinMode)) el.joinMode.value = state.joinMode;
+          if (["keep", "upper", "lower"].includes(state.letterCase)) el.letterCase.value = state.letterCase;
+          el.keepUnknown.checked = state.keepUnknown !== false;
+          el.capitalSign.checked = state.capitalSign !== false;
+          el.soundEnabled.checked = state.soundEnabled !== false;
+          if (Array.isArray(state.history)) history = state.history.slice(0, HISTORY_LIMIT);
+        } catch (_) {
+          // ignore broken storage
+        }
+      }
+
+      function setMode(next) {
+        mode = next === "decode" ? "decode" : "encode";
+        const isEncode = mode === "encode";
+        el.modeEncode.classList.toggle("active", isEncode);
+        el.modeDecode.classList.toggle("active", !isEncode);
+        el.modeEncode.setAttribute("aria-selected", String(isEncode));
+        el.modeDecode.setAttribute("aria-selected", String(!isEncode));
+        setMessage(isEncode ? "문자→점자 모드" : "점자→문자 모드", true);
+        tone("switch");
+        saveState();
+      }
+
+      function applyCase(text, option) {
+        if (option === "upper") return text.toUpperCase();
+        if (option === "lower") return text.toLowerCase();
+        return text;
+      }
+
+      function encodeText(input) {
+        const output = [];
+        let numberMode = false;
+        let mapped = 0;
+
+        for (const ch of Array.from(input)) {
+          if (/\d/.test(ch)) {
+            if (!numberMode) output.push(numberSign);
+            output.push(digitToBraille[ch]);
+            numberMode = true;
+            mapped += 1;
+            continue;
+          }
+
+          numberMode = false;
+
+          if (/\s/.test(ch)) {
+            output.push(ch);
+            continue;
+          }
+
+          const lower = ch.toLowerCase();
+          if (letterToBraille[lower]) {
+            if (el.capitalSign.checked && ch !== lower) output.push(capitalSign);
+            output.push(letterToBraille[lower]);
+            mapped += 1;
+            continue;
+          }
+
+          if (punctuationToBraille[ch]) {
+            output.push(punctuationToBraille[ch]);
+            mapped += 1;
+            continue;
+          }
+
+          if (el.keepUnknown.checked) output.push(ch);
+        }
+
+        return { output, mapped };
+      }
+
+      function decodeText(input) {
+        const chars = Array.from(input);
+        const out = [];
+        let numberMode = false;
+        let capitalizeNext = false;
+        let mapped = 0;
+
+        for (const ch of chars) {
+          if (ch === numberSign) {
+            numberMode = true;
+            continue;
+          }
+
+          if (ch === capitalSign) {
+            capitalizeNext = true;
+            continue;
+          }
+
+          if (/\s/.test(ch)) {
+            out.push(ch);
+            numberMode = false;
+            capitalizeNext = false;
+            continue;
+          }
+
+          if (numberMode && brailleToDigit[ch]) {
+            out.push(brailleToDigit[ch]);
+            mapped += 1;
+            continue;
+          }
+
+          if (brailleToLetter[ch]) {
+            let letter = brailleToLetter[ch];
+            if (capitalizeNext) letter = letter.toUpperCase();
+            out.push(letter);
+            numberMode = false;
+            capitalizeNext = false;
+            mapped += 1;
+            continue;
+          }
+
+          if (brailleToPunctuation[ch]) {
+            out.push(brailleToPunctuation[ch]);
+            numberMode = false;
+            capitalizeNext = false;
+            mapped += 1;
+            continue;
+          }
+
+          numberMode = false;
+          capitalizeNext = false;
+
+          if (BRAILLE_RANGE.test(ch) && !el.keepUnknown.checked) continue;
+          if (el.keepUnknown.checked) out.push(ch);
+        }
+
+        return { output: out, mapped };
+      }
+
+      function normalizeEncodedOutput(chars) {
+        if (el.joinMode.value !== "spaced") return chars.join("");
+        const result = [];
+        const isSpace = (c) => /\s/.test(c);
+
+        for (let i = 0; i < chars.length; i++) {
+          const curr = chars[i];
+          const prev = chars[i - 1];
+          result.push(curr);
+
+          if (!curr || isSpace(curr)) continue;
+          if (!prev || isSpace(prev)) continue;
+
+          const next = chars[i + 1];
+          if (next && !isSpace(next)) result.push(" ");
+        }
+
+        return result.join("");
+      }
+
+      function convert() {
+        const input = el.inputText.value || "";
+
+        let outputText = "";
+        let mapped = 0;
+
+        if (mode === "encode") {
+          const encoded = encodeText(input);
+          outputText = normalizeEncodedOutput(encoded.output);
+          mapped = encoded.mapped;
+        } else {
+          const decoded = decodeText(input);
+          outputText = applyCase(decoded.output.join(""), el.letterCase.value);
+          mapped = decoded.mapped;
+        }
+
+        lastOutput = outputText;
+        el.output.textContent = outputText || "(결과 없음)";
+        updateMetrics(input, mapped, outputText);
+
+        if (outputText) {
+          pushHistory({ mode, input, output: outputText, mapped, ts: Date.now() });
+          setMessage(`완료: ${mapped}개 문자 변환`, true);
+          tone("ok");
+        } else {
+          setMessage("입력값이 비어 있거나 변환 가능한 내용이 없습니다.", false);
+          tone("error");
+        }
+
+        saveState();
+      }
+
+      function updateMetrics(input, mapped, outputText) {
+        el.inputLen.textContent = String(input.length);
+        el.tokenLen.textContent = String(mapped || (outputText ? outputText.length : 0));
+        el.historyLen.textContent = String(history.length);
+      }
+
+      function formatDate(ts) {
+        const d = new Date(ts);
+        const yy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, "0");
+        const dd = String(d.getDate()).padStart(2, "0");
+        const hh = String(d.getHours()).padStart(2, "0");
+        const mi = String(d.getMinutes()).padStart(2, "0");
+        return `${yy}-${mm}-${dd} ${hh}:${mi}`;
+      }
+
+      function escapeHTML(text) {
+        return String(text)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      function renderHistory() {
+        if (!history.length) {
+          el.history.innerHTML = '<div class="history-item"><div class="history-main"><div class="history-output">아직 저장된 변환이 없습니다.</div></div></div>';
+          el.historyLen.textContent = "0";
+          return;
+        }
+
+        el.history.innerHTML = history.map((item, idx) => {
+          return `
+            <article class="history-item">
+              <div class="history-main" data-load="${idx}" role="button" tabindex="0" aria-label="히스토리 ${idx + 1} 불러오기">
+                <div class="history-mode">${item.mode === "encode" ? "Encode" : "Decode"} · ${formatDate(item.ts)}</div>
+                <div class="history-input">IN: ${escapeHTML(item.input)}</div>
+                <div class="history-output">OUT: ${escapeHTML(item.output)}</div>
+              </div>
+              <div class="history-actions">
+                <button class="mini-btn" data-copy="${idx}">복사</button>
+                <button class="mini-btn danger" data-del="${idx}">삭제</button>
+              </div>
+            </article>
+          `;
+        }).join("");
+
+        el.historyLen.textContent = String(history.length);
+      }
+
+      function pushHistory(item) {
+        const duplicateIndex = history.findIndex((h) => h.mode === item.mode && h.input === item.input && h.output === item.output);
+        if (duplicateIndex >= 0) history.splice(duplicateIndex, 1);
+        history.unshift(item);
+        history = history.slice(0, HISTORY_LIMIT);
+        renderHistory();
+      }
+
+      async function copyText(text) {
+        if (!text) {
+          setMessage("복사할 결과가 없습니다.", false);
+          tone("error");
+          return;
+        }
+
+        try {
+          await navigator.clipboard.writeText(text);
+          setMessage("결과를 클립보드에 복사했습니다.", true);
+          tone("copy");
+        } catch (_) {
+          const area = document.createElement("textarea");
+          area.value = text;
+          document.body.appendChild(area);
+          area.select();
+          try {
+            document.execCommand("copy");
+            setMessage("결과를 복사했습니다.", true);
+            tone("copy");
+          } catch (err) {
+            setMessage("복사 권한이 없어 실패했습니다.", false);
+            tone("error");
+          }
+          area.remove();
+        }
+      }
+
+      function setMessage(text, ok) {
+        el.msg.textContent = text;
+        el.msg.style.color = ok ? "var(--green)" : "var(--red)";
+      }
+
+      function ensureAudio() {
+        if (audioCtx) return;
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) return;
+        audioCtx = new Ctx();
+      }
+
+      function tone(kind) {
+        if (!el.soundEnabled.checked) return;
+        ensureAudio();
+        if (!audioCtx) return;
+
+        const cfg = {
+          ok: { f: 620, t: 0.07, g: 0.05, type: "sine" },
+          error: { f: 230, t: 0.1, g: 0.06, type: "square" },
+          switch: { f: 540, t: 0.05, g: 0.035, type: "triangle" },
+          copy: { f: 820, t: 0.05, g: 0.04, type: "sine" }
+        }[kind] || { f: 470, t: 0.05, g: 0.03, type: "sine" };
+
+        const now = audioCtx.currentTime;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = cfg.type;
+        osc.frequency.setValueAtTime(cfg.f, now);
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(cfg.g, now + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + cfg.t);
+        osc.connect(gain).connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + cfg.t + 0.01);
+      }
+
+      function attachManifest() {
+        try {
+          const iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="110" fill="#0a0a1a"/><rect x="78" y="90" width="356" height="332" rx="48" fill="#13132e" stroke="#2bd9ff" stroke-width="14"/><text x="256" y="236" fill="#2bd9ff" font-size="96" text-anchor="middle" font-family="Arial, sans-serif" font-weight="700">⠃⠗</text><text x="256" y="324" fill="#ba7bff" font-size="70" text-anchor="middle" font-family="Arial, sans-serif" font-weight="700">Braille</text></svg>`;
+          const icon = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(iconSvg)))}`;
+          const manifest = {
+            name: "Braille Translator",
+            short_name: "Braille",
+            start_url: "./",
+            display: "standalone",
+            background_color: "#0a0a1a",
+            theme_color: "#0a0a1a",
+            icons: [
+              { src: icon, sizes: "192x192", type: "image/svg+xml", purpose: "any" },
+              { src: icon, sizes: "512x512", type: "image/svg+xml", purpose: "any maskable" }
+            ]
+          };
+          const blob = new Blob([JSON.stringify(manifest)], { type: "application/manifest+json" });
+          const link = document.createElement("link");
+          link.rel = "manifest";
+          link.href = URL.createObjectURL(blob);
+          document.head.appendChild(link);
+        } catch (_) {
+          // ignore
+        }
+      }
+
+      function hookInstallPrompt() {
+        window.addEventListener("beforeinstallprompt", (event) => {
+          event.preventDefault();
+          deferredPrompt = event;
+          el.installBtn.hidden = false;
+        });
+
+        el.installBtn.addEventListener("click", async () => {
+          if (!deferredPrompt) return;
+          deferredPrompt.prompt();
+          try {
+            await deferredPrompt.userChoice;
+          } catch (_) {
+            // ignore
+          }
+          deferredPrompt = null;
+          el.installBtn.hidden = true;
+        });
+      }
+
+      function setupEvents() {
+        el.modeEncode.addEventListener("click", () => setMode("encode"));
+        el.modeDecode.addEventListener("click", () => setMode("decode"));
+
+        el.convertBtn.addEventListener("click", convert);
+        el.copyBtn.addEventListener("click", () => copyText(lastOutput));
+        el.swapBtn.addEventListener("click", () => setMode(mode === "encode" ? "decode" : "encode"));
+        el.clearBtn.addEventListener("click", () => {
+          el.inputText.value = "";
+          lastOutput = "";
+          el.output.textContent = "결과가 여기에 표시됩니다.";
+          setMessage("입력을 지웠습니다.", true);
+          updateMetrics("", 0, "");
+          tone("switch");
+          saveState();
+        });
+
+        [el.joinMode, el.letterCase, el.keepUnknown, el.capitalSign, el.soundEnabled, el.inputText].forEach((node) => {
+          node.addEventListener("input", saveState);
+          node.addEventListener("change", saveState);
+        });
+
+        el.inputText.addEventListener("keydown", (event) => {
+          if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+            event.preventDefault();
+            convert();
+          }
+        });
+
+        document.addEventListener("keydown", (event) => {
+          if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === "c") {
+            event.preventDefault();
+            copyText(lastOutput);
+            return;
+          }
+
+          if (event.altKey && event.key.toLowerCase() === "m") {
+            event.preventDefault();
+            setMode(mode === "encode" ? "decode" : "encode");
+            return;
+          }
+
+          if (event.key === "Escape" && document.activeElement === el.inputText) {
+            event.preventDefault();
+            el.inputText.value = "";
+            saveState();
+            setMessage("입력을 지웠습니다.", true);
+          }
+        });
+
+        let startX = null;
+        const onStart = (x) => { startX = x; };
+        const onEnd = (x) => {
+          if (startX == null) return;
+          const dx = x - startX;
+          startX = null;
+          if (Math.abs(dx) < 44) return;
+          setMode(dx < 0 ? "decode" : "encode");
+        };
+
+        el.modeCard.addEventListener("touchstart", (e) => onStart(e.changedTouches[0].clientX), { passive: true });
+        el.modeCard.addEventListener("touchend", (e) => onEnd(e.changedTouches[0].clientX), { passive: true });
+
+        el.history.addEventListener("click", async (event) => {
+          const loadBtn = event.target.closest("[data-load]");
+          if (loadBtn) {
+            const idx = Number(loadBtn.dataset.load);
+            const item = history[idx];
+            if (!item) return;
+            setMode(item.mode);
+            el.inputText.value = item.input;
+            lastOutput = item.output;
+            el.output.textContent = item.output;
+            updateMetrics(item.input, item.mapped || 0, item.output);
+            setMessage("히스토리를 불러왔습니다.", true);
+            tone("switch");
+            saveState();
+            return;
+          }
+
+          const copyBtn = event.target.closest("[data-copy]");
+          if (copyBtn) {
+            const idx = Number(copyBtn.dataset.copy);
+            const item = history[idx];
+            if (!item) return;
+            await copyText(item.output);
+            return;
+          }
+
+          const delBtn = event.target.closest("[data-del]");
+          if (delBtn) {
+            const idx = Number(delBtn.dataset.del);
+            if (!Number.isFinite(idx)) return;
+            history.splice(idx, 1);
+            renderHistory();
+            updateMetrics(el.inputText.value, 0, el.output.textContent);
+            setMessage("히스토리를 삭제했습니다.", true);
+            tone("switch");
+            saveState();
+          }
+        });
+
+        el.history.addEventListener("keydown", (event) => {
+          const row = event.target.closest("[data-load]");
+          if (!row) return;
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            row.click();
+          }
+        });
+      }
+
+      function init() {
+        loadState();
+        setMode(mode);
+        renderHistory();
+        attachManifest();
+        hookInstallPrompt();
+        setupEvents();
+
+        const input = el.inputText.value;
+        if (input.trim()) convert();
+        else updateMetrics(input, 0, "");
+      }
+
+      init();
+    })();
+  </script>
+</body>
+</html>

@@ -1,5 +1,6 @@
 # eastsea tools index (markdown)
 
+- [점자 변환기](./braille-translator/) — 영문 텍스트를 유니코드 점자로 변환하거나 점자를 다시 문자로 복원하고 최근 변환 기록을 저장합니다.
 - [NATO 음성 철자 변환기](./nato-phonetic-translator/) — 일반 텍스트를 NATO 음성 철자(Alpha·Bravo...)로 변환하거나 다시 문자로 복원하고 최근 변환 기록을 저장합니다.
 - [호흡 리듬 코치](./breathing-rhythm-coach/) — 박스호흡·4-7-8·커스텀 패턴으로 호흡 루틴을 진행하고 세션 기록/설정을 로컬에 저장합니다.
 - [택배 부피무게 계산기](./volumetric-weight-calculator/) — 가로·세로·높이와 실제 무게를 입력해 부피무게(체적무게), 과금무게, 예상 배송비를 계산하고 최근 이력을 저장합니다.

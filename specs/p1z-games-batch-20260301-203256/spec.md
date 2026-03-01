@@ -5,7 +5,7 @@ Create and ship 3 new HTML5 games under `games/{slug}/` with:
 - `index.html` (single-file game: HTML/CSS/JS embedded, no external deps)
 - `manifest.webmanifest`
 
-Target repo: `/Users/kjaylee/.openclaw/workspace/eastsea-blog`
+Target repo: `$WORKSPACE/eastsea-blog`
 
 ## 2) New game lineup (unique slugs)
 1. `glacier-rescue-switchboard` — **strategy/simulation**

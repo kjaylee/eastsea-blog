@@ -1,7 +1,7 @@
 # Plan — P1n Games Batch (3)
 
 ## 1) Preflight
-- [x] 작업 경로 확인: `/Users/kjaylee/.openclaw/workspace/eastsea-blog`
+- [x] 작업 경로 확인: `$WORKSPACE/eastsea-blog`
 - [x] 기존 slug 중복 점검 (`ls games/`)
 - [x] Spec/Test 선작성
 

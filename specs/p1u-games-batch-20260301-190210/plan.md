@@ -1,7 +1,7 @@
 # Implementation Plan — p1u-games-batch-20260301-190210
 
 ## Phase 0. Preflight
-- [x] 작업 디렉토리 확인: `/Users/kjaylee/.openclaw/workspace/eastsea-blog`
+- [x] 작업 디렉토리 확인: `$WORKSPACE/eastsea-blog`
 - [x] 기존 slug 중복 사전 검사 (`ls games/`)
 - [x] 신규 slug 확정
   - crystal-echo-luthier

@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>Clockwork Reef Keeper</title>
+  <meta name="theme-color" content="#0a0a1a" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <style>
+    :root{--bg:#0a0a1a;--panel:#141433;--line:#3f3f8f;--ink:#eef4ff;--neon:#66f3ff;--pink:#ff78e8;--good:#8cffb1;--warn:#ffd166;--bad:#ff6b83}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:radial-gradient(circle at 18% 0,#20204e,#0a0a1a 58%,#060611);color:var(--ink);display:flex;justify-content:center;min-height:100vh}
+    .app{width:min(980px,100%);padding:12px;display:flex;flex-direction:column;gap:10px}
+    .hud{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+    .box{background:rgba(20,20,48,.86);border:1px solid var(--line);border-radius:12px;padding:8px;text-align:center}
+    .box b{display:block;color:var(--neon);font-size:1.05rem}
+    .panel{background:rgba(10,10,26,.84);border:1px solid #36367b;border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px}
+    .status{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;color:#cfe3ff}
+    .zones{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+    .zone{border:1px solid #40408b;background:#121233;border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:8px;cursor:pointer;touch-action:manipulation}
+    .zone.active{border-color:#66f3ff;box-shadow:0 0 0 1px #66f3ff80,0 0 14px #66f3ff55}
+    .zone h3{margin:0;font-size:1rem;color:#e9f3ff;display:flex;justify-content:space-between;align-items:center}
+    .bar{height:9px;border-radius:999px;border:1px solid #4b4ba8;background:#1b1b43;overflow:hidden}
+    .bar i{display:block;height:100%;width:50%}
+    .health i{background:linear-gradient(90deg,#4dffb2,#8cffb1)}
+    .oxygen i{background:linear-gradient(90deg,#5ad3ff,#66f3ff)}
+    .stress i{background:linear-gradient(90deg,#ffd166,#ff6b83)}
+    .actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+    button{min-height:48px;border:1px solid #5a5ab9;border-radius:11px;background:#202052;color:#fff;font-weight:700}
+    button small{display:block;font-weight:500;opacity:.84}
+    .hint{font-size:.92rem;line-height:1.4;color:#c7dcff}
+    .overlay{position:fixed;inset:0;background:#040413e6;display:none;place-items:center;padding:20px}
+    .overlay.show{display:grid}
+    .card{width:min(460px,100%);border:1px solid #5656b6;border-radius:14px;background:#111130;padding:18px;text-align:center}
+    .card h2{margin:0 0 8px;color:var(--pink)}
+    @media (max-width:860px){.hud{grid-template-columns:repeat(3,minmax(0,1fr))}.zones{grid-template-columns:1fr}.actions{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="hud">
+      <div class="box">Wave<b id="wave">1</b></div>
+      <div class="box">Score<b id="score">0</b></div>
+      <div class="box">Stability<b id="stability">100%</b></div>
+      <div class="box">Pressure<b id="pressure">0%</b></div>
+      <div class="box">Best<b id="best">W1 / 0</b></div>
+    </section>
+
+    <section class="panel">
+      <div class="status">
+        <div id="phase">Ready · Select a reef zone and issue maintenance actions.</div>
+        <div>Zone: 1/2/3 · Action: Q/W/E</div>
+      </div>
+
+      <div class="zones" id="zones"></div>
+
+      <div class="actions">
+        <button data-act="clean" id="cleanBtn">Clean Current<small>Q · Stress↓ Oxygen↑</small></button>
+        <button data-act="seed" id="seedBtn">Seed Coral<small>W · Health↑ Stress↑</small></button>
+        <button data-act="shield" id="shieldBtn">Deploy Shield<small>E · Pressure dampen</small></button>
+      </div>
+
+      <button id="startBtn">Start / Restart Shift</button>
+      <div class="hint">3개 리프 존의 Health/Oxygen/Stress를 관리하세요. 외부 압력은 시간이 지날수록 상승합니다. 특정 존이 붕괴하면 교대 종료.</div>
+    </section>
+  </main>
+
+  <div class="overlay" id="overlay" role="dialog" aria-modal="true">
+    <div class="card">
+      <h2>Reef Collapse</h2>
+      <p id="final"></p>
+      <button id="retryBtn">다시 근무</button>
+    </div>
+  </div>
+
+  <script>
+  (()=>{
+    const STORE='clockworkReefKeeper.v1';
+    const waveEl=document.getElementById('wave');
+    const scoreEl=document.getElementById('score');
+    const stabilityEl=document.getElementById('stability');
+    const pressureEl=document.getElementById('pressure');
+    const bestEl=document.getElementById('best');
+    const phaseEl=document.getElementById('phase');
+    const zonesEl=document.getElementById('zones');
+    const overlay=document.getElementById('overlay');
+    const finalEl=document.getElementById('final');
+
+    const audio={ctx:null};
+    function ensureAudio(){if(!audio.ctx){const C=window.AudioContext||window.webkitAudioContext;if(C)audio.ctx=new C();}}
+    function blip(freq,d=0.08,type='triangle',g=0.04){
+      if(!audio.ctx)return;
+      const t=audio.ctx.currentTime,o=audio.ctx.createOscillator(),gain=audio.ctx.createGain();
+      o.type=type;o.frequency.setValueAtTime(freq,t);
+      gain.gain.setValueAtTime(g,t);
+      gain.gain.exponentialRampToValueAtTime(.0001,t+d);
+      o.connect(gain).connect(audio.ctx.destination);o.start(t);o.stop(t+d);
+    }
+    ['keydown','pointerdown','touchstart'].forEach(e=>window.addEventListener(e,ensureAudio,{once:true}));
+
+    let best={wave:1,score:0};
+    try{best=Object.assign(best,JSON.parse(localStorage.getItem(STORE)||'{}'));}catch{}
+
+    const names=['North Bloom','Tide Cradle','Abyss Garden'];
+    const S={running:false,wave:1,score:0,pressure:0,selected:0,zones:[],timer:0,last:0,raf:0};
+
+    function makeZone(){return{health:100,oxygen:100,stress:20,shield:0};}
+
+    function clamp(v){return Math.max(0,Math.min(100,v));}
+
+    function zoneCard(zone,i){
+      return `<article class="zone ${i===S.selected?'active':''}" data-zone="${i}">
+        <h3>${i+1}. ${names[i]} <span>${Math.round((zone.health+zone.oxygen)/2)}%</span></h3>
+        <div>Health</div><div class="bar health"><i style="width:${zone.health}%"></i></div>
+        <div>Oxygen</div><div class="bar oxygen"><i style="width:${zone.oxygen}%"></i></div>
+        <div>Stress</div><div class="bar stress"><i style="width:${zone.stress}%"></i></div>
+      </article>`;
+    }
+
+    function renderZones(){
+      zonesEl.innerHTML=S.zones.map(zoneCard).join('');
+      [...zonesEl.querySelectorAll('.zone')].forEach(el=>{
+        el.addEventListener('click',()=>selectZone(Number(el.dataset.zone)));
+      });
+    }
+
+    function selectZone(i){
+      S.selected=Math.max(0,Math.min(2,i));
+      renderZones();
+      blip(360+S.selected*70,0.05,'sine',0.03);
+    }
+
+    function applyDecay(dt){
+      const pressureFactor=S.pressure/100;
+      S.zones.forEach(z=>{
+        const shieldFactor=z.shield>0?0.45:1;
+        z.health=clamp(z.health - dt*(1.2+pressureFactor*2.6)*shieldFactor);
+        z.oxygen=clamp(z.oxygen - dt*(1.0+pressureFactor*2.2)*shieldFactor + dt*0.35);
+        z.stress=clamp(z.stress + dt*(1.0+pressureFactor*2.8) - dt*0.15);
+        z.shield=Math.max(0,z.shield-dt*14);
+      });
+      const avg=(S.zones.reduce((a,z)=>a+(z.health+z.oxygen-z.stress*0.5),0)/(S.zones.length*2));
+      S.score += Math.max(0,Math.round(avg*dt*0.7));
+      if(avg>68)S.score+=1;
+    }
+
+    function action(type){
+      if(!S.running)return;
+      const z=S.zones[S.selected];
+      if(type==='clean'){
+        z.stress=clamp(z.stress-26);
+        z.oxygen=clamp(z.oxygen+12);
+        S.score+=14;
+        phaseEl.textContent=`${names[S.selected]} cleaned.`;
+        blip(520,0.09,'triangle',0.05);
+      }else if(type==='seed'){
+        z.health=clamp(z.health+18);
+        z.stress=clamp(z.stress+10);
+        S.score+=16;
+        phaseEl.textContent=`${names[S.selected]} seeded.`;
+        blip(620,0.1,'sawtooth',0.045);
+      }else if(type==='shield'){
+        z.shield=clamp(z.shield+42);
+        z.stress=clamp(z.stress-8);
+        S.pressure=clamp(S.pressure-7);
+        S.score+=10;
+        phaseEl.textContent=`Shield stabilized ${names[S.selected]}.`;
+        blip(430,0.11,'square',0.04);
+      }
+      renderZones();
+      syncHud();
+    }
+
+    function getStability(){
+      const val=S.zones.reduce((a,z)=>a+Math.max(0,(z.health+z.oxygen)/2-z.stress*0.35),0)/S.zones.length;
+      return clamp(val);
+    }
+
+    function syncHud(){
+      waveEl.textContent=S.wave;
+      scoreEl.textContent=S.score;
+      stabilityEl.textContent=`${Math.round(getStability())}%`;
+      pressureEl.textContent=`${Math.round(S.pressure)}%`;
+      bestEl.textContent=`W${best.wave} / ${best.score}`;
+    }
+
+    function endGame(){
+      S.running=false;
+      cancelAnimationFrame(S.raf);
+      if(S.score>best.score||S.wave>best.wave){
+        best.score=Math.max(best.score,S.score);
+        best.wave=Math.max(best.wave,S.wave);
+        localStorage.setItem(STORE,JSON.stringify(best));
+      }
+      syncHud();
+      finalEl.textContent=`Wave ${S.wave} · Score ${S.score} · 최고 W${best.wave}/${best.score}`;
+      overlay.classList.add('show');
+      blip(130,0.25,'triangle',0.05);
+      phaseEl.textContent='A reef sector collapsed.';
+    }
+
+    function loop(now){
+      if(!S.running)return;
+      if(!S.last)S.last=now;
+      const dt=Math.min(0.05,(now-S.last)/1000);
+      S.last=now;
+      S.timer+=dt;
+      if(S.timer>=8){
+        S.timer=0;
+        S.wave+=1;
+        S.pressure=clamp(S.pressure+8);
+        phaseEl.textContent=`Wave ${S.wave}: current pressure rising.`;
+        blip(700,0.08,'triangle',0.045);
+      }
+      S.pressure=clamp(S.pressure+dt*1.8);
+      applyDecay(dt);
+      renderZones();
+      syncHud();
+      if(S.zones.some(z=>z.health<=0||z.oxygen<=0))return endGame();
+      S.raf=requestAnimationFrame(loop);
+    }
+
+    function start(){
+      ensureAudio();
+      S.running=true;S.wave=1;S.score=0;S.pressure=6;S.selected=0;S.zones=[makeZone(),makeZone(),makeZone()];S.timer=0;S.last=0;
+      overlay.classList.remove('show');
+      phaseEl.textContent='Shift online. Keep every reef alive.';
+      renderZones();
+      syncHud();
+      cancelAnimationFrame(S.raf);
+      S.raf=requestAnimationFrame(loop);
+      blip(460,0.1,'triangle',0.05);
+    }
+
+    document.getElementById('startBtn').addEventListener('click',start);
+    document.getElementById('retryBtn').addEventListener('click',start);
+    document.getElementById('cleanBtn').addEventListener('click',()=>action('clean'));
+    document.getElementById('seedBtn').addEventListener('click',()=>action('seed'));
+    document.getElementById('shieldBtn').addEventListener('click',()=>action('shield'));
+
+    window.addEventListener('keydown',e=>{
+      if(['1','2','3'].includes(e.key)){e.preventDefault();selectZone(Number(e.key)-1);}
+      else if(['q','Q'].includes(e.key)){e.preventDefault();action('clean');}
+      else if(['w','W'].includes(e.key)){e.preventDefault();action('seed');}
+      else if(['e','E'].includes(e.key)){e.preventDefault();action('shield');}
+      else if(e.key==='Enter'&&!S.running){start();}
+    });
+
+    S.zones=[makeZone(),makeZone(),makeZone()];
+    renderZones();
+    syncHud();
+  })();
+  </script>
+</body>
+</html>

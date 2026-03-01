@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>Aurora Rail Rescue</title>
+  <meta name="theme-color" content="#0a0a1a" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <style>
+    :root{--bg:#0a0a1a;--panel:#14142f;--line:#3f3f8f;--ink:#eef3ff;--neon:#66f3ff;--pink:#ff77e6;--good:#8cffb1;--bad:#ff7e7e;--warn:#ffd166}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:radial-gradient(circle at 20% 0,#1c1c4a,#0a0a1a 60%,#060611);color:var(--ink);display:flex;justify-content:center;min-height:100vh}
+    .app{width:min(920px,100%);padding:12px;display:flex;flex-direction:column;gap:10px}
+    .hud{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+    .box{background:rgba(20,20,48,.86);border:1px solid var(--line);border-radius:12px;padding:8px;text-align:center}
+    .box b{display:block;color:var(--neon);font-size:1.03rem}
+    .panel{background:rgba(10,10,26,.84);border:1px solid #36367a;border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:10px}
+    .status{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;color:#d7e7ff}
+    .track{position:relative;height:62vh;min-height:360px;max-height:620px;border-radius:14px;border:1px solid #46469a;overflow:hidden;background:linear-gradient(180deg,#13133a,#090918)}
+    .lane{position:absolute;top:0;bottom:0;width:33.33%;border-right:1px dashed #2e2e68}
+    .lane:last-child{border-right:none}
+    .player,.item{position:absolute;left:0;width:33.33%;display:grid;place-items:center;font-size:1.5rem;transition:left .12s}
+    .player{bottom:6px;height:54px;text-shadow:0 0 12px #66f3ffcc}
+    .item{height:40px}
+    .item.hazard{filter:drop-shadow(0 0 8px #ff6b6baa)}
+    .item.pod{filter:drop-shadow(0 0 8px #8cffb1aa)}
+    .bar{height:10px;border-radius:999px;border:1px solid #4a4aa5;background:#1a1a3d;overflow:hidden}
+    .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#66f3ff,#8da0ff,#ff77e6)}
+    .controls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+    button{min-height:46px;border:1px solid #5757b4;border-radius:11px;background:#202052;color:white;font-weight:700}
+    button:active{transform:translateY(1px)}
+    .hint{font-size:.92rem;line-height:1.4;color:#c3d6ff}
+    .overlay{position:fixed;inset:0;background:#040413e0;display:none;place-items:center;padding:18px}
+    .overlay.show{display:grid}
+    .card{width:min(420px,100%);border:1px solid #5454b3;border-radius:14px;background:#11112d;padding:18px;text-align:center}
+    .card h2{margin:0 0 8px;color:var(--pink)}
+    @media (max-width:760px){.hud{grid-template-columns:repeat(3,minmax(0,1fr))}.track{height:54vh;min-height:320px}.controls{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="hud">
+      <div class="box">Distance<b id="distance">0m</b></div>
+      <div class="box">Score<b id="score">0</b></div>
+      <div class="box">Chain<b id="chain">0</b></div>
+      <div class="box">Shield<b id="shield">3</b></div>
+      <div class="box">Charge<b id="charge">0%</b></div>
+      <div class="box">Best<b id="best">0 / 0m</b></div>
+    </section>
+
+    <section class="panel">
+      <div class="status">
+        <div id="phase">Ready · Move rails and rescue pods.</div>
+        <div>Keys: ← → / A D · Space Pulse</div>
+      </div>
+      <div class="bar"><i id="chargeBar"></i></div>
+      <div class="track" id="track">
+        <div class="lane" style="left:0"></div>
+        <div class="lane" style="left:33.33%"></div>
+        <div class="lane" style="left:66.66%"></div>
+        <div class="player" id="player">🚆</div>
+      </div>
+      <div class="controls">
+        <button id="leftBtn">◀ Left</button>
+        <button id="rightBtn">Right ▶</button>
+        <button id="pulseBtn">Pulse ⚡</button>
+        <button id="startBtn">Start / Restart</button>
+      </div>
+      <div class="hint">오로라 레일 3개를 오가며 구조 포드(🟢)를 회수하고 파편(☄️)을 회피하세요. Pulse는 충전이 40% 이상일 때 사용 가능합니다.</div>
+    </section>
+  </main>
+
+  <div class="overlay" id="overlay" role="dialog" aria-modal="true">
+    <div class="card">
+      <h2>Rail Integrity Lost</h2>
+      <p id="final"></p>
+      <button id="retryBtn">다시 출격</button>
+    </div>
+  </div>
+
+  <script>
+  (()=>{
+    const STORE='auroraRailRescue.v1';
+    const distanceEl=document.getElementById('distance');
+    const scoreEl=document.getElementById('score');
+    const chainEl=document.getElementById('chain');
+    const shieldEl=document.getElementById('shield');
+    const chargeEl=document.getElementById('charge');
+    const bestEl=document.getElementById('best');
+    const phaseEl=document.getElementById('phase');
+    const chargeBar=document.getElementById('chargeBar');
+    const playerEl=document.getElementById('player');
+    const trackEl=document.getElementById('track');
+    const overlay=document.getElementById('overlay');
+    const finalEl=document.getElementById('final');
+
+    const audio={ctx:null};
+    function ensureAudio(){if(!audio.ctx){const C=window.AudioContext||window.webkitAudioContext;if(C)audio.ctx=new C();}}
+    function tone(freq,dur=0.08,type='triangle',gainV=0.05){
+      if(!audio.ctx)return;
+      const t=audio.ctx.currentTime;
+      const o=audio.ctx.createOscillator();
+      const g=audio.ctx.createGain();
+      o.type=type;o.frequency.setValueAtTime(freq,t);
+      g.gain.setValueAtTime(gainV,t);
+      g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+      o.connect(g).connect(audio.ctx.destination);
+      o.start(t);o.stop(t+dur);
+    }
+    ['keydown','pointerdown','touchstart'].forEach(e=>window.addEventListener(e,ensureAudio,{once:true}));
+
+    let best={score:0,distance:0};
+    try{best=Object.assign(best,JSON.parse(localStorage.getItem(STORE)||'{}'));}catch{}
+
+    const S={running:false,lane:1,items:[],spawnAt:0,last:0,distance:0,score:0,chain:0,shield:3,charge:0,speed:220,raf:0};
+
+    function laneToLeft(l){return `${l*33.33}%`;}
+    function renderPlayer(){playerEl.style.left=laneToLeft(S.lane);}
+
+    function createItem(type,lane){
+      const el=document.createElement('div');
+      el.className=`item ${type}`;
+      el.textContent=type==='hazard'?'☄️':'🟢';
+      trackEl.appendChild(el);
+      const item={type,lane,y:-42,el};
+      item.el.style.left=laneToLeft(lane);
+      item.el.style.top=`${item.y}px`;
+      S.items.push(item);
+    }
+
+    function move(delta){
+      if(!S.running)return;
+      S.lane=Math.max(0,Math.min(2,S.lane+delta));
+      renderPlayer();
+      tone(420+S.lane*80,0.05,'sine',0.03);
+    }
+
+    function pulse(){
+      if(!S.running||S.charge<40)return;
+      S.charge=Math.max(0,S.charge-40);
+      let cleared=0;
+      S.items=S.items.filter(it=>{
+        if(it.type==='hazard'&&it.lane===S.lane&&it.y>trackEl.clientHeight-180){
+          cleared++;it.el.remove();return false;
+        }
+        return true;
+      });
+      if(cleared){S.score+=cleared*30;S.chain+=cleared;tone(680,0.12,'sawtooth',0.06);}else{tone(190,0.09,'square',0.03);}
+    }
+
+    function collide(item){
+      if(item.type==='hazard'){
+        S.shield-=1;S.chain=0;tone(120,0.18,'sawtooth',0.06);
+        phaseEl.textContent='Collision! Shield reduced.';
+      }else{
+        S.chain+=1;S.score+=18+S.chain*2;S.charge=Math.min(100,S.charge+18);
+        tone(620,0.08,'triangle',0.05);
+        phaseEl.textContent='Pod rescued. Keep the chain alive!';
+      }
+      if(S.shield<=0)endGame();
+    }
+
+    function maybeSpawn(now){
+      if(now<S.spawnAt)return;
+      const lane=Math.floor(Math.random()*3);
+      const hazardBias=Math.min(.74,.52+S.distance/7000);
+      const type=Math.random()<hazardBias?'hazard':'pod';
+      createItem(type,lane);
+      S.spawnAt=now + (type==='hazard'?360:420) - Math.min(160,S.distance/50);
+    }
+
+    function endGame(){
+      S.running=false;
+      cancelAnimationFrame(S.raf);
+      if(S.score>best.score||S.distance>best.distance){
+        best.score=Math.max(best.score,S.score);
+        best.distance=Math.max(best.distance,Math.floor(S.distance));
+        localStorage.setItem(STORE,JSON.stringify(best));
+      }
+      syncHud();
+      finalEl.textContent=`점수 ${S.score} · 거리 ${Math.floor(S.distance)}m · 최고 ${best.score}/${best.distance}m`;
+      overlay.classList.add('show');
+      tone(100,0.3,'triangle',0.05);
+    }
+
+    function syncHud(){
+      distanceEl.textContent=`${Math.floor(S.distance)}m`;
+      scoreEl.textContent=S.score;
+      chainEl.textContent=S.chain;
+      shieldEl.textContent=S.shield;
+      chargeEl.textContent=`${Math.floor(S.charge)}%`;
+      chargeBar.style.width=`${S.charge}%`;
+      bestEl.textContent=`${best.score} / ${best.distance}m`;
+    }
+
+    function resetState(){
+      S.running=true;S.lane=1;S.items.forEach(i=>i.el.remove());S.items=[];S.spawnAt=0;S.distance=0;S.score=0;S.chain=0;S.shield=3;S.charge=16;S.speed=220;overlay.classList.remove('show');
+      phaseEl.textContent='Rescue operation live. Stay on the rails.';
+      renderPlayer();
+      syncHud();
+    }
+
+    function loop(now){
+      if(!S.running)return;
+      if(!S.last)S.last=now;
+      const dt=Math.min(0.05,(now-S.last)/1000);
+      S.last=now;
+      S.distance+=dt*(S.speed*0.35);
+      S.speed=Math.min(360,S.speed+dt*2.8);
+      S.charge=Math.min(100,S.charge+dt*8.5);
+
+      maybeSpawn(now);
+      const hitY=trackEl.clientHeight-72;
+      S.items=S.items.filter(it=>{
+        it.y+=S.speed*dt;
+        it.el.style.top=`${it.y}px`;
+        if(it.y>=hitY&&it.y<=hitY+28&&it.lane===S.lane){collide(it);it.el.remove();return false;}
+        if(it.y>trackEl.clientHeight+50){
+          if(it.type==='pod'){S.chain=0;phaseEl.textContent='Missed pod. Chain reset.';}
+          it.el.remove();
+          return false;
+        }
+        return true;
+      });
+      syncHud();
+      S.raf=requestAnimationFrame(loop);
+    }
+
+    function start(){
+      ensureAudio();
+      resetState();
+      S.last=0;
+      cancelAnimationFrame(S.raf);
+      S.raf=requestAnimationFrame(loop);
+      tone(440,0.1,'triangle',0.05);
+    }
+
+    function bindHold(btn,fn){
+      let int=0;
+      const down=e=>{e.preventDefault();fn();int=setInterval(fn,140);};
+      const up=()=>{clearInterval(int);};
+      btn.addEventListener('pointerdown',down);
+      btn.addEventListener('pointerup',up);
+      btn.addEventListener('pointercancel',up);
+      btn.addEventListener('pointerleave',up);
+    }
+
+    bindHold(document.getElementById('leftBtn'),()=>move(-1));
+    bindHold(document.getElementById('rightBtn'),()=>move(1));
+    document.getElementById('pulseBtn').addEventListener('click',pulse);
+    document.getElementById('startBtn').addEventListener('click',start);
+    document.getElementById('retryBtn').addEventListener('click',start);
+
+    window.addEventListener('keydown',e=>{
+      if(['ArrowLeft','a','A'].includes(e.key)){e.preventDefault();move(-1);}
+      else if(['ArrowRight','d','D'].includes(e.key)){e.preventDefault();move(1);}
+      else if(e.key===' '){e.preventDefault();pulse();}
+      else if(e.key==='Enter'&&!S.running){start();}
+    });
+
+    renderPlayer();
+    syncHud();
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>Echo Mosaic Forge</title>
+  <meta name="theme-color" content="#0a0a1a" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <style>
+    :root{--bg:#0a0a1a;--panel:#141433;--line:#3e3e8d;--ink:#eef4ff;--neon:#66f3ff;--pink:#ff77e6;--good:#8cffb1;--warn:#ffd166;--bad:#ff6b83}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:radial-gradient(circle at 18% 0,#1f1f4b,#0a0a1a 58%,#060611);color:var(--ink);display:flex;justify-content:center;min-height:100vh}
+    .app{width:min(900px,100%);padding:12px;display:flex;flex-direction:column;gap:10px}
+    .hud{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+    .box{background:rgba(20,20,48,.86);border:1px solid var(--line);border-radius:12px;padding:8px;text-align:center}
+    .box b{display:block;color:var(--neon);font-size:1.04rem}
+    .panel{background:rgba(10,10,26,.84);border:1px solid #35357a;border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:12px}
+    .status{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+    .phase{font-weight:700;color:#d9e9ff}
+    .bar{height:12px;border:1px solid #4c4cad;background:#1a1a3f;border-radius:999px;overflow:hidden}
+    .bar i{display:block;height:100%;width:100%;background:linear-gradient(90deg,#66f3ff,#8098ff,#ff77e6)}
+    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    .pad{min-height:120px;border-radius:15px;border:1px solid #47479d;background:linear-gradient(180deg,#1d1d4a,#131333);color:#f5f8ff;font-size:1.18rem;font-weight:800;display:grid;place-items:center;touch-action:manipulation;box-shadow:0 8px 18px #00000035}
+    .pad small{display:block;font-size:.76rem;opacity:.85;margin-top:7px}
+    .pad.active{transform:scale(.98);filter:brightness(1.2);box-shadow:0 0 16px #66f3ff88;border-color:#66f3ff}
+    .controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+    button{min-height:46px;border:1px solid #5959ba;border-radius:11px;background:#202052;color:#fff;font-weight:700}
+    .hint{font-size:.92rem;line-height:1.4;color:#c4d9ff}
+    .overlay{position:fixed;inset:0;background:#040413e6;display:none;place-items:center;padding:20px}
+    .overlay.show{display:grid}
+    .card{width:min(420px,100%);background:#11112f;border:1px solid #5656b5;border-radius:14px;padding:18px;text-align:center}
+    .card h2{margin:0 0 8px;color:var(--pink)}
+    @media (max-width:760px){.hud{grid-template-columns:repeat(3,minmax(0,1fr))}.pad{min-height:94px}}
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="hud">
+      <div class="box">Round<b id="round">1</b></div>
+      <div class="box">Score<b id="score">0</b></div>
+      <div class="box">Combo<b id="combo">0</b></div>
+      <div class="box">Life<b id="life">3</b></div>
+      <div class="box">Timer<b id="timer">0.0s</b></div>
+      <div class="box">Best<b id="best">R1 / 0</b></div>
+    </section>
+
+    <section class="panel">
+      <div class="status">
+        <div class="phase" id="phase">Ready · Start to hear the mosaic echo.</div>
+        <div>Keys: A S D F / 1 2 3 4</div>
+      </div>
+      <div class="bar"><i id="timerBar"></i></div>
+      <div class="grid" id="grid"></div>
+      <div class="controls">
+        <button id="startBtn">Start / Next Round</button>
+        <button id="resetBtn">Reset Run</button>
+      </div>
+      <div class="hint" id="hint">패턴 재생을 보고 들은 뒤 같은 순서로 모자이크를 입력하세요. 라운드가 오를수록 길이와 속도가 증가합니다.</div>
+    </section>
+  </main>
+
+  <div class="overlay" id="overlay" role="dialog" aria-modal="true">
+    <div class="card">
+      <h2>Mosaic Echo Shattered</h2>
+      <p id="final"></p>
+      <button id="retryBtn">다시 단조하기</button>
+    </div>
+  </div>
+
+  <script>
+  (()=>{
+    const STORE='echoMosaicForge.v1';
+    const tones=[294,370,440,554];
+    const labels=['A','S','D','F'];
+    const names=['Azure','Magenta','Amber','Mint'];
+
+    const roundEl=document.getElementById('round');
+    const scoreEl=document.getElementById('score');
+    const comboEl=document.getElementById('combo');
+    const lifeEl=document.getElementById('life');
+    const timerEl=document.getElementById('timer');
+    const bestEl=document.getElementById('best');
+    const phaseEl=document.getElementById('phase');
+    const timerBar=document.getElementById('timerBar');
+    const gridEl=document.getElementById('grid');
+    const hintEl=document.getElementById('hint');
+    const overlay=document.getElementById('overlay');
+    const finalEl=document.getElementById('final');
+
+    const audio={ctx:null};
+    function ensureAudio(){if(!audio.ctx){const C=window.AudioContext||window.webkitAudioContext;if(C)audio.ctx=new C();}}
+    function beep(n,d=0.12,type='triangle',g=0.055){
+      if(!audio.ctx)return;
+      const t=audio.ctx.currentTime,o=audio.ctx.createOscillator(),gain=audio.ctx.createGain();
+      o.type=type;o.frequency.setValueAtTime(n,t);
+      gain.gain.setValueAtTime(g,t);
+      gain.gain.exponentialRampToValueAtTime(.0001,t+d);
+      o.connect(gain).connect(audio.ctx.destination);o.start(t);o.stop(t+d);
+    }
+    ['keydown','pointerdown','touchstart'].forEach(evt=>window.addEventListener(evt,ensureAudio,{once:true}));
+
+    let best={round:1,score:0};
+    try{best=Object.assign(best,JSON.parse(localStorage.getItem(STORE)||'{}'));}catch{}
+
+    const S={round:1,score:0,combo:0,life:3,sequence:[],inputIndex:0,accepting:false,timer:0,timeLimit:0,raf:0,running:true};
+    const pads=[];
+
+    for(let i=0;i<4;i++){
+      const b=document.createElement('button');
+      b.className='pad';
+      b.innerHTML=`${names[i]}<small>${labels[i]} / ${i+1}</small>`;
+      b.addEventListener('click',()=>press(i));
+      gridEl.appendChild(b);
+      pads.push(b);
+    }
+
+    function flash(i,ms=180){
+      const el=pads[i];
+      if(!el)return;
+      el.classList.add('active');
+      setTimeout(()=>el.classList.remove('active'),ms);
+    }
+
+    function syncHud(){
+      roundEl.textContent=S.round;
+      scoreEl.textContent=S.score;
+      comboEl.textContent=S.combo;
+      lifeEl.textContent=S.life;
+      timerEl.textContent=`${S.timer.toFixed(1)}s`;
+      const pct=S.timeLimit?Math.max(0,Math.min(1,S.timer/S.timeLimit)):1;
+      timerBar.style.width=`${(1-pct)*100}%`;
+      bestEl.textContent=`R${best.round} / ${best.score}`;
+    }
+
+    function resetRun(){
+      S.round=1;S.score=0;S.combo=0;S.life=3;S.sequence=[];S.inputIndex=0;S.accepting=false;S.timer=0;S.timeLimit=0;S.running=true;
+      overlay.classList.remove('show');
+      hintEl.textContent='패턴 재생을 보고 들은 뒤 같은 순서로 모자이크를 입력하세요. 라운드가 오를수록 길이와 속도가 증가합니다.';
+      phaseEl.textContent='Ready · Start to hear the mosaic echo.';
+      syncHud();
+    }
+
+    function makeSeq(len){return Array.from({length:len},()=>Math.floor(Math.random()*4));}
+
+    async function playSeq(){
+      S.accepting=false;
+      phaseEl.textContent='Listen carefully...';
+      const speed=Math.max(230,520-(S.round-1)*26);
+      await new Promise(r=>setTimeout(r,300));
+      for(const i of S.sequence){
+        flash(i,Math.min(220,speed*0.55));
+        beep(tones[i],0.14,'triangle',0.06);
+        await new Promise(r=>setTimeout(r,speed));
+      }
+      S.accepting=true;
+      S.inputIndex=0;
+      S.timer=0;
+      S.timeLimit=Math.max(4,3.6+S.sequence.length*1.18-(S.round-1)*0.09);
+      phaseEl.textContent='Reproduce the sequence!';
+      syncHud();
+    }
+
+    function fail(msg){
+      S.life-=1;
+      S.combo=0;
+      phaseEl.textContent=msg;
+      beep(170,0.2,'sawtooth',0.06);
+      if(S.life<=0)return finish();
+      setTimeout(()=>startRound(false),620);
+      syncHud();
+    }
+
+    function finish(){
+      S.running=false;
+      S.accepting=false;
+      cancelAnimationFrame(S.raf);
+      if(S.score>best.score||S.round>best.round){
+        best.score=Math.max(best.score,S.score);
+        best.round=Math.max(best.round,S.round);
+        localStorage.setItem(STORE,JSON.stringify(best));
+      }
+      syncHud();
+      finalEl.textContent=`Round ${S.round} · Score ${S.score} · 최고 R${best.round}/${best.score}`;
+      overlay.classList.add('show');
+      phaseEl.textContent='Run finished. Retry to forge a better echo.';
+    }
+
+    function press(i){
+      if(!S.accepting||!S.running)return;
+      flash(i,140);
+      beep(tones[i],0.09,'square',0.045);
+      if(S.sequence[S.inputIndex]!==i)return fail('Wrong tile resonance.');
+      S.inputIndex+=1;
+      S.score+=12+S.combo*2;
+      S.combo+=1;
+      if(S.inputIndex>=S.sequence.length){
+        S.round+=1;
+        S.score+=24+S.round*2;
+        phaseEl.textContent='Perfect forge! Next round.';
+        beep(740,0.16,'triangle',0.065);
+        setTimeout(()=>startRound(true),560);
+      }
+      syncHud();
+    }
+
+    function startRound(grow=true){
+      if(!S.running)return;
+      S.sequence=grow?makeSeq(Math.min(14,2+S.round)):S.sequence;
+      playSeq();
+    }
+
+    function tick(now){
+      if(!S.running)return;
+      if(!tick.last)tick.last=now;
+      const dt=Math.min(0.05,(now-tick.last)/1000);
+      tick.last=now;
+      if(S.accepting){
+        S.timer+=dt;
+        if(S.timer>S.timeLimit)fail('Time over. The echo faded.');
+      }
+      syncHud();
+      S.raf=requestAnimationFrame(tick);
+    }
+
+    function start(){
+      ensureAudio();
+      if(!S.running||S.life<=0)resetRun();
+      startRound(true);
+      tick.last=0;
+      cancelAnimationFrame(S.raf);
+      S.raf=requestAnimationFrame(tick);
+      beep(420,0.1,'triangle',0.05);
+    }
+
+    document.getElementById('startBtn').addEventListener('click',start);
+    document.getElementById('resetBtn').addEventListener('click',()=>{resetRun();start();});
+    document.getElementById('retryBtn').addEventListener('click',()=>{resetRun();start();});
+
+    window.addEventListener('keydown',e=>{
+      const map={'a':0,'A':0,'1':0,'s':1,'S':1,'2':1,'d':2,'D':2,'3':2,'f':3,'F':3,'4':3};
+      if(e.key in map){e.preventDefault();press(map[e.key]);}
+      else if(e.key==='Enter'&&!S.accepting){e.preventDefault();start();}
+    });
+
+    syncHud();
+  })();
+  </script>
+</body>
+</html>

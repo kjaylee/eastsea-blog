@@ -1,0 +1,297 @@
+<!DOCTYPE html><head>
+<title>Hex Merge Puzzle</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<link rel="manifest" href="manifest.webmanifest">
+<style>body{margin:0;background:#0a0a1a;overflow:hidden}</style>
+</head><body>
+<script src="https://cdn.jsdelivr.net/npm/littlejsengine/dist/littlejs.min.js"></script>
+<script>'use strict';
+showSplashScreen=false;debugWatermark=false;showEngineVersion=false;
+canvasClearColor=hsl(0,0,.04);touchGamepadEnable=true;
+cameraScale=34;
+
+const SAVE_KEY='littlejs-hex-merge-puzzle-best';
+const GRID_RADIUS=2;
+
+const sndMove=new Sound([.45,.01,220,.004,0,.05,0,1.1,0,0,0,0,0,0,0,0,0,.5]);
+const sndMerge=new Sound([.85,.01,760,.004,0,.11,0,2.1,8,0,0,0,0,0,0,0,0,.82]);
+const sndSpawn=new Sound([.42,.01,520,.004,0,.08,0,1.4,2,0,0,0,0,0,0,0,0,.45]);
+const sndBlock=new Sound([.7,.01,150,.03,0,.1,0,1,-5,0,0,0,0,0,0,0,0,.65]);
+
+let state='start';
+let score=0,best=0,moves=0;
+let cells=[],board={};
+let pointerDown=false,pointerStart=vec2();
+let infoText='',infoTimer=0;
+let stars=[];
+
+const DIRS=[
+  {name:'E', dq: 1, dr: 0, keys:['KeyD','ArrowRight']},
+  {name:'NE',dq: 1, dr:-1, keys:['KeyE']},
+  {name:'NW',dq: 0, dr:-1, keys:['KeyW','ArrowUp']},
+  {name:'W', dq:-1, dr: 0, keys:['KeyA','ArrowLeft']},
+  {name:'SW',dq:-1, dr: 1, keys:['KeyZ','ArrowDown']},
+  {name:'SE',dq: 0, dr: 1, keys:['KeyX']},
+];
+
+function keyOf(q,r){ return `${q},${r}`; }
+
+function axialToWorld(q,r){
+  return vec2((q+r*.5)*2.06,r*1.78);
+}
+
+function fillCells(){
+  cells=[];
+  board={};
+  for(let q=-GRID_RADIUS;q<=GRID_RADIUS;q++){
+    for(let r=-GRID_RADIUS;r<=GRID_RADIUS;r++){
+      if(Math.abs(q+r)>GRID_RADIUS) continue;
+      const c={q,r,key:keyOf(q,r),pos:axialToWorld(q,r)};
+      cells.push(c);
+      board[c.key]=0;
+    }
+  }
+}
+
+function tileColor(value){
+  if(!value) return hsl(.58,.5,.12,.65);
+  const l=clamp(Math.log2(value)/12,.1,.95);
+  const h=mod(.56-.05*Math.log2(value),1);
+  return hsl(h,.9,.44+.28*l);
+}
+
+function drawHexApprox(pos,size,color,border,glow){
+  drawRect(pos,vec2(size*1.52,size*.98),color);
+  drawRect(pos,vec2(size*.98,size*1.52),color);
+  for(let i=0;i<6;i++){
+    const a=i*PI/3;
+    drawCircle(pos.add(vec2(Math.cos(a)*size*.58,Math.sin(a)*size*.58)),size*.41,color);
+  }
+
+  const pts=[];
+  for(let i=0;i<6;i++){
+    const a=i*PI/3;
+    pts.push(pos.add(vec2(Math.cos(a)*size*.86,Math.sin(a)*size*.86)));
+  }
+  for(let i=0;i<6;i++)
+    drawLine(pts[i],pts[(i+1)%6],.045,border);
+
+  if(glow)
+    drawCircle(pos,size*1.48,glow);
+}
+
+function emitMerge(pos,value){
+  const hue=mod(.56-.04*Math.log2(value),1);
+  new ParticleEmitter(
+    pos,0,.1,.07,560,PI,undefined,
+    hsl(hue,1,.65),hsl(.15,1,.72),hsl(0,0,0,0),hsl(0,0,0,0),
+    .45,.05,.28,.12,.04,.96,1,.2,PI,.16,.5,false,true,true,1,false
+  );
+}
+
+function spawnRandom(count=1){
+  while(count-- > 0){
+    const empties=cells.filter(c=>board[c.key]===0);
+    if(!empties.length) return;
+    const pick=empties[randInt(empties.length)];
+    board[pick.key]=rand()<.12?4:2;
+    sndSpawn.play(pick.pos,.42,1+.04*randSign());
+  }
+}
+
+function canMove(){
+  if(cells.some(c=>board[c.key]===0)) return true;
+  for(const c of cells){
+    const v=board[c.key];
+    for(const d of DIRS){
+      const nk=keyOf(c.q+d.dq,c.r+d.dr);
+      if(!(nk in board)) continue;
+      if(board[nk]===v) return true;
+    }
+  }
+  return false;
+}
+
+function tryMove(dir){
+  if(state!=='play') return;
+
+  let moved=false;
+  const merged={};
+  const project=c=>c.q*dir.dq+c.r*dir.dr;
+  const order=[...cells].sort((a,b)=>project(b)-project(a));
+
+  for(const cell of order){
+    let curQ=cell.q,curR=cell.r;
+    let curKey=keyOf(curQ,curR);
+    let val=board[curKey];
+    if(!val) continue;
+
+    while(true){
+      const nq=curQ+dir.dq,nr=curR+dir.dr;
+      const nk=keyOf(nq,nr);
+      if(!(nk in board)) break;
+
+      if(board[nk]===0){
+        board[nk]=val;
+        board[curKey]=0;
+        curQ=nq; curR=nr; curKey=nk;
+        moved=true;
+        continue;
+      }
+
+      if(board[nk]===val && !merged[nk]){
+        board[nk]=val*2;
+        board[curKey]=0;
+        merged[nk]=1;
+        moved=true;
+        score+=board[nk];
+        emitMerge(axialToWorld(nq,nr),board[nk]);
+        sndMerge.play(axialToWorld(nq,nr),.65,1+.02*Math.log2(board[nk]));
+      }
+      break;
+    }
+  }
+
+  if(!moved){
+    sndBlock.play(undefined,.45,1);
+    return;
+  }
+
+  moves++;
+  sndMove.play(undefined,.45,1.02);
+  spawnRandom(1);
+
+  if(score>best){
+    best=score;
+    localStorage.setItem(SAVE_KEY,String(best));
+  }
+
+  if(!canMove()){
+    state='gameover';
+    infoText='NO MORE MOVES';
+    infoTimer=1.1;
+  }
+}
+
+function resetGame(){
+  score=0; moves=0; infoText=''; infoTimer=0;
+  fillCells();
+  spawnRandom(3);
+  state='play';
+}
+
+function directionFromSwipe(delta){
+  if(delta.length()<.8) return;
+  let bestDir=DIRS[0],bestDot=-1e9;
+  const n=delta.normalize();
+  for(const d of DIRS){
+    const world=axialToWorld(d.dq,d.dr).normalize();
+    const dot=n.dot(world);
+    if(dot>bestDot){ bestDot=dot; bestDir=d; }
+  }
+  return bestDir;
+}
+
+function actionPressed(){
+  return keyWasPressed('Space')||keyWasPressed('Enter')||mouseWasPressed(0);
+}
+
+function gameInit(){
+  best=Number(localStorage.getItem(SAVE_KEY)||0);
+  fillCells();
+  for(let i=0;i<120;i++) stars.push(vec2(rand(-16,16),rand(-11,11)));
+}
+
+function gameUpdate(){
+  if(state==='start'){
+    if(actionPressed()) resetGame();
+    return;
+  }
+
+  if(state==='gameover'){
+    if(actionPressed()||keyWasPressed('KeyR')) resetGame();
+    return;
+  }
+
+  if(keyWasPressed('KeyR')){ resetGame(); return; }
+
+  for(const d of DIRS){
+    for(const k of d.keys){
+      if(keyWasPressed(k)){ tryMove(d); break; }
+    }
+  }
+
+  const down=mouseIsDown(0);
+  if(down&&!pointerDown){
+    pointerDown=true;
+    pointerStart=mousePos.copy();
+  }
+  if(!down&&pointerDown){
+    pointerDown=false;
+    const swipe=mousePos.subtract(pointerStart);
+    const dir=directionFromSwipe(swipe);
+    if(dir) tryMove(dir);
+  }
+
+  infoTimer=max(0,infoTimer-(timeDelta||1/60));
+}
+
+function gameUpdatePost(){
+  cameraPos=cameraPos.lerp(vec2(),.2);
+}
+
+function gameRender(){
+  const t=timeReal||0;
+  for(const s of stars)
+    drawCircle(s,.045,hsl(.58,1,.8,.18+.14*Math.sin(t+s.x*.9)));
+
+  drawRect(vec2(),vec2(15.6,13.8),hsl(.56,1,.19,.11));
+
+  for(const c of cells){
+    const value=board[c.key];
+    const fill=tileColor(value);
+    const border=value?hsl(.15,1,.72,.6):hsl(.56,1,.52,.22);
+    const glow=value?hsl(.56,1,.66,.12):undefined;
+
+    drawHexApprox(c.pos,.95,fill,border,glow);
+
+    if(value)
+      drawText(String(value),c.pos.add(vec2(0,.02)),.58,hsl(0,0,.96),.07,hsl(0,0,0));
+  }
+
+  if(pointerDown){
+    drawCircle(pointerStart,.22,hsl(.33,1,.65,.25));
+    drawLine(pointerStart,mousePos,.06,hsl(.33,1,.65,.4));
+  }
+}
+
+function gameRenderPost(){
+  const W=mainCanvasSize.x,H=mainCanvasSize.y;
+  drawTextScreen('HEX MERGE PUZZLE',vec2(W/2,38),40,hsl(.56,1,.74),3,hsl(0,0,0));
+  drawTextScreen(`BEST ${best}`,vec2(W-112,30),22,hsl(.33,1,.67),2,hsl(0,0,0));
+
+  if(state==='start'){
+    drawTextScreen('Merge same numbers on a 6-way hex grid',vec2(W/2,H/2-36),30,hsl(.56,1,.76),2,hsl(0,0,0));
+    drawTextScreen('Swipe any direction or use A/W/E + D/Z/X',vec2(W/2,H/2+4),26,hsl(.15,1,.67),2,hsl(0,0,0));
+    drawTextScreen('R to restart run',vec2(W/2,H/2+40),24,hsl(.33,1,.68),2,hsl(0,0,0));
+    drawTextScreen('TAP / SPACE TO START',vec2(W/2,H/2+112),44,hsl(.33,1,.67),3,hsl(0,0,0));
+    return;
+  }
+
+  drawTextScreen(`SCORE ${score}`,vec2(110,30),26,hsl(.15,1,.67),2,hsl(0,0,0));
+  drawTextScreen(`MOVES ${moves}`,vec2(98,58),21,hsl(.56,1,.74),2,hsl(0,0,0));
+  drawTextScreen('Swipe 6 directions • R reset',vec2(W/2,H-20),18,hsl(0,0,.78),1,hsl(0,0,0));
+
+  if(infoTimer>0)
+    drawTextScreen(infoText,vec2(W/2,84),30,hsl(.33,1,.67),2,hsl(0,0,0));
+
+  if(state==='gameover'){
+    drawTextScreen('NO MORE MOVES',vec2(W/2,H/2-18),60,hsl(.01,1,.62),4,hsl(0,0,0));
+    drawTextScreen(`FINAL SCORE ${score}`,vec2(W/2,H/2+30),34,hsl(.56,1,.74),3,hsl(0,0,0));
+    drawTextScreen('TAP / SPACE TO RETRY',vec2(W/2,H/2+86),30,hsl(.33,1,.67),2,hsl(0,0,0));
+  }
+}
+
+engineInit(gameInit, gameUpdate, gameUpdatePost, gameRender, gameRenderPost);
+</script></body></html>

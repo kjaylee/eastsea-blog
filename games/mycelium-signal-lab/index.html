@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>Mycelium Signal Lab</title>
+  <meta name="theme-color" content="#0a0a1a" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <style>
+    :root {
+      --bg: #0a0a1a;
+      --panel: #101430;
+      --text: #eef1ff;
+      --cyan: #4df4ff;
+      --violet: #9988ff;
+      --green: #79ffaf;
+      --orange: #ffbe64;
+      --danger: #ff6878;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(circle at 50% -35%, #20285c 0%, var(--bg) 58%);
+      color: var(--text);
+      font-family: "Pretendard", "Segoe UI", system-ui, sans-serif;
+      display: grid;
+      place-items: center;
+      touch-action: manipulation;
+    }
+    .wrap {
+      width: min(96vw, 580px);
+      border: 1px solid #2f4198;
+      border-radius: 16px;
+      background: rgba(8, 10, 25, 0.9);
+      box-shadow: 0 0 34px rgba(77, 244, 255, 0.12);
+      padding: 12px;
+    }
+    h1 {
+      margin: 3px 0 8px;
+      font-size: clamp(18px, 4vw, 24px);
+    }
+    .hud {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 10px;
+      font-size: 13px;
+    }
+    .pill {
+      border: 1px solid #3949a3;
+      border-radius: 999px;
+      padding: 5px 10px;
+      background: rgba(20, 27, 60, 0.72);
+    }
+    canvas {
+      width: 100%;
+      aspect-ratio: 16/9;
+      display: block;
+      border: 1px solid #3243a2;
+      border-radius: 12px;
+      background: linear-gradient(180deg, #111636, #0a0a1a);
+      box-shadow: inset 0 0 24px rgba(153, 136, 255, 0.16);
+    }
+    .zone-row, .act-row {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .zone-row { grid-template-columns: repeat(3, 1fr); }
+    .act-row { grid-template-columns: repeat(3, 1fr); }
+    button {
+      border: 1px solid #4354bf;
+      border-radius: 10px;
+      background: #141c49;
+      color: var(--text);
+      padding: 10px 8px;
+      font-weight: 700;
+      font-size: 13px;
+      touch-action: manipulation;
+    }
+    button.active {
+      border-color: var(--cyan);
+      box-shadow: 0 0 12px rgba(77, 244, 255, 0.4);
+    }
+    .hint {
+      margin-top: 8px;
+      font-size: 12px;
+      opacity: 0.86;
+      line-height: 1.45;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>🍄 Mycelium Signal Lab</h1>
+    <div class="hud">
+      <div class="pill">Cycle <b id="cycle">0</b></div>
+      <div class="pill">Best <b id="best">0</b></div>
+      <div class="pill">Stability <b id="stab">100</b>%</div>
+      <div class="pill">Selected <b id="selected">Zone 1</b></div>
+      <div class="pill">State <b id="state">Stable</b></div>
+    </div>
+    <canvas id="lab" width="560" height="315" aria-label="Mycelium network simulation"></canvas>
+    <div class="zone-row">
+      <button data-zone="0" id="zone0">Zone 1</button>
+      <button data-zone="1" id="zone1">Zone 2</button>
+      <button data-zone="2" id="zone2">Zone 3</button>
+    </div>
+    <div class="act-row">
+      <button data-act="hydrate">Q · Hydrate</button>
+      <button data-act="feed">W · Feed</button>
+      <button data-act="pulse">E · Pulse</button>
+    </div>
+    <p class="hint">키보드: 1/2/3 구역 선택, Q/W/E 조절, R 재시작. 안정도를 25% 이상으로 유지하며 최대한 오래 생존하세요.</p>
+  </div>
+
+  <script>
+    (() => {
+      const canvas = document.getElementById('lab');
+      const ctx = canvas.getContext('2d');
+      const cycleEl = document.getElementById('cycle');
+      const bestEl = document.getElementById('best');
+      const stabEl = document.getElementById('stab');
+      const selectedEl = document.getElementById('selected');
+      const stateEl = document.getElementById('state');
+      const zoneButtons = [0, 1, 2].map(i => document.getElementById(`zone${i}`));
+      const bestKey = 'msl-best-cycle-v1';
+      let best = Number(localStorage.getItem(bestKey) || 0);
+      bestEl.textContent = String(best);
+
+      let audioCtx;
+      const beep = (freq = 260, dur = 0.06, type = 'sine', gain = 0.05) => {
+        try {
+          audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+          const o = audioCtx.createOscillator();
+          const g = audioCtx.createGain();
+          o.type = type;
+          o.frequency.value = freq;
+          g.gain.value = gain;
+          o.connect(g);
+          g.connect(audioCtx.destination);
+          o.start();
+          o.stop(audioCtx.currentTime + dur);
+        } catch (_) {}
+      };
+
+      const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+      const rnd = (a, b) => a + Math.random() * (b - a);
+
+      const state = {
+        cycle: 0,
+        selected: 0,
+        stability: 100,
+        collapseTicks: 0,
+        over: false,
+        zones: [],
+        t: 0,
+      };
+
+      function makeZone(i) {
+        return {
+          id: i,
+          moisture: rnd(45, 60),
+          sugar: rnd(45, 60),
+          conductivity: rnd(45, 60),
+          pulse: 0,
+          health: 100,
+        };
+      }
+
+      function reset() {
+        state.cycle = 0;
+        state.selected = 0;
+        state.stability = 100;
+        state.collapseTicks = 0;
+        state.over = false;
+        state.zones = [makeZone(0), makeZone(1), makeZone(2)];
+        state.t = 0;
+        syncHud();
+      }
+
+      function targetsFor(zoneId, cycle) {
+        return {
+          moisture: 54 + Math.sin(cycle * 0.11 + zoneId * 0.8) * 14,
+          sugar: 50 + Math.cos(cycle * 0.09 + zoneId * 0.7) * 13,
+          conductivity: 52 + Math.sin(cycle * 0.07 + zoneId * 1.1) * 16,
+        };
+      }
+
+      function act(type) {
+        if (state.over) return;
+        const z = state.zones[state.selected];
+        if (!z) return;
+        if (type === 'hydrate') {
+          z.moisture += 12;
+          z.conductivity -= 2;
+          beep(320, 0.05, 'sine', 0.06);
+        }
+        if (type === 'feed') {
+          z.sugar += 12;
+          z.moisture -= 2;
+          beep(430, 0.05, 'triangle', 0.06);
+        }
+        if (type === 'pulse') {
+          z.conductivity += 12;
+          z.sugar -= 3;
+          z.pulse = 1;
+          beep(520, 0.05, 'square', 0.06);
+        }
+        z.moisture = clamp(z.moisture, 0, 100);
+        z.sugar = clamp(z.sugar, 0, 100);
+        z.conductivity = clamp(z.conductivity, 0, 100);
+      }
+
+      function tick() {
+        if (state.over) return;
+        state.cycle += 1;
+        state.t += 1;
+
+        let totalError = 0;
+        for (const z of state.zones) {
+          const pressure = 1 + state.cycle * 0.01;
+          z.moisture = clamp(z.moisture + rnd(-3.4, 2.9) * pressure, 0, 100);
+          z.sugar = clamp(z.sugar + rnd(-3.2, 3.1) * pressure, 0, 100);
+          z.conductivity = clamp(z.conductivity + rnd(-3.0, 3.3) * pressure, 0, 100);
+          z.pulse *= 0.88;
+
+          const target = targetsFor(z.id, state.cycle);
+          const e =
+            Math.abs(z.moisture - target.moisture) +
+            Math.abs(z.sugar - target.sugar) +
+            Math.abs(z.conductivity - target.conductivity);
+          totalError += e / 3;
+
+          z.health = clamp(100 - e * 0.6, 0, 100);
+        }
+
+        const avgError = totalError / state.zones.length;
+        state.stability = clamp(100 - avgError, 0, 100);
+
+        if (state.stability < 25) {
+          state.collapseTicks += 1;
+          stateEl.textContent = 'Critical';
+          if (state.collapseTicks % 2 === 0) beep(130, 0.08, 'sawtooth', 0.06);
+        } else if (state.stability < 45) {
+          state.collapseTicks = Math.max(0, state.collapseTicks - 0.5);
+          stateEl.textContent = 'Warning';
+        } else {
+          state.collapseTicks = Math.max(0, state.collapseTicks - 1);
+          stateEl.textContent = 'Stable';
+        }
+
+        if (state.collapseTicks >= 8) {
+          state.over = true;
+          stateEl.textContent = 'Collapsed';
+          beep(95, 0.22, 'square', 0.08);
+          if (state.cycle > best) {
+            best = state.cycle;
+            localStorage.setItem(bestKey, String(best));
+            bestEl.textContent = String(best);
+          }
+        }
+
+        syncHud();
+      }
+
+      function bar(ctx, x, y, w, h, value, color, label) {
+        ctx.fillStyle = 'rgba(20,26,55,0.85)';
+        ctx.fillRect(x, y, w, h);
+        ctx.fillStyle = color;
+        ctx.fillRect(x, y, w * (value / 100), h);
+        ctx.strokeStyle = 'rgba(120,139,255,0.45)';
+        ctx.strokeRect(x, y, w, h);
+        ctx.fillStyle = '#dbe1ff';
+        ctx.font = '11px system-ui';
+        ctx.fillText(`${label} ${value.toFixed(0)}`, x + 4, y + h - 4);
+      }
+
+      function drawNetwork() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        const centers = [
+          { x: canvas.width * 0.2, y: canvas.height * 0.52 },
+          { x: canvas.width * 0.5, y: canvas.height * 0.28 },
+          { x: canvas.width * 0.8, y: canvas.height * 0.55 },
+        ];
+
+        ctx.lineWidth = 5;
+        for (let i = 0; i < 3; i++) {
+          for (let j = i + 1; j < 3; j++) {
+            const a = centers[i];
+            const b = centers[j];
+            const glow = (state.zones[i].health + state.zones[j].health) * 0.5;
+            ctx.strokeStyle = `rgba(77,244,255,${0.18 + glow / 380})`;
+            ctx.beginPath();
+            ctx.moveTo(a.x, a.y);
+            ctx.quadraticCurveTo((a.x + b.x) * 0.5, (a.y + b.y) * 0.5 - 28, b.x, b.y);
+            ctx.stroke();
+          }
+        }
+
+        for (let i = 0; i < 3; i++) {
+          const z = state.zones[i];
+          const c = centers[i];
+          const selected = i === state.selected;
+          const radius = 36 + z.pulse * 5;
+          ctx.beginPath();
+          ctx.fillStyle = selected ? 'rgba(153,136,255,0.35)' : 'rgba(20,26,58,0.85)';
+          ctx.arc(c.x, c.y, radius + 7, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.beginPath();
+          ctx.fillStyle = z.health > 60 ? '#79ffaf' : z.health > 30 ? '#ffbe64' : '#ff6878';
+          ctx.shadowColor = ctx.fillStyle;
+          ctx.shadowBlur = 14;
+          ctx.arc(c.x, c.y, radius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+
+          ctx.fillStyle = '#0a0a1a';
+          ctx.font = '700 14px system-ui';
+          ctx.textAlign = 'center';
+          ctx.fillText(`Z${i + 1}`, c.x, c.y + 4);
+        }
+
+        ctx.textAlign = 'left';
+        for (let i = 0; i < 3; i++) {
+          const z = state.zones[i];
+          const x = 14;
+          const y = 18 + i * 92;
+          bar(ctx, x, y, 170, 14, z.moisture, '#4df4ff', `Z${i + 1} H2O`);
+          bar(ctx, x, y + 18, 170, 14, z.sugar, '#9988ff', `Z${i + 1} Sugar`);
+          bar(ctx, x, y + 36, 170, 14, z.conductivity, '#79ffaf', `Z${i + 1} Cond`);
+        }
+
+        if (state.over) {
+          ctx.fillStyle = 'rgba(8,10,26,0.72)';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.textAlign = 'center';
+          ctx.fillStyle = '#eef1ff';
+          ctx.font = '700 30px system-ui';
+          ctx.fillText('Network Collapsed', canvas.width / 2, canvas.height * 0.42);
+          ctx.font = '600 17px system-ui';
+          ctx.fillStyle = '#ffbe64';
+          ctx.fillText(`Cycle ${state.cycle}  •  Best ${best}`, canvas.width / 2, canvas.height * 0.5);
+          ctx.font = '500 14px system-ui';
+          ctx.fillStyle = '#c5cbff';
+          ctx.fillText('Press R or tap canvas to restart', canvas.width / 2, canvas.height * 0.57);
+        }
+
+        requestAnimationFrame(drawNetwork);
+      }
+
+      function selectZone(i) {
+        state.selected = i;
+        syncHud();
+        beep(260 + i * 60, 0.03, 'triangle', 0.04);
+      }
+
+      function syncHud() {
+        cycleEl.textContent = String(state.cycle);
+        stabEl.textContent = state.stability.toFixed(0);
+        selectedEl.textContent = `Zone ${state.selected + 1}`;
+        zoneButtons.forEach((btn, i) => btn.classList.toggle('active', i === state.selected));
+      }
+
+      for (const btn of zoneButtons) {
+        btn.addEventListener('click', () => selectZone(Number(btn.dataset.zone)));
+      }
+      document.querySelectorAll('[data-act]').forEach((btn) => {
+        btn.addEventListener('click', () => act(btn.dataset.act));
+      });
+
+      window.addEventListener('keydown', (e) => {
+        if (e.key === '1') selectZone(0);
+        if (e.key === '2') selectZone(1);
+        if (e.key === '3') selectZone(2);
+        if (e.key.toLowerCase() === 'q') act('hydrate');
+        if (e.key.toLowerCase() === 'w') act('feed');
+        if (e.key.toLowerCase() === 'e') act('pulse');
+        if (e.key.toLowerCase() === 'r') reset();
+      });
+
+      canvas.addEventListener('pointerdown', () => {
+        if (state.over) reset();
+      });
+
+      reset();
+      setInterval(tick, 620);
+      drawNetwork();
+    })();
+  </script>
+</body>
+</html>

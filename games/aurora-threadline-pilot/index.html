@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>Aurora Threadline Pilot</title>
+  <meta name="theme-color" content="#0a0a1a" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <style>
+    :root {
+      --bg: #0a0a1a;
+      --cyan: #3df5ff;
+      --violet: #8d6bff;
+      --pink: #ff5fd2;
+      --ok: #6dff9a;
+      --danger: #ff5a6b;
+      --text: #e9ecff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(circle at 50% -30%, #18204d 0%, var(--bg) 55%);
+      color: var(--text);
+      font-family: "Pretendard", "Segoe UI", system-ui, sans-serif;
+      display: grid;
+      place-items: center;
+      touch-action: manipulation;
+    }
+    .wrap {
+      width: min(96vw, 520px);
+      padding: 12px;
+      border: 1px solid #27306a;
+      border-radius: 16px;
+      background: rgba(8, 10, 28, 0.88);
+      box-shadow: 0 0 36px rgba(61, 245, 255, 0.16), inset 0 0 28px rgba(141, 107, 255, 0.1);
+    }
+    h1 {
+      margin: 4px 0 10px;
+      font-size: clamp(18px, 4vw, 24px);
+      letter-spacing: 0.3px;
+    }
+    .hud {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 10px;
+      font-size: 13px;
+    }
+    .pill {
+      border: 1px solid #33408f;
+      border-radius: 999px;
+      padding: 5px 10px;
+      background: rgba(21, 27, 61, 0.7);
+    }
+    canvas {
+      width: 100%;
+      aspect-ratio: 9/14;
+      background: linear-gradient(180deg, #0f1540, #0a0a1a 40%, #060612);
+      border: 1px solid #2b3aa8;
+      border-radius: 12px;
+      display: block;
+      box-shadow: inset 0 0 20px rgba(61, 245, 255, 0.13);
+    }
+    .controls {
+      margin-top: 10px;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+    }
+    button {
+      border: 1px solid #4251b7;
+      border-radius: 10px;
+      background: #131b49;
+      color: var(--text);
+      padding: 10px 6px;
+      font-weight: 700;
+      font-size: 14px;
+      touch-action: manipulation;
+    }
+    button:active { transform: translateY(1px) scale(0.99); }
+    .hint {
+      margin-top: 8px;
+      font-size: 12px;
+      opacity: 0.82;
+      line-height: 1.45;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>🌌 Aurora Threadline Pilot</h1>
+    <div class="hud">
+      <div class="pill">Score <b id="score">0</b></div>
+      <div class="pill">Best <b id="best">0</b></div>
+      <div class="pill">Lives <b id="lives">3</b></div>
+      <div class="pill">Combo <b id="combo">x1.0</b></div>
+    </div>
+    <canvas id="game" width="420" height="650" aria-label="Aurora Threadline Pilot game canvas"></canvas>
+    <div class="controls">
+      <button id="leftBtn" aria-label="left">⬅ LEFT</button>
+      <button id="boostBtn" aria-label="boost">⚡ BOOST</button>
+      <button id="rightBtn" aria-label="right">RIGHT ➡</button>
+    </div>
+    <p class="hint">키보드: ←/→ 또는 A/D 이동, Space 부스트. 오로라 라인에 최대한 붙어 비행하면 콤보가 상승합니다.</p>
+  </div>
+
+  <script>
+    (() => {
+      const canvas = document.getElementById('game');
+      const ctx = canvas.getContext('2d');
+      const scoreEl = document.getElementById('score');
+      const bestEl = document.getElementById('best');
+      const livesEl = document.getElementById('lives');
+      const comboEl = document.getElementById('combo');
+      const bestKey = 'atp-best-v1';
+      let best = Number(localStorage.getItem(bestKey) || 0);
+      bestEl.textContent = best;
+
+      let audioCtx;
+      const beep = (freq = 440, dur = 0.07, type = 'sine', gain = 0.04) => {
+        try {
+          audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+          const o = audioCtx.createOscillator();
+          const g = audioCtx.createGain();
+          o.type = type;
+          o.frequency.value = freq;
+          g.gain.value = gain;
+          o.connect(g);
+          g.connect(audioCtx.destination);
+          o.start();
+          o.stop(audioCtx.currentTime + dur);
+        } catch (_) {}
+      };
+
+      const state = {
+        x: canvas.width * 0.5,
+        y: canvas.height * 0.78,
+        speed: 4.4,
+        boost: false,
+        left: false,
+        right: false,
+        score: 0,
+        lives: 3,
+        combo: 0,
+        t: 0,
+        over: false,
+        orbs: [],
+        storms: [],
+        spawnTick: 0,
+        invuln: 0,
+      };
+
+      const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+
+      function threadX(y, t) {
+        const w = canvas.width;
+        return w * 0.5
+          + Math.sin((t + y * 4.3) * 0.0017) * (w * 0.24)
+          + Math.sin((t + y * 8.2) * 0.0011) * (w * 0.12);
+      }
+
+      function reset() {
+        state.x = canvas.width * 0.5;
+        state.score = 0;
+        state.lives = 3;
+        state.combo = 0;
+        state.orbs = [];
+        state.storms = [];
+        state.spawnTick = 0;
+        state.invuln = 0;
+        state.t = 0;
+        state.over = false;
+      }
+
+      function spawn() {
+        const topY = -20;
+        const drift = Math.sin((state.t + 1200) * 0.0019) * 45;
+        const laneX = threadX(120, state.t) + (Math.random() * 50 - 25) + drift * 0.2;
+        state.orbs.push({ x: clamp(laneX, 24, canvas.width - 24), y: topY, r: 7 + Math.random() * 4, v: 2.4 + Math.random() * 1.2 });
+        if (Math.random() < 0.62) {
+          const sx = clamp(Math.random() * canvas.width, 18, canvas.width - 18);
+          state.storms.push({ x: sx, y: topY - 35, r: 10 + Math.random() * 8, v: 2.6 + Math.random() * 1.5 });
+        }
+      }
+
+      function update() {
+        if (state.over) return;
+        state.t += 16;
+
+        const move = state.speed + (state.boost ? 2.8 : 0);
+        if (state.left) state.x -= move;
+        if (state.right) state.x += move;
+        state.x = clamp(state.x, 16, canvas.width - 16);
+
+        state.spawnTick += 1;
+        if (state.spawnTick > (state.boost ? 14 : 18)) {
+          state.spawnTick = 0;
+          spawn();
+        }
+
+        const target = threadX(state.y, state.t);
+        const diff = Math.abs(state.x - target);
+        if (diff < 26) {
+          state.combo = clamp(state.combo + 0.05, 0, 14);
+          state.score += 0.9 + state.combo * 0.22;
+          if (state.boost) state.score += 0.6;
+        } else {
+          state.combo = Math.max(0, state.combo - 0.11);
+          state.score += 0.15;
+        }
+
+        const speedScale = 1 + Math.min(1.3, state.score / 2200);
+        for (const o of state.orbs) o.y += o.v * speedScale;
+        for (const s of state.storms) s.y += s.v * speedScale;
+
+        state.orbs = state.orbs.filter(o => o.y < canvas.height + 30);
+        state.storms = state.storms.filter(s => s.y < canvas.height + 40);
+
+        for (let i = state.orbs.length - 1; i >= 0; i--) {
+          const o = state.orbs[i];
+          const d = Math.hypot(state.x - o.x, state.y - o.y);
+          if (d < o.r + 12) {
+            state.score += 18;
+            state.combo = clamp(state.combo + 0.7, 0, 16);
+            beep(720, 0.06, 'triangle', 0.06);
+            state.orbs.splice(i, 1);
+          }
+        }
+
+        if (state.invuln > 0) state.invuln -= 1;
+        for (let i = state.storms.length - 1; i >= 0; i--) {
+          const s = state.storms[i];
+          const d = Math.hypot(state.x - s.x, state.y - s.y);
+          if (d < s.r + 13 && state.invuln <= 0) {
+            state.lives -= 1;
+            state.combo = Math.max(0, state.combo - 3);
+            state.invuln = 45;
+            beep(150, 0.12, 'sawtooth', 0.07);
+            state.storms.splice(i, 1);
+            if (state.lives <= 0) {
+              state.over = true;
+              beep(95, 0.25, 'square', 0.08);
+              const finalScore = Math.floor(state.score);
+              if (finalScore > best) {
+                best = finalScore;
+                localStorage.setItem(bestKey, String(best));
+                bestEl.textContent = String(best);
+              }
+            }
+          }
+        }
+
+        scoreEl.textContent = String(Math.floor(state.score));
+        livesEl.textContent = String(state.lives);
+        comboEl.textContent = `x${(1 + state.combo * 0.1).toFixed(1)}`;
+      }
+
+      function drawBackground() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        ctx.strokeStyle = 'rgba(61,245,255,0.22)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (let y = 0; y <= canvas.height; y += 12) {
+          const x = threadX(y, state.t);
+          if (y === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+
+        ctx.strokeStyle = 'rgba(141,107,255,0.18)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let y = 0; y <= canvas.height; y += 14) {
+          const x = threadX(y, state.t + 360);
+          if (y === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+
+      function drawObjects() {
+        for (const o of state.orbs) {
+          ctx.beginPath();
+          ctx.fillStyle = 'rgba(109,255,154,0.92)';
+          ctx.shadowColor = '#6dff9a';
+          ctx.shadowBlur = 12;
+          ctx.arc(o.x, o.y, o.r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        for (const s of state.storms) {
+          ctx.beginPath();
+          ctx.fillStyle = 'rgba(255,90,107,0.85)';
+          ctx.shadowColor = '#ff5a6b';
+          ctx.shadowBlur = 14;
+          ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.shadowBlur = 0;
+      }
+
+      function drawPlayer() {
+        ctx.save();
+        if (state.invuln > 0 && state.invuln % 8 < 4) ctx.globalAlpha = 0.4;
+        ctx.translate(state.x, state.y);
+        ctx.fillStyle = state.boost ? '#ff5fd2' : '#3df5ff';
+        ctx.shadowColor = state.boost ? '#ff5fd2' : '#3df5ff';
+        ctx.shadowBlur = 18;
+        ctx.beginPath();
+        ctx.moveTo(0, -13);
+        ctx.lineTo(12, 10);
+        ctx.lineTo(0, 6);
+        ctx.lineTo(-12, 10);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+
+      function drawOverlay() {
+        if (!state.over) return;
+        ctx.fillStyle = 'rgba(6,8,20,0.78)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#e9ecff';
+        ctx.font = '700 32px system-ui';
+        ctx.fillText('Mission Failed', canvas.width / 2, canvas.height * 0.42);
+        ctx.font = '600 18px system-ui';
+        ctx.fillStyle = '#8d6bff';
+        ctx.fillText(`Score ${Math.floor(state.score)} / Best ${best}`, canvas.width / 2, canvas.height * 0.49);
+        ctx.font = '500 14px system-ui';
+        ctx.fillStyle = '#b8c0ff';
+        ctx.fillText('Tap canvas or press Enter to restart', canvas.width / 2, canvas.height * 0.56);
+      }
+
+      function frame() {
+        update();
+        drawBackground();
+        drawObjects();
+        drawPlayer();
+        drawOverlay();
+        requestAnimationFrame(frame);
+      }
+
+      function setInput(dir, on) {
+        if (dir === 'left') state.left = on;
+        if (dir === 'right') state.right = on;
+        if (dir === 'boost') state.boost = on;
+      }
+
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') setInput('left', true);
+        if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') setInput('right', true);
+        if (e.code === 'Space') setInput('boost', true);
+        if (state.over && (e.key === 'Enter' || e.code === 'Space')) reset();
+      });
+      window.addEventListener('keyup', (e) => {
+        if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') setInput('left', false);
+        if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') setInput('right', false);
+        if (e.code === 'Space') setInput('boost', false);
+      });
+
+      function bindHold(btn, type) {
+        const down = (ev) => { ev.preventDefault(); setInput(type, true); beep(360, 0.03, 'square', 0.03); };
+        const up = (ev) => { ev.preventDefault(); setInput(type, false); };
+        btn.addEventListener('pointerdown', down);
+        btn.addEventListener('pointerup', up);
+        btn.addEventListener('pointercancel', up);
+        btn.addEventListener('pointerleave', up);
+      }
+      bindHold(document.getElementById('leftBtn'), 'left');
+      bindHold(document.getElementById('rightBtn'), 'right');
+      bindHold(document.getElementById('boostBtn'), 'boost');
+
+      canvas.addEventListener('pointerdown', () => {
+        if (state.over) reset();
+      });
+
+      reset();
+      frame();
+    })();
+  </script>
+</body>
+</html>

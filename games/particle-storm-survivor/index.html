@@ -1,0 +1,344 @@
+<!DOCTYPE html><head>
+<title>Particle Storm Survivor</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<link rel="manifest" href="manifest.webmanifest">
+<style>body{margin:0;background:#0a0a1a;overflow:hidden}</style>
+</head><body>
+<script src="https://cdn.jsdelivr.net/npm/littlejsengine/dist/littlejs.min.js"></script>
+<script>'use strict';
+showSplashScreen=false;
+debugWatermark=false;
+showEngineVersion=false;
+canvasClearColor=hsl(0,0,.04);
+touchGamepadEnable=true;
+gravity=vec2();
+cameraScale=36;
+
+const SAVE_KEY='littlejs-particle-storm-high-wave';
+const shotSound=new Sound([.65,.02,360,.004,0,.08,0,1.2,1,0,0,0,0,0,0,0,0,.7]);
+const hitSound=new Sound([.6,.01,240,.001,0,.05,0,2.2,-2,0,0,0,0,0,0,0,0,.7]);
+const levelSound=new Sound([.85,.04,720,.01,0,.2,0,1.7,5,0,0,0,0,0,0,0,0,.8]);
+const overSound=new Sound([.9,.03,140,.02,0,.3,0,1.8,-5,0,0,0,0,0,0,0,0,.8]);
+
+let state='start';
+let player, enemies=[], bullets=[];
+let wave=1, waveClock=0, spawnClock=0, fireClock=0;
+let level=1, xp=0, xpNeed=10;
+let score=0, bestWave=0;
+let hurtClock=0;
+let stormEmitter;
+
+class Player extends EngineObject {
+  constructor(){
+    super(vec2(0,0),vec2(.72));
+    this.setCollision(true,false,false,false);
+    this.mass=1;
+    this.damping=.84;
+    this.maxHp=42;
+    this.hp=this.maxHp;
+  }
+  update(){
+    if(state!=='play') return;
+
+    const kx=(keyIsDown('KeyD')||keyIsDown('ArrowRight')?1:0)-(keyIsDown('KeyA')||keyIsDown('ArrowLeft')?1:0);
+    const ky=(keyIsDown('KeyW')||keyIsDown('ArrowUp')?1:0)-(keyIsDown('KeyS')||keyIsDown('ArrowDown')?1:0);
+    let dx=kx, dy=ky;
+
+    if(mouseIsDown(0)){
+      const tx=mousePos.x-this.pos.x, ty=mousePos.y-this.pos.y;
+      const d=Math.hypot(tx,ty);
+      if(d>.25){ dx+=tx/d; dy+=ty/d; }
+    }
+
+    const len=Math.hypot(dx,dy);
+    if(len>.001){
+      const speed=.07 + level*.002;
+      this.applyAcceleration(vec2(dx/len*speed,dy/len*speed));
+    }
+
+    this.pos.x=clamp(this.pos.x,-13.2,13.2);
+    this.pos.y=clamp(this.pos.y,-8.2,8.2);
+    super.update();
+  }
+  render(){
+    drawCircle(this.pos,.42,hsl(.53,1,.66));
+    drawCircle(this.pos,.95,hsl(.53,1,.58,.15));
+    drawCircle(this.pos.add(vec2(0,.02)),.18,hsl(.15,1,.74,.85));
+  }
+}
+
+class Enemy extends EngineObject {
+  constructor(pos,type){
+    const s=.52+type*.11;
+    super(pos,vec2(s));
+    this.setCollision(true,false,false,false);
+    this.mass=1;
+    this.damping=.9;
+    this.type=type;
+    this.hp=3.5+wave*1.2+type*1.4;
+    this.speed=.022+wave*.0015+type*.003;
+    this.damage=.7+wave*.08+type*.12;
+  }
+  update(){
+    if(state!=='play') return;
+    const dx=player.pos.x-this.pos.x, dy=player.pos.y-this.pos.y;
+    const d=Math.hypot(dx,dy)||1;
+    this.applyAcceleration(vec2(dx/d*this.speed,dy/d*this.speed));
+    super.update();
+  }
+  render(){
+    const c=this.type>1?hsl(.95,1,.58):hsl(.02,1,.56);
+    drawCircle(this.pos,this.size.x*.62,c);
+    drawCircle(this.pos,this.size.x*1.3,c.scale(.4,.3));
+  }
+}
+
+class Bullet extends EngineObject {
+  constructor(pos,vel){
+    super(vec2(pos.x,pos.y),vec2(.2));
+    this.setCollision(false,false,false,false);
+    this.mass=0;
+    this.velocity=vel;
+    this.life=1.5;
+    this.damage=2+level*.4;
+  }
+  update(){
+    if(state!=='play') return;
+    this.life-=(timeDelta||1/60);
+    if(this.life<=0||Math.abs(this.pos.x)>15||Math.abs(this.pos.y)>10) this.destroy();
+    super.update();
+  }
+  render(){
+    drawCircle(this.pos,.15,hsl(.15,1,.72));
+    drawCircle(this.pos,.5,hsl(.15,1,.65,.18));
+  }
+}
+
+function burst(pos,color,count,size){
+  new ParticleEmitter(
+    pos,0,.05,.06,count*30,PI,undefined,
+    color,color.mutate(.25,.15),hsl(0,0,0,0),hsl(0,0,0,0),
+    .35,size||.05,.3,.2,.1,.94,1,0,PI,.13,.35,false,true,true,2,false
+  );
+}
+
+function spawnEnemy(){
+  const side=randInt(4);
+  let x=0,y=0;
+  if(side===0){ x=-14; y=rand(-8,8); }
+  else if(side===1){ x=14; y=rand(-8,8); }
+  else if(side===2){ x=rand(-13,13); y=-9; }
+  else { x=rand(-13,13); y=9; }
+  const type=randInt(0,Math.min(3,1+Math.floor(wave/4)));
+  enemies.push(new Enemy(vec2(x,y),type));
+}
+
+function nearestEnemy(){
+  let best=null, bestD=1e9;
+  for(const e of enemies){
+    if(e.destroyed) continue;
+    const dx=e.pos.x-player.pos.x, dy=e.pos.y-player.pos.y;
+    const d=dx*dx+dy*dy;
+    if(d<bestD){ bestD=d; best=e; }
+  }
+  return best;
+}
+
+function fireAuto(){
+  const t=nearestEnemy();
+  if(!t) return;
+  const dx=t.pos.x-player.pos.x, dy=t.pos.y-player.pos.y;
+  const d=Math.hypot(dx,dy)||1;
+  const v=vec2(dx/d*.44,dy/d*.44);
+  bullets.push(new Bullet(player.pos,v));
+  shotSound.play(player.pos);
+  burst(player.pos,hsl(.55,1,.62),10,.04);
+}
+
+function gainXp(amount){
+  xp+=amount;
+  while(xp>=xpNeed){
+    xp-=xpNeed;
+    level++;
+    xpNeed=Math.floor(xpNeed*1.32+6);
+    player.maxHp+=3;
+    player.hp=Math.min(player.maxHp,player.hp+7);
+    levelSound.play(player.pos);
+    burst(player.pos,hsl(.33,1,.68),28,.06);
+  }
+}
+
+function startRun(){
+  engineObjectsDestroy();
+  enemies=[];
+  bullets=[];
+  player=new Player();
+  wave=1;
+  waveClock=0;
+  spawnClock=.25;
+  fireClock=.2;
+  level=1;
+  xp=0;
+  xpNeed=10;
+  score=0;
+  hurtClock=0;
+
+  stormEmitter=new ParticleEmitter(
+    vec2(0,0),0,vec2(27,17),0,140,PI,undefined,
+    hsl(.56,1,.55,.09),hsl(.83,1,.56,.08),hsl(.56,1,.5,0),hsl(.83,1,.5,0),
+    1.6,.03,.26,.03,.03,.98,1,0,PI,.24,.8,false,true,true,-1,false
+  );
+
+  state='play';
+}
+
+function endRun(){
+  state='gameover';
+  overSound.play(player.pos);
+  if(wave>bestWave){
+    bestWave=wave;
+    localStorage.setItem(SAVE_KEY,String(bestWave));
+  }
+}
+
+function actionPressed(){
+  return keyWasPressed('Space')||keyWasPressed('Enter')||mouseWasPressed(0);
+}
+
+function gameInit(){
+  bestWave=Number(localStorage.getItem(SAVE_KEY)||0);
+}
+
+function gameUpdate(){
+  if(state==='start'){
+    if(actionPressed()) startRun();
+    return;
+  }
+
+  if(state==='gameover'){
+    if(actionPressed()) startRun();
+    return;
+  }
+
+  const dt=timeDelta||1/60;
+  waveClock+=dt;
+  spawnClock-=dt;
+  fireClock-=dt;
+  hurtClock=Math.max(0,hurtClock-dt);
+
+  if(waveClock>18){
+    waveClock=0;
+    wave++;
+    burst(player.pos,hsl(.68,1,.66),22,.06);
+  }
+
+  const spawnInterval=Math.max(.18,1.05-wave*.05);
+  if(spawnClock<=0){
+    spawnClock=spawnInterval;
+    spawnEnemy();
+    if(wave>4&&Math.random()<.18) spawnEnemy();
+  }
+
+  const fireRate=Math.max(.12,.55-level*.02);
+  if(fireClock<=0){
+    fireClock=fireRate;
+    fireAuto();
+  }
+
+  for(const b of bullets){
+    if(b.destroyed) continue;
+    for(const e of enemies){
+      if(e.destroyed) continue;
+      if(b.isOverlappingObject(e)){
+        b.destroy();
+        e.hp-=b.damage;
+        hitSound.play(e.pos);
+        burst(e.pos,hsl(.01,1,.58),14,.05);
+        if(e.hp<=0){
+          e.destroy();
+          score+=Math.floor(8+wave*2+level*.8);
+          gainXp(2+Math.floor(wave*.25));
+          burst(e.pos,hsl(.33,1,.65),20,.06);
+        }
+        break;
+      }
+    }
+  }
+
+  for(const e of enemies){
+    if(e.destroyed) continue;
+    if(hurtClock<=0&&e.isOverlappingObject(player)){
+      player.hp-=e.damage;
+      hurtClock=.32;
+      burst(player.pos,hsl(0,1,.6),18,.06);
+      if(player.hp<=0){
+        player.hp=0;
+        endRun();
+        break;
+      }
+    }
+  }
+
+  enemies=enemies.filter(e=>!e.destroyed);
+  bullets=bullets.filter(b=>!b.destroyed);
+
+  if(stormEmitter){
+    stormEmitter.pos=player.pos.lerp(vec2(0,0),.04);
+  }
+}
+
+function gameUpdatePost(){
+  if(player)
+    cameraPos=cameraPos.lerp(player.pos,.08);
+}
+
+function gameRender(){
+  for(let x=-14;x<=14;x+=2)
+    drawLine(vec2(x,-9),vec2(x,9),.02,hsl(.58,1,.5,.08));
+  for(let y=-8;y<=8;y+=2)
+    drawLine(vec2(-14,y),vec2(14,y),.02,hsl(.58,1,.5,.08));
+
+  if(player){
+    const pulse=.5+.2*Math.sin(time*6);
+    drawCircle(player.pos,2.2+pulse,hsl(.55,1,.55,.05));
+  }
+}
+
+function gameRenderPost(){
+  const W=mainCanvasSize.x,H=mainCanvasSize.y;
+  drawTextScreen('PARTICLE STORM SURVIVOR',vec2(W/2,36),40,hsl(.55,1,.72),3,hsl(0,0,0));
+
+  if(state==='start'){
+    drawTextScreen('WASD/Arrow + Touch Hold to move',vec2(W/2,H/2-28),28,hsl(.58,.7,.76),2,hsl(0,0,0));
+    drawTextScreen('Auto-fire, survive escalating waves',vec2(W/2,H/2+14),28,hsl(.15,1,.68),2,hsl(0,0,0));
+    drawTextScreen(`BEST WAVE ${bestWave}`,vec2(W/2,H/2+62),30,hsl(.33,1,.66),2,hsl(0,0,0));
+    drawTextScreen('TAP TO START',vec2(W/2,H/2+118),40,hsl(.03,1,.63),3,hsl(0,0,0));
+    return;
+  }
+
+  drawTextScreen(`WAVE ${wave}`,vec2(90,28),26,hsl(.55,1,.72),2,hsl(0,0,0));
+  drawTextScreen(`LEVEL ${level}`,vec2(88,56),22,hsl(.15,1,.67),2,hsl(0,0,0));
+  drawTextScreen(`SCORE ${score}`,vec2(110,84),22,hsl(.33,1,.67),2,hsl(0,0,0));
+  drawTextScreen(`BEST ${bestWave}`,vec2(W-80,28),22,hsl(.33,1,.68),2,hsl(0,0,0));
+
+  if(player){
+    const hpRate=player.hp/player.maxHp;
+    const xpRate=xp/xpNeed;
+    drawRect(vec2(-7.5,8.4),vec2(5.8, .22),hsl(0,0,.2,.6));
+    drawRect(vec2(-10.3+5.8*hpRate/2,8.4),vec2(5.8*hpRate,.22),hsl(.01,1,.6));
+    drawRect(vec2(7.5,8.4),vec2(5.8,.22),hsl(0,0,.2,.6));
+    drawRect(vec2(4.7+5.8*xpRate/2,8.4),vec2(5.8*xpRate,.22),hsl(.56,1,.62));
+    drawTextScreen(`HP ${Math.ceil(player.hp)}/${player.maxHp}`,vec2(165,H-20),16,hsl(0,0,.85),1,hsl(0,0,0));
+    drawTextScreen(`XP ${xp}/${xpNeed}`,vec2(W-160,H-20),16,hsl(0,0,.85),1,hsl(0,0,0));
+  }
+
+  if(state==='gameover'){
+    drawTextScreen('SYSTEM OVERRUN',vec2(W/2,H/2-26),62,hsl(.01,1,.62),4,hsl(0,0,0));
+    drawTextScreen(`WAVE ${wave}   SCORE ${score}`,vec2(W/2,H/2+24),34,hsl(.56,1,.74),2,hsl(0,0,0));
+    drawTextScreen('TAP / SPACE TO RETRY',vec2(W/2,H/2+82),32,hsl(.33,1,.67),2,hsl(0,0,0));
+  }
+}
+
+engineInit(gameInit,gameUpdate,gameUpdatePost,gameRender,gameRenderPost);
+</script></body></html>

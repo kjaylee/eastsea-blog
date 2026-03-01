@@ -1,0 +1,387 @@
+<!DOCTYPE html><head>
+<title>Neon Brick Builder</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<link rel="manifest" href="manifest.webmanifest">
+<style>body{margin:0;background:#0a0a1a;overflow:hidden}</style>
+</head><body>
+<script src="https://cdn.jsdelivr.net/npm/littlejsengine/dist/littlejs.min.js"></script>
+<script>'use strict';
+showSplashScreen=false;
+debugWatermark=false;
+showEngineVersion=false;
+canvasClearColor=hsl(0,0,.04);
+touchGamepadEnable=true;
+cameraScale=36;
+
+const SAVE_KEY='littlejs-neon-brick-builder-hi';
+const BOARD_W=10, BOARD_H=20;
+
+const rotateSound=new Sound([.6,.02,460,.001,0,.06,0,1.7,4,0,0,0,0,0,0,0,0,.7]);
+const placeSound=new Sound([.5,.01,220,.001,0,.05,0,2,-2,0,0,0,0,0,0,0,0,.65]);
+const clearSound=new Sound([.85,.02,760,.01,0,.22,0,1.7,6,0,0,0,0,0,0,0,0,.8]);
+const overSound=new Sound([.8,.03,150,.03,0,.3,0,1.8,-4,0,0,0,0,0,0,0,0,.8]);
+
+const pieces=[
+  {name:'I',color:hsl(.55,1,.62),rots:[[[0,1],[1,1],[2,1],[3,1]],[[2,0],[2,1],[2,2],[2,3]],[[0,2],[1,2],[2,2],[3,2]],[[1,0],[1,1],[1,2],[1,3]]]},
+  {name:'O',color:hsl(.14,1,.63),rots:[[[1,1],[2,1],[1,2],[2,2]],[[1,1],[2,1],[1,2],[2,2]],[[1,1],[2,1],[1,2],[2,2]],[[1,1],[2,1],[1,2],[2,2]]]},
+  {name:'T',color:hsl(.78,1,.62),rots:[[[1,1],[0,2],[1,2],[2,2]],[[1,1],[1,2],[2,2],[1,3]],[[0,2],[1,2],[2,2],[1,3]],[[1,1],[0,2],[1,2],[1,3]]]},
+  {name:'S',color:hsl(.32,1,.6),rots:[[[1,1],[2,1],[0,2],[1,2]],[[1,1],[1,2],[2,2],[2,3]],[[1,2],[2,2],[0,3],[1,3]],[[0,1],[0,2],[1,2],[1,3]]]},
+  {name:'Z',color:hsl(.01,1,.6),rots:[[[0,1],[1,1],[1,2],[2,2]],[[2,1],[1,2],[2,2],[1,3]],[[0,2],[1,2],[1,3],[2,3]],[[1,1],[0,2],[1,2],[0,3]]]},
+  {name:'J',color:hsl(.62,1,.63),rots:[[[0,1],[0,2],[1,2],[2,2]],[[1,1],[2,1],[1,2],[1,3]],[[0,2],[1,2],[2,2],[2,3]],[[1,1],[1,2],[0,3],[1,3]]]},
+  {name:'L',color:hsl(.09,1,.62),rots:[[[2,1],[0,2],[1,2],[2,2]],[[1,1],[1,2],[1,3],[2,3]],[[0,2],[1,2],[2,2],[0,3]],[[0,1],[1,1],[1,2],[1,3]]]}
+];
+
+let state='start';
+let board=[];
+let activePiece;
+let holdType=-1;
+let holdUsed=false;
+let queue=[];
+let bag=[];
+let dropClock=0;
+let score=0, bestScore=0, totalLines=0, level=1, combo=0;
+
+class FallingPiece extends EngineObject {
+  constructor(type){
+    super(vec2(),vec2(1));
+    this.setCollision(false,false,false,false);
+    this.type=type;
+    this.rot=0;
+    this.x=3;
+    this.y=16;
+  }
+  cells(rot=this.rot,x=this.x,y=this.y){
+    const out=[];
+    for(const c of pieces[this.type].rots[rot]) out.push({x:x+c[0],y:y+c[1]});
+    return out;
+  }
+  update(){
+    if(state!=='play') return;
+    const dt=timeDelta||1/60;
+    const touchSoft=mouseIsDown(0)&&mousePosScreen.y>mainCanvasSize.y*.78&&mousePosScreen.x>mainCanvasSize.x*.4&&mousePosScreen.x<mainCanvasSize.x*.6;
+    const softDrop=keyIsDown('ArrowDown')||keyIsDown('KeyS')||touchSoft;
+    dropClock-=dt*(softDrop?8:1);
+    if(dropClock<=0){
+      dropClock+=getDropInterval();
+      if(!movePiece(0,-1)) lockPiece();
+    }
+  }
+  render(){
+    drawPieceCells(this.cells(),pieces[this.type].color,1);
+
+    let gy=this.y;
+    while(canPlace(this.type,this.rot,this.x,gy-1)) gy--;
+    if(gy!==this.y)
+      drawPieceCells(this.cells(this.rot,this.x,gy),pieces[this.type].color,.22);
+  }
+}
+
+function getDropInterval(){ return Math.max(.08,.72-(level-1)*.05); }
+
+function resetBoard(){
+  board=[];
+  for(let y=0;y<BOARD_H;y++) board.push(new Array(BOARD_W).fill(0));
+}
+
+function refillBag(){
+  bag=[];
+  for(let i=0;i<pieces.length;i++) bag.push(i);
+  for(let i=bag.length-1;i>0;i--){
+    const j=randInt(i+1);
+    const t=bag[i]; bag[i]=bag[j]; bag[j]=t;
+  }
+}
+
+function nextType(){
+  if(!bag.length) refillBag();
+  return bag.pop();
+}
+
+function ensureQueue(){
+  while(queue.length<4) queue.push(nextType());
+}
+
+function spawnPiece(forcedType){
+  ensureQueue();
+  const type=forcedType===undefined?queue.shift():forcedType;
+  if(forcedType===undefined) ensureQueue();
+  if(activePiece) activePiece.destroy();
+  activePiece=new FallingPiece(type);
+  holdUsed=false;
+  dropClock=getDropInterval();
+
+  if(!canPlace(activePiece.type,activePiece.rot,activePiece.x,activePiece.y))
+    endGame();
+}
+
+function canPlace(type,rot,x,y){
+  for(const c of pieces[type].rots[rot]){
+    const cx=x+c[0], cy=y+c[1];
+    if(cx<0||cx>=BOARD_W||cy<0||cy>=BOARD_H) return false;
+    if(board[cy][cx]) return false;
+  }
+  return true;
+}
+
+function movePiece(dx,dy){
+  if(!activePiece||state!=='play') return false;
+  const nx=activePiece.x+dx, ny=activePiece.y+dy;
+  if(canPlace(activePiece.type,activePiece.rot,nx,ny)){
+    activePiece.x=nx;
+    activePiece.y=ny;
+    return true;
+  }
+  return false;
+}
+
+function rotatePiece(dir){
+  if(!activePiece||state!=='play') return;
+  const nr=(activePiece.rot+dir+4)%4;
+  for(const kick of [0,1,-1,2,-2]){
+    if(canPlace(activePiece.type,nr,activePiece.x+kick,activePiece.y)){
+      activePiece.rot=nr;
+      activePiece.x+=kick;
+      rotateSound.play();
+      return;
+    }
+  }
+}
+
+function hardDrop(){
+  if(!activePiece||state!=='play') return;
+  let d=0;
+  while(movePiece(0,-1)) d++;
+  score+=d*2;
+  lockPiece();
+}
+
+function holdPiece(){
+  if(!activePiece||holdUsed||state!=='play') return;
+  const cur=activePiece.type;
+  activePiece.destroy();
+
+  if(holdType<0){
+    holdType=cur;
+    spawnPiece();
+  }
+  else {
+    const swap=holdType;
+    holdType=cur;
+    spawnPiece(swap);
+  }
+  holdUsed=true;
+}
+
+function lineBurst(row,color){
+  const y=rowToWorld(row);
+  new ParticleEmitter(
+    vec2(0,y),0,vec2(11,.3),.1,260,PI,undefined,
+    color,color.mutate(.2,.15),hsl(0,0,0,0),hsl(0,0,0,0),
+    .4,.06,.35,.25,.08,.95,1,0,PI,.14,.4,false,true,true,3,false
+  );
+}
+
+function lockPiece(){
+  for(const c of activePiece.cells()){
+    if(c.y>=0&&c.y<BOARD_H&&c.x>=0&&c.x<BOARD_W)
+      board[c.y][c.x]=activePiece.type+1;
+  }
+  placeSound.play();
+
+  const full=[];
+  for(let y=0;y<BOARD_H;y++)
+    if(board[y].every(v=>v)) full.push(y);
+
+  if(full.length){
+    const gain=[0,120,320,560,900][full.length]*level;
+    combo++;
+    score+=gain+combo*35;
+    totalLines+=full.length;
+    level=1+Math.floor(totalLines/10);
+    clearSound.play();
+
+    full.sort((a,b)=>b-a);
+    for(const y of full){
+      const col=pieces[(y+level)%pieces.length].color;
+      lineBurst(y,col);
+      board.splice(y,1);
+      board.push(new Array(BOARD_W).fill(0));
+    }
+  }
+  else combo=0;
+
+  spawnPiece();
+}
+
+function endGame(){
+  state='gameover';
+  if(activePiece) activePiece.destroy();
+  overSound.play();
+  if(score>bestScore){
+    bestScore=score;
+    localStorage.setItem(SAVE_KEY,String(bestScore));
+  }
+}
+
+function startRun(){
+  engineObjectsDestroy();
+  resetBoard();
+  holdType=-1;
+  queue=[];
+  bag=[];
+  score=0;
+  totalLines=0;
+  level=1;
+  combo=0;
+  ensureQueue();
+  spawnPiece();
+  state='play';
+}
+
+function boardToWorld(x,y){
+  return vec2(x-BOARD_W/2+.5,y-BOARD_H/2+.5+1.4);
+}
+function rowToWorld(y){ return y-BOARD_H/2+.5+1.4; }
+
+function drawCell(x,y,color,alpha){
+  const p=boardToWorld(x,y);
+  const c=hsl(color.r||0,color.g||0,color.b||0,1);
+  if(alpha!==undefined){
+    drawRect(p,vec2(.9,.9),hsl(c.r||0,c.g||0,c.b||0,alpha));
+    drawRect(p,vec2(1.15,1.15),hsl(c.r||0,c.g||0,c.b||0,alpha*.25));
+    return;
+  }
+  drawRect(p,vec2(.9,.9),color);
+  drawRect(p,vec2(1.15,1.15),color.scale(.35,.45));
+}
+
+function drawPieceCells(cells,color,alpha){
+  for(const c of cells){
+    if(c.y<0||c.y>=BOARD_H||c.x<0||c.x>=BOARD_W) continue;
+    if(alpha===undefined) drawCell(c.x,c.y,color);
+    else {
+      const p=boardToWorld(c.x,c.y);
+      drawRect(p,vec2(.9,.9),hsl(.56,1,.65,alpha));
+      drawRect(p,vec2(1.15,1.15),hsl(.56,1,.65,alpha*.25));
+    }
+  }
+}
+
+function handleInput(){
+  if(state==='start'){
+    if(keyWasPressed('Space')||keyWasPressed('Enter')||mouseWasPressed(0)) startRun();
+    return;
+  }
+
+  if(state==='gameover'){
+    if(keyWasPressed('Space')||keyWasPressed('Enter')||mouseWasPressed(0)) startRun();
+    return;
+  }
+
+  if(keyWasPressed('ArrowLeft')||keyWasPressed('KeyA')) movePiece(-1,0);
+  if(keyWasPressed('ArrowRight')||keyWasPressed('KeyD')) movePiece(1,0);
+  if(keyWasPressed('ArrowUp')||keyWasPressed('KeyX')) rotatePiece(1);
+  if(keyWasPressed('KeyZ')) rotatePiece(-1);
+  if(keyWasPressed('Space')) hardDrop();
+  if(keyWasPressed('KeyC')||keyWasPressed('ShiftLeft')) holdPiece();
+
+  if(mouseWasPressed(0)){
+    const sx=mousePosScreen.x/mainCanvasSize.x;
+    const sy=mousePosScreen.y/mainCanvasSize.y;
+    if(sy>.8){
+      if(sx<.2) movePiece(-1,0);
+      else if(sx<.4) rotatePiece(-1);
+      else if(sx<.6) movePiece(0,-1);
+      else if(sx<.8) rotatePiece(1);
+      else holdPiece();
+    }
+    else if(sy>.56){
+      if(sx<.5) movePiece(-1,0); else movePiece(1,0);
+    }
+    else hardDrop();
+  }
+}
+
+function gameInit(){
+  bestScore=Number(localStorage.getItem(SAVE_KEY)||0);
+  resetBoard();
+  ensureQueue();
+}
+
+function gameUpdate(){
+  handleInput();
+}
+
+function gameUpdatePost(){
+  cameraPos=cameraPos.lerp(vec2(0,1.2),.08);
+}
+
+function gameRender(){
+  for(let x=0;x<BOARD_W;x++){
+    for(let y=0;y<BOARD_H;y++){
+      const p=boardToWorld(x,y);
+      drawRect(p,vec2(.94,.94),hsl(.62,.5,.11,.9));
+      const v=board[y][x];
+      if(v) drawCell(x,y,pieces[v-1].color);
+    }
+  }
+
+  drawRect(vec2(0,1.4),vec2(10.7,20.7),hsl(.55,1,.62,.08));
+  drawRect(vec2(-8.3,4.5),vec2(3.8,3.8),hsl(.55,.6,.12,.8));
+  drawRect(vec2(8.3,4.5),vec2(3.8,7.8),hsl(.55,.6,.12,.8));
+
+  if(holdType>=0){
+    const color=pieces[holdType].color;
+    for(const c of pieces[holdType].rots[0]){
+      const px=-9.6+c[0]*.62;
+      const py=3.1+c[1]*.62;
+      drawRect(vec2(px,py),vec2(.56,.56),color);
+      drawRect(vec2(px,py),vec2(.74,.74),color.scale(.35,.45));
+    }
+  }
+
+  for(let i=0;i<3;i++){
+    const t=queue[i];
+    if(t===undefined) continue;
+    const color=pieces[t].color;
+    for(const c of pieces[t].rots[0]){
+      const px=7+c[0]*.58;
+      const py=6.8-i*2.35+c[1]*.58;
+      drawRect(vec2(px,py),vec2(.54,.54),color);
+      drawRect(vec2(px,py),vec2(.7,.7),color.scale(.35,.45));
+    }
+  }
+}
+
+function gameRenderPost(){
+  const W=mainCanvasSize.x,H=mainCanvasSize.y;
+  drawTextScreen('NEON BRICK BUILDER',vec2(W/2,34),42,hsl(.56,1,.72),3,hsl(0,0,0));
+
+  if(state==='start'){
+    drawTextScreen('Place blocks, clear lines, stack combos',vec2(W/2,H/2-28),30,hsl(.58,.7,.75),2,hsl(0,0,0));
+    drawTextScreen('Hold: C / right touch zone',vec2(W/2,H/2+14),26,hsl(.15,1,.67),2,hsl(0,0,0));
+    drawTextScreen(`BEST SCORE ${bestScore}`,vec2(W/2,H/2+62),30,hsl(.33,1,.67),2,hsl(0,0,0));
+    drawTextScreen('TAP TO START',vec2(W/2,H/2+118),40,hsl(.03,1,.63),3,hsl(0,0,0));
+    return;
+  }
+
+  drawTextScreen(`SCORE ${score}`,vec2(90,28),24,hsl(.15,1,.67),2,hsl(0,0,0));
+  drawTextScreen(`LINES ${totalLines}`,vec2(90,56),22,hsl(.33,1,.67),2,hsl(0,0,0));
+  drawTextScreen(`LV ${level}`,vec2(88,82),20,hsl(.56,1,.72),2,hsl(0,0,0));
+  drawTextScreen(`BEST ${bestScore}`,vec2(W-90,28),22,hsl(.56,1,.72),2,hsl(0,0,0));
+  drawTextScreen(`COMBO x${Math.max(1,combo)}`,vec2(W-98,56),20,hsl(.03,1,.64),2,hsl(0,0,0));
+  drawTextScreen('HOLD',vec2(74,135),18,hsl(0,0,.8),1,hsl(0,0,0));
+  drawTextScreen('NEXT',vec2(W-74,135),18,hsl(0,0,.8),1,hsl(0,0,0));
+
+  drawTextScreen('◀   ↺   ▼   ↻   HOLD',vec2(W/2,H-20),18,hsl(0,0,.78),1,hsl(0,0,0));
+
+  if(state==='gameover'){
+    drawTextScreen('STACK COLLAPSED',vec2(W/2,H/2-20),60,hsl(.01,1,.62),4,hsl(0,0,0));
+    drawTextScreen(`SCORE ${score}`,vec2(W/2,H/2+28),34,hsl(.56,1,.74),2,hsl(0,0,0));
+    drawTextScreen('TAP / SPACE TO RETRY',vec2(W/2,H/2+84),32,hsl(.33,1,.67),2,hsl(0,0,0));
+  }
+}
+
+engineInit(gameInit,gameUpdate,gameUpdatePost,gameRender,gameRenderPost);
+</script></body></html>

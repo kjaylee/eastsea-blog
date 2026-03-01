@@ -1,0 +1,515 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0a1a" />
+  <title>Abyssal Archive Diver</title>
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <style>
+    :root{
+      --bg:#0a0a1a;
+      --panel:#14142e;
+      --ink:#eaf8ff;
+      --cyan:#2fe5ff;
+      --vio:#a56dff;
+      --ok:#75ffb6;
+      --warn:#ff7a9d;
+    }
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    body{margin:0;min-height:100vh;display:flex;justify-content:center;background:radial-gradient(circle at 15% -5%,#232357 0%,var(--bg) 58%);color:var(--ink);font-family:"Pretendard","Noto Sans KR",system-ui,sans-serif}
+    .wrap{width:min(100vw,780px);padding:12px;display:flex;flex-direction:column;gap:10px}
+    .hud{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+    .card{background:linear-gradient(180deg,#1b1b3a,#111128);border:1px solid #2a2a62;border-radius:12px;padding:8px;text-align:center}
+    .label{font-size:11px;opacity:.76}.value{font-size:17px;font-weight:800}
+    .arena{position:relative;background:#0d0d22;border:1px solid #2d2d65;border-radius:14px;padding:10px;box-shadow:inset 0 0 36px #000}
+    canvas{width:100%;aspect-ratio:4/5;border-radius:10px;display:block;background:linear-gradient(180deg,#11173f 0%,#071025 70%,#050811 100%)}
+    .overlay{position:absolute;inset:10px;border-radius:10px;background:#03030fcc;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;padding:18px;text-align:center}
+    .overlay.hidden{display:none}
+    button{appearance:none;border:none;border-radius:10px;background:linear-gradient(180deg,#2f2f77,#1f1f4b);color:#fff;font-weight:700;padding:10px 14px;cursor:pointer}
+    .ctrl-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+    .ctrl-grid button{padding:12px 6px;font-size:14px}
+    .desc{font-size:13px;line-height:1.45;opacity:.9;background:#111129;border:1px solid #2a2a5d;border-radius:12px;padding:10px}
+    @media (max-width:560px){.hud{grid-template-columns:repeat(2,1fr)}.value{font-size:15px}}
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="hud">
+      <div class="card"><div class="label">SCORE</div><div id="score" class="value">0</div></div>
+      <div class="card"><div class="label">BEST</div><div id="best" class="value">0</div></div>
+      <div class="card"><div class="label">OXYGEN</div><div id="oxygen" class="value">100%</div></div>
+      <div class="card"><div class="label">HULL</div><div id="hull" class="value">5</div></div>
+      <div class="card"><div class="label">DEPTH</div><div id="depth" class="value">0m</div></div>
+    </section>
+
+    <section class="arena">
+      <canvas id="game" width="600" height="760" aria-label="Abyssal Archive Diver"></canvas>
+      <div id="overlay" class="overlay">
+        <h2 style="margin:0">Abyssal Archive Diver</h2>
+        <p style="margin:0;opacity:.86">심해 보관소로 잠수해 유물 캡슐을 회수하세요. 잔해를 피하고 산소를 유지해야 생존합니다.</p>
+        <button id="startBtn">Begin Dive</button>
+      </div>
+    </section>
+
+    <section class="ctrl-grid">
+      <button id="leftBtn">◀ LEFT</button>
+      <button id="upBtn">▲ UP</button>
+      <button id="rightBtn">RIGHT ▶</button>
+      <button id="boostBtn">⚡ BOOST</button>
+      <button id="downBtn">▼ DOWN</button>
+      <button id="pulseBtn">SONAR</button>
+    </section>
+
+    <section class="desc">
+      키보드: <b>←/→/↑/↓</b> 이동, <b>Space</b> 부스트, <b>S</b> 소나, <b>Enter</b> 재시작.<br/>
+      터치: 하단 버튼 사용. 잔해 충돌 시 Hull 감소, 산소가 0%가 되면 잠수 종료.
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const canvas = document.getElementById('game');
+      const ctx = canvas.getContext('2d');
+      const overlay = document.getElementById('overlay');
+      const startBtn = document.getElementById('startBtn');
+      const scoreEl = document.getElementById('score');
+      const bestEl = document.getElementById('best');
+      const oxygenEl = document.getElementById('oxygen');
+      const hullEl = document.getElementById('hull');
+      const depthEl = document.getElementById('depth');
+
+      const leftBtn = document.getElementById('leftBtn');
+      const rightBtn = document.getElementById('rightBtn');
+      const upBtn = document.getElementById('upBtn');
+      const downBtn = document.getElementById('downBtn');
+      const boostBtn = document.getElementById('boostBtn');
+      const pulseBtn = document.getElementById('pulseBtn');
+
+      const storeKey = 'abyssalArchiveDiverBest';
+      let best = Number(localStorage.getItem(storeKey) || 0);
+      bestEl.textContent = best;
+
+      let audioCtx;
+      function tone(freq, dur = 0.08, type = 'sine', gain = 0.035) {
+        audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.value = freq;
+        g.gain.value = gain;
+        osc.connect(g).connect(audioCtx.destination);
+        osc.start();
+        g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
+        osc.stop(audioCtx.currentTime + dur);
+      }
+
+      const state = {
+        running:false,
+        score:0,
+        depth:0,
+        oxygen:100,
+        hull:5,
+        sonar:0,
+        keys:{left:false,right:false,up:false,down:false},
+        diver:{x:300,y:610,vx:0,vy:0,r:20},
+        debris:[],
+        relics:[],
+        bubbles:[],
+        timer:0,
+        spawnDebris:0,
+        spawnRelic:0,
+        spawnBubble:0
+      };
+
+      function reset() {
+        state.running = true;
+        state.score = 0;
+        state.depth = 0;
+        state.oxygen = 100;
+        state.hull = 5;
+        state.sonar = 0;
+        state.debris.length = 0;
+        state.relics.length = 0;
+        state.bubbles.length = 0;
+        state.timer = 0;
+        state.spawnDebris = 0;
+        state.spawnRelic = 0;
+        state.spawnBubble = 0;
+        state.diver.x = 300;
+        state.diver.y = 610;
+        state.diver.vx = 0;
+        state.diver.vy = 0;
+        syncHud();
+        overlay.classList.add('hidden');
+        tone(500, 0.1, 'triangle', 0.04);
+      }
+
+      function endDive() {
+        state.running = false;
+        if (state.score > best) {
+          best = state.score;
+          localStorage.setItem(storeKey, String(best));
+          bestEl.textContent = best;
+        }
+        overlay.innerHTML = `<h2 style="margin:0">Dive Ended</h2>
+          <p style="margin:0;opacity:.9">Score <b>${state.score}</b> · Depth <b>${Math.floor(state.depth)}m</b> · Best <b>${best}</b></p>
+          <button id="startBtn">Dive Again</button>`;
+        overlay.classList.remove('hidden');
+        document.getElementById('startBtn').addEventListener('click', reset, { once: true });
+        tone(145, 0.26, 'sawtooth', 0.055);
+      }
+
+      function spawnDebris() {
+        const w = 40 + Math.random() * 38;
+        state.debris.push({
+          x: 30 + Math.random() * (canvas.width - 60),
+          y: -50,
+          w,
+          h: 14 + Math.random() * 20,
+          vy: 120 + Math.random() * 90 + state.depth * 0.18,
+          drift: (Math.random() - 0.5) * 24
+        });
+      }
+
+      function spawnRelic() {
+        state.relics.push({
+          x: 40 + Math.random() * (canvas.width - 80),
+          y: -30,
+          r: 14,
+          vy: 150 + Math.random() * 45,
+          spin: Math.random() * Math.PI * 2
+        });
+      }
+
+      function spawnBubble() {
+        state.bubbles.push({
+          x: 35 + Math.random() * (canvas.width - 70),
+          y: -24,
+          r: 10,
+          vy: 140 + Math.random() * 30
+        });
+      }
+
+      function overlapCircleRect(cx, cy, r, x, y, w, h) {
+        const nx = Math.max(x, Math.min(cx, x + w));
+        const ny = Math.max(y, Math.min(cy, y + h));
+        const dx = cx - nx;
+        const dy = cy - ny;
+        return dx * dx + dy * dy < r * r;
+      }
+
+      function updateDiver(dt, boost) {
+        const accel = boost ? 760 : 540;
+        const drag = 0.88;
+        if (state.keys.left) state.diver.vx -= accel * dt;
+        if (state.keys.right) state.diver.vx += accel * dt;
+        if (state.keys.up) state.diver.vy -= accel * dt;
+        if (state.keys.down) state.diver.vy += accel * dt;
+
+        state.diver.vx *= drag;
+        state.diver.vy *= drag;
+        state.diver.x += state.diver.vx * dt;
+        state.diver.y += state.diver.vy * dt;
+        state.diver.x = Math.max(26, Math.min(canvas.width - 26, state.diver.x));
+        state.diver.y = Math.max(80, Math.min(canvas.height - 42, state.diver.y));
+      }
+
+      function update(dt) {
+        if (!state.running) return;
+
+        state.timer += dt;
+        state.depth += 14 * dt;
+        state.oxygen -= (3.8 + state.depth * 0.004) * dt;
+        if (state.oxygen <= 0) {
+          state.oxygen = 0;
+          syncHud();
+          endDive();
+          return;
+        }
+
+        const boostOn = state.boosting === true;
+        if (boostOn) {
+          state.oxygen = Math.max(0, state.oxygen - 7 * dt);
+          tone(320 + Math.random() * 30, 0.03, 'triangle', 0.012);
+        }
+        updateDiver(dt, boostOn);
+
+        state.spawnDebris += dt;
+        state.spawnRelic += dt;
+        state.spawnBubble += dt;
+
+        const debrisEvery = Math.max(0.25, 0.68 - state.depth * 0.0015);
+        if (state.spawnDebris >= debrisEvery) {
+          state.spawnDebris = 0;
+          spawnDebris();
+        }
+        if (state.spawnRelic >= 1.55) {
+          state.spawnRelic = 0;
+          spawnRelic();
+        }
+        if (state.spawnBubble >= 3.2) {
+          state.spawnBubble = 0;
+          spawnBubble();
+        }
+
+        for (let i = state.debris.length - 1; i >= 0; i--) {
+          const d = state.debris[i];
+          d.y += d.vy * dt;
+          d.x += d.drift * dt;
+          if (d.x < 10 || d.x + d.w > canvas.width - 10) d.drift *= -1;
+
+          if (overlapCircleRect(state.diver.x, state.diver.y, state.diver.r, d.x, d.y, d.w, d.h)) {
+            state.hull -= 1;
+            state.debris.splice(i, 1);
+            state.oxygen = Math.max(0, state.oxygen - 12);
+            tone(180, 0.1, 'sawtooth', 0.045);
+            if (state.hull <= 0) {
+              syncHud();
+              endDive();
+              return;
+            }
+            continue;
+          }
+
+          if (d.y > canvas.height + 40) state.debris.splice(i, 1);
+        }
+
+        for (let i = state.relics.length - 1; i >= 0; i--) {
+          const r = state.relics[i];
+          r.y += r.vy * dt;
+          r.spin += dt * 2.2;
+          const dx = r.x - state.diver.x;
+          const dy = r.y - state.diver.y;
+          if (Math.hypot(dx, dy) < r.r + state.diver.r) {
+            state.score += 35 + Math.floor(state.depth * 0.05);
+            state.oxygen = Math.min(100, state.oxygen + 4);
+            tone(720, 0.06, 'triangle', 0.035);
+            state.relics.splice(i, 1);
+            continue;
+          }
+          if (r.y > canvas.height + 30) state.relics.splice(i, 1);
+        }
+
+        for (let i = state.bubbles.length - 1; i >= 0; i--) {
+          const b = state.bubbles[i];
+          b.y += b.vy * dt;
+          const dx = b.x - state.diver.x;
+          const dy = b.y - state.diver.y;
+          if (Math.hypot(dx, dy) < b.r + state.diver.r) {
+            state.oxygen = Math.min(100, state.oxygen + 22);
+            state.score += 10;
+            tone(450, 0.05, 'sine', 0.03);
+            state.bubbles.splice(i, 1);
+            continue;
+          }
+          if (b.y > canvas.height + 22) state.bubbles.splice(i, 1);
+        }
+
+        if (state.sonar > 0) state.sonar -= dt;
+
+        state.score += dt * 4;
+        syncHud();
+      }
+
+      function drawBackground() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        grad.addColorStop(0, '#13224d');
+        grad.addColorStop(0.6, '#0a1430');
+        grad.addColorStop(1, '#050810');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        for (let i = 0; i < 42; i++) {
+          const y = (i * 55 + (state.depth * 6 % 55));
+          ctx.strokeStyle = 'rgba(95,210,255,0.08)';
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(canvas.width, y);
+          ctx.stroke();
+        }
+      }
+
+      function drawDebris() {
+        ctx.fillStyle = '#7f6b9d';
+        for (const d of state.debris) {
+          ctx.save();
+          ctx.shadowColor = '#7f6b9d';
+          ctx.shadowBlur = 8;
+          ctx.fillRect(d.x, d.y, d.w, d.h);
+          ctx.restore();
+        }
+      }
+
+      function drawRelics() {
+        for (const r of state.relics) {
+          ctx.save();
+          ctx.translate(r.x, r.y);
+          ctx.rotate(r.spin);
+          ctx.fillStyle = '#ffce6d';
+          ctx.shadowColor = '#ffce6d';
+          ctx.shadowBlur = 12;
+          ctx.beginPath();
+          ctx.moveTo(0, -r.r);
+          ctx.lineTo(r.r * 0.92, 0);
+          ctx.lineTo(0, r.r);
+          ctx.lineTo(-r.r * 0.92, 0);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+
+      function drawBubbles() {
+        for (const b of state.bubbles) {
+          ctx.beginPath();
+          ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+          ctx.fillStyle = '#8af3ff88';
+          ctx.fill();
+          ctx.strokeStyle = '#baf9ff';
+          ctx.stroke();
+        }
+      }
+
+      function drawDiver() {
+        const d = state.diver;
+        ctx.save();
+        ctx.translate(d.x, d.y);
+
+        ctx.fillStyle = '#2de4ff';
+        ctx.shadowColor = '#2de4ff';
+        ctx.shadowBlur = 18;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 22, 16, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#ff6bd7';
+        ctx.beginPath();
+        ctx.moveTo(-18, 0);
+        ctx.lineTo(-34, -10);
+        ctx.lineTo(-34, 10);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#041322';
+        ctx.beginPath();
+        ctx.arc(6, -2, 5, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (state.boosting) {
+          ctx.fillStyle = '#ffb96d';
+          ctx.beginPath();
+          ctx.moveTo(-34, 0);
+          ctx.lineTo(-52 - Math.random() * 8, -8);
+          ctx.lineTo(-52 - Math.random() * 8, 8);
+          ctx.closePath();
+          ctx.fill();
+        }
+
+        ctx.restore();
+
+        if (state.sonar > 0) {
+          ctx.strokeStyle = `rgba(122,243,255,${state.sonar * 0.9})`;
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(d.x, d.y, 46 + (1 - state.sonar) * 72, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+
+      function drawOverlayData() {
+        ctx.fillStyle = 'rgba(7,14,32,0.5)';
+        ctx.fillRect(8, 8, 150, 46);
+        ctx.fillStyle = '#91f4ff';
+        ctx.font = 'bold 14px system-ui';
+        ctx.fillText(`Relics ${Math.floor(state.score / 30)}`, 16, 29);
+        ctx.fillText(`Depth ${Math.floor(state.depth)}m`, 16, 47);
+      }
+
+      function render() {
+        drawBackground();
+        drawDebris();
+        drawRelics();
+        drawBubbles();
+        drawDiver();
+        drawOverlayData();
+      }
+
+      function syncHud() {
+        scoreEl.textContent = Math.floor(state.score);
+        bestEl.textContent = best;
+        oxygenEl.textContent = Math.floor(state.oxygen) + '%';
+        hullEl.textContent = state.hull;
+        depthEl.textContent = Math.floor(state.depth) + 'm';
+      }
+
+      function setKeyFlag(key, val) {
+        if (key === 'arrowleft' || key === 'a') state.keys.left = val;
+        if (key === 'arrowright' || key === 'd') state.keys.right = val;
+        if (key === 'arrowup' || key === 'w') state.keys.up = val;
+        if (key === 'arrowdown' || key === 's') state.keys.down = val;
+      }
+
+      function bindHold(btn, onDown, onUp = onDown) {
+        const start = (e) => { e.preventDefault(); onDown(true); };
+        const end = (e) => { e.preventDefault(); onUp(false); };
+        btn.addEventListener('mousedown', start);
+        btn.addEventListener('touchstart', start, { passive:false });
+        btn.addEventListener('mouseup', end);
+        btn.addEventListener('mouseleave', end);
+        btn.addEventListener('touchend', end, { passive:false });
+      }
+
+      function bindInput() {
+        document.addEventListener('keydown', (e) => {
+          const k = e.key.toLowerCase();
+          setKeyFlag(k, true);
+          if (k === ' ') state.boosting = true;
+          if (k === 's') {
+            state.sonar = 1;
+            tone(360, 0.07, 'sine', 0.03);
+          }
+          if (e.key === 'Enter' && !state.running) reset();
+        });
+
+        document.addEventListener('keyup', (e) => {
+          const k = e.key.toLowerCase();
+          setKeyFlag(k, false);
+          if (k === ' ') state.boosting = false;
+        });
+
+        bindHold(leftBtn, (v)=> state.keys.left = v);
+        bindHold(rightBtn, (v)=> state.keys.right = v);
+        bindHold(upBtn, (v)=> state.keys.up = v);
+        bindHold(downBtn, (v)=> state.keys.down = v);
+        bindHold(boostBtn, (v)=> state.boosting = v);
+
+        const sonarTap = (e) => {
+          e.preventDefault();
+          state.sonar = 1;
+          tone(390, 0.08, 'sine', 0.03);
+        };
+        pulseBtn.addEventListener('click', sonarTap);
+        pulseBtn.addEventListener('touchstart', sonarTap, { passive:false });
+
+        startBtn.addEventListener('click', reset, { once: true });
+      }
+
+      function loop(ts) {
+        if (!loop.prev) loop.prev = ts;
+        const dt = Math.min(0.033, (ts - loop.prev) / 1000);
+        loop.prev = ts;
+        update(dt);
+        render();
+        requestAnimationFrame(loop);
+      }
+
+      bindInput();
+      syncHud();
+      requestAnimationFrame(loop);
+    })();
+  </script>
+</body>
+</html>

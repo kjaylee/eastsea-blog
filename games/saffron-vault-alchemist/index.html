@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0a1a" />
+  <title>Saffron Vault Alchemist</title>
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <style>
+    :root{
+      --bg:#0a0a1a;
+      --panel:#151530;
+      --line:#30e7ff;
+      --hot:#ff5cd8;
+      --ok:#7dffba;
+      --warn:#ffd66e;
+      --text:#edf7ff;
+    }
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    body{margin:0;min-height:100vh;background:radial-gradient(circle at 17% -8%,#232350 0%,var(--bg) 56%);color:var(--text);font-family:"Pretendard","Noto Sans KR",system-ui,sans-serif;display:flex;justify-content:center}
+    .wrap{width:min(100vw,900px);padding:12px;display:flex;flex-direction:column;gap:10px}
+    .hud{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+    .card{background:linear-gradient(180deg,#1a1a39,#111127);border:1px solid #2d2d67;border-radius:12px;padding:8px;text-align:center;box-shadow:0 0 16px #0008}
+    .label{font-size:11px;opacity:.74}
+    .value{font-size:17px;font-weight:800}
+    .panel{background:linear-gradient(180deg,#11112a,#0c0c20);border:1px solid #2a2a60;border-radius:14px;padding:12px;box-shadow:inset 0 0 28px #0008}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .target,.mix{background:#171739;border:1px solid #30306e;border-radius:12px;padding:10px}
+    .tri{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:6px}
+    .orb{height:92px;border-radius:12px;background:#0f0f23;border:1px solid #2a2a61;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;box-shadow:inset 0 0 14px #0009}
+    .orb strong{font-size:24px}
+    .chan{display:grid;grid-template-columns:1fr;gap:8px;margin-top:10px}
+    .channel{background:#151534;border:1px solid #2d2d66;border-radius:12px;padding:10px;display:grid;grid-template-columns:1fr auto auto auto;align-items:center;gap:8px}
+    .channel .name{font-weight:700}
+    .meter{height:10px;border-radius:999px;background:#0f0f25;border:1px solid #2a2a61;overflow:hidden}
+    .fill{height:100%;width:40%;background:linear-gradient(90deg,#3beeff,#6296ff)}
+    .btn{appearance:none;border:none;border-radius:10px;padding:10px 12px;font-weight:800;cursor:pointer;color:#02131a;background:linear-gradient(180deg,#34f2ff,#157fb9)}
+    .btn.mix{background:linear-gradient(180deg,#ff77dc,#b83d84);color:#fff}
+    .controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+    .desc{font-size:13px;line-height:1.45;opacity:.9;background:#12122b;border:1px solid #29295f;border-radius:12px;padding:10px}
+    .overlay{position:fixed;inset:0;background:#050512d8;display:flex;align-items:center;justify-content:center;padding:12px}
+    .overlay.hidden{display:none}
+    .modal{width:min(92vw,520px);background:linear-gradient(180deg,#161638,#111127);border:1px solid #34347a;border-radius:14px;padding:18px;text-align:center;box-shadow:0 0 30px #000a}
+    @media (max-width:760px){
+      .hud{grid-template-columns:repeat(3,1fr)}
+      .row{grid-template-columns:1fr}
+      .channel{grid-template-columns:1fr auto auto}
+    }
+    @media (max-width:520px){
+      .hud{grid-template-columns:repeat(2,1fr)}
+      .value{font-size:15px}
+      .orb{height:80px}
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="hud">
+      <div class="card"><div class="label">ROUND</div><div id="round" class="value">1</div></div>
+      <div class="card"><div class="label">SCORE</div><div id="score" class="value">0</div></div>
+      <div class="card"><div class="label">BEST</div><div id="best" class="value">0</div></div>
+      <div class="card"><div class="label">LIVES</div><div id="lives" class="value">4</div></div>
+      <div class="card"><div class="label">MIXES</div><div id="mixes" class="value">7</div></div>
+      <div class="card"><div class="label">TIME</div><div id="time" class="value">30</div></div>
+    </section>
+
+    <section class="panel">
+      <div class="row">
+        <article class="target">
+          <h3 style="margin:0">Target Formula</h3>
+          <div class="tri" id="targetTri"></div>
+        </article>
+        <article class="mix">
+          <h3 style="margin:0">Current Mixture</h3>
+          <div class="tri" id="mixTri"></div>
+        </article>
+      </div>
+
+      <div class="chan" id="channels"></div>
+
+      <div class="controls">
+        <button id="mixBtn" class="btn mix">Mix / Enter</button>
+        <button id="nudgeBtn" class="btn">Auto Nudge</button>
+        <button id="resetBtn" class="btn">Reset Round</button>
+      </div>
+
+      <p id="status" style="margin:10px 0 0;font-size:14px;opacity:.92">Start를 눌러 금고 배합을 시작하세요.</p>
+    </section>
+
+    <section class="desc">
+      키보드: <b>Q/A</b> 채널1 ±, <b>W/S</b> 채널2 ±, <b>E/D</b> 채널3 ±, <b>Enter</b> Mix, <b>R</b> Reset.<br>
+      터치: 각 채널의 -/+ 버튼과 Mix 버튼 사용. 목표 수치에 가까울수록 높은 점수를 획득합니다.
+    </section>
+  </main>
+
+  <div id="overlay" class="overlay">
+    <div class="modal">
+      <h2 style="margin:0 0 8px">Saffron Vault Alchemist</h2>
+      <p style="opacity:.88;line-height:1.5">3개 채널을 조정해 목표 배합을 맞추세요.<br>라운드가 오를수록 제한 시간과 허용 오차가 줄어듭니다.</p>
+      <button id="startBtn" class="btn mix" style="padding:12px 16px">Start Alchemy</button>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      const roundEl = document.getElementById('round');
+      const scoreEl = document.getElementById('score');
+      const bestEl = document.getElementById('best');
+      const livesEl = document.getElementById('lives');
+      const mixesEl = document.getElementById('mixes');
+      const timeEl = document.getElementById('time');
+      const targetTri = document.getElementById('targetTri');
+      const mixTri = document.getElementById('mixTri');
+      const channelsEl = document.getElementById('channels');
+      const statusEl = document.getElementById('status');
+      const mixBtn = document.getElementById('mixBtn');
+      const nudgeBtn = document.getElementById('nudgeBtn');
+      const resetBtn = document.getElementById('resetBtn');
+      const overlay = document.getElementById('overlay');
+      const startBtn = document.getElementById('startBtn');
+
+      const names = ['Saffron', 'Cobalt', 'Verdant'];
+      const storeKey = 'saffronVaultAlchemistBest';
+      let best = Number(localStorage.getItem(storeKey) || 0);
+      bestEl.textContent = best;
+
+      let audioCtx;
+      function beep(freq, dur = 0.08, type = 'sine', gain = 0.03) {
+        audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.type = type;
+        o.frequency.value = freq;
+        g.gain.value = gain;
+        o.connect(g).connect(audioCtx.destination);
+        o.start();
+        g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
+        o.stop(audioCtx.currentTime + dur);
+      }
+
+      const state = {
+        running: false,
+        round: 1,
+        score: 0,
+        lives: 4,
+        mixes: 7,
+        timeLeft: 30,
+        target: [4, 5, 6],
+        mix: [5, 5, 5],
+        tolerance: 2,
+      };
+
+      const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+
+      function genTarget() {
+        return Array.from({ length: 3 }, () => 2 + Math.floor(Math.random() * 8));
+      }
+
+      function drawTri(container, arr, hide = false) {
+        container.innerHTML = '';
+        for (let i = 0; i < 3; i++) {
+          const el = document.createElement('div');
+          el.className = 'orb';
+          const val = hide ? '?' : arr[i];
+          el.innerHTML = `<div style="font-size:12px;opacity:.74">${names[i]}</div><strong>${val}</strong>`;
+          container.appendChild(el);
+        }
+      }
+
+      function renderChannels() {
+        channelsEl.innerHTML = '';
+        for (let i = 0; i < 3; i++) {
+          const row = document.createElement('div');
+          row.className = 'channel';
+          row.innerHTML = `
+            <div>
+              <div class="name">${i + 1}. ${names[i]}</div>
+              <div class="meter"><div class="fill" style="width:${state.mix[i] * 10}%"></div></div>
+            </div>
+            <button class="btn" data-op="dec" data-i="${i}">-</button>
+            <div style="font-size:20px;font-weight:800;min-width:34px;text-align:center">${state.mix[i]}</div>
+            <button class="btn" data-op="inc" data-i="${i}">+</button>
+          `;
+          channelsEl.appendChild(row);
+        }
+
+        [...channelsEl.querySelectorAll('button')].forEach(btn => {
+          const i = Number(btn.dataset.i);
+          const op = btn.dataset.op;
+          const apply = (e) => {
+            e.preventDefault();
+            adjust(i, op === 'inc' ? 1 : -1);
+          };
+          btn.addEventListener('click', apply);
+          btn.addEventListener('touchstart', apply, { passive: false });
+        });
+      }
+
+      function syncHud() {
+        roundEl.textContent = state.round;
+        scoreEl.textContent = Math.floor(state.score);
+        livesEl.textContent = state.lives;
+        mixesEl.textContent = state.mixes;
+        timeEl.textContent = Math.ceil(state.timeLeft);
+      }
+
+      function adjust(i, delta) {
+        if (!state.running) return;
+        state.mix[i] = clamp(state.mix[i] + delta, 0, 10);
+        renderChannels();
+        drawTri(mixTri, state.mix, false);
+        beep(360 + i * 120 + (delta > 0 ? 30 : -20), 0.04, 'triangle', 0.025);
+      }
+
+      function calcDistance() {
+        return state.target.reduce((sum, t, i) => sum + Math.abs(t - state.mix[i]), 0);
+      }
+
+      function nextRound() {
+        state.round += 1;
+        state.mixes = Math.max(4, 7 - Math.floor(state.round / 2));
+        state.timeLeft = Math.max(14, 30 - state.round * 1.6);
+        state.tolerance = Math.max(1, 2 - Math.floor(state.round / 4));
+        state.target = genTarget();
+        state.mix = [5, 5, 5];
+        statusEl.textContent = `Round ${state.round} 시작. 허용 오차 총합 ≤ ${state.tolerance + 2}`;
+        renderChannels();
+        drawTri(targetTri, state.target, false);
+        drawTri(mixTri, state.mix, false);
+        syncHud();
+      }
+
+      function failRound(reason) {
+        state.lives -= 1;
+        state.mixes = Math.max(0, state.mixes - 1);
+        statusEl.textContent = `실패: ${reason}. Lives -1`;
+        beep(170, 0.13, 'square', 0.055);
+        if (state.lives <= 0) return endGame();
+
+        state.mix = [5, 5, 5];
+        state.timeLeft = Math.max(8, state.timeLeft - 5);
+        renderChannels();
+        drawTri(mixTri, state.mix, false);
+        syncHud();
+      }
+
+      function evaluateMix() {
+        if (!state.running || state.mixes <= 0) return;
+
+        state.mixes -= 1;
+        const dist = calcDistance();
+        const passThreshold = 2 + state.tolerance;
+
+        if (dist <= passThreshold) {
+          const gain = 40 + state.round * 8 + Math.max(0, 30 - dist * 8) + state.mixes * 4;
+          state.score += gain;
+          statusEl.textContent = `성공! 거리 ${dist} · +${gain}점`;
+          beep(720, 0.07, 'sine', 0.04);
+          nextRound();
+        } else {
+          statusEl.textContent = `거리 ${dist} (기준 ≤ ${passThreshold}) — 재조정 필요`;
+          beep(220, 0.08, 'sawtooth', 0.04);
+          if (state.mixes <= 0) failRound('시도 횟수 소진');
+          else syncHud();
+        }
+      }
+
+      function autoNudge() {
+        if (!state.running) return;
+        for (let i = 0; i < 3; i++) {
+          const delta = Math.sign(state.target[i] - state.mix[i]);
+          state.mix[i] = clamp(state.mix[i] + delta, 0, 10);
+        }
+        state.mixes = Math.max(0, state.mixes - 1);
+        drawTri(mixTri, state.mix, false);
+        renderChannels();
+        syncHud();
+        beep(480, 0.05, 'triangle', 0.03);
+        if (state.mixes <= 0) failRound('보정 횟수 소진');
+      }
+
+      function endGame() {
+        state.running = false;
+        const final = Math.floor(state.score);
+        if (final > best) {
+          best = final;
+          localStorage.setItem(storeKey, String(best));
+          bestEl.textContent = best;
+        }
+        overlay.classList.remove('hidden');
+        statusEl.textContent = `실험 종료 — Score ${final} · Best ${best}`;
+        startBtn.textContent = 'Restart Alchemy';
+        beep(120, 0.24, 'sawtooth', 0.06);
+      }
+
+      function reset() {
+        state.running = true;
+        state.round = 1;
+        state.score = 0;
+        state.lives = 4;
+        state.mixes = 7;
+        state.timeLeft = 30;
+        state.tolerance = 2;
+        state.target = genTarget();
+        state.mix = [5, 5, 5];
+        statusEl.textContent = '목표 배합을 맞춰 금고를 안정화하세요.';
+        drawTri(targetTri, state.target, false);
+        drawTri(mixTri, state.mix, false);
+        renderChannels();
+        syncHud();
+        overlay.classList.add('hidden');
+        beep(520, 0.09, 'triangle', 0.05);
+      }
+
+      mixBtn.addEventListener('click', evaluateMix);
+      mixBtn.addEventListener('touchstart', (e) => { e.preventDefault(); evaluateMix(); }, { passive: false });
+      nudgeBtn.addEventListener('click', autoNudge);
+      nudgeBtn.addEventListener('touchstart', (e) => { e.preventDefault(); autoNudge(); }, { passive: false });
+      resetBtn.addEventListener('click', () => { if (state.running) failRound('라운드 수동 리셋'); });
+      resetBtn.addEventListener('touchstart', (e) => { e.preventDefault(); if (state.running) failRound('라운드 수동 리셋'); }, { passive: false });
+      startBtn.addEventListener('click', reset);
+
+      document.addEventListener('keydown', (e) => {
+        const k = e.key.toLowerCase();
+        if (k === 'q') adjust(0, +1);
+        if (k === 'a') adjust(0, -1);
+        if (k === 'w') adjust(1, +1);
+        if (k === 's') adjust(1, -1);
+        if (k === 'e') adjust(2, +1);
+        if (k === 'd') adjust(2, -1);
+        if (k === 'enter') evaluateMix();
+        if (k === 'r' && state.running) failRound('라운드 수동 리셋');
+      });
+
+      let last = performance.now();
+      function tick(now) {
+        const dt = Math.min(0.05, (now - last) / 1000);
+        last = now;
+        if (state.running) {
+          state.timeLeft -= dt;
+          if (state.timeLeft <= 0) {
+            failRound('시간 초과');
+            state.timeLeft = Math.max(10, 24 - state.round);
+          }
+          syncHud();
+        }
+        requestAnimationFrame(tick);
+      }
+
+      drawTri(targetTri, state.target, false);
+      drawTri(mixTri, state.mix, false);
+      renderChannels();
+      syncHud();
+      requestAnimationFrame(tick);
+    })();
+  </script>
+</body>
+</html>

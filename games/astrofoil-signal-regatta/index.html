@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0a1a" />
+  <title>Astrofoil Signal Regatta</title>
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <style>
+    :root{
+      --bg:#0a0a1a;
+      --panel:#14142f;
+      --line:#30e7ff;
+      --hot:#ff5bd7;
+      --good:#7cffba;
+      --text:#eff8ff;
+    }
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    body{margin:0;min-height:100vh;background:radial-gradient(circle at 15% -10%,#22224f 0%,var(--bg) 57%);color:var(--text);font-family:"Pretendard","Noto Sans KR",system-ui,sans-serif;display:flex;justify-content:center}
+    .wrap{width:min(100vw,820px);padding:12px;display:flex;flex-direction:column;gap:10px}
+    .hud{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+    .card{background:linear-gradient(180deg,#19193a,#101026);border:1px solid #2b2b63;border-radius:12px;padding:8px;text-align:center;box-shadow:0 0 16px #0008}
+    .label{font-size:11px;opacity:.74}
+    .value{font-size:17px;font-weight:800}
+    .arena{position:relative;background:#0d0d22;border:1px solid #2a2a5f;border-radius:14px;padding:10px;box-shadow:inset 0 0 30px #000}
+    canvas{width:100%;aspect-ratio:16/9;border-radius:10px;display:block;background:linear-gradient(180deg,#111138,#080817)}
+    .overlay{position:absolute;inset:10px;border-radius:10px;background:#040410cc;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;padding:20px;text-align:center}
+    .overlay.hidden{display:none}
+    button.start{appearance:none;border:none;border-radius:10px;padding:10px 14px;font-weight:800;color:#fff;background:linear-gradient(180deg,#4d4dff,#2f2fbf);cursor:pointer}
+    .controls{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+    .btn{appearance:none;border:none;border-radius:10px;padding:12px 8px;font-size:15px;font-weight:800;color:#02131a;background:linear-gradient(180deg,#36f2ff,#1682bf);cursor:pointer}
+    .btn.hot{background:linear-gradient(180deg,#ff76dc,#b6387f);color:#fff;box-shadow:0 0 14px #ff5bd799}
+    .desc{font-size:13px;line-height:1.45;opacity:.9;background:#121229;border:1px solid #29295f;border-radius:12px;padding:10px}
+    @media (max-width:560px){
+      .hud{grid-template-columns:repeat(2,1fr)}
+      .value{font-size:15px}
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="hud">
+      <div class="card"><div class="label">SCORE</div><div id="score" class="value">0</div></div>
+      <div class="card"><div class="label">BEST</div><div id="best" class="value">0</div></div>
+      <div class="card"><div class="label">CHAIN</div><div id="chain" class="value">x1</div></div>
+      <div class="card"><div class="label">SHIELD</div><div id="shield" class="value">5</div></div>
+      <div class="card"><div class="label">SPEED</div><div id="speed" class="value">1.0x</div></div>
+    </section>
+
+    <section class="arena">
+      <canvas id="game" width="960" height="540" aria-label="Astrofoil Signal Regatta playfield"></canvas>
+      <div id="overlay" class="overlay">
+        <h2 style="margin:0">Astrofoil Signal Regatta</h2>
+        <p style="margin:0;opacity:.86">신호 부이를 모아 점수를 올리고, 파편을 피하세요. Pulse(스페이스)로 짧은 보호막을 활성화할 수 있습니다.</p>
+        <button id="startBtn" class="start">Start Regatta</button>
+      </div>
+    </section>
+
+    <section class="controls">
+      <button class="btn" data-act="left">◀ Left</button>
+      <button class="btn" data-act="pulse">✦ Pulse</button>
+      <button class="btn" data-act="right">Right ▶</button>
+    </section>
+
+    <section class="desc">
+      키보드: <b>←/→</b> 또는 <b>A/D</b> 이동, <b>Space</b> Pulse, <b>Enter</b> 재시작.<br>
+      터치: 하단 버튼으로 이동/펄스. Pulse 중에는 짧은 무적과 점수 보너스가 적용됩니다.
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const canvas = document.getElementById('game');
+      const ctx = canvas.getContext('2d');
+      const scoreEl = document.getElementById('score');
+      const bestEl = document.getElementById('best');
+      const chainEl = document.getElementById('chain');
+      const shieldEl = document.getElementById('shield');
+      const speedEl = document.getElementById('speed');
+      const overlay = document.getElementById('overlay');
+      const startBtn = document.getElementById('startBtn');
+      const touchBtns = [...document.querySelectorAll('.btn')];
+
+      const storeKey = 'astrofoilSignalRegattaBest';
+      let best = Number(localStorage.getItem(storeKey) || 0);
+      bestEl.textContent = best;
+
+      let audioCtx;
+      function beep(freq, dur = 0.08, type = 'sine', gain = 0.03) {
+        audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.type = type;
+        o.frequency.value = freq;
+        g.gain.value = gain;
+        o.connect(g).connect(audioCtx.destination);
+        o.start();
+        g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
+        o.stop(audioCtx.currentTime + dur);
+      }
+
+      const laneX = [240, 480, 720];
+      const state = {
+        running: false,
+        lane: 1,
+        score: 0,
+        chain: 0,
+        shield: 5,
+        speed: 1,
+        spawnClock: 0,
+        elapsed: 0,
+        objects: [],
+        pulse: 0,
+        stars: []
+      };
+
+      function setLane(v) {
+        state.lane = Math.max(0, Math.min(2, v));
+      }
+
+      function activatePulse() {
+        if (!state.running) return;
+        state.pulse = 0.8;
+        state.speed = Math.min(2.4, state.speed + 0.08);
+        beep(840, 0.06, 'triangle', 0.045);
+        touchBtns.find(b => b.dataset.act === 'pulse')?.classList.add('hot');
+        setTimeout(() => touchBtns.find(b => b.dataset.act === 'pulse')?.classList.remove('hot'), 220);
+      }
+
+      function spawn() {
+        const lane = Math.floor(Math.random() * 3);
+        const type = Math.random() < 0.63 ? 'buoy' : 'debris';
+        state.objects.push({
+          lane,
+          type,
+          y: -20,
+          speed: (240 + Math.random() * 100) * state.speed,
+          r: type === 'buoy' ? 15 : 18,
+          rot: Math.random() * Math.PI * 2
+        });
+      }
+
+      function syncHud() {
+        scoreEl.textContent = Math.floor(state.score);
+        chainEl.textContent = `x${Math.max(1, state.chain)}`;
+        shieldEl.textContent = state.shield;
+        speedEl.textContent = `${state.speed.toFixed(1)}x`;
+      }
+
+      function reset() {
+        state.running = true;
+        state.lane = 1;
+        state.score = 0;
+        state.chain = 0;
+        state.shield = 5;
+        state.speed = 1;
+        state.spawnClock = 0;
+        state.elapsed = 0;
+        state.objects.length = 0;
+        state.pulse = 0;
+        state.stars.length = 0;
+        overlay.classList.add('hidden');
+        syncHud();
+        beep(520, 0.09, 'triangle', 0.05);
+      }
+
+      function gameOver() {
+        state.running = false;
+        if (state.score > best) {
+          best = Math.floor(state.score);
+          localStorage.setItem(storeKey, String(best));
+          bestEl.textContent = best;
+        }
+        overlay.innerHTML = `<h2 style="margin:0">Regatta Ended</h2>
+          <p style="margin:0;opacity:.88">Score <b>${Math.floor(state.score)}</b> · Best <b>${best}</b></p>
+          <button id="startBtn" class="start">Restart</button>`;
+        overlay.classList.remove('hidden');
+        document.getElementById('startBtn').addEventListener('click', reset, { once: true });
+        beep(140, 0.22, 'sawtooth', 0.06);
+      }
+
+      function drawBackground() {
+        const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        grad.addColorStop(0, '#141441');
+        grad.addColorStop(1, '#090919');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        for (let i = 0; i < 3; i++) {
+          const x = laneX[i];
+          ctx.strokeStyle = '#2ee6ff44';
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, canvas.height);
+          ctx.stroke();
+        }
+
+        for (let i = 0; i < 30; i++) {
+          const sx = (i * 123 + state.elapsed * 40) % canvas.width;
+          const sy = (i * 51 + state.elapsed * 90) % canvas.height;
+          ctx.fillStyle = '#c6ecff66';
+          ctx.fillRect(sx, sy, 2, 2);
+        }
+      }
+
+      function drawShip() {
+        const x = laneX[state.lane];
+        const y = canvas.height - 76;
+        const glow = state.pulse > 0 ? '#ff5bd7cc' : '#2ee6ff88';
+        ctx.save();
+        ctx.shadowBlur = state.pulse > 0 ? 18 : 10;
+        ctx.shadowColor = glow;
+        ctx.fillStyle = state.pulse > 0 ? '#ffd3f3' : '#c6f9ff';
+        ctx.beginPath();
+        ctx.moveTo(x, y - 26);
+        ctx.lineTo(x - 22, y + 16);
+        ctx.lineTo(x + 22, y + 16);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+
+      function drawObject(o) {
+        const x = laneX[o.lane];
+        ctx.save();
+        ctx.translate(x, o.y);
+        ctx.rotate(o.rot);
+        if (o.type === 'buoy') {
+          ctx.fillStyle = '#7dffbf';
+          ctx.shadowBlur = 14;
+          ctx.shadowColor = '#7dffbfaa';
+          ctx.beginPath();
+          ctx.arc(0, 0, o.r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#073427';
+          ctx.fillRect(-3, -o.r - 8, 6, 10);
+        } else {
+          ctx.fillStyle = '#ff7fa8';
+          ctx.shadowBlur = 10;
+          ctx.shadowColor = '#ff7fa888';
+          for (let i = 0; i < 5; i++) {
+            const a = (Math.PI * 2 / 5) * i;
+            const px = Math.cos(a) * o.r;
+            const py = Math.sin(a) * o.r;
+            ctx.fillRect(px - 4, py - 4, 8, 8);
+          }
+        }
+        ctx.restore();
+      }
+
+      function update(dt) {
+        if (!state.running) return;
+
+        state.elapsed += dt;
+        state.spawnClock += dt;
+        state.pulse = Math.max(0, state.pulse - dt);
+
+        const every = Math.max(0.32, 0.82 - state.elapsed * 0.006);
+        while (state.spawnClock >= every) {
+          state.spawnClock -= every;
+          spawn();
+        }
+
+        for (let i = state.objects.length - 1; i >= 0; i--) {
+          const o = state.objects[i];
+          o.y += o.speed * dt * (1 + state.elapsed * 0.005);
+          o.rot += dt * 2.4;
+
+          const hitY = canvas.height - 90;
+          if (Math.abs(o.y - hitY) < 26 && o.lane === state.lane) {
+            if (o.type === 'buoy') {
+              state.chain += 1;
+              const gain = 10 + Math.floor(state.chain * 0.7) + (state.pulse > 0 ? 8 : 0);
+              state.score += gain;
+              state.speed = Math.min(2.6, state.speed + 0.03);
+              beep(640, 0.05, 'sine', 0.03);
+            } else {
+              if (state.pulse > 0) {
+                state.score += 6;
+                beep(760, 0.04, 'triangle', 0.03);
+              } else {
+                state.chain = 0;
+                state.shield -= 1;
+                state.speed = Math.max(1, state.speed - 0.08);
+                beep(170, 0.12, 'square', 0.05);
+                if (state.shield <= 0) {
+                  state.objects.splice(i, 1);
+                  syncHud();
+                  gameOver();
+                  return;
+                }
+              }
+            }
+            state.objects.splice(i, 1);
+            continue;
+          }
+
+          if (o.y > canvas.height + 40) {
+            if (o.type === 'buoy') {
+              state.chain = 0;
+              state.speed = Math.max(1, state.speed - 0.02);
+            }
+            state.objects.splice(i, 1);
+          }
+        }
+
+        state.score += dt * 2.2 * state.speed;
+        syncHud();
+      }
+
+      function render() {
+        drawBackground();
+        state.objects.forEach(drawObject);
+        drawShip();
+      }
+
+      document.addEventListener('keydown', (e) => {
+        const k = e.key.toLowerCase();
+        if (k === 'arrowleft' || k === 'a') setLane(state.lane - 1);
+        if (k === 'arrowright' || k === 'd') setLane(state.lane + 1);
+        if (k === ' ') {
+          e.preventDefault();
+          activatePulse();
+        }
+        if (k === 'enter' && !state.running) reset();
+      });
+
+      touchBtns.forEach(btn => {
+        const act = btn.dataset.act;
+        const handler = (e) => {
+          e.preventDefault();
+          if (act === 'left') setLane(state.lane - 1);
+          else if (act === 'right') setLane(state.lane + 1);
+          else activatePulse();
+        };
+        btn.addEventListener('touchstart', handler, { passive: false });
+        btn.addEventListener('click', handler);
+      });
+
+      startBtn.addEventListener('click', reset);
+
+      let last = performance.now();
+      function frame(now) {
+        const dt = Math.min(0.05, (now - last) / 1000);
+        last = now;
+        update(dt);
+        render();
+        requestAnimationFrame(frame);
+      }
+      syncHud();
+      requestAnimationFrame(frame);
+    })();
+  </script>
+</body>
+</html>

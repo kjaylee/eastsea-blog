@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0a1a" />
+  <title>Glacier Rescue Switchboard</title>
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <style>
+    :root{
+      --bg:#0a0a1a;
+      --panel:#151530;
+      --line:#2ce6ff;
+      --hot:#ff5ad7;
+      --ok:#74ffb2;
+      --warn:#ffd66e;
+      --text:#ecf7ff;
+    }
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    body{margin:0;background:radial-gradient(circle at 15% -10%,#232350 0%,var(--bg) 56%);color:var(--text);font-family:"Pretendard","Noto Sans KR",system-ui,sans-serif;display:flex;justify-content:center;min-height:100vh}
+    .wrap{width:min(100vw,860px);padding:12px;display:flex;flex-direction:column;gap:10px}
+    .hud{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+    .card{background:linear-gradient(180deg,#1a1a39,#101025);border:1px solid #2c2c63;border-radius:12px;padding:8px;text-align:center;box-shadow:0 0 18px #0007}
+    .label{font-size:11px;opacity:.74}
+    .value{font-size:17px;font-weight:800}
+    .board{background:linear-gradient(180deg,#11112a,#0c0c1f);border:1px solid #2a2a5d;border-radius:14px;padding:12px;box-shadow:inset 0 0 26px #0009}
+    .headline{display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+    .request{padding:10px;border-radius:10px;border:1px solid #34347a;background:#19193e;font-size:14px}
+    .request strong{color:var(--line)}
+    .sectors{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}
+    .sector{background:#17173a;border:1px solid #2f2f6c;border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:6px}
+    .sector h3{margin:0;font-size:14px}
+    .bar{height:10px;border-radius:999px;background:#0e0e22;border:1px solid #2a2a60;overflow:hidden}
+    .fill{height:100%;width:20%;background:linear-gradient(90deg,#6bf7ff,#4d8dff)}
+    .fill.high{background:linear-gradient(90deg,#ffd66e,#ff7a5f)}
+    .fill.critical{background:linear-gradient(90deg,#ff8ec4,#ff3b7e)}
+    .route-btn{appearance:none;border:none;border-radius:10px;padding:10px 8px;font-weight:800;color:#02131a;background:linear-gradient(180deg,#34f2ff,#1483bf);cursor:pointer}
+    .route-btn:active{transform:translateY(1px)}
+    .route-btn.hot{box-shadow:0 0 14px #ff5ad799;background:linear-gradient(180deg,#ff78dc,#b5367f);color:#fff}
+    .foot{font-size:13px;line-height:1.45;opacity:.9;background:#12122b;border:1px solid #29295f;border-radius:12px;padding:10px}
+    .overlay{position:fixed;inset:0;background:#060611d9;display:flex;align-items:center;justify-content:center;padding:14px}
+    .overlay.hidden{display:none}
+    .modal{width:min(92vw,520px);background:linear-gradient(180deg,#161636,#101026);border:1px solid #34347a;border-radius:14px;padding:18px;text-align:center;box-shadow:0 0 30px #000a}
+    button.start{appearance:none;border:none;border-radius:10px;padding:12px 16px;font-size:15px;font-weight:800;color:#fff;background:linear-gradient(180deg,#4c4cff,#2c2cb7);cursor:pointer}
+    @media (max-width:640px){
+      .hud{grid-template-columns:repeat(2,1fr)}
+      .sectors{grid-template-columns:1fr}
+      .value{font-size:15px}
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="hud">
+      <div class="card"><div class="label">SCORE</div><div id="score" class="value">0</div></div>
+      <div class="card"><div class="label">BEST</div><div id="best" class="value">0</div></div>
+      <div class="card"><div class="label">CHAIN</div><div id="chain" class="value">x1</div></div>
+      <div class="card"><div class="label">HULL</div><div id="hull" class="value">100</div></div>
+      <div class="card"><div class="label">TIME</div><div id="time" class="value">90</div></div>
+    </section>
+
+    <section class="board">
+      <div class="headline">
+        <h2 style="margin:0;font-size:20px">Glacier Rescue Switchboard</h2>
+        <div id="pressure" style="font-size:13px;opacity:.84">Global pressure stable</div>
+      </div>
+      <div id="request" class="request">대기 중… 시작 버튼을 눌러 구조 지시를 받으세요.</div>
+      <div class="sectors" id="sectors"></div>
+    </section>
+
+    <section class="foot">
+      조작: <b>1/2/3</b> 또는 <b>A/S/D</b>, 터치 버튼으로 구역 라우팅. 요청 도착 후 제한 시간 안에 정확한 구역으로 dispatch 하세요.<br>
+      잘못 보내거나 지연되면 압력이 상승하고 Hull이 감소합니다.
+    </section>
+  </main>
+
+  <div id="overlay" class="overlay">
+    <div class="modal">
+      <h2 style="margin:0 0 8px">빙하 구조 관제 시작</h2>
+      <p style="opacity:.88;line-height:1.5">3개 구역 요청을 즉시 라우팅해 구조선을 투입하세요.<br>연속 성공 시 체인 보너스가 상승합니다.</p>
+      <button id="startBtn" class="start">Start Dispatch</button>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      const sectorsEl = document.getElementById('sectors');
+      const requestEl = document.getElementById('request');
+      const scoreEl = document.getElementById('score');
+      const bestEl = document.getElementById('best');
+      const chainEl = document.getElementById('chain');
+      const hullEl = document.getElementById('hull');
+      const timeEl = document.getElementById('time');
+      const pressureEl = document.getElementById('pressure');
+      const overlay = document.getElementById('overlay');
+      const startBtn = document.getElementById('startBtn');
+
+      const storeKey = 'glacierRescueSwitchboardBest';
+      let best = Number(localStorage.getItem(storeKey) || 0);
+      bestEl.textContent = best;
+
+      let audioCtx;
+      function beep(freq, dur = 0.08, type = 'sine', gain = 0.03) {
+        audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const amp = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.value = freq;
+        amp.gain.value = gain;
+        osc.connect(amp).connect(audioCtx.destination);
+        osc.start();
+        amp.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
+        osc.stop(audioCtx.currentTime + dur);
+      }
+
+      const sectorDefs = [
+        { id: 0, name: 'North Shelf', color: '#4ae6ff', key: '1 / A' },
+        { id: 1, name: 'Blue Rift', color: '#9d7bff', key: '2 / S' },
+        { id: 2, name: 'Echo Bay', color: '#7bffba', key: '3 / D' }
+      ];
+
+      const state = {
+        running: false,
+        score: 0,
+        chain: 0,
+        hull: 100,
+        timeLeft: 90,
+        sectors: [18, 22, 15],
+        request: null,
+        requestTimer: 0,
+        cycleClock: 0,
+        urgency: 0,
+      };
+
+      function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+
+      function setPressureLabel(avg) {
+        if (avg >= 78) pressureEl.textContent = 'Global pressure: CRITICAL';
+        else if (avg >= 55) pressureEl.textContent = 'Global pressure: high';
+        else pressureEl.textContent = 'Global pressure: stable';
+      }
+
+      function renderSectors(hotTarget = -1) {
+        sectorsEl.innerHTML = '';
+        sectorDefs.forEach((d, i) => {
+          const level = state.sectors[i];
+          const card = document.createElement('div');
+          card.className = 'sector';
+          const fillClass = level >= 80 ? 'fill critical' : level >= 55 ? 'fill high' : 'fill';
+          card.innerHTML = `
+            <h3>${d.name}</h3>
+            <div style="font-size:12px;opacity:.78">Stress ${Math.round(level)}% · Key ${d.key}</div>
+            <div class="bar"><div class="${fillClass}" style="width:${level}%"></div></div>
+            <button class="route-btn ${hotTarget === i ? 'hot' : ''}" data-sector="${i}">Route Convoy → ${d.name}</button>
+          `;
+          sectorsEl.appendChild(card);
+        });
+        [...sectorsEl.querySelectorAll('.route-btn')].forEach(btn => {
+          const invoke = (e) => {
+            if (e) e.preventDefault();
+            routeTo(Number(btn.dataset.sector));
+          };
+          btn.addEventListener('click', invoke);
+          btn.addEventListener('touchstart', invoke, { passive: false });
+        });
+      }
+
+      function spawnRequest() {
+        const target = Math.floor(Math.random() * 3);
+        const urgency = 1 + Math.floor(Math.random() * 3);
+        const eta = Math.max(2.2, 4.7 - state.score / 180);
+        state.request = { target, urgency, ttl: eta };
+        requestEl.innerHTML = `긴급도 <b>${urgency}</b> · <strong>${sectorDefs[target].name}</strong> 에 구조선 투입 필요 — ETA ${eta.toFixed(1)}s`;
+        beep(420 + target * 120, 0.09, 'triangle', 0.045);
+        renderSectors(target);
+      }
+
+      function applyDrift(dt) {
+        for (let i = 0; i < 3; i++) {
+          const rise = dt * (1.1 + Math.random() * 1.7);
+          state.sectors[i] = clamp(state.sectors[i] + rise, 0, 100);
+        }
+
+        const avg = (state.sectors[0] + state.sectors[1] + state.sectors[2]) / 3;
+        if (avg > 65) state.hull = clamp(state.hull - dt * ((avg - 60) * 0.22), 0, 100);
+        setPressureLabel(avg);
+      }
+
+      function routeTo(target) {
+        if (!state.running || !state.request) return;
+        const req = state.request;
+        const timingBonus = Math.max(0, req.ttl);
+
+        if (target === req.target) {
+          const relief = 11 + req.urgency * 4;
+          state.sectors[target] = clamp(state.sectors[target] - relief, 0, 100);
+          state.chain += 1;
+          const gained = 14 * req.urgency + Math.floor(state.chain * 1.5) + Math.floor(timingBonus * 6);
+          state.score += gained;
+          requestEl.innerHTML = `✅ ${sectorDefs[target].name} 라우팅 성공 +${gained}`;
+          beep(720 - req.urgency * 40, 0.07, 'sine', 0.03);
+        } else {
+          state.chain = 0;
+          state.hull = clamp(state.hull - (8 + req.urgency * 5), 0, 100);
+          state.sectors[req.target] = clamp(state.sectors[req.target] + 9, 0, 100);
+          requestEl.innerHTML = `❌ 오배치! 요청은 ${sectorDefs[req.target].name} 였습니다.`;
+          beep(180, 0.14, 'square', 0.05);
+        }
+
+        state.request = null;
+        state.cycleClock = 0;
+        renderSectors(-1);
+        syncHud();
+      }
+
+      function timeoutRequest() {
+        if (!state.request) return;
+        state.chain = 0;
+        state.hull = clamp(state.hull - (10 + state.request.urgency * 4), 0, 100);
+        state.sectors[state.request.target] = clamp(state.sectors[state.request.target] + 12, 0, 100);
+        requestEl.innerHTML = `⏱️ 응답 지연! ${sectorDefs[state.request.target].name} 압력 증가`;
+        beep(150, 0.2, 'sawtooth', 0.055);
+        state.request = null;
+        state.cycleClock = 0;
+        renderSectors(-1);
+      }
+
+      function syncHud() {
+        scoreEl.textContent = Math.floor(state.score);
+        chainEl.textContent = `x${Math.max(1, state.chain)}`;
+        hullEl.textContent = Math.ceil(state.hull);
+        timeEl.textContent = Math.ceil(state.timeLeft);
+      }
+
+      function gameOver() {
+        state.running = false;
+        if (state.score > best) {
+          best = Math.floor(state.score);
+          localStorage.setItem(storeKey, String(best));
+          bestEl.textContent = best;
+        }
+        requestEl.innerHTML = `관제 종료 — Score ${Math.floor(state.score)} · Best ${best}`;
+        overlay.classList.remove('hidden');
+        startBtn.textContent = 'Restart Dispatch';
+        beep(120, 0.24, 'sawtooth', 0.06);
+      }
+
+      function reset() {
+        state.running = true;
+        state.score = 0;
+        state.chain = 0;
+        state.hull = 100;
+        state.timeLeft = 90;
+        state.sectors = [18, 22, 15];
+        state.request = null;
+        state.requestTimer = 0;
+        state.cycleClock = 1.2;
+        overlay.classList.add('hidden');
+        requestEl.textContent = '관제 채널 동기화 중...';
+        syncHud();
+        renderSectors(-1);
+        beep(520, 0.1, 'triangle', 0.05);
+      }
+
+      document.addEventListener('keydown', (e) => {
+        const k = e.key.toLowerCase();
+        if (k === '1' || k === 'a') routeTo(0);
+        if (k === '2' || k === 's') routeTo(1);
+        if (k === '3' || k === 'd') routeTo(2);
+        if (k === 'enter' && !state.running) reset();
+      });
+
+      startBtn.addEventListener('click', reset);
+
+      let last = performance.now();
+      function tick(now) {
+        const dt = Math.min(0.05, (now - last) / 1000);
+        last = now;
+
+        if (state.running) {
+          state.timeLeft -= dt;
+          state.cycleClock += dt;
+          applyDrift(dt);
+
+          if (!state.request && state.cycleClock >= 1.1) spawnRequest();
+          if (state.request) {
+            state.request.ttl -= dt;
+            if (state.request.ttl <= 0) timeoutRequest();
+            else requestEl.innerHTML = `긴급도 <b>${state.request.urgency}</b> · <strong>${sectorDefs[state.request.target].name}</strong> 라우팅 필요 — ETA ${state.request.ttl.toFixed(1)}s`;
+          }
+
+          syncHud();
+          renderSectors(state.request ? state.request.target : -1);
+
+          if (state.hull <= 0 || state.timeLeft <= 0) gameOver();
+        }
+
+        requestAnimationFrame(tick);
+      }
+
+      renderSectors(-1);
+      syncHud();
+      requestAnimationFrame(tick);
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Auric Pollen Panic</title>
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0a0a1a;
+      --panel: #111a33;
+      --line: #2f3f73;
+      --text: #e9f2ff;
+      --muted: #9eb0d8;
+      --good: #66f3ff;
+      --warn: #ffb25a;
+      --bad: #ff6ea8;
+      font-family: "Pretendard", "Noto Sans KR", system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      display: flex;
+      justify-content: center;
+      background: radial-gradient(circle at 50% 0%, #1b1a40 0%, var(--bg) 58%);
+      color: var(--text);
+      padding: 12px;
+    }
+    .app { width: min(560px, 100%); display: grid; gap: 10px; }
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      font-size: 12px;
+    }
+    .card {
+      background: linear-gradient(180deg, #182345, #111a33);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 8px;
+      text-align: center;
+    }
+    .zones {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .zone {
+      background: linear-gradient(180deg, #182448, #111a33);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px;
+      display: grid;
+      gap: 7px;
+    }
+    .zone.active { border-color: var(--good); box-shadow: 0 0 12px #66f3ff3d; }
+    .zone h3 {
+      margin: 0;
+      font-size: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+    .bar {
+      height: 10px;
+      background: #0c1225;
+      border: 1px solid #2a3867;
+      border-radius: 999px;
+      overflow: hidden;
+      position: relative;
+    }
+    .fill {
+      height: 100%;
+      width: 50%;
+      transition: width 120ms linear;
+    }
+    .water { background: linear-gradient(90deg, #2dc7ff, #64f3ff); }
+    .pollen { background: linear-gradient(90deg, #ffd362, #ffb25a); }
+    .disease { background: linear-gradient(90deg, #ff8ab8, #ff5b98); }
+
+    .selectors,
+    .actions {
+      display: grid;
+      gap: 8px;
+    }
+    .selectors { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .actions { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+    button {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--panel);
+      color: var(--text);
+      padding: 11px 8px;
+      font-weight: 700;
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    button:active,
+    button.on {
+      transform: translateY(1px) scale(0.99);
+      border-color: var(--good);
+    }
+    .hint {
+      margin: 0;
+      text-align: center;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    @media (max-width: 640px) {
+      .zones {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="hud">
+      <div class="card">SCORE<br><strong id="score">0</strong></div>
+      <div class="card">BEST<br><strong id="best">0</strong></div>
+      <div class="card">WAVE<br><strong id="wave">1</strong></div>
+      <div class="card">HIVE<br><strong id="hive">100</strong></div>
+    </section>
+
+    <section class="zones" id="zones"></section>
+
+    <section class="selectors">
+      <button data-zone="0" id="z0" aria-label="select zone 1">1️⃣ Zone 1</button>
+      <button data-zone="1" id="z1" aria-label="select zone 2">2️⃣ Zone 2</button>
+      <button data-zone="2" id="z2" aria-label="select zone 3">3️⃣ Zone 3</button>
+    </section>
+
+    <section class="actions">
+      <button data-action="water" id="waterBtn" aria-label="irrigate">Q 💧 IRRIGATE</button>
+      <button data-action="pollen" id="pollenBtn" aria-label="pollinate">W 🌼 POLLINATE</button>
+      <button data-action="purify" id="purifyBtn" aria-label="purify disease">E 🫧 PURIFY</button>
+    </section>
+
+    <button id="restartBtn">RESTART</button>
+    <p class="hint">1/2/3으로 구역 선택, Q/W/E로 액션 실행 (터치 동일). 수분·꽃가루를 유지하고 병해를 낮춰 Hive Integrity를 지키세요.</p>
+  </main>
+
+  <script>
+    (() => {
+      const KEY = 'best-auric-pollen-panic';
+      const zoneNames = ['Sunbank', 'Mistfield', 'Nightpetal'];
+
+      const scoreEl = document.getElementById('score');
+      const bestEl = document.getElementById('best');
+      const waveEl = document.getElementById('wave');
+      const hiveEl = document.getElementById('hive');
+      const zonesEl = document.getElementById('zones');
+      const restartBtn = document.getElementById('restartBtn');
+
+      const zoneButtons = [...document.querySelectorAll('[data-zone]')];
+      const actionButtons = [...document.querySelectorAll('[data-action]')];
+
+      let audio;
+      function beep(freq = 440, dur = 0.07, type = 'sine', vol = 0.02) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        if (!audio) audio = new AC();
+        if (audio.state === 'suspended') audio.resume();
+        const o = audio.createOscillator();
+        const g = audio.createGain();
+        o.type = type;
+        o.frequency.value = freq;
+        g.gain.value = vol;
+        o.connect(g).connect(audio.destination);
+        o.start();
+        o.stop(audio.currentTime + dur);
+      }
+
+      let best = Number(localStorage.getItem(KEY) || 0);
+      let state;
+      let last = performance.now();
+
+      function makeZone() {
+        return {
+          water: 72 + Math.random() * 10,
+          pollen: 68 + Math.random() * 12,
+          disease: 20 + Math.random() * 8
+        };
+      }
+
+      function reset() {
+        state = {
+          score: 0,
+          wave: 1,
+          hive: 100,
+          selected: 0,
+          active: true,
+          elapsed: 0,
+          zones: [makeZone(), makeZone(), makeZone()]
+        };
+        updateUI();
+      }
+
+      function clamp(v) {
+        return Math.max(0, Math.min(100, v));
+      }
+
+      function decayRate() {
+        return 3 + state.wave * 0.45;
+      }
+
+      function applyAction(action) {
+        if (!state.active) return;
+        const z = state.zones[state.selected];
+
+        if (action === 'water') {
+          z.water = clamp(z.water + 24);
+          z.disease = clamp(z.disease - 6);
+          state.score += 9;
+          beep(560, 0.05, 'triangle', 0.025);
+        } else if (action === 'pollen') {
+          z.pollen = clamp(z.pollen + 26);
+          z.disease = clamp(z.disease + 4);
+          state.score += 11;
+          beep(680, 0.05, 'sine', 0.025);
+        } else if (action === 'purify') {
+          z.disease = clamp(z.disease - 28);
+          z.water = clamp(z.water - 7);
+          state.score += 8;
+          beep(420, 0.06, 'square', 0.02);
+        }
+
+        blinkButton(action);
+        updateUI();
+      }
+
+      function blinkButton(action) {
+        const btn = document.querySelector(`[data-action="${action}"]`);
+        if (!btn) return;
+        btn.classList.add('on');
+        setTimeout(() => btn.classList.remove('on'), 90);
+      }
+
+      function selectZone(index) {
+        state.selected = index;
+        zoneButtons.forEach((b, i) => b.classList.toggle('on', i === index));
+        beep(340 + index * 90, 0.03, 'triangle', 0.015);
+        updateUI();
+      }
+
+      function update(dt) {
+        if (!state.active) return;
+
+        state.elapsed += dt;
+        const d = decayRate() * dt;
+
+        state.zones.forEach((z) => {
+          z.water = clamp(z.water - (d * (0.65 + Math.random() * 0.25)));
+          z.pollen = clamp(z.pollen - (d * (0.7 + Math.random() * 0.2)));
+          z.disease = clamp(z.disease + (d * (0.55 + Math.random() * 0.35)));
+
+          if (z.water < 28) state.hive -= (28 - z.water) * 0.02;
+          if (z.pollen < 30) state.hive -= (30 - z.pollen) * 0.02;
+          if (z.disease > 72) state.hive -= (z.disease - 72) * 0.03;
+        });
+
+        state.score += (state.wave * 0.8) * dt;
+
+        if (state.elapsed > 18) {
+          state.elapsed = 0;
+          state.wave += 1;
+          state.hive = clamp(state.hive + 5);
+          beep(760, 0.08, 'triangle', 0.03);
+        }
+
+        if (state.hive <= 0) {
+          state.hive = 0;
+          state.active = false;
+          const finalScore = Math.floor(state.score);
+          if (finalScore > best) {
+            best = finalScore;
+            localStorage.setItem(KEY, String(best));
+          }
+          beep(150, 0.14, 'sawtooth', 0.04);
+        }
+
+        updateUI();
+      }
+
+      function zoneMarkup(zone, i) {
+        const active = i === state.selected ? 'active' : '';
+        return `
+          <article class="zone ${active}">
+            <h3>${zoneNames[i]} <span>${i + 1}</span></h3>
+            <label>Water ${Math.floor(zone.water)}
+              <div class="bar"><div class="fill water" style="width:${zone.water}%"></div></div>
+            </label>
+            <label>Pollen ${Math.floor(zone.pollen)}
+              <div class="bar"><div class="fill pollen" style="width:${zone.pollen}%"></div></div>
+            </label>
+            <label>Disease ${Math.floor(zone.disease)}
+              <div class="bar"><div class="fill disease" style="width:${zone.disease}%"></div></div>
+            </label>
+          </article>
+        `;
+      }
+
+      function updateUI() {
+        scoreEl.textContent = Math.floor(state.score);
+        bestEl.textContent = best;
+        waveEl.textContent = state.wave;
+        hiveEl.textContent = Math.floor(state.hive);
+
+        zonesEl.innerHTML = state.zones.map(zoneMarkup).join('');
+
+        if (!state.active) {
+          const gameOver = document.createElement('article');
+          gameOver.className = 'zone active';
+          gameOver.innerHTML = `<h3>Hive Collapse</h3><p style="margin:0;color:var(--muted);font-size:13px;line-height:1.45;">Score ${Math.floor(state.score)} · Best ${best}<br>Restart를 눌러 다시 시도하세요.</p>`;
+          zonesEl.appendChild(gameOver);
+        }
+      }
+
+      function frame(now) {
+        const dt = Math.min(0.033, (now - last) / 1000);
+        last = now;
+        update(dt);
+        requestAnimationFrame(frame);
+      }
+
+      document.addEventListener('keydown', (e) => {
+        const key = e.key.toLowerCase();
+        if (['1', '2', '3'].includes(key)) {
+          e.preventDefault();
+          selectZone(Number(key) - 1);
+          return;
+        }
+        if (key === 'q') {
+          e.preventDefault();
+          applyAction('water');
+          return;
+        }
+        if (key === 'w') {
+          e.preventDefault();
+          applyAction('pollen');
+          return;
+        }
+        if (key === 'e') {
+          e.preventDefault();
+          applyAction('purify');
+        }
+      });
+
+      zoneButtons.forEach((btn) => {
+        btn.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          selectZone(Number(btn.dataset.zone));
+        }, { passive: false });
+      });
+
+      actionButtons.forEach((btn) => {
+        btn.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          applyAction(btn.dataset.action);
+        }, { passive: false });
+      });
+
+      restartBtn.addEventListener('click', () => {
+        beep(430, 0.05, 'triangle', 0.02);
+        reset();
+      });
+
+      reset();
+      requestAnimationFrame(frame);
+    })();
+  </script>
+</body>
+</html>

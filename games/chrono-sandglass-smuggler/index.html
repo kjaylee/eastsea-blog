@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Chrono Sandglass Smuggler</title>
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0a0a1a;
+      --panel: #121b36;
+      --line: #30437d;
+      --text: #ebf2ff;
+      --muted: #9cb0de;
+      --neon: #6af0ff;
+      --alert: #ff7ab2;
+      font-family: "Pretendard", "Noto Sans KR", system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      display: flex;
+      justify-content: center;
+      padding: 12px;
+      color: var(--text);
+      background: radial-gradient(circle at 50% 0%, #1d1c44 0%, var(--bg) 60%);
+    }
+    .app { width: min(500px, 100%); display: grid; gap: 10px; }
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+      font-size: 12px;
+    }
+    .card {
+      background: linear-gradient(180deg, #192449, #111a34);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 8px;
+      text-align: center;
+    }
+    canvas {
+      width: 100%;
+      aspect-ratio: 9 / 16;
+      border-radius: 16px;
+      border: 1px solid #3a4f8d;
+      background: linear-gradient(180deg, #11142d, #080a14);
+      box-shadow: 0 0 24px #6af0ff2f;
+      touch-action: none;
+    }
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+    }
+    button {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--panel);
+      color: var(--text);
+      padding: 12px 8px;
+      font-weight: 700;
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    button:active,
+    button.on { transform: translateY(1px) scale(0.99); border-color: var(--neon); }
+    .hint {
+      margin: 0;
+      text-align: center;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="hud">
+      <div class="card">SCORE<br><strong id="score">0</strong></div>
+      <div class="card">BEST<br><strong id="best">0</strong></div>
+      <div class="card">HP<br><strong id="hp">3</strong></div>
+      <div class="card">ENERGY<br><strong id="energy">100</strong></div>
+      <div class="card">FREEZE<br><strong id="freeze">OFF</strong></div>
+    </section>
+
+    <canvas id="game" width="360" height="640" aria-label="Chrono Sandglass Smuggler canvas"></canvas>
+
+    <section class="controls">
+      <button id="leftBtn" aria-label="move left">◀ LEFT</button>
+      <button id="freezeBtn" aria-label="hold freeze">⏳ FREEZE</button>
+      <button id="rightBtn" aria-label="move right">RIGHT ▶</button>
+    </section>
+    <button id="restartBtn">RESTART</button>
+    <p class="hint">←/→ 또는 좌우 버튼 이동, Space/가운데 버튼 홀드로 Time Freeze. 에너지 소모를 관리하며 카고(청록)를 모으고 장벽(분홍)을 피하세요.</p>
+  </main>
+
+  <script>
+    (() => {
+      const KEY = 'best-chrono-sandglass-smuggler';
+      const lanes = [90, 180, 270];
+      const canvas = document.getElementById('game');
+      const ctx = canvas.getContext('2d');
+
+      const scoreEl = document.getElementById('score');
+      const bestEl = document.getElementById('best');
+      const hpEl = document.getElementById('hp');
+      const energyEl = document.getElementById('energy');
+      const freezeEl = document.getElementById('freeze');
+
+      const leftBtn = document.getElementById('leftBtn');
+      const rightBtn = document.getElementById('rightBtn');
+      const freezeBtn = document.getElementById('freezeBtn');
+      const restartBtn = document.getElementById('restartBtn');
+
+      let audio;
+      function beep(freq = 440, dur = 0.07, type = 'sine', vol = 0.02) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        if (!audio) audio = new AC();
+        if (audio.state === 'suspended') audio.resume();
+        const o = audio.createOscillator();
+        const g = audio.createGain();
+        o.type = type;
+        o.frequency.value = freq;
+        g.gain.value = vol;
+        o.connect(g).connect(audio.destination);
+        o.start();
+        o.stop(audio.currentTime + dur);
+      }
+
+      let best = Number(localStorage.getItem(KEY) || 0);
+      let state;
+      let last = performance.now();
+      let holdFreeze = false;
+
+      function reset() {
+        state = {
+          lane: 1,
+          y: 560,
+          hp: 3,
+          score: 0,
+          energy: 100,
+          active: true,
+          obstacles: [],
+          cargo: [],
+          spawnObstacle: 0,
+          spawnCargo: 0,
+          flash: 0
+        };
+        holdFreeze = false;
+        updateHud();
+      }
+
+      function spawnObstacle() {
+        state.obstacles.push({
+          lane: Math.floor(Math.random() * 3),
+          y: -30,
+          size: 24 + Math.random() * 16
+        });
+      }
+
+      function spawnCargo() {
+        state.cargo.push({
+          lane: Math.floor(Math.random() * 3),
+          y: -20,
+          r: 10
+        });
+      }
+
+      function moveLane(delta) {
+        if (!state.active) return;
+        state.lane = Math.max(0, Math.min(2, state.lane + delta));
+        beep(360 + state.lane * 80, 0.03, 'triangle', 0.015);
+      }
+
+      function collides(item, radius = 18) {
+        const x = lanes[item.lane];
+        const dx = x - lanes[state.lane];
+        const dy = item.y - state.y;
+        return Math.abs(dx) < 24 && Math.abs(dy) < radius + 20;
+      }
+
+      function update(dt) {
+        if (!state.active) return;
+
+        const freezeOn = holdFreeze && state.energy > 0;
+        const speedFactor = freezeOn ? 0.28 : 1;
+        const worldSpeed = (220 + Math.min(260, state.score * 0.14)) * speedFactor;
+
+        if (freezeOn) {
+          state.energy = Math.max(0, state.energy - 30 * dt);
+          state.score += 4 * dt;
+          beep(220, 0.01, 'sine', 0.003);
+        } else {
+          state.energy = Math.min(100, state.energy + 20 * dt);
+          state.score += 8 * dt;
+        }
+
+        state.spawnObstacle -= dt;
+        state.spawnCargo -= dt;
+
+        if (state.spawnObstacle <= 0) {
+          spawnObstacle();
+          state.spawnObstacle = Math.max(0.32, 0.9 - state.score / 700);
+        }
+        if (state.spawnCargo <= 0) {
+          spawnCargo();
+          state.spawnCargo = 0.75 + Math.random() * 0.7;
+        }
+
+        for (const o of state.obstacles) o.y += worldSpeed * dt;
+        for (const c of state.cargo) c.y += worldSpeed * dt;
+
+        for (let i = state.cargo.length - 1; i >= 0; i--) {
+          const c = state.cargo[i];
+          if (collides(c, 16)) {
+            state.cargo.splice(i, 1);
+            state.score += 18;
+            state.energy = Math.min(100, state.energy + 8);
+            beep(720, 0.05, 'triangle', 0.028);
+            continue;
+          }
+          if (c.y > canvas.height + 30) state.cargo.splice(i, 1);
+        }
+
+        for (let i = state.obstacles.length - 1; i >= 0; i--) {
+          const o = state.obstacles[i];
+          if (collides(o, o.size / 2)) {
+            state.obstacles.splice(i, 1);
+            state.hp -= 1;
+            state.energy = Math.max(0, state.energy - 18);
+            state.flash = 0.15;
+            beep(150, 0.11, 'sawtooth', 0.04);
+            if (state.hp <= 0) {
+              state.hp = 0;
+              state.active = false;
+              if (Math.floor(state.score) > best) {
+                best = Math.floor(state.score);
+                localStorage.setItem(KEY, String(best));
+              }
+            }
+            continue;
+          }
+          if (o.y > canvas.height + 40) state.obstacles.splice(i, 1);
+        }
+
+        state.flash = Math.max(0, state.flash - dt);
+        updateHud();
+      }
+
+      function drawRoad() {
+        ctx.fillStyle = '#0f1731';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const laneW = 80;
+        lanes.forEach((x, i) => {
+          ctx.fillStyle = i % 2 ? '#111d3d' : '#0c1630';
+          ctx.fillRect(x - laneW / 2, 0, laneW, canvas.height);
+          ctx.strokeStyle = '#2d3f73';
+          ctx.strokeRect(x - laneW / 2, 0, laneW, canvas.height);
+        });
+
+        ctx.strokeStyle = '#6af0ff30';
+        ctx.lineWidth = 2;
+        for (let y = 0; y < canvas.height; y += 36) {
+          ctx.beginPath();
+          ctx.moveTo(180, (y + performance.now() * 0.08) % canvas.height);
+          ctx.lineTo(180, (y + 16 + performance.now() * 0.08) % canvas.height);
+          ctx.stroke();
+        }
+      }
+
+      function drawPlayer() {
+        const x = lanes[state.lane];
+        const freezeOn = holdFreeze && state.energy > 0;
+        ctx.save();
+        ctx.translate(x, state.y);
+        ctx.fillStyle = freezeOn ? '#8fe8ff' : '#6af0ff';
+        ctx.shadowColor = '#6af0ff';
+        ctx.shadowBlur = freezeOn ? 20 : 12;
+        ctx.beginPath();
+        ctx.moveTo(0, -18);
+        ctx.lineTo(14, 18);
+        ctx.lineTo(-14, 18);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+
+        if (freezeOn) {
+          ctx.strokeStyle = '#9be8ff88';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(x, state.y, 28, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+
+      function drawItems() {
+        for (const c of state.cargo) {
+          const x = lanes[c.lane];
+          ctx.fillStyle = '#64f7ff';
+          ctx.shadowColor = '#64f7ff';
+          ctx.shadowBlur = 12;
+          ctx.beginPath();
+          ctx.arc(x, c.y, c.r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        }
+
+        for (const o of state.obstacles) {
+          const x = lanes[o.lane];
+          const s = o.size;
+          ctx.save();
+          ctx.translate(x, o.y);
+          ctx.rotate((o.y / 70) % Math.PI);
+          ctx.fillStyle = '#ff7ab2';
+          ctx.shadowColor = '#ff7ab2';
+          ctx.shadowBlur = 10;
+          ctx.fillRect(-s / 2, -s / 2, s, s);
+          ctx.restore();
+        }
+      }
+
+      function drawOverlay() {
+        if (state.flash > 0) {
+          ctx.fillStyle = `rgba(255,122,178,${state.flash * 0.8})`;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+        if (state.active) return;
+
+        ctx.fillStyle = '#05070ed8';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#ebf2ff';
+        ctx.textAlign = 'center';
+        ctx.font = 'bold 28px sans-serif';
+        ctx.fillText('BUSTED', canvas.width / 2, 252);
+        ctx.font = '16px sans-serif';
+        ctx.fillText(`Score ${Math.floor(state.score)} · Best ${best}`, canvas.width / 2, 286);
+        ctx.fillText('Restart를 눌러 재시작', canvas.width / 2, 316);
+      }
+
+      function render() {
+        drawRoad();
+        drawItems();
+        drawPlayer();
+        drawOverlay();
+      }
+
+      function updateHud() {
+        scoreEl.textContent = Math.floor(state.score);
+        bestEl.textContent = best;
+        hpEl.textContent = state.hp;
+        energyEl.textContent = Math.floor(state.energy);
+        freezeEl.textContent = holdFreeze && state.energy > 0 ? 'ON' : 'OFF';
+      }
+
+      function frame(now) {
+        const dt = Math.min(0.033, (now - last) / 1000);
+        last = now;
+        update(dt);
+        render();
+        requestAnimationFrame(frame);
+      }
+
+      function setFreeze(on) {
+        if (!state.active) return;
+        holdFreeze = on;
+        freezeBtn.classList.toggle('on', on);
+      }
+
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          moveLane(-1);
+          leftBtn.classList.add('on');
+          setTimeout(() => leftBtn.classList.remove('on'), 90);
+        }
+        if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          moveLane(1);
+          rightBtn.classList.add('on');
+          setTimeout(() => rightBtn.classList.remove('on'), 90);
+        }
+        if (e.code === 'Space') {
+          e.preventDefault();
+          setFreeze(true);
+        }
+      });
+
+      document.addEventListener('keyup', (e) => {
+        if (e.code === 'Space') {
+          e.preventDefault();
+          setFreeze(false);
+        }
+      });
+
+      leftBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        moveLane(-1);
+        leftBtn.classList.add('on');
+        setTimeout(() => leftBtn.classList.remove('on'), 90);
+      }, { passive: false });
+
+      rightBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        moveLane(1);
+        rightBtn.classList.add('on');
+        setTimeout(() => rightBtn.classList.remove('on'), 90);
+      }, { passive: false });
+
+      freezeBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        setFreeze(true);
+      }, { passive: false });
+
+      const releaseFreeze = (e) => {
+        e.preventDefault();
+        setFreeze(false);
+      };
+      freezeBtn.addEventListener('pointerup', releaseFreeze, { passive: false });
+      freezeBtn.addEventListener('pointerleave', releaseFreeze, { passive: false });
+      freezeBtn.addEventListener('pointercancel', releaseFreeze, { passive: false });
+
+      restartBtn.addEventListener('click', () => {
+        beep(430, 0.05, 'triangle', 0.02);
+        reset();
+      });
+
+      reset();
+      requestAnimationFrame(frame);
+    })();
+  </script>
+</body>
+</html>

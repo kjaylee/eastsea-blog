@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Thermal Drone Orchard</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <style>
+    :root{--bg:#0a0a1a;--panel:#12122d;--line:#2de2e6;--accent:#ff4ecd;--ok:#44ffa1;--warn:#ffcc70;--bad:#ff5f7c}
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100svh;background:radial-gradient(circle at 20% 0,#1a1a43,#0a0a1a 62%);color:#f4f8ff;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;padding:calc(12px + env(safe-area-inset-top)) 12px calc(18px + env(safe-area-inset-bottom));display:flex;justify-content:center}
+    .app{width:min(940px,100%);display:grid;gap:10px}
+    .card{background:linear-gradient(180deg,#141432,#0f1026);border:1px solid #34589b;border-radius:14px;padding:10px;box-shadow:0 0 20px #0008,inset 0 0 20px #203b7722}
+    h1{margin:0;color:var(--line);font-size:clamp(1.1rem,2.8vw,1.6rem);text-shadow:0 0 12px #2de2e680}
+    .hint{opacity:.82;font-size:.86rem;line-height:1.4}
+    .hud{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+    .stat{background:#0b1331;border:1px solid #2f4a8a;border-radius:10px;padding:8px;text-align:center}
+    .label{font-size:.72rem;opacity:.74}.value{font-weight:800}
+    canvas{width:100%;height:auto;aspect-ratio:16/10;background:#071022;border:1px solid #294d93;border-radius:12px;touch-action:none}
+    .zoneButtons,.actionButtons,.controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+    .controls{grid-template-columns:repeat(4,minmax(0,1fr))}
+    button{border:1px solid #3a5ea5;background:#12254b;color:#f5fbff;border-radius:10px;padding:11px 8px;font-weight:800}
+    button.active{outline:2px solid #44ffa1;box-shadow:0 0 14px #44ffa188}
+    .ok{background:#133b2a;border-color:#49d69b}.danger{background:#3a1620;border-color:#d45167}.accent{background:#3a1a42;border-color:#d686ef}
+    .overlay{position:fixed;inset:0;background:#060916de;display:grid;place-items:center;padding:16px;z-index:40}
+    .overlay.hidden{display:none}
+    .panel{width:min(560px,100%);background:#10122a;border:1px solid #375a9c;border-radius:14px;padding:16px;display:grid;gap:10px}
+    .panel h2{margin:0;color:var(--line)}
+    @media (max-width:760px){.hud{grid-template-columns:repeat(3,minmax(0,1fr))}.controls{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="card">
+      <h1>🚁 Thermal Drone Orchard</h1>
+      <div class="hint">3개 구역의 온도·수분·병충해를 관리하세요. 구역 선택 후 드론 명령을 배분해 Integrity를 지키면 점수가 상승합니다.</div>
+    </div>
+
+    <div class="card hud">
+      <div class="stat"><div class="label">Score</div><div id="score" class="value">0</div></div>
+      <div class="stat"><div class="label">Best</div><div id="best" class="value">0</div></div>
+      <div class="stat"><div class="label">Shift</div><div id="shift" class="value">1</div></div>
+      <div class="stat"><div class="label">Integrity</div><div id="integrity" class="value">100</div></div>
+      <div class="stat"><div class="label">Selected</div><div id="selected" class="value">Zone 1</div></div>
+      <div class="stat"><div class="label">Mode</div><div id="mode" class="value">RUN</div></div>
+    </div>
+
+    <div class="card">
+      <canvas id="cv" width="960" height="600" aria-label="orchard dashboard"></canvas>
+    </div>
+
+    <div class="card zoneButtons" id="zoneButtons">
+      <button data-zone="0" class="active">Zone 1 (1)</button>
+      <button data-zone="1">Zone 2 (2)</button>
+      <button data-zone="2">Zone 3 (3)</button>
+    </div>
+
+    <div class="card actionButtons">
+      <button id="scanBtn">Scan (Q)</button>
+      <button id="waterBtn" class="ok">Water (W)</button>
+      <button id="ventBtn" class="accent">Vent (E)</button>
+    </div>
+
+    <div class="card controls">
+      <button id="startBtn" class="ok">Start (Enter)</button>
+      <button id="pauseBtn" class="accent">Pause (P)</button>
+      <button id="sprayBtn">Spray (A)</button>
+      <button id="resetBtn" class="danger">Reset</button>
+    </div>
+
+    <div class="card hint">키보드: 1~3 구역 선택 · Q 스캔 · W 관수 · E 환기 · A 방제 · P 일시정지</div>
+  </div>
+
+  <div id="overlay" class="overlay">
+    <div class="panel">
+      <h2 id="ovTitle">Thermal Drone Orchard</h2>
+      <div id="ovText">지표를 안정 구간에 유지해 장기 운영 기록을 세우세요.</div>
+      <button id="ovBtn" class="ok">Start Shift</button>
+    </div>
+  </div>
+
+<script>
+(()=>{
+'use strict';
+const LS_KEY='thermal-drone-orchard-v1';
+const st={score:0,best:0,shift:1,integrity:100,running:false,paused:false,selected:0,last:0,audio:null,zones:[],scanFlash:0};
+const ui={score:$('#score'),best:$('#best'),shift:$('#shift'),integrity:$('#integrity'),selected:$('#selected'),mode:$('#mode'),overlay:$('#overlay'),ovTitle:$('#ovTitle'),ovText:$('#ovText'),ovBtn:$('#ovBtn')};
+const cv=$('#cv'),ctx=cv.getContext('2d');
+
+function $(q){return document.querySelector(q);} 
+function clamp(v,min,max){return Math.max(min,Math.min(max,v));}
+function rnd(min,max){return min+Math.random()*(max-min);} 
+function load(){try{const d=JSON.parse(localStorage.getItem(LS_KEY)||'{}');st.best=Number(d.best||0);}catch(_){st.best=0;}}
+function save(){localStorage.setItem(LS_KEY,JSON.stringify({best:st.best}));}
+function ensureAudio(){if(st.audio)return;st.audio=new (window.AudioContext||window.webkitAudioContext)();}
+function beep(f=680,d=0.06,t='sine',g=0.05){if(!st.audio)return;const n=st.audio.currentTime,o=st.audio.createOscillator(),a=st.audio.createGain();o.type=t;o.frequency.value=f;a.gain.setValueAtTime(g,n);a.gain.exponentialRampToValueAtTime(0.0001,n+d);o.connect(a).connect(st.audio.destination);o.start(n);o.stop(n+d);} 
+function sfx(k){if(k==='ok'){beep(980,0.05,'triangle',0.06);setTimeout(()=>beep(1280,0.07,'triangle',0.05),40);}else if(k==='bad'){beep(210,0.2,'sawtooth',0.07);}else if(k==='scan'){beep(730,0.04,'square',0.04);}else{beep(600,0.03,'square',0.035);}}
+
+function newZones(){
+  st.zones=[0,1,2].map(i=>({
+    name:`Zone ${i+1}`,
+    temp:rnd(45,62),
+    moist:rnd(45,62),
+    pest:rnd(8,22),
+    stress:0
+  }));
+}
+
+function renderHUD(){
+  ui.score.textContent=Math.floor(st.score);
+  ui.best.textContent=Math.floor(st.best);
+  ui.shift.textContent=st.shift;
+  ui.integrity.textContent=Math.floor(st.integrity);
+  ui.selected.textContent=`Zone ${st.selected+1}`;
+  ui.mode.textContent=st.paused?'PAUSE':'RUN';
+  [...document.querySelectorAll('#zoneButtons button')].forEach((b,i)=>b.classList.toggle('active',i===st.selected));
+}
+
+function drawBar(x,y,w,h,val,color,label){
+  ctx.fillStyle='#0f1b3f';ctx.fillRect(x,y,w,h);
+  ctx.fillStyle=color;ctx.fillRect(x,y,w*clamp(val/100,0,1),h);
+  ctx.strokeStyle='#355da7';ctx.strokeRect(x,y,w,h);
+  ctx.fillStyle='#d7ebff';ctx.font='bold 14px system-ui';ctx.fillText(`${label}: ${Math.round(val)}`,x+8,y+h-8);
+}
+
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  const g=ctx.createLinearGradient(0,0,0,cv.height);g.addColorStop(0,'#091330');g.addColorStop(1,'#070d1d');ctx.fillStyle=g;ctx.fillRect(0,0,cv.width,cv.height);
+
+  ctx.fillStyle='#9ec5ff';ctx.font='bold 22px system-ui';ctx.fillText('THERMAL DRONE ORCHARD // LIVE DASHBOARD',22,34);
+
+  const cols=[90,390,690];
+  st.zones.forEach((z,i)=>{
+    const x=cols[i],y=92,w=180,h=430;
+    const active=i===st.selected;
+    ctx.fillStyle=active?'#142b58':'#101f40';
+    ctx.strokeStyle=active?'#44ffa1':'#31568f';
+    ctx.lineWidth=active?3:2;
+    ctx.fillRect(x,y,w,h);ctx.strokeRect(x,y,w,h);
+    ctx.fillStyle='#f5fbff';ctx.font='bold 20px system-ui';ctx.fillText(z.name,x+18,y+30);
+    drawBar(x+14,y+62,w-28,44,z.temp,'#ff7a70','Temp');
+    drawBar(x+14,y+126,w-28,44,z.moist,'#2de2e6','Moist');
+    drawBar(x+14,y+190,w-28,44,z.pest,'#ff4ecd','Pest');
+    drawBar(x+14,y+254,w-28,44,z.stress,'#ffcc70','Stress');
+
+    const good=(z.temp>=38&&z.temp<=67&&z.moist>=40&&z.moist<=72&&z.pest<=35);
+    ctx.fillStyle=good?'#44ffa1':'#ff5f7c';
+    ctx.font='bold 16px system-ui';
+    ctx.fillText(good?'STABLE':'RISK',x+16,y+328);
+
+    if(st.scanFlash>0){
+      ctx.strokeStyle='rgba(45,226,230,'+Math.min(1,st.scanFlash)+')';
+      ctx.lineWidth=4;
+      ctx.strokeRect(x+6,y+6,w-12,h-12);
+    }
+  });
+
+  ctx.fillStyle='#9ec5ff';ctx.font='14px system-ui';
+  ctx.fillText('목표: 안정구간 유지 + 라운드 상승. Integrity 0이면 종료.',24,574);
+}
+
+function update(dt){
+  st.shift = 1 + Math.floor(st.score/140);
+  const drift=1 + st.shift*0.06;
+  let hazard=0;
+
+  st.zones.forEach(z=>{
+    z.temp = clamp(z.temp + rnd(-2.3,2.8)*dt*drift + (Math.random()<0.03?rnd(4,8):0),0,100);
+    z.moist = clamp(z.moist + rnd(-2.8,1.2)*dt*drift,0,100);
+    z.pest = clamp(z.pest + rnd(-0.5,2.2)*dt*drift,0,100);
+
+    let stress=0;
+    if(z.temp<35) stress += (35-z.temp)*0.55;
+    if(z.temp>67) stress += (z.temp-67)*0.75;
+    if(z.moist<38) stress += (38-z.moist)*0.7;
+    if(z.moist>78) stress += (z.moist-78)*0.4;
+    if(z.pest>32) stress += (z.pest-32)*1.1;
+    z.stress=clamp(stress,0,100);
+    hazard += z.stress;
+  });
+
+  st.integrity = clamp(st.integrity - hazard*0.006*dt,0,100);
+  st.score += Math.max(0,6 - hazard*0.012)*dt;
+  if(st.score>st.best){st.best=st.score;save();}
+  if(st.integrity<=0){gameOver();}
+
+  st.scanFlash = Math.max(0,st.scanFlash-dt*2.5);
+}
+
+function command(kind){
+  if(!st.running||st.paused) return;
+  ensureAudio();if(st.audio.state==='suspended')st.audio.resume();
+  const z=st.zones[st.selected];
+  if(kind==='scan'){
+    st.scanFlash=1;sfx('scan');
+    st.score += 2;
+  }else if(kind==='water'){
+    z.moist=clamp(z.moist+14,0,100);z.temp=clamp(z.temp-4,0,100);z.pest=clamp(z.pest-3,0,100);sfx('ok');
+  }else if(kind==='vent'){
+    z.temp=clamp(z.temp-15,0,100);z.moist=clamp(z.moist-4,0,100);sfx('tap');
+  }else if(kind==='spray'){
+    z.pest=clamp(z.pest-18,0,100);z.moist=clamp(z.moist-2,0,100);sfx('ok');
+  }
+}
+
+function selectZone(idx){st.selected=clamp(idx,0,2);sfx('tap');renderHUD();}
+
+function start(){
+  ensureAudio();if(st.audio.state==='suspended')st.audio.resume();
+  st.score=0;st.shift=1;st.integrity=100;st.running=true;st.paused=false;st.last=0;st.scanFlash=0;
+  newZones();renderHUD();ui.overlay.classList.add('hidden');
+}
+
+function reset(){
+  st.running=false;st.paused=false;st.score=0;st.integrity=100;st.shift=1;newZones();renderHUD();
+  show('Thermal Drone Orchard','지표 균형을 유지하며 장기 교대를 버티세요.','Start Shift',start);
+}
+
+function gameOver(){
+  st.running=false;
+  sfx('bad');
+  show('System Failure',`Score ${Math.floor(st.score)} · Best ${Math.floor(st.best)} · Shift ${st.shift}`,'Retry',start);
+}
+
+function show(t,tx,b,fn){ui.ovTitle.textContent=t;ui.ovText.textContent=tx;ui.ovBtn.textContent=b;ui.ovBtn.onclick=()=>{ui.overlay.classList.add('hidden');fn&&fn();};ui.overlay.classList.remove('hidden');}
+
+function onKey(e){
+  const k=e.key.toLowerCase();
+  if(['1','2','3','q','w','e','a','p','enter'].includes(k)) e.preventDefault();
+  if(k==='1')selectZone(0);if(k==='2')selectZone(1);if(k==='3')selectZone(2);
+  if(k==='q')command('scan');if(k==='w')command('water');if(k==='e')command('vent');if(k==='a')command('spray');
+  if(k==='p'&&st.running)st.paused=!st.paused;
+  if(k==='enter'&&!st.running)start();
+}
+
+function loop(ts){
+  if(!st.last) st.last=ts;
+  const dt=Math.min(.05,(ts-st.last)/1000);st.last=ts;
+  if(st.running && !st.paused){update(dt);}  
+  renderHUD();draw();
+  requestAnimationFrame(loop);
+}
+
+[...document.querySelectorAll('#zoneButtons button')].forEach((b)=>b.addEventListener('pointerdown',()=>selectZone(Number(b.dataset.zone))));
+$('#scanBtn').addEventListener('pointerdown',()=>command('scan'));
+$('#waterBtn').addEventListener('pointerdown',()=>command('water'));
+$('#ventBtn').addEventListener('pointerdown',()=>command('vent'));
+$('#sprayBtn').addEventListener('pointerdown',()=>command('spray'));
+$('#startBtn').addEventListener('pointerdown',()=>st.running?null:start());
+$('#pauseBtn').addEventListener('pointerdown',()=>{if(st.running)st.paused=!st.paused;});
+$('#resetBtn').addEventListener('pointerdown',reset);
+document.addEventListener('keydown',onKey,{passive:false});
+
+load();newZones();renderHUD();draw();show('Thermal Drone Orchard','구역을 선택하고 드론 커맨드로 리스크를 제어하세요.','Start Shift',start);requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Braille Beacon Operator</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <style>
+    :root{--bg:#0a0a1a;--panel:#12122d;--line:#2de2e6;--accent:#ff4ecd;--ok:#44ffa1;--warn:#ffcc70;--bad:#ff5f7c}
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100svh;background:radial-gradient(circle at 20% 0,#1a1a43,#0a0a1a 60%);color:#f4f8ff;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;padding:calc(12px + env(safe-area-inset-top)) 12px calc(18px + env(safe-area-inset-bottom));display:flex;justify-content:center}
+    .app{width:min(860px,100%);display:grid;gap:10px}
+    .card{background:linear-gradient(180deg,#141432,#0f1026);border:1px solid #34589b;border-radius:14px;padding:10px;box-shadow:0 0 20px #0008,inset 0 0 20px #203b7722}
+    h1{margin:0;color:var(--line);font-size:clamp(1.1rem,2.8vw,1.6rem);text-shadow:0 0 12px #2de2e680}
+    .hint{opacity:.82;font-size:.86rem;line-height:1.4}
+    .hud{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+    .stat{background:#0b1331;border:1px solid #2f4a8a;border-radius:10px;padding:8px;text-align:center}
+    .label{font-size:.72rem;opacity:.74}.value{font-weight:800}
+    .play{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .beacon{background:#080f26;border:1px solid #2a4a90;border-radius:12px;padding:14px;display:grid;place-items:center;min-height:240px}
+    .braille{display:grid;grid-template-columns:repeat(2,58px);grid-template-rows:repeat(3,58px);gap:16px}
+    .dot{width:58px;height:58px;border-radius:50%;border:1px solid #31549a;background:#0d1838;box-shadow:inset 0 0 16px #000a;transition:all .15s}
+    .dot.on{background:radial-gradient(circle at 35% 30%,#d6faff,#2de2e6 55%,#146b78);box-shadow:0 0 18px #2de2e6aa,inset 0 0 16px #cfffff55;border-color:#7de8ff}
+    .question{display:grid;gap:10px}
+    .questionBox{background:#0b1331;border:1px solid #2f4a8a;border-radius:12px;padding:12px}
+    .prompt{font-size:.92rem;opacity:.82}
+    .target{font-size:1.6rem;font-weight:900;color:var(--line);text-shadow:0 0 10px #2de2e680;margin:6px 0 4px}
+    .options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+    button{border:1px solid #3a5ea5;background:#12254b;color:#f5fbff;border-radius:10px;padding:12px 8px;font-weight:800}
+    button:active{transform:translateY(1px)}
+    .ok{background:#133b2a;border-color:#49d69b}.danger{background:#3a1620;border-color:#d45167}.accent{background:#3a1a42;border-color:#d686ef}
+    .controls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+    .overlay{position:fixed;inset:0;background:#060916de;display:grid;place-items:center;padding:16px;z-index:40}
+    .overlay.hidden{display:none}
+    .panel{width:min(560px,100%);background:#10122a;border:1px solid #375a9c;border-radius:14px;padding:16px;display:grid;gap:10px}
+    .panel h2{margin:0;color:var(--line)}
+    @media (max-width:760px){.hud{grid-template-columns:repeat(3,minmax(0,1fr))}.play{grid-template-columns:1fr}.controls{grid-template-columns:repeat(2,minmax(0,1fr))}.braille{grid-template-columns:repeat(2,46px);grid-template-rows:repeat(3,46px);gap:12px}.dot{width:46px;height:46px}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="card">
+      <h1>🔤 Braille Beacon Operator</h1>
+      <div class="hint">점자 비콘 패턴을 보고 4지선다 정답 문자를 고르세요. 숫자키 1~4 또는 버튼 터치로 입력합니다.</div>
+    </div>
+
+    <div class="card hud">
+      <div class="stat"><div class="label">Score</div><div id="score" class="value">0</div></div>
+      <div class="stat"><div class="label">Best</div><div id="best" class="value">0</div></div>
+      <div class="stat"><div class="label">Combo</div><div id="combo" class="value">0</div></div>
+      <div class="stat"><div class="label">Time</div><div id="time" class="value">60</div></div>
+      <div class="stat"><div class="label">Round</div><div id="round" class="value">1</div></div>
+    </div>
+
+    <div class="card play">
+      <div class="beacon">
+        <div id="braille" class="braille" aria-label="braille beacon">
+          <div class="dot" data-i="0"></div><div class="dot" data-i="1"></div>
+          <div class="dot" data-i="2"></div><div class="dot" data-i="3"></div>
+          <div class="dot" data-i="4"></div><div class="dot" data-i="5"></div>
+        </div>
+      </div>
+      <div class="question">
+        <div class="questionBox">
+          <div class="prompt">다음 점자 문자를 선택하세요</div>
+          <div id="target" class="target">A</div>
+          <div class="hint">정답 +10(+콤보), 오답 -3초</div>
+        </div>
+        <div id="options" class="options"></div>
+      </div>
+    </div>
+
+    <div class="card controls">
+      <button id="startBtn" class="ok">Start (Enter)</button>
+      <button id="pauseBtn" class="accent">Pause (P)</button>
+      <button id="hintBtn">Replay Beacon (R)</button>
+      <button id="resetBtn" class="danger">Reset</button>
+    </div>
+
+    <div class="card hint">키보드: 1~4 선택 / Enter 시작 / P 일시정지 / R 패턴 재점멸</div>
+  </div>
+
+  <div id="overlay" class="overlay">
+    <div class="panel">
+      <h2 id="ovTitle">Braille Beacon Operator</h2>
+      <div id="ovText">60초 동안 최대한 많은 점자 문자를 해독하세요.</div>
+      <button id="ovBtn" class="ok">Start Shift</button>
+    </div>
+  </div>
+
+<script>
+(()=>{
+'use strict';
+const LS_KEY='braille-beacon-operator-v1';
+const LETTERS='ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+const BRAILLE={
+  A:[1,0,0,0,0,0],B:[1,0,1,0,0,0],C:[1,1,0,0,0,0],D:[1,1,0,1,0,0],E:[1,0,0,1,0,0],
+  F:[1,1,1,0,0,0],G:[1,1,1,1,0,0],H:[1,0,1,1,0,0],I:[0,1,1,0,0,0],J:[0,1,1,1,0,0],
+  K:[1,0,0,0,1,0],L:[1,0,1,0,1,0],M:[1,1,0,0,1,0],N:[1,1,0,1,1,0],O:[1,0,0,1,1,0],
+  P:[1,1,1,0,1,0],Q:[1,1,1,1,1,0],R:[1,0,1,1,1,0],S:[0,1,1,0,1,0],T:[0,1,1,1,1,0],
+  U:[1,0,0,0,1,1],V:[1,0,1,0,1,1],W:[0,1,1,1,0,1],X:[1,1,0,0,1,1],Y:[1,1,0,1,1,1],Z:[1,0,0,1,1,1]
+};
+const st={score:0,best:0,combo:0,time:60,round:1,running:false,paused:false,last:0,acc:0,current:'A',options:[],audio:null,tick:0};
+const ui={
+  score:$('#score'),best:$('#best'),combo:$('#combo'),time:$('#time'),round:$('#round'),target:$('#target'),
+  options:$('#options'),overlay:$('#overlay'),ovTitle:$('#ovTitle'),ovText:$('#ovText'),ovBtn:$('#ovBtn'),dots:[...document.querySelectorAll('.dot')]
+};
+
+function $(q){return document.querySelector(q);} 
+function load(){try{const d=JSON.parse(localStorage.getItem(LS_KEY)||'{}');st.best=Number(d.best||0);}catch(_){st.best=0;}}
+function save(){localStorage.setItem(LS_KEY,JSON.stringify({best:st.best}));}
+function ensureAudio(){if(st.audio)return;st.audio=new (window.AudioContext||window.webkitAudioContext)();}
+function beep(f=740,d=0.06,t='sine',g=0.05){if(!st.audio)return;const n=st.audio.currentTime,o=st.audio.createOscillator(),a=st.audio.createGain();o.type=t;o.frequency.value=f;a.gain.setValueAtTime(g,n);a.gain.exponentialRampToValueAtTime(0.0001,n+d);o.connect(a).connect(st.audio.destination);o.start(n);o.stop(n+d);} 
+function sfx(kind){if(kind==='ok'){beep(980,0.05,'triangle',0.06);setTimeout(()=>beep(1320,0.08,'triangle',0.05),55);}else if(kind==='bad'){beep(220,0.22,'sawtooth',0.07);}else if(kind==='tick'){beep(520,0.03,'square',0.03);}else{beep(680,0.04,'square',0.035);}}
+
+function shuffle(arr){for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]];}return arr;}
+
+function flashBraille(letter){
+  const bits=BRAILLE[letter]||BRAILLE.A;
+  const blink=(st.tick++%2===0);
+  ui.dots.forEach((dot,i)=>{
+    const on=Boolean(bits[i]) && (blink || Math.random()>0.22);
+    dot.classList.toggle('on',on);
+  });
+}
+
+function nextQuestion(){
+  st.current=LETTERS[Math.floor(Math.random()*LETTERS.length)];
+  ui.target.textContent=st.current;
+  const pool=new Set([st.current]);
+  while(pool.size<4){pool.add(LETTERS[Math.floor(Math.random()*LETTERS.length)]);}  
+  st.options=shuffle([...pool]);
+  renderOptions();
+  flashBraille(st.current);
+}
+
+function renderOptions(){
+  ui.options.innerHTML='';
+  st.options.forEach((ch,i)=>{
+    const b=document.createElement('button');
+    b.textContent=`${i+1}. ${ch}`;
+    b.addEventListener('pointerdown',()=>answer(i));
+    ui.options.appendChild(b);
+  });
+}
+
+function renderHUD(){
+  ui.score.textContent=Math.floor(st.score);
+  ui.best.textContent=Math.floor(st.best);
+  ui.combo.textContent=st.combo;
+  ui.time.textContent=Math.max(0,Math.ceil(st.time));
+  ui.round.textContent=st.round;
+}
+
+function answer(idx){
+  if(!st.running||st.paused) return;
+  ensureAudio(); if(st.audio.state==='suspended')st.audio.resume();
+  const picked=st.options[idx];
+  if(picked===st.current){
+    st.combo++; st.score += 10 + st.combo*2; st.round = 1 + Math.floor(st.score/60); sfx('ok');
+  }else{
+    st.combo=0; st.time=Math.max(0,st.time-3); sfx('bad');
+  }
+  if(st.score>st.best){st.best=st.score;save();}
+  renderHUD();
+  if(st.time<=0){return gameOver();}
+  nextQuestion();
+}
+
+function start(){
+  ensureAudio(); if(st.audio.state==='suspended')st.audio.resume();
+  st.score=0;st.combo=0;st.time=60;st.round=1;st.running=true;st.paused=false;st.last=0;st.acc=0;st.tick=0;
+  renderHUD();nextQuestion();ui.overlay.classList.add('hidden');
+}
+
+function reset(){
+  st.running=false;st.paused=false;st.score=0;st.combo=0;st.time=60;st.round=1;
+  renderHUD();
+  show('Braille Beacon Operator','60초 동안 점자 비콘을 해독해 최고 점수를 경신하세요.','Start Shift',start);
+}
+
+function gameOver(){
+  st.running=false;
+  show('Shift Complete',`Score ${Math.floor(st.score)} · Best ${Math.floor(st.best)}`,'Retry',start);
+}
+
+function show(t,tx,b,fn){ui.ovTitle.textContent=t;ui.ovText.textContent=tx;ui.ovBtn.textContent=b;ui.ovBtn.onclick=()=>{ui.overlay.classList.add('hidden');fn&&fn();};ui.overlay.classList.remove('hidden');}
+
+function onKey(e){
+  const k=e.key.toLowerCase();
+  if(['1','2','3','4','enter','p','r'].includes(k)) e.preventDefault();
+  if(k>='1'&&k<='4') answer(Number(k)-1);
+  if(k==='enter'&&!st.running) start();
+  if(k==='p'&&st.running){st.paused=!st.paused;}
+  if(k==='r'&&st.running){flashBraille(st.current);sfx('tap');}
+}
+
+function loop(ts){
+  if(!st.last) st.last=ts;
+  const dt=Math.min(.05,(ts-st.last)/1000); st.last=ts;
+  if(st.running && !st.paused){
+    st.time -= dt;
+    st.acc += dt;
+    if(st.acc>0.65){flashBraille(st.current);st.acc=0;sfx('tick');}
+    if(st.time<=0){st.time=0;renderHUD();gameOver();}
+  }
+  renderHUD();
+  requestAnimationFrame(loop);
+}
+
+$('#startBtn').addEventListener('pointerdown',()=>st.running?null:start());
+$('#pauseBtn').addEventListener('pointerdown',()=>{if(st.running)st.paused=!st.paused;});
+$('#hintBtn').addEventListener('pointerdown',()=>{if(st.running){flashBraille(st.current);sfx('tap');}});
+$('#resetBtn').addEventListener('pointerdown',reset);
+document.addEventListener('keydown',onKey,{passive:false});
+
+load();renderHUD();flashBraille('A');show('Braille Beacon Operator','숫자 1~4 또는 터치로 점자 문자를 맞추세요.','Start Shift',start);requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

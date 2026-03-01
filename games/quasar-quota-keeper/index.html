@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Quasar Quota Keeper</title>
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0a0a1a;
+      --panel: #121a33;
+      --line: #2f3f75;
+      --text: #eaf2ff;
+      --muted: #94a8d4;
+      --power: #62f3ff;
+      --cool: #7affad;
+      --trust: #ff87cb;
+      font-family: "Pretendard", "Noto Sans KR", system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      display: flex;
+      justify-content: center;
+      background: radial-gradient(circle at 50% 0%, #19193c 0%, var(--bg) 58%);
+      color: var(--text);
+      padding: 12px;
+    }
+    .app { width: min(500px, 100%); display: grid; gap: 10px; }
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      font-size: 12px;
+    }
+    .card {
+      background: linear-gradient(180deg, #182241, #121a33);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 8px;
+      text-align: center;
+    }
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 12px;
+      background: linear-gradient(180deg, #11182f, #0b1125);
+      display: grid;
+      gap: 10px;
+    }
+    .meter {
+      display: grid;
+      gap: 6px;
+    }
+    .meter label {
+      font-size: 12px;
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+    }
+    .bar {
+      height: 12px;
+      border-radius: 999px;
+      background: #0c1328;
+      border: 1px solid #263763;
+      overflow: hidden;
+    }
+    .fill {
+      height: 100%;
+      width: 100%;
+      transition: width 0.15s linear;
+    }
+    #powerFill { background: linear-gradient(90deg, #2481b6, var(--power)); }
+    #coolFill { background: linear-gradient(90deg, #28683f, var(--cool)); }
+    #trustFill { background: linear-gradient(90deg, #843961, var(--trust)); }
+
+    .actions {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+    button {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--panel);
+      color: var(--text);
+      padding: 11px 6px;
+      font-weight: 700;
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    button:active { transform: translateY(1px) scale(0.99); }
+    .minor {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .log {
+      min-height: 56px;
+      border: 1px solid #2a3b6b;
+      border-radius: 10px;
+      background: #0c1225;
+      padding: 8px;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+    .hint {
+      margin: 0;
+      text-align: center;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="hud">
+      <div class="card">WAVE<br><strong id="wave">1</strong></div>
+      <div class="card">TIME<br><strong id="time">0s</strong></div>
+      <div class="card">BEST WAVE<br><strong id="bestWave">0</strong></div>
+      <div class="card">STATE<br><strong id="state">RUN</strong></div>
+    </section>
+
+    <section class="panel">
+      <div class="meter">
+        <label>POWER <span id="powerV">100%</span></label>
+        <div class="bar"><div id="powerFill" class="fill"></div></div>
+      </div>
+      <div class="meter">
+        <label>COOLING <span id="coolV">100%</span></label>
+        <div class="bar"><div id="coolFill" class="fill"></div></div>
+      </div>
+      <div class="meter">
+        <label>TRUST <span id="trustV">100%</span></label>
+        <div class="bar"><div id="trustFill" class="fill"></div></div>
+      </div>
+
+      <div class="actions">
+        <button id="chargeBtn">Q · CHARGE</button>
+        <button id="ventBtn">W · VENT</button>
+        <button id="briefBtn">E · BRIEF</button>
+      </div>
+      <div class="minor">
+        <button id="stabilizeBtn">SPACE · STABILIZE</button>
+        <button id="restartBtn">RESTART</button>
+      </div>
+      <div class="log" id="log">쿼사 정거장 교대를 시작합니다. 지표를 0으로 떨어뜨리지 마세요.</div>
+    </section>
+
+    <p class="hint">키보드 Q/W/E + Space 또는 터치 버튼 조작. 웨이브가 오를수록 소모율이 증가합니다.</p>
+  </main>
+
+  <script>
+    (() => {
+      const KEY_WAVE = 'best-wave-quasar-quota-keeper';
+
+      const waveEl = document.getElementById('wave');
+      const timeEl = document.getElementById('time');
+      const bestWaveEl = document.getElementById('bestWave');
+      const stateEl = document.getElementById('state');
+      const logEl = document.getElementById('log');
+
+      const powerV = document.getElementById('powerV');
+      const coolV = document.getElementById('coolV');
+      const trustV = document.getElementById('trustV');
+      const powerFill = document.getElementById('powerFill');
+      const coolFill = document.getElementById('coolFill');
+      const trustFill = document.getElementById('trustFill');
+
+      const chargeBtn = document.getElementById('chargeBtn');
+      const ventBtn = document.getElementById('ventBtn');
+      const briefBtn = document.getElementById('briefBtn');
+      const stabilizeBtn = document.getElementById('stabilizeBtn');
+      const restartBtn = document.getElementById('restartBtn');
+
+      let audio;
+      function sfx(freq = 440, dur = 0.08, type = 'sine', gain = 0.024) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        if (!audio) audio = new AC();
+        if (audio.state === 'suspended') audio.resume();
+        const osc = audio.createOscillator();
+        const g = audio.createGain();
+        osc.type = type;
+        osc.frequency.value = freq;
+        g.gain.value = gain;
+        osc.connect(g).connect(audio.destination);
+        osc.start();
+        osc.stop(audio.currentTime + dur);
+      }
+
+      const clamp = (v) => Math.max(0, Math.min(100, v));
+      let bestWave = Number(localStorage.getItem(KEY_WAVE) || 0);
+      let st;
+      let last = performance.now();
+
+      function reset() {
+        st = {
+          power: 100,
+          cool: 100,
+          trust: 100,
+          wave: 1,
+          sec: 0,
+          over: false,
+          stabilizeCd: 0,
+          incidentTimer: 5,
+          waveTimer: 15
+        };
+        log('교대 시작: 균형 유지 중');
+      }
+
+      function log(msg) {
+        logEl.textContent = msg;
+      }
+
+      function applyAction(kind) {
+        if (st.over) return;
+        if (kind === 'charge') {
+          st.power = clamp(st.power + 22);
+          st.cool = clamp(st.cool - 7);
+          st.trust = clamp(st.trust - 2);
+          sfx(590, 0.07, 'square', 0.024);
+          log('CHARGE: 전력 증강, 냉각 부담 증가');
+        }
+        if (kind === 'vent') {
+          st.cool = clamp(st.cool + 24);
+          st.power = clamp(st.power - 6);
+          st.trust = clamp(st.trust - 2);
+          sfx(440, 0.08, 'triangle', 0.024);
+          log('VENT: 냉각 안정화, 전력 소모');
+        }
+        if (kind === 'brief') {
+          st.trust = clamp(st.trust + 20);
+          st.power = clamp(st.power - 7);
+          sfx(690, 0.07, 'sine', 0.024);
+          log('BRIEF: 신뢰 회복, 전력 비용 발생');
+        }
+        if (kind === 'stabilize') {
+          if (st.stabilizeCd > 0) return;
+          st.power = clamp(st.power + 10);
+          st.cool = clamp(st.cool + 10);
+          st.trust = clamp(st.trust + 10);
+          st.stabilizeCd = 9;
+          sfx(830, 0.1, 'sawtooth', 0.03);
+          log('STABILIZE 발동: 전체 지표 응급 보정');
+        }
+      }
+
+      function incident() {
+        const type = (Math.random() * 3) | 0;
+        const dmg = 10 + Math.random() * 10 + st.wave * 1.5;
+        if (type === 0) {
+          st.power = clamp(st.power - dmg);
+          log(`사건: Solar drift → POWER -${Math.round(dmg)}`);
+          sfx(180, 0.11, 'square', 0.035);
+        }
+        if (type === 1) {
+          st.cool = clamp(st.cool - dmg);
+          log(`사건: Coolant leak → COOLING -${Math.round(dmg)}`);
+          sfx(210, 0.11, 'square', 0.035);
+        }
+        if (type === 2) {
+          st.trust = clamp(st.trust - dmg);
+          log(`사건: Rumor burst → TRUST -${Math.round(dmg)}`);
+          sfx(240, 0.11, 'square', 0.035);
+        }
+      }
+
+      function update(dt) {
+        if (st.over) return;
+
+        st.sec += dt;
+        st.waveTimer -= dt;
+        st.incidentTimer -= dt;
+        st.stabilizeCd = Math.max(0, st.stabilizeCd - dt);
+
+        const decayScale = 1 + (st.wave - 1) * 0.22;
+        st.power = clamp(st.power - dt * (3.8 * decayScale));
+        st.cool = clamp(st.cool - dt * (3.3 * decayScale));
+        st.trust = clamp(st.trust - dt * (2.9 * decayScale));
+
+        if (st.waveTimer <= 0) {
+          st.wave += 1;
+          st.waveTimer = Math.max(9, 15 - st.wave * 0.25);
+          st.incidentTimer = Math.max(2.4, st.incidentTimer);
+          sfx(760, 0.08, 'triangle', 0.028);
+          log(`웨이브 상승: ${st.wave} (소모율 증가)`);
+        }
+
+        if (st.incidentTimer <= 0) {
+          incident();
+          st.incidentTimer = Math.max(2.1, 5 - st.wave * 0.2);
+        }
+
+        if (st.power <= 0 || st.cool <= 0 || st.trust <= 0) {
+          st.over = true;
+          bestWave = Math.max(bestWave, st.wave);
+          localStorage.setItem(KEY_WAVE, String(bestWave));
+          stateEl.textContent = 'FAIL';
+          log(`정거장 붕괴! 생존 ${Math.floor(st.sec)}초 / 웨이브 ${st.wave}. RESTART로 재시작.`);
+          sfx(120, 0.2, 'sawtooth', 0.042);
+        }
+      }
+
+      function render() {
+        waveEl.textContent = st.wave;
+        timeEl.textContent = `${Math.floor(st.sec)}s`;
+        bestWaveEl.textContent = bestWave;
+        stateEl.textContent = st.over ? 'FAIL' : 'RUN';
+
+        powerV.textContent = `${Math.round(st.power)}%`;
+        coolV.textContent = `${Math.round(st.cool)}%`;
+        trustV.textContent = `${Math.round(st.trust)}%`;
+
+        powerFill.style.width = `${st.power}%`;
+        coolFill.style.width = `${st.cool}%`;
+        trustFill.style.width = `${st.trust}%`;
+
+        stabilizeBtn.textContent = st.stabilizeCd > 0
+          ? `SPACE · CD ${st.stabilizeCd.toFixed(1)}s`
+          : 'SPACE · STABILIZE';
+      }
+
+      function loop(now) {
+        const dt = Math.min(0.05, (now - last) / 1000);
+        last = now;
+        update(dt);
+        render();
+        requestAnimationFrame(loop);
+      }
+
+      window.addEventListener('keydown', (e) => {
+        if (e.repeat) return;
+        if (e.key === 'q' || e.key === 'Q') applyAction('charge');
+        if (e.key === 'w' || e.key === 'W') applyAction('vent');
+        if (e.key === 'e' || e.key === 'E') applyAction('brief');
+        if (e.key === ' ' || e.key === 'Spacebar') { e.preventDefault(); applyAction('stabilize'); }
+        if (e.key === 'Enter' && st.over) reset();
+      });
+
+      chargeBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); applyAction('charge'); });
+      ventBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); applyAction('vent'); });
+      briefBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); applyAction('brief'); });
+      stabilizeBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); applyAction('stabilize'); });
+      restartBtn.addEventListener('click', reset);
+
+      reset();
+      bestWaveEl.textContent = bestWave;
+      requestAnimationFrame(loop);
+    })();
+  </script>
+</body>
+</html>

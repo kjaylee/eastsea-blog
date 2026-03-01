@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Nebula Noise Cartographer</title>
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0a0a1a;
+      --panel: #121a33;
+      --line: #2f3f75;
+      --text: #eaf2ff;
+      --muted: #96abd3;
+      --c1: #5ef1ff;
+      --c2: #b0ff6a;
+      --c3: #ff7cc8;
+      --c4: #ffc46c;
+      font-family: "Pretendard", "Noto Sans KR", system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      display: flex;
+      justify-content: center;
+      background: radial-gradient(circle at 50% 0%, #19193c 0%, var(--bg) 58%);
+      color: var(--text);
+      padding: 12px;
+    }
+    .app { width: min(480px, 100%); display: grid; gap: 10px; }
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      font-size: 12px;
+    }
+    .card {
+      background: linear-gradient(180deg, #182241, #121a33);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 8px;
+      text-align: center;
+    }
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 12px;
+      background: linear-gradient(180deg, #11182f, #0b1125);
+    }
+    .status {
+      min-height: 44px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+      margin-bottom: 10px;
+    }
+    .pads {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .pad {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      min-height: 88px;
+      font-weight: 800;
+      color: #05101f;
+      background: #23304f;
+      cursor: pointer;
+      transition: transform 0.06s ease, filter 0.1s ease;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .pad:active,
+    .pad.active { transform: scale(0.98); filter: brightness(1.25); }
+    .pad[data-i="0"] { background: linear-gradient(180deg, #2a6a86, var(--c1)); }
+    .pad[data-i="1"] { background: linear-gradient(180deg, #4a6d33, var(--c2)); }
+    .pad[data-i="2"] { background: linear-gradient(180deg, #77345f, var(--c3)); }
+    .pad[data-i="3"] { background: linear-gradient(180deg, #815624, var(--c4)); }
+    .actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    button.ctrl {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--panel);
+      color: var(--text);
+      padding: 11px 8px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .hint {
+      margin: 0;
+      text-align: center;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="hud">
+      <div class="card">ROUND<br><strong id="round">0</strong></div>
+      <div class="card">BEST<br><strong id="best">0</strong></div>
+      <div class="card">SCORE<br><strong id="score">0</strong></div>
+      <div class="card">STATE<br><strong id="state">READY</strong></div>
+    </section>
+
+    <section class="panel">
+      <p class="status" id="status">START를 누르면 성운 노이즈 패턴이 재생됩니다.</p>
+      <div class="pads" id="pads">
+        <button class="pad" data-i="0" aria-label="Pad 1">1</button>
+        <button class="pad" data-i="1" aria-label="Pad 2">2</button>
+        <button class="pad" data-i="2" aria-label="Pad 3">3</button>
+        <button class="pad" data-i="3" aria-label="Pad 4">4</button>
+      </div>
+      <div class="actions">
+        <button class="ctrl" id="startBtn">START / RESTART</button>
+        <button class="ctrl" id="replayBtn">REPLAY SIGNAL</button>
+      </div>
+    </section>
+
+    <p class="hint">키보드: 1/2/3/4 또는 A/S/D/F · 터치 패드 입력 지원. 패턴을 끝까지 맞추면 라운드 상승.</p>
+  </main>
+
+  <script>
+    (() => {
+      const KEY = 'best-nebula-noise-cartographer';
+      const tones = [330, 440, 550, 660];
+      const pads = [...document.querySelectorAll('.pad')];
+      const roundEl = document.getElementById('round');
+      const bestEl = document.getElementById('best');
+      const scoreEl = document.getElementById('score');
+      const stateEl = document.getElementById('state');
+      const statusEl = document.getElementById('status');
+      const startBtn = document.getElementById('startBtn');
+      const replayBtn = document.getElementById('replayBtn');
+
+      let audio;
+      function blip(freq = 440, dur = 0.12, type = 'triangle', gain = 0.03) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        if (!audio) audio = new AC();
+        if (audio.state === 'suspended') audio.resume();
+        const osc = audio.createOscillator();
+        const g = audio.createGain();
+        osc.type = type;
+        osc.frequency.value = freq;
+        g.gain.value = gain;
+        osc.connect(g).connect(audio.destination);
+        osc.start();
+        osc.stop(audio.currentTime + dur);
+      }
+
+      let best = Number(localStorage.getItem(KEY) || 0);
+      let seq = [];
+      let input = [];
+      let round = 0;
+      let score = 0;
+      let accepting = false;
+      let gameOver = false;
+
+      function sleep(ms) {
+        return new Promise((resolve) => setTimeout(resolve, ms));
+      }
+
+      function updateHud(stateText = 'READY') {
+        roundEl.textContent = round;
+        bestEl.textContent = best;
+        scoreEl.textContent = score;
+        stateEl.textContent = stateText;
+      }
+
+      function flash(i, ms = 190) {
+        const pad = pads[i];
+        pad.classList.add('active');
+        setTimeout(() => pad.classList.remove('active'), ms);
+      }
+
+      async function playSequence() {
+        accepting = false;
+        updateHud('PLAY');
+        statusEl.textContent = '신호 재생 중...';
+        for (const i of seq) {
+          flash(i, 210);
+          blip(tones[i], 0.13, 'triangle', 0.028);
+          await sleep(320);
+        }
+        input = [];
+        accepting = true;
+        updateHud('INPUT');
+        statusEl.textContent = `라운드 ${round} 입력: 패턴을 따라 누르세요.`;
+      }
+
+      function addStep() {
+        seq.push((Math.random() * 4) | 0);
+      }
+
+      async function startGame() {
+        seq = [];
+        input = [];
+        round = 0;
+        score = 0;
+        gameOver = false;
+        statusEl.textContent = '초기화 완료. 패턴 생성 중...';
+        nextRound();
+      }
+
+      function finishFail() {
+        gameOver = true;
+        accepting = false;
+        best = Math.max(best, round);
+        localStorage.setItem(KEY, String(best));
+        updateHud('FAIL');
+        statusEl.textContent = `신호 붕괴! 최종 라운드 ${round}. START로 재시작.`;
+        blip(170, 0.22, 'sawtooth', 0.04);
+      }
+
+      function nextRound() {
+        round += 1;
+        addStep();
+        score += round * 8;
+        updateHud('SYNC');
+        playSequence();
+      }
+
+      function handleInput(i) {
+        if (!accepting || gameOver) return;
+        flash(i, 120);
+        blip(tones[i], 0.09, 'sine', 0.025);
+        input.push(i);
+
+        const idx = input.length - 1;
+        if (seq[idx] !== i) {
+          finishFail();
+          return;
+        }
+
+        if (input.length === seq.length) {
+          accepting = false;
+          statusEl.textContent = '패턴 일치! 다음 라운드로 이동...';
+          updateHud('CLEAR');
+          blip(820, 0.08, 'triangle', 0.03);
+          setTimeout(nextRound, 550);
+        }
+      }
+
+      pads.forEach((pad) => {
+        pad.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          handleInput(Number(pad.dataset.i));
+        });
+      });
+
+      const keyMap = {
+        '1': 0, '2': 1, '3': 2, '4': 3,
+        a: 0, s: 1, d: 2, f: 3,
+        A: 0, S: 1, D: 2, F: 3
+      };
+      window.addEventListener('keydown', (e) => {
+        if (e.repeat) return;
+        const mapped = keyMap[e.key];
+        if (mapped !== undefined) {
+          e.preventDefault();
+          handleInput(mapped);
+        }
+      });
+
+      startBtn.addEventListener('click', startGame);
+      replayBtn.addEventListener('click', () => {
+        if (!seq.length || gameOver) return;
+        playSequence();
+      });
+
+      updateHud();
+      statusEl.textContent = 'START를 눌러 패턴 맵핑을 시작하세요.';
+    })();
+  </script>
+</body>
+</html>

@@ -62,7 +62,46 @@ engineInit(gameInit, gameUpdate, gameUpdatePost, gameRender, gameRenderPost);
 - [ ] No console errors
 ```
 
-## 사용법
+## 파이프라인 스크립트 (`_engine/`)
+
+### 개별 게임 처리
+```bash
+# 1. 게임 생성 후 유효성 검사
+bash games/_engine/validate.sh <slug>
+
+# 2. manifest 생성
+bash games/_engine/manifest.sh <slug> "Game Title"
+
+# 3. games-list.json 등록
+python3 games/_engine/add-to-list.py <slug> "Game Title" <category> <emoji>
+
+# 4. 위 1~3을 한번에: pipeline.sh
+bash games/_engine/pipeline.sh <slug> "Game Title" [category] [emoji]
+```
+
+### 배치 처리 (manifest 없는 게임 전부)
+```bash
+bash games/_engine/batch.sh
+```
+
+### 배포
+```bash
+# Git push
+bash games/_engine/git-push.sh "feat: add N LittleJS games"
+
+# MiniPC 동기화 (Tailscale → GCP relay fallback)
+bash games/_engine/sync-minipc.sh
+```
+
+### 서브에이전트용 전체 흐름
+```
+1. index.html 생성 → games/{slug}/index.html
+2. bash games/_engine/pipeline.sh {slug} "Title" {cat} {emoji}
+3. bash games/_engine/git-push.sh "feat: add {slug}"
+4. bash games/_engine/sync-minipc.sh
+```
+
+## 사용법 (Codex/Claude 서브에이전트)
 
 ```bash
 # Codex에 전달할 때
@@ -73,5 +112,9 @@ $(cat games/_engine/reference.md)
 
 Make a game: [GAME_IDEA]
 Output: games/[SLUG]/index.html
+
+After creating, run pipeline:
+bash games/_engine/pipeline.sh [SLUG] '[TITLE]' [CATEGORY] [EMOJI]
+bash games/_engine/git-push.sh 'feat: add [SLUG]'
 "
 ```

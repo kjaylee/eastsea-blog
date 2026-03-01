@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+  <meta name="theme-color" content="#0a0a1a">
+  <title>Lexi Laser Word Search</title>
+  <style>
+    :root{
+      --bg:#0a0a1a;
+      --panel:#101733;
+      --neon:#47f7ff;
+      --neon2:#ff4ed1;
+      --text:#dceeff;
+      --ok:#64ffa4;
+    }
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+    body{display:flex;justify-content:center;align-items:stretch}
+    .app{width:min(100vw,640px);padding:12px;display:flex;flex-direction:column;gap:10px}
+    .hud{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+    .card{background:var(--panel);border:1px solid #2d4084;border-radius:12px;padding:9px;text-align:center;font-size:13px;font-weight:700}
+    #grid{width:100%;aspect-ratio:1/1;border:1px solid #2d4084;border-radius:14px;background:radial-gradient(circle at 50% 10%,#1b2759 0%,#0a0a1a 48%,#070712 100%);touch-action:none}
+    .row{display:flex;gap:8px}
+    .btn{flex:1;padding:12px;border-radius:12px;border:1px solid #3456c0;background:#17245d;color:var(--text);font-size:15px;font-weight:700}
+    .words{background:var(--panel);border:1px solid #2d4084;border-radius:12px;padding:10px;display:flex;flex-wrap:wrap;gap:8px}
+    .word{padding:6px 10px;border-radius:999px;border:1px solid #3858bc;color:#b2cdff;font-weight:700;font-size:13px}
+    .word.found{border-color:#2dc274;color:#d7ffe9;background:#1e3d31}
+    .hint{font-size:12px;text-align:center;color:#a6c0ff}
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="hud">
+      <div class="card">Found<br><span id="foundCount">0</span></div>
+      <div class="card">Best Found<br><span id="bestFound">0</span></div>
+      <div class="card">Time<br><span id="timer">0.0s</span></div>
+      <div class="card">Best Time<br><span id="bestTime">--</span></div>
+    </section>
+
+    <canvas id="grid" width="620" height="620"></canvas>
+
+    <div class="words" id="wordList"></div>
+
+    <div class="row">
+      <button type="button" id="newBtn" class="btn">New Grid</button>
+      <button type="button" id="muteBtn" class="btn">🔊 Sound On</button>
+    </div>
+    <div class="hint">Touch drag or mouse drag to select. Keyboard: arrows move cursor, Enter/Space set start/end.</div>
+  </main>
+
+  <script>
+  (() => {
+    const canvas = document.getElementById('grid');
+    const ctx = canvas.getContext('2d');
+    const foundEl = document.getElementById('foundCount');
+    const bestFoundEl = document.getElementById('bestFound');
+    const timerEl = document.getElementById('timer');
+    const bestTimeEl = document.getElementById('bestTime');
+    const wordListEl = document.getElementById('wordList');
+    const newBtn = document.getElementById('newBtn');
+    const muteBtn = document.getElementById('muteBtn');
+
+    const STORAGE_KEY = 'esb_lexi_laser_word_search_stats';
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{"bestFound":0,"bestTime":null}');
+    let bestFound = Number(saved.bestFound || 0);
+    let bestTime = saved.bestTime === null ? null : Number(saved.bestTime);
+
+    bestFoundEl.textContent = String(bestFound);
+    bestTimeEl.textContent = bestTime ? `${bestTime.toFixed(1)}s` : '--';
+
+    let audioCtx = null;
+    let muted = false;
+
+    const SIZE = 10;
+    const WORDS = ['NOVA','LASER','COMET','PULSE','ORBIT','ION'];
+    const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+    const state = {
+      board: Array.from({length: SIZE}, () => Array(SIZE).fill('')),
+      placements: [],
+      found: new Set(),
+      marks: [],
+      selecting: null,
+      pointerCell: null,
+      cursor: {x:0,y:0},
+      kbStart: null,
+      startTs: performance.now(),
+      won: false
+    };
+
+    function setupPWA() {
+      const manifest = {
+        name: 'Lexi Laser Word Search',
+        short_name: 'LexiLaser',
+        start_url: '.',
+        display: 'standalone',
+        background_color: '#0a0a1a',
+        theme_color: '#0a0a1a',
+        icons: [{
+          src: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><rect width="128" height="128" rx="20" fill="%230a0a1a"/><path d="M20 24h88v80H20z" fill="none" stroke="%2347f7ff" stroke-width="8"/><path d="M34 94l24-40 18 24 18-28" stroke="%23ff4ed1" stroke-width="8" fill="none" stroke-linecap="round"/></svg>',
+          sizes: '128x128',
+          type: 'image/svg+xml'
+        }]
+      };
+      const blob = new Blob([JSON.stringify(manifest)], {type:'application/json'});
+      const link = document.createElement('link');
+      link.rel = 'manifest';
+      link.href = URL.createObjectURL(blob);
+      document.head.appendChild(link);
+
+      if ('serviceWorker' in navigator) {
+        const code = `self.addEventListener('install',e=>self.skipWaiting());self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));self.addEventListener('fetch',()=>{});`;
+        navigator.serviceWorker.register(URL.createObjectURL(new Blob([code], {type:'text/javascript'}))).catch(()=>{});
+      }
+    }
+
+    function ensureAudio() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    }
+
+    function beep(freq = 560, dur = 0.08, type = 'triangle', gain = 0.03) {
+      if (muted) return;
+      ensureAudio();
+      const t = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, t);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(gain, t + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      osc.connect(g).connect(audioCtx.destination);
+      osc.start(t);
+      osc.stop(t + dur + 0.02);
+    }
+
+    function saveStats() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({bestFound, bestTime}));
+    }
+
+    function randomInt(n){ return Math.floor(Math.random() * n); }
+
+    function canPlace(word, x, y, dx, dy, board) {
+      for (let i = 0; i < word.length; i++) {
+        const xx = x + dx * i;
+        const yy = y + dy * i;
+        if (xx < 0 || yy < 0 || xx >= SIZE || yy >= SIZE) return false;
+        const cell = board[yy][xx];
+        if (cell && cell !== word[i]) return false;
+      }
+      return true;
+    }
+
+    function placeWord(word, board) {
+      const dirs = [
+        [1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,-1],[1,-1],[-1,1]
+      ];
+      for (let tries = 0; tries < 500; tries++) {
+        const [dx,dy] = dirs[randomInt(dirs.length)];
+        const x = randomInt(SIZE);
+        const y = randomInt(SIZE);
+        if (!canPlace(word,x,y,dx,dy,board)) continue;
+        for (let i = 0; i < word.length; i++) {
+          const xx = x + dx * i;
+          const yy = y + dy * i;
+          board[yy][xx] = word[i];
+        }
+        return {word, x1:x, y1:y, x2:x + dx*(word.length-1), y2:y + dy*(word.length-1)};
+      }
+      return null;
+    }
+
+    function buildBoard() {
+      const board = Array.from({length: SIZE}, () => Array(SIZE).fill(''));
+      const placements = [];
+      for (const w of WORDS) {
+        const p = placeWord(w, board);
+        if (!p) return buildBoard();
+        placements.push(p);
+      }
+      for (let y = 0; y < SIZE; y++) {
+        for (let x = 0; x < SIZE; x++) {
+          if (!board[y][x]) board[y][x] = ALPHABET[randomInt(ALPHABET.length)];
+        }
+      }
+      return {board, placements};
+    }
+
+    function renderWords() {
+      wordListEl.innerHTML = '';
+      for (const w of WORDS) {
+        const el = document.createElement('span');
+        el.className = 'word' + (state.found.has(w) ? ' found' : '');
+        el.textContent = w;
+        wordListEl.appendChild(el);
+      }
+    }
+
+    function newGame() {
+      const {board, placements} = buildBoard();
+      state.board = board;
+      state.placements = placements;
+      state.found.clear();
+      state.marks = [];
+      state.selecting = null;
+      state.pointerCell = null;
+      state.cursor = {x:0,y:0};
+      state.kbStart = null;
+      state.startTs = performance.now();
+      state.won = false;
+      foundEl.textContent = '0';
+      renderWords();
+      beep(420,0.07,'sine',0.03);
+    }
+
+    function posToCell(clientX, clientY) {
+      const rect = canvas.getBoundingClientRect();
+      const x = (clientX - rect.left) / rect.width * canvas.width;
+      const y = (clientY - rect.top) / rect.height * canvas.height;
+      const c = canvas.width / SIZE;
+      return {
+        x: Math.max(0, Math.min(SIZE-1, Math.floor(x / c))),
+        y: Math.max(0, Math.min(SIZE-1, Math.floor(y / c)))
+      };
+    }
+
+    function lineCells(a, b) {
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const stepX = Math.sign(dx);
+      const stepY = Math.sign(dy);
+      const adx = Math.abs(dx), ady = Math.abs(dy);
+      if (!(adx === 0 || ady === 0 || adx === ady)) return null;
+      const len = Math.max(adx, ady) + 1;
+      const cells = [];
+      for (let i = 0; i < len; i++) cells.push({x: a.x + stepX*i, y: a.y + stepY*i});
+      return cells;
+    }
+
+    function wordFromCells(cells) {
+      return cells.map(c => state.board[c.y][c.x]).join('');
+    }
+
+    function trySelection(a, b) {
+      if (state.won) return;
+      const cells = lineCells(a,b);
+      if (!cells) {
+        beep(180,0.06,'sawtooth',0.03);
+        return;
+      }
+      const txt = wordFromCells(cells);
+      const rev = txt.split('').reverse().join('');
+      const foundWord = WORDS.find(w => !state.found.has(w) && (w === txt || w === rev));
+
+      if (foundWord) {
+        state.found.add(foundWord);
+        state.marks.push({cells:[...cells], color:`hsl(${Math.random()*360} 90% 60% / 0.35)`});
+        foundEl.textContent = String(state.found.size);
+        renderWords();
+        beep(760,0.08,'triangle',0.04);
+        setTimeout(() => beep(980,0.06,'sine',0.03), 70);
+
+        if (state.found.size > bestFound) {
+          bestFound = state.found.size;
+          bestFoundEl.textContent = String(bestFound);
+          saveStats();
+        }
+
+        if (state.found.size === WORDS.length) {
+          state.won = true;
+          const sec = (performance.now() - state.startTs) / 1000;
+          if (bestTime === null || sec < bestTime) {
+            bestTime = sec;
+            bestTimeEl.textContent = `${bestTime.toFixed(1)}s`;
+            saveStats();
+          }
+          beep(1180,0.11,'triangle',0.05);
+        }
+      } else {
+        beep(220,0.05,'square',0.025);
+      }
+    }
+
+    function draw() {
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      const cell = canvas.width / SIZE;
+
+      for (const mark of state.marks) {
+        ctx.fillStyle = mark.color;
+        for (const c of mark.cells) {
+          ctx.fillRect(c.x*cell+2, c.y*cell+2, cell-4, cell-4);
+        }
+      }
+
+      if (state.selecting && state.pointerCell) {
+        const cells = lineCells(state.selecting, state.pointerCell);
+        if (cells) {
+          ctx.fillStyle = 'rgba(71,247,255,0.24)';
+          for (const c of cells) {
+            ctx.fillRect(c.x*cell+2, c.y*cell+2, cell-4, cell-4);
+          }
+        }
+      }
+
+      if (state.kbStart) {
+        ctx.fillStyle = 'rgba(255,78,209,0.25)';
+        ctx.fillRect(state.kbStart.x*cell+2, state.kbStart.y*cell+2, cell-4, cell-4);
+      }
+
+      for (let y = 0; y < SIZE; y++) {
+        for (let x = 0; x < SIZE; x++) {
+          const px = x*cell;
+          const py = y*cell;
+          ctx.strokeStyle = '#29407f';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(px, py, cell, cell);
+
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.font = `700 ${Math.floor(cell*0.43)}px system-ui,sans-serif`;
+          ctx.fillStyle = '#dbecff';
+          ctx.shadowColor = '#47f7ff';
+          ctx.shadowBlur = 6;
+          ctx.fillText(state.board[y][x], px + cell/2, py + cell/2 + 1);
+          ctx.shadowBlur = 0;
+        }
+      }
+
+      ctx.strokeStyle = '#ffffffd6';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(state.cursor.x*cell + 3, state.cursor.y*cell + 3, cell-6, cell-6);
+
+      if (state.won) {
+        ctx.fillStyle = 'rgba(6,10,28,0.65)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#dff8ff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = '700 44px system-ui,sans-serif';
+        ctx.fillText('GRID CLEARED!', canvas.width/2, canvas.height/2 - 20);
+        ctx.font = '700 28px system-ui,sans-serif';
+        const sec = ((performance.now() - state.startTs)/1000).toFixed(1);
+        ctx.fillText(`${sec}s`, canvas.width/2, canvas.height/2 + 26);
+      }
+
+      const sec = ((performance.now() - state.startTs)/1000).toFixed(1);
+      timerEl.textContent = `${sec}s`;
+
+      requestAnimationFrame(draw);
+    }
+
+    canvas.addEventListener('pointerdown', (e) => {
+      ensureAudio();
+      const c = posToCell(e.clientX, e.clientY);
+      state.cursor = {...c};
+      state.selecting = c;
+      state.pointerCell = c;
+      canvas.setPointerCapture(e.pointerId);
+    });
+
+    canvas.addEventListener('pointermove', (e) => {
+      if (!state.selecting) return;
+      state.pointerCell = posToCell(e.clientX, e.clientY);
+    });
+
+    function endPointer(e) {
+      if (!state.selecting) return;
+      const end = posToCell(e.clientX, e.clientY);
+      trySelection(state.selecting, end);
+      state.selecting = null;
+      state.pointerCell = null;
+      if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+    }
+
+    canvas.addEventListener('pointerup', endPointer);
+    canvas.addEventListener('pointercancel', () => {
+      state.selecting = null;
+      state.pointerCell = null;
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Enter','Space'].includes(e.code)) e.preventDefault();
+      if (e.code === 'ArrowUp') state.cursor.y = Math.max(0, state.cursor.y - 1);
+      if (e.code === 'ArrowDown') state.cursor.y = Math.min(SIZE-1, state.cursor.y + 1);
+      if (e.code === 'ArrowLeft') state.cursor.x = Math.max(0, state.cursor.x - 1);
+      if (e.code === 'ArrowRight') state.cursor.x = Math.min(SIZE-1, state.cursor.x + 1);
+      if (e.code === 'Enter' || e.code === 'Space') {
+        ensureAudio();
+        if (!state.kbStart) {
+          state.kbStart = {...state.cursor};
+          beep(520,0.04,'triangle',0.02);
+        } else {
+          trySelection(state.kbStart, state.cursor);
+          state.kbStart = null;
+        }
+      }
+    }, {passive:false});
+
+    newBtn.addEventListener('click', () => {
+      ensureAudio();
+      newGame();
+    });
+
+    muteBtn.addEventListener('click', () => {
+      muted = !muted;
+      muteBtn.textContent = muted ? '🔇 Sound Off' : '🔊 Sound On';
+    });
+
+    setupPWA();
+    newGame();
+    draw();
+  })();
+  </script>
+</body>
+</html>

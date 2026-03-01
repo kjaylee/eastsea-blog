@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <meta name="theme-color" content="#0a0a1a" />
+  <title>Echo Drift Harvester</title>
+  <style>
+    :root{--bg:#0a0a1a;--aqua:#65f6ff;--vio:#8d62ff;--pink:#ff5ce7;--text:#eaf7ff}
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    html,body{margin:0;height:100%;background:linear-gradient(160deg,#0f1a3d,var(--bg));font-family:Inter,system-ui,sans-serif;color:var(--text);overflow:hidden}
+    #app{max-width:720px;margin:0 auto;height:100%;padding:12px;display:flex;flex-direction:column;gap:10px}
+    .hud{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+    .cell{background:rgba(255,255,255,.06);border:1px solid rgba(101,246,255,.35);padding:8px;border-radius:12px;text-align:center;font-size:13px}
+    #field{position:relative;flex:1;border-radius:14px;overflow:hidden;border:1px solid rgba(255,255,255,.2);background:radial-gradient(circle at 50% 0%,#152f66,#0a0a1a 65%)}
+    canvas{width:100%;height:100%;display:block}
+    #msg{position:absolute;inset:auto 0 48%;text-align:center;font-weight:700;text-shadow:0 0 16px rgba(101,246,255,.8)}
+    .controls{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+    button{padding:13px 10px;border-radius:12px;border:1px solid rgba(101,246,255,.45);background:rgba(8,20,47,.8);color:var(--text);font-weight:700;font-size:15px}
+    button:active{transform:scale(.98)}
+    .hint{font-size:12px;opacity:.8;text-align:center}
+  </style>
+</head>
+<body>
+<div id="app">
+  <div class="hud">
+    <div class="cell">Score <b id="score">0</b></div>
+    <div class="cell">Best <b id="best">0</b></div>
+    <div class="cell">Chain <b id="chain">0</b></div>
+    <div class="cell">Speed <b id="spd">1.0</b></div>
+  </div>
+  <div id="field"><canvas id="cv"></canvas><div id="msg">Tap / Space to Start</div></div>
+  <div class="controls">
+    <button id="b0">LEFT</button><button id="b1">CENTER</button><button id="b2">RIGHT</button>
+  </div>
+  <div class="hint">Keyboard: A/D or ←/→ · Space restart</div>
+</div>
+<script>
+(() => {
+  const KEY='best_echo_drift_harvester_v1';
+  const scoreEl=document.getElementById('score'),bestEl=document.getElementById('best'),chainEl=document.getElementById('chain'),spdEl=document.getElementById('spd'),msg=document.getElementById('msg');
+  let best=+(localStorage.getItem(KEY)||0); bestEl.textContent=best;
+
+  const manifest={name:'Echo Drift Harvester',short_name:'EchoDrift',start_url:'./',display:'standalone',background_color:'#0a0a1a',theme_color:'#0a0a1a',icons:[{src:'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="12" fill="%230a0a1a"/><path d="M12 50L32 14l20 36" stroke="%2365f6ff" stroke-width="5" fill="none"/><circle cx="32" cy="34" r="6" fill="%23ff5ce7"/></svg>',sizes:'192x192',type:'image/svg+xml'}]};
+  const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createObjectURL(new Blob([JSON.stringify(manifest)],{type:'application/manifest+json'})); document.head.appendChild(ml);
+
+  let ac=null; const sfx=(f=440,d=.09,t='triangle',v=.05)=>{if(!ac) return;const o=ac.createOscillator(),g=ac.createGain();o.type=t;o.frequency.value=f;o.connect(g).connect(ac.destination);g.gain.value=v;o.start();g.gain.exponentialRampToValueAtTime(.0001,ac.currentTime+d);o.stop(ac.currentTime+d)};
+
+  const field=document.getElementById('field'); const cv=document.getElementById('cv'); const ctx=cv.getContext('2d');
+  let w=0,h=0,pr=1; const resize=()=>{pr=Math.min(devicePixelRatio||1,2);w=field.clientWidth;h=field.clientHeight;cv.width=w*pr;cv.height=h*pr;ctx.setTransform(pr,0,0,pr,0,0)};addEventListener('resize',resize);resize();
+
+  let running=false,over=false,lane=1,score=0,chain=0,speed=1,last=0,spawn=0;
+  const laneX=()=>[w*0.23,w*0.5,w*0.77];
+  const objs=[]; // {lane,y,type}
+
+  function reset(){running=false;over=false;lane=1;score=0;chain=0;speed=1;spawn=0;objs.length=0;scoreEl.textContent='0';chainEl.textContent='0';spdEl.textContent='1.0';msg.style.display='block';msg.textContent='Tap / Space to Start';}
+  function start(){ if(!ac) ac=new (window.AudioContext||window.webkitAudioContext)(); if(ac.state==='suspended') ac.resume(); if(over) reset(); running=true; msg.style.display='none'; sfx(320,.08,'sine',.06); }
+
+  function spawnObj(){
+    const type=Math.random()<0.68?'shard':'spike';
+    const ln=Math.floor(Math.random()*3);
+    objs.push({lane:ln,y:-18,type});
+  }
+
+  function setLane(v){lane=Math.max(0,Math.min(2,v)); if(!running&&!over) start();}
+
+  function update(dt){
+    speed+=dt*0.00002;
+    spawn+=dt;
+    const intv=Math.max(180,640-speed*85);
+    if(spawn>=intv){spawn=0;spawnObj(); if(Math.random()<0.3) spawnObj();}
+    for(let i=objs.length-1;i>=0;i--){
+      const o=objs[i]; o.y+=dt*0.2*speed;
+      if(o.y>h+22){objs.splice(i,1); if(o.type==='shard') chain=0; continue;}
+      if(o.y>h-86 && o.y<h-38 && o.lane===lane){
+        if(o.type==='shard'){chain++; score+=10+chain*2; sfx(520+Math.min(chain,20)*14,.05,'triangle',.05);} else {running=false; over=true; sfx(110,.24,'sawtooth',.08); msg.style.display='block'; msg.textContent='Signal Lost! Tap / Space to Retry'; if(score>best){best=score;localStorage.setItem(KEY,best);} }
+        objs.splice(i,1);
+      }
+    }
+    score += Math.floor(dt*0.01*speed);
+    if(score>best){best=score;localStorage.setItem(KEY,best);} 
+    scoreEl.textContent=score; bestEl.textContent=best; chainEl.textContent=chain; spdEl.textContent=speed.toFixed(1);
+  }
+
+  function draw(){
+    ctx.clearRect(0,0,w,h);
+    // lanes
+    const xs=laneX();
+    for(let i=0;i<3;i++){
+      ctx.strokeStyle='rgba(101,246,255,.22)';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(xs[i],0);ctx.lineTo(xs[i],h);ctx.stroke();
+    }
+    // road flow
+    for(let y=0;y<h;y+=34){ctx.fillStyle='rgba(141,98,255,.12)';ctx.fillRect(xs[0]-6,(y+(performance.now()*0.15)%34),12,14);ctx.fillRect(xs[1]-6,(y+(performance.now()*0.18)%34),12,14);ctx.fillRect(xs[2]-6,(y+(performance.now()*0.21)%34),12,14);}    
+    // player
+    const px=xs[lane],py=h-62;
+    ctx.fillStyle='#65f6ff';ctx.shadowColor='#65f6ff';ctx.shadowBlur=14;
+    ctx.beginPath();ctx.moveTo(px,py-16);ctx.lineTo(px-14,py+14);ctx.lineTo(px+14,py+14);ctx.closePath();ctx.fill();ctx.shadowBlur=0;
+    // objs
+    for(const o of objs){
+      const x=xs[o.lane];
+      if(o.type==='shard'){
+        ctx.fillStyle='#ff5ce7';ctx.shadowColor='#ff5ce7';ctx.shadowBlur=12;
+        ctx.beginPath();ctx.moveTo(x,o.y-9);ctx.lineTo(x+9,o.y);ctx.lineTo(x,o.y+9);ctx.lineTo(x-9,o.y);ctx.closePath();ctx.fill();ctx.shadowBlur=0;
+      }else{
+        ctx.strokeStyle='#ff6b6b';ctx.lineWidth=3;
+        ctx.beginPath();ctx.moveTo(x-10,o.y-10);ctx.lineTo(x+10,o.y+10);ctx.moveTo(x+10,o.y-10);ctx.lineTo(x-10,o.y+10);ctx.stroke();
+      }
+    }
+  }
+
+  function loop(t){const dt=Math.min(33,t-last||16);last=t;if(running)update(dt);draw();requestAnimationFrame(loop)}requestAnimationFrame(loop);
+
+  ['b0','b1','b2'].forEach((id,i)=>{const el=document.getElementById(id);el.addEventListener('pointerdown',e=>{e.preventDefault();setLane(i);});});
+  addEventListener('keydown',e=>{
+    if(['ArrowLeft','ArrowRight','a','A','d','D',' '].includes(e.key)) e.preventDefault();
+    if(e.key===' ' && !running) start();
+    if(e.key==='ArrowLeft'||e.key==='a'||e.key==='A') setLane(lane-1);
+    if(e.key==='ArrowRight'||e.key==='d'||e.key==='D') setLane(lane+1);
+  });
+  field.addEventListener('pointerdown',e=>{const x=e.clientX-field.getBoundingClientRect().left;const part=Math.floor(x/(field.clientWidth/3));setLane(part);if(!running)start();});
+
+  reset();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <meta name="theme-color" content="#0a0a1a" />
+  <title>Void Garden Sentinel</title>
+  <style>
+    :root{--bg:#0a0a1a;--mint:#6bffd3;--vio:#7d6bff;--rose:#ff6bd6;--text:#ebfff8}
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    html,body{margin:0;height:100%;overflow:hidden;background:radial-gradient(circle at 50% 15%,#142445,var(--bg) 58%);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+    #root{max-width:720px;height:100%;margin:0 auto;padding:12px;display:flex;flex-direction:column;gap:10px}
+    .hud{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+    .tile{background:rgba(255,255,255,.06);border:1px solid rgba(107,255,211,.35);border-radius:12px;padding:8px;text-align:center;font-size:13px}
+    #arena{position:relative;flex:1;border:1px solid rgba(255,255,255,.2);border-radius:14px;overflow:hidden;background:radial-gradient(circle at 50% 60%,#131e49,#090a1a 70%)}
+    canvas{display:block;width:100%;height:100%}
+    #msg{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;font-weight:700;text-shadow:0 0 14px rgba(107,255,211,.8)}
+    .controls{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    button{padding:14px 10px;border-radius:12px;border:1px solid rgba(107,255,211,.4);background:rgba(13,25,49,.8);color:var(--text);font-size:16px;font-weight:800}
+    button:active{transform:scale(.98)}
+    .hint{text-align:center;font-size:12px;opacity:.8}
+  </style>
+</head>
+<body>
+<div id="root">
+  <div class="hud">
+    <div class="tile">Score <b id="score">0</b></div>
+    <div class="tile">Best <b id="best">0</b></div>
+    <div class="tile">Wave <b id="wave">1</b></div>
+    <div class="tile">Core <b id="hp">6</b></div>
+  </div>
+  <div id="arena"><canvas id="cv"></canvas><div id="msg">Tap / Space to Start</div></div>
+  <div class="controls"><button id="left">⟲ SHIELD</button><button id="right">SHIELD ⟳</button></div>
+  <div class="hint">Keyboard: ← → / A D · Space restart</div>
+</div>
+<script>
+(() => {
+  const KEY='best_void_garden_sentinel_v1';
+  const scoreEl=document.getElementById('score');
+  const bestEl=document.getElementById('best');
+  const waveEl=document.getElementById('wave');
+  const hpEl=document.getElementById('hp');
+  const msgEl=document.getElementById('msg');
+  let bestScore=+(localStorage.getItem(KEY)||0); bestEl.textContent=bestScore;
+
+  const manifest={name:'Void Garden Sentinel',short_name:'VoidGarden',start_url:'./',display:'standalone',background_color:'#0a0a1a',theme_color:'#0a0a1a',icons:[{src:'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="12" fill="%230a0a1a"/><circle cx="32" cy="32" r="20" stroke="%236bffd3" stroke-width="4" fill="none"/><path d="M32 12L38 32L32 52L26 32z" fill="%23ff6bd6"/></svg>',sizes:'192x192',type:'image/svg+xml'}]};
+  const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createObjectURL(new Blob([JSON.stringify(manifest)],{type:'application/manifest+json'})); document.head.appendChild(ml);
+
+  let audio=null; const blip=(f=420,d=.08,t='sine',v=.05)=>{if(!audio) return;const o=audio.createOscillator(),g=audio.createGain();o.type=t;o.frequency.value=f;o.connect(g).connect(audio.destination);g.gain.value=v;o.start();g.gain.exponentialRampToValueAtTime(.0001,audio.currentTime+d);o.stop(audio.currentTime+d)};
+
+  const arena=document.getElementById('arena'); const cv=document.getElementById('cv'); const ctx=cv.getContext('2d');
+  let w=0,h=0,pr=1;
+  function resize(){pr=Math.min(devicePixelRatio||1,2);w=arena.clientWidth;h=arena.clientHeight;cv.width=w*pr;cv.height=h*pr;ctx.setTransform(pr,0,0,pr,0,0)}
+  addEventListener('resize',resize); resize();
+
+  let running=false,over=false;
+  let rot=0,shieldAng=0,score=0,wave=1,core=6,speed=1,last=0,spawnT=0;
+  const spores=[]; // {x,y,vx,vy,r,ang}
+
+  function reset(){running=false;over=false;rot=0;shieldAng=0;score=0;wave=1;core=6;speed=1;spawnT=0;spores.length=0;scoreEl.textContent='0';waveEl.textContent='1';hpEl.textContent='6';msgEl.textContent='Tap / Space to Start';msgEl.style.display='block';}
+  function start(){if(!audio) audio=new (window.AudioContext||window.webkitAudioContext)();if(audio.state==='suspended') audio.resume();if(over) reset();running=true;msgEl.style.display='none';blip(300,.08,'triangle',.06)}
+
+  function spawnSpore(){
+    const cx=w/2,cy=h/2;
+    const a=Math.random()*Math.PI*2;
+    const dist=Math.max(w,h)*0.55+30;
+    const x=cx+Math.cos(a)*dist,y=cy+Math.sin(a)*dist;
+    const dx=cx-x,dy=cy-y,m=Math.hypot(dx,dy)||1;
+    const v=(1.1+Math.random()*1.5+speed*0.25);
+    spores.push({x,y,vx:dx/m*v,vy:dy/m*v,r:8+Math.random()*3,ang:a});
+  }
+
+  function update(dt){
+    shieldAng += rot*0.0042*dt;
+    speed += dt*0.000018;
+    wave = 1 + Math.floor(score/300);
+    spawnT += dt;
+    const intv = Math.max(180,850 - wave*55);
+    if(spawnT>intv){spawnT=0;spawnSpore();if(Math.random()<Math.min(.7,wave*.08))spawnSpore();}
+
+    const cx=w/2,cy=h/2,ring=Math.min(w,h)*0.29;
+    const arc=0.58; // shield half width
+
+    for(let i=spores.length-1;i>=0;i--){
+      const s=spores[i];
+      s.x += s.vx*dt*0.06; s.y += s.vy*dt*0.06;
+      const a=Math.atan2(s.y-cy,s.x-cx);
+      const d=Math.hypot(s.x-cx,s.y-cy);
+      let diff=Math.atan2(Math.sin(a-shieldAng),Math.cos(a-shieldAng));
+      if(Math.abs(diff)<arc && d<ring+10 && d>ring-16){
+        score += 20 + Math.floor(wave*2);
+        blip(610,.05,'sine',.05);
+        spores.splice(i,1);
+      } else if(d<22){
+        core--; blip(140,.17,'sawtooth',.08); spores.splice(i,1);
+        if(core<=0){running=false;over=true;msgEl.style.display='block';msgEl.textContent='Garden Lost! Tap / Space to Retry';blip(90,.28,'square',.09);}
+      }
+    }
+
+    score += Math.floor(dt*0.015*speed);
+    if(score>bestScore){bestScore=score;localStorage.setItem(KEY,bestScore);}    
+    scoreEl.textContent=score; bestEl.textContent=bestScore; waveEl.textContent=wave; hpEl.textContent=core;
+  }
+
+  function draw(){
+    ctx.clearRect(0,0,w,h);
+    const cx=w/2,cy=h/2,ring=Math.min(w,h)*0.29;
+
+    // stars
+    for(let i=0;i<35;i++){
+      const x=(i*97%w), y=(i*61+performance.now()*0.02)%h;
+      ctx.fillStyle='rgba(125,107,255,.2)'; ctx.fillRect(x,y,2,2);
+    }
+
+    // core
+    let g=ctx.createRadialGradient(cx,cy,2,cx,cy,60);g.addColorStop(0,'#6bffd399');g.addColorStop(1,'#0000');ctx.fillStyle=g;ctx.beginPath();ctx.arc(cx,cy,60,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#6bffd3';ctx.beginPath();ctx.arc(cx,cy,12,0,Math.PI*2);ctx.fill();
+
+    // defense ring
+    ctx.strokeStyle='rgba(125,107,255,.45)';ctx.lineWidth=4;ctx.beginPath();ctx.arc(cx,cy,ring,0,Math.PI*2);ctx.stroke();
+    // shield arc
+    ctx.strokeStyle='#ff6bd6';ctx.lineWidth=8;ctx.shadowColor='#ff6bd6';ctx.shadowBlur=12;ctx.beginPath();ctx.arc(cx,cy,ring,shieldAng-0.58,shieldAng+0.58);ctx.stroke();ctx.shadowBlur=0;
+
+    // spores
+    for(const s of spores){ctx.fillStyle='#ffae5f';ctx.shadowColor='#ffae5f';ctx.shadowBlur=10;ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;}
+  }
+
+  function loop(t){const dt=Math.min(33,t-last||16);last=t;if(running)update(dt);draw();requestAnimationFrame(loop)}requestAnimationFrame(loop);
+
+  const hold=(el,v)=>{const on=(e)=>{e.preventDefault();rot=v;if(!running&&!over)start();};const off=()=>{if(rot===v)rot=0;};el.addEventListener('pointerdown',on);el.addEventListener('pointerup',off);el.addEventListener('pointercancel',off);el.addEventListener('pointerleave',off);};
+  hold(document.getElementById('left'),-1); hold(document.getElementById('right'),1);
+
+  const keys={};
+  addEventListener('keydown',e=>{if(['ArrowLeft','ArrowRight','a','A','d','D',' '].includes(e.key))e.preventDefault();keys[e.key]=true;if(e.key===' '&&!running)start();rot=(keys['ArrowLeft']||keys['a']||keys['A'])?-1:(keys['ArrowRight']||keys['d']||keys['D'])?1:0;});
+  addEventListener('keyup',e=>{keys[e.key]=false;rot=(keys['ArrowLeft']||keys['a']||keys['A'])?-1:(keys['ArrowRight']||keys['d']||keys['D'])?1:0;});
+  arena.addEventListener('pointerdown',()=>{if(!running)start();});
+
+  reset();
+})();
+</script>
+</body>
+</html>

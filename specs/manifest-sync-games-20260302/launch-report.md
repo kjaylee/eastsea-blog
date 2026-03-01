@@ -1,0 +1,21 @@
+# Launch Report — manifest-sync-games-20260302
+
+- Build path:
+  - `games/pulse-lantern-orbit/index.html`
+  - `games/echo-drift-harvester/index.html`
+  - `games/void-garden-sentinel/index.html`
+- QA status:
+  - ✅ File size <500KB (8.9KB / 7.8KB / 8.4KB)
+  - ✅ Touch + keyboard input handlers present
+  - ✅ Web Audio API present (`AudioContext`)
+  - ✅ localStorage best-score persistence present
+  - ✅ PWA manifest injection present (`rel=manifest`)
+  - ✅ Neon dark theme uses `#0a0a1a`
+- Known issues:
+  - No service worker/offline cache (manifest-only PWA mode)
+- URL:
+  - `/games/pulse-lantern-orbit/`
+  - `/games/echo-drift-harvester/`
+  - `/games/void-garden-sentinel/`
+- Next iteration:
+  - Add service worker cache + optional haptics on mobile.

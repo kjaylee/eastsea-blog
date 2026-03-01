@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <meta name="theme-color" content="#0a0a1a" />
+  <title>Pulse Lantern Orbit</title>
+  <style>
+    :root{--bg:#0a0a1a;--neon:#6ef3ff;--pink:#ff4dd2;--ok:#7cff77;--warn:#ffb347;--text:#e8f7ff}
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    html,body{margin:0;height:100%;background:radial-gradient(circle at 50% 20%,#13214a,var(--bg) 55%);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;overflow:hidden}
+    #wrap{display:flex;flex-direction:column;height:100%;max-width:720px;margin:0 auto;padding:12px;gap:10px}
+    .hud{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+    .card{background:rgba(255,255,255,.06);border:1px solid rgba(110,243,255,.35);border-radius:12px;padding:8px 10px;font-size:13px;text-align:center;box-shadow:0 0 14px rgba(110,243,255,.15) inset}
+    #game{position:relative;flex:1;border-radius:16px;border:1px solid rgba(255,255,255,.15);background:radial-gradient(circle at 50% 50%,#111f48,#0b0c21 68%);overflow:hidden}
+    canvas{width:100%;height:100%;display:block}
+    .msg{position:absolute;inset:auto 0 50%;transform:translateY(50%);text-align:center;font-weight:700;pointer-events:none;text-shadow:0 0 12px rgba(110,243,255,.8)}
+    .controls{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    button{border:1px solid rgba(110,243,255,.5);border-radius:12px;padding:14px 10px;background:rgba(14,25,52,.75);color:var(--text);font-size:16px;font-weight:700}
+    button:active{transform:scale(.98);box-shadow:0 0 20px rgba(110,243,255,.35)}
+    .hint{font-size:12px;opacity:.8;text-align:center}
+  </style>
+</head>
+<body>
+<div id="wrap">
+  <div class="hud">
+    <div class="card">Score <b id="score">0</b></div>
+    <div class="card">Best <b id="best">0</b></div>
+    <div class="card">Combo <b id="combo">x1</b></div>
+    <div class="card">HP <b id="hp">5</b></div>
+  </div>
+  <div id="game">
+    <canvas id="c"></canvas>
+    <div class="msg" id="msg">Tap / Space to Start</div>
+  </div>
+  <div class="controls">
+    <button id="leftBtn">⟲ LEFT</button>
+    <button id="rightBtn">RIGHT ⟳</button>
+  </div>
+  <div class="hint">Keyboard: ← → / A D · Space restart</div>
+</div>
+<script>
+(() => {
+  const KEY='best_pulse_lantern_orbit_v1';
+  const bestEl=document.getElementById('best');
+  const scoreEl=document.getElementById('score');
+  const comboEl=document.getElementById('combo');
+  const hpEl=document.getElementById('hp');
+  const msg=document.getElementById('msg');
+  let best=+(localStorage.getItem(KEY)||0); bestEl.textContent=best;
+
+  const cv=document.getElementById('c'),ctx=cv.getContext('2d');
+  const gameBox=document.getElementById('game');
+  let w=0,h=0,pr=1;
+  const resize=()=>{pr=Math.min(devicePixelRatio||1,2);w=gameBox.clientWidth;h=gameBox.clientHeight;cv.width=w*pr;cv.height=h*pr;ctx.setTransform(pr,0,0,pr,0,0)};
+  addEventListener('resize',resize); resize();
+
+  // PWA manifest (inline blob)
+  const manifest={name:'Pulse Lantern Orbit',short_name:'LanternOrbit',start_url:'./',display:'standalone',background_color:'#0a0a1a',theme_color:'#0a0a1a',icons:[{src:'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="12" fill="%230a0a1a"/><circle cx="32" cy="32" r="20" fill="none" stroke="%236ef3ff" stroke-width="4"/><circle cx="50" cy="32" r="6" fill="%23ff4dd2"/></svg>',sizes:'192x192',type:'image/svg+xml'}]};
+  const mLink=document.createElement('link'); mLink.rel='manifest'; mLink.href=URL.createObjectURL(new Blob([JSON.stringify(manifest)],{type:'application/manifest+json'})); document.head.appendChild(mLink);
+
+  let audioCtx=null;
+  const tone=(f=440,d=.08,t='sine',v=.05)=>{if(!audioCtx) return; const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type=t;o.frequency.value=f;g.gain.value=v;o.connect(g).connect(audioCtx.destination);o.start();g.gain.exponentialRampToValueAtTime(0.0001,audioCtx.currentTime+d);o.stop(audioCtx.currentTime+d)};
+
+  let running=false, over=false;
+  let score=0,combo=1,hp=5,ang=0,rot=0,speed=1;
+  const pulses=[];
+  const colors=['#6ef3ff','#ff4dd2'];
+  let last=0,spawnTimer=0;
+
+  const reset=()=>{running=false;over=false;score=0;combo=1;hp=5;ang=0;rot=0;speed=1;pulses.length=0;spawnTimer=0;scoreEl.textContent=0;comboEl.textContent='x1';hpEl.textContent='5';msg.textContent='Tap / Space to Start';msg.style.display='block'};
+
+  const spawn=()=>{
+    const side=Math.random()<.5?0:1; // 0 cyan 1 pink
+    const edge=Math.floor(Math.random()*4);
+    let x,y,vx,vy;
+    if(edge===0){x=Math.random()*w;y=-20;} else if(edge===1){x=w+20;y=Math.random()*h;} else if(edge===2){x=Math.random()*w;y=h+20;} else {x=-20;y=Math.random()*h;}
+    const cx=w/2,cy=h/2; const dx=cx-x,dy=cy-y; const m=Math.hypot(dx,dy)||1;
+    const sp=1.1+Math.random()*1.5+speed*.35;vx=dx/m*sp;vy=dy/m*sp;
+    pulses.push({x,y,vx,vy,r:8,color:colors[side],side});
+  };
+
+  const start=()=>{
+    if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+    if(audioCtx.state==='suspended') audioCtx.resume();
+    if(over) reset();
+    running=true; msg.style.display='none'; tone(330,.1,'triangle',.06);
+  };
+
+  const hitCheck=()=>{
+    const cx=w/2,cy=h/2,rad=Math.min(w,h)*.26;
+    const lx=cx+Math.cos(ang)*rad, ly=cy+Math.sin(ang)*rad;
+    const lColor=(Math.cos(ang)>=0)?0:1; // right side cyan, left side pink
+    for(let i=pulses.length-1;i>=0;i--){
+      const p=pulses[i];
+      const d=Math.hypot(p.x-lx,p.y-ly);
+      if(d<16){
+        if(p.side===lColor){ score+=Math.ceil(10*combo); combo=Math.min(combo+.2,6); tone(640+combo*20,.06,'sine',.05); }
+        else{ hp--; combo=1; tone(170,.12,'sawtooth',.08); }
+        pulses.splice(i,1);
+      } else {
+        const dc=Math.hypot(p.x-cx,p.y-cy);
+        if(dc<10){ hp--; combo=1; pulses.splice(i,1); tone(120,.16,'square',.08); }
+      }
+    }
+    if(hp<=0 && running){ running=false; over=true; msg.textContent='Core Collapse! Tap / Space to Retry'; msg.style.display='block'; tone(90,.35,'sawtooth',.09); if(score>best){best=score;localStorage.setItem(KEY,best);} }
+  };
+
+  const loop=(t)=>{
+    const dt=Math.min(32,t-last||16); last=t;
+    if(running){
+      ang+=rot*0.004*dt;
+      speed+=dt*0.000015;
+      spawnTimer+=dt;
+      const interval=Math.max(240,900-speed*80);
+      if(spawnTimer>=interval){spawnTimer=0;spawn(); if(Math.random()<0.35) spawn();}
+      for(const p of pulses){p.x+=p.vx*dt*0.06;p.y+=p.vy*dt*0.06;}
+      hitCheck();
+      score+=Math.floor(dt*0.02*Math.max(1,combo*.7));
+      if(combo>1) combo=Math.max(1,combo-dt*0.0004);
+      if(score>best){best=score;localStorage.setItem(KEY,best);}
+      scoreEl.textContent=score; bestEl.textContent=best; comboEl.textContent='x'+combo.toFixed(1); hpEl.textContent=hp;
+    }
+
+    ctx.clearRect(0,0,w,h);
+    const cx=w/2,cy=h/2,rad=Math.min(w,h)*.26;
+    // core glow
+    const g=ctx.createRadialGradient(cx,cy,6,cx,cy,rad+42);g.addColorStop(0,'#2f58ff66');g.addColorStop(1,'#00000000');ctx.fillStyle=g;ctx.beginPath();ctx.arc(cx,cy,rad+42,0,Math.PI*2);ctx.fill();
+    // ring
+    ctx.strokeStyle='rgba(110,243,255,.35)';ctx.lineWidth=4;ctx.beginPath();ctx.arc(cx,cy,rad,0,Math.PI*2);ctx.stroke();
+    // lantern
+    const lx=cx+Math.cos(ang)*rad,ly=cy+Math.sin(ang)*rad; const lC=(Math.cos(ang)>=0)?colors[0]:colors[1];
+    ctx.fillStyle=lC;ctx.shadowColor=lC;ctx.shadowBlur=16;ctx.beginPath();ctx.arc(lx,ly,10,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
+    // side indicators
+    ctx.fillStyle=colors[0];ctx.fillRect(cx+rad+14,cy-4,26,8);ctx.fillStyle=colors[1];ctx.fillRect(cx-rad-40,cy-4,26,8);
+    // pulses
+    for(const p of pulses){ctx.fillStyle=p.color;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();}
+
+    requestAnimationFrame(loop);
+  };
+  requestAnimationFrame(loop);
+
+  const bindHold=(el,dir)=>{
+    const on=()=>{rot=dir; if(!running&&!over) start();};
+    const off=()=>{if(rot===dir) rot=0;};
+    el.addEventListener('pointerdown',e=>{e.preventDefault();on();});
+    el.addEventListener('pointerup',off); el.addEventListener('pointercancel',off); el.addEventListener('pointerleave',off);
+  };
+  bindHold(document.getElementById('leftBtn'),-1); bindHold(document.getElementById('rightBtn'),1);
+
+  const keys={};
+  addEventListener('keydown',e=>{
+    if(['ArrowLeft','ArrowRight','a','d','A','D',' '].includes(e.key)) e.preventDefault();
+    keys[e.key]=true;
+    if(e.key===' ' && !running) start();
+    rot=(keys['ArrowLeft']||keys['a']||keys['A'])?-1:(keys['ArrowRight']||keys['d']||keys['D'])?1:0;
+  });
+  addEventListener('keyup',e=>{keys[e.key]=false;rot=(keys['ArrowLeft']||keys['a']||keys['A'])?-1:(keys['ArrowRight']||keys['d']||keys['D'])?1:0;});
+
+  gameBox.addEventListener('pointerdown',()=>{ if(!running) start(); });
+  reset();
+})();
+</script>
+</body>
+</html>

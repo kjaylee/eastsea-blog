@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>Quantum Koi Courier</title>
+  <meta name="theme-color" content="#0a0a1a" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <style>
+    :root{--bg:#0a0a1a;--panel:#141432;--ink:#e9f5ff;--neon:#65f5ff;--pink:#ff6ef8;--warn:#ffd166}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:radial-gradient(circle at 50% 0%,#1d1d46 0%,#0a0a1a 55%,#060611 100%);color:var(--ink);min-height:100vh;display:flex;justify-content:center}
+    .app{width:min(860px,100%);padding:12px;display:flex;flex-direction:column;gap:10px}
+    .hud{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+    .box{background:rgba(20,20,50,.85);border:1px solid #2f2f69;border-radius:12px;padding:8px;text-align:center}
+    .box b{display:block;color:var(--neon);font-size:1.08rem}
+    .wrap{background:rgba(10,10,26,.75);border:1px solid #2f2f69;border-radius:14px;padding:10px}
+    canvas{display:block;width:100%;max-height:66vh;aspect-ratio:3/4;background:linear-gradient(180deg,#101038,#070718);border-radius:12px;border:1px solid #373773}
+    .touch{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+    button{background:#181843;color:white;border:1px solid #444488;border-radius:11px;min-height:46px;font-weight:700;padding:10px}
+    button.active{border-color:var(--neon);box-shadow:0 0 14px #65f5ff66}
+    button:active{transform:translateY(1px)}
+    .note{font-size:.86rem;opacity:.87;margin:0}
+    .overlay{position:fixed;inset:0;background:#03030be0;display:none;justify-content:center;align-items:center;padding:18px}
+    .overlay.show{display:flex}
+    .panel{width:min(420px,100%);padding:18px;background:#11112a;border:1px solid #40408f;border-radius:14px;text-align:center}
+    .panel h2{margin:0 0 10px;color:var(--pink)}
+    @media (max-width:720px){.hud{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="hud">
+      <div class="box">Score<b id="score">0</b></div>
+      <div class="box">Distance<b id="distance">0m</b></div>
+      <div class="box">Combo<b id="combo">x1</b></div>
+      <div class="box">HP<b id="hp">3</b></div>
+      <div class="box">Best<b id="best">0m / x1</b></div>
+    </section>
+
+    <section class="wrap">
+      <canvas id="game" width="540" height="720" aria-label="Quantum Koi playfield"></canvas>
+    </section>
+
+    <section class="touch" aria-label="touch controls">
+      <button id="leftBtn">◀ Left</button>
+      <button id="dashBtn">⚡ Dash</button>
+      <button id="rightBtn">Right ▶</button>
+    </section>
+    <p class="note">키보드: <b>←/→ 또는 A/D</b> 이동, <b>Space</b> 대시, <b>R</b> 재시작. 터치 버튼 동일 지원.</p>
+  </main>
+
+  <div id="overlay" class="overlay" role="dialog" aria-modal="true">
+    <div class="panel">
+      <h2>Koi Signal Lost</h2>
+      <p id="final"></p>
+      <button id="retry">다시 출항</button>
+    </div>
+  </div>
+
+  <script>
+  (()=>{
+    const c=document.getElementById('game'),ctx=c.getContext('2d');
+    const scoreEl=document.getElementById('score');
+    const distanceEl=document.getElementById('distance');
+    const comboEl=document.getElementById('combo');
+    const hpEl=document.getElementById('hp');
+    const bestEl=document.getElementById('best');
+    const overlay=document.getElementById('overlay');
+    const final=document.getElementById('final');
+
+    const key='quantumKoiCourier.v1';
+    let best={distance:0,combo:1};
+    try{best=Object.assign(best,JSON.parse(localStorage.getItem(key)||'{}'));}catch{}
+
+    const audio={ctx:null};
+    const initAudio=()=>{if(!audio.ctx){const C=window.AudioContext||window.webkitAudioContext;if(C)audio.ctx=new C();}};
+    const beep=(f=440,t=.08,type='sine',g=.05)=>{
+      if(!audio.ctx)return;
+      const now=audio.ctx.currentTime,o=audio.ctx.createOscillator(),gn=audio.ctx.createGain();
+      o.type=type;o.frequency.setValueAtTime(f,now);gn.gain.setValueAtTime(g,now);gn.gain.exponentialRampToValueAtTime(.0001,now+t);
+      o.connect(gn).connect(audio.ctx.destination);o.start(now);o.stop(now+t);
+    };
+    ['pointerdown','keydown'].forEach(ev=>window.addEventListener(ev,initAudio,{once:true}));
+
+    const S={
+      player:{x:c.width/2,y:c.height-90,w:42,h:56,vx:0,speed:340,dashUntil:0,dashCd:0},
+      objs:[],score:0,distance:0,combo:1,hp:3,running:true,last:performance.now(),spawn:0,spawnGap:.72,speedMul:1,t:0
+    };
+    const input={left:false,right:false};
+
+    function reset(){
+      S.player.x=c.width/2;S.player.vx=0;S.player.dashUntil=0;S.player.dashCd=0;
+      S.objs.length=0;S.score=0;S.distance=0;S.combo=1;S.hp=3;S.running=true;S.last=performance.now();S.spawn=0;S.spawnGap=.72;S.speedMul=1;S.t=0;
+      overlay.classList.remove('show');
+      syncHud();
+    }
+
+    function spawn(){
+      const isPearl=Math.random()<0.63;
+      const size=isPearl?16:24;
+      S.objs.push({
+        kind:isPearl?'pearl':'vortex',
+        x:32+Math.random()*(c.width-64),
+        y:-30,
+        r:size,
+        vy:(220+Math.random()*120)*S.speedMul,
+        spin:Math.random()*Math.PI*2
+      });
+    }
+
+    function dash(){
+      if(!S.running||S.player.dashCd>0)return;
+      S.player.dashUntil=S.t+.2;
+      S.player.dashCd=1.2;
+      beep(760,.08,'sawtooth',.05);
+    }
+
+    function endGame(){
+      S.running=false;
+      if(S.distance>best.distance)best.distance=Math.floor(S.distance);
+      if(S.combo>best.combo)best.combo=S.combo;
+      localStorage.setItem(key,JSON.stringify(best));
+      final.textContent=`거리 ${Math.floor(S.distance)}m · 점수 ${S.score} · 최고 ${best.distance}m`;
+      overlay.classList.add('show');
+      beep(170,.2,'triangle',.06);setTimeout(()=>beep(120,.28,'sawtooth',.05),140);
+      syncHud();
+    }
+
+    function collide(a,b){
+      return Math.hypot(a.x-b.x,a.y-b.y)<(a.r+b.r*.62);
+    }
+
+    function update(dt){
+      if(!S.running)return;
+      S.t+=dt;
+      S.player.dashCd=Math.max(0,S.player.dashCd-dt);
+      const dashing=S.t<S.player.dashUntil;
+      const speed=S.player.speed*(dashing?1.9:1);
+      S.player.vx=(input.left?-1:0)+(input.right?1:0);
+      S.player.x+=S.player.vx*speed*dt;
+      S.player.x=Math.max(24,Math.min(c.width-24,S.player.x));
+
+      S.spawn+=dt;
+      S.distance+=dt*(30+S.speedMul*8);
+      if(S.spawn>=S.spawnGap){S.spawn=0;spawn();if(Math.random()<.24)spawn();}
+      S.speedMul=Math.min(2.45,S.speedMul+dt*0.03);
+      S.spawnGap=Math.max(.34,S.spawnGap-dt*0.0024);
+
+      for(let i=S.objs.length-1;i>=0;i--){
+        const o=S.objs[i];
+        o.y+=o.vy*dt;o.spin+=dt*4;
+        if(o.y>c.height+40){S.objs.splice(i,1);if(o.kind==='pearl')S.combo=1;continue;}
+        if(collide({x:S.player.x,y:S.player.y,r:24},o)){
+          if(o.kind==='pearl'){
+            S.combo=Math.min(12,S.combo+1);
+            S.score+=8*S.combo;
+            beep(740,.05,'triangle',.04);
+          }else if(!dashing){
+            S.hp--;S.combo=1;S.score=Math.max(0,S.score-12);
+            beep(210,.09,'square',.055);
+            if(S.hp<=0){S.objs.splice(i,1);endGame();break;}
+          }else{
+            S.score+=18;beep(880,.04,'sine',.03);
+          }
+          S.objs.splice(i,1);
+        }
+      }
+      syncHud();
+    }
+
+    function drawBg(){
+      ctx.clearRect(0,0,c.width,c.height);
+      const g=ctx.createLinearGradient(0,0,0,c.height);g.addColorStop(0,'#131343');g.addColorStop(1,'#070718');ctx.fillStyle=g;ctx.fillRect(0,0,c.width,c.height);
+      for(let i=0;i<28;i++){
+        const y=((i*87+S.t*110)%c.height);
+        ctx.fillStyle='rgba(101,245,255,.12)';ctx.fillRect((i*97)%c.width,y,2,28);
+      }
+    }
+
+    function drawPlayer(){
+      const dashing=S.t<S.player.dashUntil;
+      ctx.save();ctx.translate(S.player.x,S.player.y);
+      ctx.shadowBlur=20;ctx.shadowColor=dashing?'#ff6ef8':'#65f5ff';
+      ctx.fillStyle=dashing?'#ff8af8':'#7df8ff';
+      ctx.beginPath();ctx.moveTo(0,-28);ctx.lineTo(20,20);ctx.lineTo(0,28);ctx.lineTo(-20,20);ctx.closePath();ctx.fill();
+      ctx.fillStyle='#ffffff';ctx.fillRect(-2,-10,4,22);
+      ctx.restore();
+    }
+
+    function drawObjs(){
+      S.objs.forEach(o=>{
+        ctx.save();ctx.translate(o.x,o.y);ctx.rotate(o.spin);
+        if(o.kind==='pearl'){
+          ctx.shadowBlur=12;ctx.shadowColor='#65f5ff';ctx.fillStyle='#8ef8ff';ctx.beginPath();ctx.arc(0,0,o.r,0,Math.PI*2);ctx.fill();
+          ctx.fillStyle='rgba(255,255,255,.5)';ctx.beginPath();ctx.arc(-4,-5,4,0,Math.PI*2);ctx.fill();
+        }else{
+          ctx.shadowBlur=16;ctx.shadowColor='#ff4fd1';
+          for(let i=0;i<4;i++){ctx.rotate(Math.PI/2);ctx.fillStyle=i%2?'#ff7eea':'#ff4fd1';ctx.fillRect(-4,0,8,o.r);}
+          ctx.strokeStyle='#ffd166';ctx.lineWidth=2;ctx.beginPath();ctx.arc(0,0,o.r*.56,0,Math.PI*2);ctx.stroke();
+        }
+        ctx.restore();
+      });
+    }
+
+    function drawHudInCanvas(){
+      ctx.fillStyle='rgba(0,0,0,.28)';ctx.fillRect(10,10,180,54);
+      ctx.fillStyle='#e9f5ff';ctx.font='16px sans-serif';ctx.fillText(`Dash CD: ${S.player.dashCd>0?S.player.dashCd.toFixed(1):'READY'}`,18,34);
+      ctx.fillStyle='#ffd166';ctx.fillText(`Speed x${S.speedMul.toFixed(2)}`,18,56);
+    }
+
+    function render(){drawBg();drawObjs();drawPlayer();drawHudInCanvas();}
+
+    function syncHud(){
+      scoreEl.textContent=String(S.score);
+      distanceEl.textContent=`${Math.floor(S.distance)}m`;
+      comboEl.textContent=`x${S.combo}`;
+      hpEl.textContent=String(S.hp);
+      bestEl.textContent=`${best.distance}m / x${best.combo}`;
+    }
+
+    function frame(now){const dt=Math.min(.05,(now-S.last)/1000);S.last=now;update(dt);render();requestAnimationFrame(frame);}    
+
+    window.addEventListener('keydown',e=>{
+      if(e.key==='ArrowLeft'||e.key==='a'||e.key==='A')input.left=true;
+      if(e.key==='ArrowRight'||e.key==='d'||e.key==='D')input.right=true;
+      if(e.key===' '){e.preventDefault();dash();}
+      if(e.key==='r'||e.key==='R')reset();
+    });
+    window.addEventListener('keyup',e=>{
+      if(e.key==='ArrowLeft'||e.key==='a'||e.key==='A')input.left=false;
+      if(e.key==='ArrowRight'||e.key==='d'||e.key==='D')input.right=false;
+    });
+
+    const bindHold=(el,side)=>{
+      const on=()=>{input[side]=true;el.classList.add('active');};
+      const off=()=>{input[side]=false;el.classList.remove('active');};
+      ['pointerdown','touchstart'].forEach(ev=>el.addEventListener(ev,e=>{e.preventDefault();on();},{passive:false}));
+      ['pointerup','pointerleave','pointercancel','touchend','touchcancel'].forEach(ev=>el.addEventListener(ev,off));
+    };
+
+    bindHold(document.getElementById('leftBtn'),'left');
+    bindHold(document.getElementById('rightBtn'),'right');
+    document.getElementById('dashBtn').addEventListener('click',dash);
+    document.getElementById('retry').addEventListener('click',reset);
+
+    syncHud();requestAnimationFrame(frame);
+  })();
+  </script>
+</body>
+</html>

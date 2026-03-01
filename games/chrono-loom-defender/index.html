@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>Chrono Loom Defender</title>
+  <meta name="theme-color" content="#0a0a1a" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <style>
+    :root{
+      --bg:#0a0a1a;--panel:#12122b;--ink:#e8f6ff;--neon:#65f5ff;--pink:#ff5edc;--warn:#ffd166;--bad:#ff6b6b;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:radial-gradient(circle at 20% 10%,#1a1a3b 0%,var(--bg) 45%,#060611 100%);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh;display:flex;justify-content:center;align-items:stretch}
+    .app{width:min(980px,100%);padding:12px;display:flex;flex-direction:column;gap:10px}
+    .hud{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+    .card{background:rgba(18,18,43,.85);border:1px solid #2a2a54;border-radius:12px;padding:8px 10px;text-align:center;box-shadow:0 0 16px #0008}
+    .card b{display:block;color:var(--neon);font-size:1.1rem}
+    .arena{background:rgba(10,10,26,.75);border:1px solid #2d2d63;border-radius:14px;padding:10px;display:grid;gap:8px}
+    .lane{position:relative;background:#121235;border:1px solid #2f2f6a;border-radius:10px;padding:10px 10px 20px;min-height:74px;overflow:hidden}
+    .lane.active{outline:2px solid var(--neon);box-shadow:0 0 18px #65f5ff55}
+    .laneLabel{font-size:.86rem;opacity:.9}
+    .track{position:absolute;left:8px;right:8px;bottom:8px;height:10px;background:#22224d;border-radius:999px;overflow:hidden}
+    .anomaly{position:absolute;bottom:6px;height:14px;border-radius:999px;background:linear-gradient(90deg,#ff85e7,#ff4d9f);box-shadow:0 0 10px #ff5edcaa}
+    .controls,.touch{display:grid;gap:8px}
+    .controls{grid-template-columns:repeat(3,minmax(0,1fr))}
+    button{background:#191944;color:#fff;border:1px solid #3e3e80;border-radius:10px;padding:10px;font-weight:700;min-height:44px}
+    button.active{border-color:var(--neon);background:#24245a;box-shadow:0 0 12px #65f5ff55}
+    button:active{transform:translateY(1px)}
+    .touch{grid-template-columns:repeat(4,minmax(0,1fr))}
+    .note{font-size:.84rem;opacity:.86;line-height:1.4}
+    .overlay{position:fixed;inset:0;background:#03030be0;display:none;justify-content:center;align-items:center;padding:20px;z-index:3}
+    .overlay.show{display:flex}
+    .panel{width:min(420px,100%);background:#11112a;border:1px solid #40408f;border-radius:16px;padding:18px;text-align:center}
+    .panel h2{margin:0 0 10px;color:#ff9be8}
+    .panel p{margin:8px 0}
+    @media (max-width:720px){
+      .hud{grid-template-columns:repeat(2,minmax(0,1fr))}
+      .controls{grid-template-columns:1fr}
+      .touch{grid-template-columns:repeat(2,minmax(0,1fr))}
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="hud">
+      <div class="card">Score<b id="score">0</b></div>
+      <div class="card">Round<b id="round">1</b></div>
+      <div class="card">Stability<b id="stability">100</b></div>
+      <div class="card">Energy<b id="energy">100</b></div>
+      <div class="card">Best<b id="best">0 / R1</b></div>
+    </section>
+
+    <section id="arena" class="arena" aria-label="lanes"></section>
+
+    <section class="controls" aria-label="widgets">
+      <button data-widget="pulse">Q · Pulse (18E)</button>
+      <button data-widget="stitch">W · Stitch (35E)</button>
+      <button data-widget="freeze">E · Freeze (22E)</button>
+    </section>
+
+    <section class="touch" aria-label="touch controls">
+      <button data-lane="0">Lane 1</button>
+      <button data-lane="1">Lane 2</button>
+      <button data-lane="2">Lane 3</button>
+      <button data-lane="3">Lane 4</button>
+      <button id="deployBtn">Deploy · Space</button>
+      <button id="restartBtn">Restart · R</button>
+    </section>
+
+    <p class="note">키보드: <b>1~4</b> 레인 선택, <b>Q/W/E</b> 위젯 선택, <b>Space</b> 배치, <b>R</b> 재시작. 터치 버튼 완전 지원.</p>
+  </main>
+
+  <div id="overlay" class="overlay" role="dialog" aria-modal="true">
+    <div class="panel">
+      <h2>Chrono Loom Breached</h2>
+      <p id="finalText"></p>
+      <button id="retryBtn">다시 방어하기</button>
+    </div>
+  </div>
+
+  <script>
+    (()=>{
+      const laneCount=4, storageKey='chronoLoomDefender.v1';
+      const arena=document.getElementById('arena');
+      const scoreEl=document.getElementById('score');
+      const roundEl=document.getElementById('round');
+      const stabilityEl=document.getElementById('stability');
+      const energyEl=document.getElementById('energy');
+      const bestEl=document.getElementById('best');
+      const overlay=document.getElementById('overlay');
+      const finalText=document.getElementById('finalText');
+      const widgetButtons=[...document.querySelectorAll('[data-widget]')];
+      const laneButtons=[...document.querySelectorAll('[data-lane]')];
+
+      const SFX={ctx:null};
+      const chirp=(f=440,t=.08,type='sine',g=.05)=>{
+        if(!SFX.ctx)return;
+        const now=SFX.ctx.currentTime;
+        const o=SFX.ctx.createOscillator();
+        const gn=SFX.ctx.createGain();
+        o.type=type;o.frequency.setValueAtTime(f,now);
+        gn.gain.setValueAtTime(g,now);gn.gain.exponentialRampToValueAtTime(.0001,now+t);
+        o.connect(gn).connect(SFX.ctx.destination);o.start(now);o.stop(now+t);
+      };
+      const ensureAudio=()=>{
+        if(!SFX.ctx){
+          const C=window.AudioContext||window.webkitAudioContext;
+          if(C)SFX.ctx=new C();
+        }
+      };
+      ['pointerdown','keydown'].forEach(evt=>window.addEventListener(evt,ensureAudio,{once:true}));
+
+      let saved={bestScore:0,bestRound:1};
+      try{saved=Object.assign(saved,JSON.parse(localStorage.getItem(storageKey)||'{}'));}catch{}
+
+      const state={
+        lanes:Array.from({length:laneCount},()=>({anomalies:[],slowUntil:0})),
+        selectedLane:0,selectedWidget:'pulse',score:0,round:1,stability:100,energy:100,
+        spawnTimer:0,spawnEvery:1.45,elapsed:0,running:true,last:performance.now(),
+        cooldowns:{pulse:0,stitch:0,freeze:0}
+      };
+
+      const widgets={
+        pulse:{cost:18,damage:22,cd:0.34,sfx:520},
+        stitch:{cost:35,damage:44,cd:0.78,sfx:720},
+        freeze:{cost:22,damage:12,cd:1.05,sfx:360}
+      };
+
+      const laneEls=[];
+      for(let i=0;i<laneCount;i++){
+        const el=document.createElement('div');
+        el.className='lane';
+        el.innerHTML=`<div class="laneLabel">Lane ${i+1}</div><div class="track"></div>`;
+        el.addEventListener('click',()=>{state.selectedLane=i;chirp(400,.04,'triangle',.03);syncActive();});
+        arena.appendChild(el);laneEls.push(el);
+      }
+
+      function spawnAnomaly(){
+        const laneIndex=(Math.random()*laneCount)|0;
+        const hp=12+state.round*4+(Math.random()*8|0);
+        state.lanes[laneIndex].anomalies.push({pos:100,hp,maxHp:hp,speed:10+state.round*1.8+Math.random()*4});
+      }
+
+      function deploy(){
+        if(!state.running)return;
+        const w=widgets[state.selectedWidget];
+        if(state.energy<w.cost||state.cooldowns[state.selectedWidget]>0){chirp(130,.08,'square',.03);return;}
+        const lane=state.lanes[state.selectedLane];
+        state.energy-=w.cost;
+        state.cooldowns[state.selectedWidget]=w.cd;
+        let hit=false;
+        if(state.selectedWidget==='freeze'){
+          lane.slowUntil=state.elapsed+1.5;
+          chirp(w.sfx,.11,'sawtooth',.045);
+        }
+        lane.anomalies.sort((a,b)=>a.pos-b.pos);
+        lane.anomalies.slice(0,2).forEach(a=>{
+          a.hp-=w.damage;
+          if(a.hp<=0){state.score+=14+state.round*2;hit=true;chirp(930,.06,'triangle',.035);} else {chirp(w.sfx,.07,'square',.032);} 
+        });
+        lane.anomalies=lane.anomalies.filter(a=>a.hp>0);
+        if(!hit&&state.selectedWidget!=='freeze') chirp(250,.05,'triangle',.028);
+        syncHud();
+      }
+
+      function gameOver(){
+        state.running=false;
+        if(state.score>saved.bestScore){saved.bestScore=state.score;saved.bestRound=state.round;localStorage.setItem(storageKey,JSON.stringify(saved));}
+        finalText.textContent=`점수 ${state.score} · 라운드 ${state.round} · 최고 ${saved.bestScore}`;
+        overlay.classList.add('show');
+        chirp(180,.28,'sawtooth',.05);setTimeout(()=>chirp(120,.34,'triangle',.045),120);
+        syncHud();
+      }
+
+      function restart(){
+        state.lanes.forEach(l=>{l.anomalies=[];l.slowUntil=0});
+        state.selectedLane=0;state.selectedWidget='pulse';state.score=0;state.round=1;
+        state.stability=100;state.energy=100;state.spawnTimer=0;state.spawnEvery=1.45;state.elapsed=0;
+        state.running=true;state.last=performance.now();
+        state.cooldowns={pulse:0,stitch:0,freeze:0};
+        overlay.classList.remove('show');
+        syncActive();syncHud();
+      }
+
+      function syncActive(){
+        laneEls.forEach((el,i)=>el.classList.toggle('active',i===state.selectedLane));
+        widgetButtons.forEach(btn=>btn.classList.toggle('active',btn.dataset.widget===state.selectedWidget));
+        laneButtons.forEach(btn=>btn.classList.toggle('active',Number(btn.dataset.lane)===state.selectedLane));
+      }
+
+      function syncHud(){
+        scoreEl.textContent=String(state.score);
+        roundEl.textContent=String(state.round);
+        stabilityEl.textContent=String(Math.max(0,state.stability));
+        energyEl.textContent=String(Math.round(state.energy));
+        bestEl.textContent=`${saved.bestScore} / R${saved.bestRound}`;
+      }
+
+      function render(){
+        state.lanes.forEach((lane,idx)=>{
+          const el=laneEls[idx];
+          [...el.querySelectorAll('.anomaly')].forEach(n=>n.remove());
+          lane.anomalies.forEach(a=>{
+            const n=document.createElement('div');n.className='anomaly';
+            n.style.left=`calc(${100-a.pos}% - 6px)`;
+            n.style.width=`${Math.max(14,(a.hp/a.maxHp)*42)}px`;
+            n.style.opacity=String(Math.max(.45,a.hp/a.maxHp));
+            if(state.elapsed<lane.slowUntil) n.style.background='linear-gradient(90deg,#8ee8ff,#6ea8ff)';
+            el.appendChild(n);
+          });
+        });
+      }
+
+      function loop(now){
+        const dt=Math.min(0.05,(now-state.last)/1000);state.last=now;
+        if(state.running){
+          state.elapsed+=dt;
+          state.spawnTimer+=dt;
+          state.energy=Math.min(100,state.energy+dt*14);
+          Object.keys(state.cooldowns).forEach(k=>state.cooldowns[k]=Math.max(0,state.cooldowns[k]-dt));
+          if(state.spawnTimer>=state.spawnEvery){state.spawnTimer=0;spawnAnomaly();if(Math.random()<0.28+state.round*0.02)spawnAnomaly();}
+          if(state.elapsed>=state.round*20){state.round++;state.spawnEvery=Math.max(.55,state.spawnEvery-.07);chirp(640,.11,'triangle',.042);}
+          state.lanes.forEach(lane=>{
+            const slowed=state.elapsed<lane.slowUntil?0.52:1;
+            lane.anomalies.forEach(a=>a.pos-=a.speed*dt*slowed);
+            const breached=lane.anomalies.filter(a=>a.pos<=0);
+            if(breached.length){
+              state.stability-=breached.length*10;
+              chirp(220,.09,'sawtooth',.05);
+            }
+            lane.anomalies=lane.anomalies.filter(a=>a.pos>0);
+          });
+          if(state.stability<=0)gameOver();
+          syncHud();
+        }
+        render();
+        requestAnimationFrame(loop);
+      }
+
+      window.addEventListener('keydown',(e)=>{
+        if(['1','2','3','4'].includes(e.key)){state.selectedLane=Number(e.key)-1;syncActive();chirp(390,.04,'triangle',.026);} 
+        else if(['q','Q'].includes(e.key)){state.selectedWidget='pulse';syncActive();chirp(510,.05,'triangle',.03);} 
+        else if(['w','W'].includes(e.key)){state.selectedWidget='stitch';syncActive();chirp(610,.05,'triangle',.03);} 
+        else if(['e','E'].includes(e.key)){state.selectedWidget='freeze';syncActive();chirp(310,.05,'triangle',.03);} 
+        else if(e.key===' '||e.key==='Enter'){e.preventDefault();deploy();}
+        else if(['r','R'].includes(e.key)){restart();}
+      });
+
+      widgetButtons.forEach(btn=>btn.addEventListener('click',()=>{state.selectedWidget=btn.dataset.widget;syncActive();chirp(500,.05,'triangle',.03);}));
+      laneButtons.forEach(btn=>btn.addEventListener('click',()=>{state.selectedLane=Number(btn.dataset.lane);syncActive();chirp(390,.04,'triangle',.026);}));
+      document.getElementById('deployBtn').addEventListener('click',deploy);
+      document.getElementById('restartBtn').addEventListener('click',restart);
+      document.getElementById('retryBtn').addEventListener('click',restart);
+
+      syncActive();syncHud();render();requestAnimationFrame(loop);
+    })();
+  </script>
+</body>
+</html>

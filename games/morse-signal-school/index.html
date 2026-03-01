@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Morse Signal School</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <style>
+    :root{
+      --bg:#0a0a1a;--panel:#12122a;--line:#2de2e6;--accent:#ff4ecd;--ok:#44ff99;--warn:#ffc857;--bad:#ff5d73;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;background:radial-gradient(circle at top,#17173a,#0a0a1a 60%);color:#eaf6ff;min-height:100svh;padding:calc(12px + env(safe-area-inset-top)) 12px calc(16px + env(safe-area-inset-bottom));display:flex;justify-content:center}
+    .app{width:min(680px,100%);display:grid;gap:10px}
+    .card{background:linear-gradient(180deg,#141432,#0f1026);border:1px solid #22345f;border-radius:14px;padding:12px;box-shadow:0 0 24px #0008,inset 0 0 20px #1b2c5a33}
+    h1{margin:0;font-size:clamp(1.2rem,3vw,1.7rem);color:var(--line);text-shadow:0 0 12px #2de2e680}
+    .hud{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;font-size:.9rem}
+    .stat{background:#0b1433;border:1px solid #2c4e8a;border-radius:10px;padding:8px;text-align:center}
+    .label{opacity:.75;font-size:.75rem}
+    .value{font-weight:700}
+    .signal{font-size:1.8rem;letter-spacing:.22rem;text-align:center;min-height:2.4rem;color:var(--warn);text-shadow:0 0 12px #ffc85766}
+    .prompt{text-align:center;font-size:1rem;opacity:.9}
+    .meter{height:10px;background:#09101f;border-radius:999px;overflow:hidden;border:1px solid #2c3f6f}
+    .meter>span{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--line));width:100%}
+    .controls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+    button{border:1px solid #35579a;background:#122246;color:#eff8ff;border-radius:10px;padding:10px 8px;font-weight:700}
+    button:active{transform:translateY(1px)}
+    .primary{background:linear-gradient(180deg,#1b3270,#122246);border-color:#4f84e6}
+    .accent{background:linear-gradient(180deg,#4b1a52,#2a1136);border-color:#b861d1}
+    .ok{border-color:#3ad38d;background:#113425}
+    .danger{border-color:#d35062;background:#3a1520}
+    .keys{opacity:.75;font-size:.82rem;text-align:center}
+    .hidden{display:none}
+    .overlay{position:fixed;inset:0;background:#070915df;display:grid;place-items:center;padding:16px;z-index:50}
+    .panel{max-width:560px;width:100%;background:#101129;border:1px solid #31518f;border-radius:14px;padding:16px;display:grid;gap:10px}
+    .panel h2{margin:0;color:var(--line)}
+    .panel p{margin:0;line-height:1.4}
+    @media (max-width:560px){.controls{grid-template-columns:repeat(2,minmax(0,1fr))}.hud{grid-template-columns:repeat(3,minmax(0,1fr))}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="card"><h1>📡 Morse Signal School</h1><div class="keys">터치 또는 키보드: J(·), K(-), Enter(제출), Backspace(삭제)</div></div>
+    <div class="card hud">
+      <div class="stat"><div class="label">Lesson</div><div id="lesson" class="value">1 / 6</div></div>
+      <div class="stat"><div class="label">Round</div><div id="round" class="value">1 / 5</div></div>
+      <div class="stat"><div class="label">Score</div><div id="score" class="value">0</div></div>
+      <div class="stat"><div class="label">Combo</div><div id="combo" class="value">0</div></div>
+      <div class="stat"><div class="label">Miss</div><div id="miss" class="value">0 / 3</div></div>
+    </div>
+    <div class="card">
+      <div class="prompt" id="prompt">신호를 듣고 모스 부호를 입력하세요.</div>
+      <div class="signal" id="inputSignal">&nbsp;</div>
+      <div class="meter" title="question time"><span id="timerBar"></span></div>
+    </div>
+    <div class="card controls">
+      <button id="dotBtn" class="primary">· Dot (J)</button>
+      <button id="dashBtn" class="accent">- Dash (K)</button>
+      <button id="playBtn">🔊 Replay</button>
+      <button id="backBtn">⌫ Back</button>
+      <button id="submitBtn" class="ok">✓ Submit</button>
+      <button id="clearBtn">Clear</button>
+      <button id="nextBtn" class="primary">Next Prompt</button>
+      <button id="restartBtn" class="danger">Restart</button>
+    </div>
+    <div class="card">
+      <div>Best Score: <b id="bestScore">0</b> · Best Lesson: <b id="bestLesson">1</b> · Best Combo: <b id="bestCombo">0</b></div>
+    </div>
+  </div>
+
+  <div id="overlay" class="overlay">
+    <div class="panel">
+      <h2 id="ovTitle">Morse Signal School</h2>
+      <p id="ovText">6개 레슨으로 모스 부호를 해독하세요. 라운드당 5문항, 오답 3회면 종료됩니다.</p>
+      <button id="startBtn" class="primary">Start Lesson</button>
+    </div>
+  </div>
+
+<script>
+(()=>{
+'use strict';
+const MORSE={A:'.-',B:'-...',C:'-.-.',D:'-..',E:'.',F:'..-.',G:'--.',H:'....',I:'..',J:'.---',K:'-.-',L:'.-..',M:'--',N:'-.',O:'---',P:'.--.',Q:'--.-',R:'.-.',S:'...',T:'-',U:'..-',V:'...-',W:'.--',X:'-..-',Y:'-.--',Z:'--..'};
+const LESSONS=[['E','T','A','N'],['I','M','S','O','R'],['D','G','K','U','W'],['B','C','F','H','L','P'],['Q','V','X','Y','Z','J'],Object.keys(MORSE)];
+const ROUNDS=5,TIME_PER=10,MAX_MISS=3,saveKey='morse-signal-school-v1';
+const $=s=>document.querySelector(s);
+let st={lesson:0,round:1,score:0,combo:0,bestCombo:0,miss:0,input:'',target:'E',timeLeft:TIME_PER,loop:0,locked:false,audio:null,best:{bestScore:0,bestLesson:1,bestCombo:0}};
+const el={lesson:$('#lesson'),round:$('#round'),score:$('#score'),combo:$('#combo'),miss:$('#miss'),prompt:$('#prompt'),inputSignal:$('#inputSignal'),timerBar:$('#timerBar'),bestScore:$('#bestScore'),bestLesson:$('#bestLesson'),bestCombo:$('#bestCombo'),overlay:$('#overlay'),ovTitle:$('#ovTitle'),ovText:$('#ovText')};
+
+function load(){try{const v=JSON.parse(localStorage.getItem(saveKey)||'{}');st.best.bestScore=v.bestScore||0;st.best.bestLesson=v.bestLesson||1;st.best.bestCombo=v.bestCombo||0;}catch(_){};renderBest();}
+function save(){localStorage.setItem(saveKey,JSON.stringify(st.best));}
+function renderBest(){el.bestScore.textContent=st.best.bestScore;el.bestLesson.textContent=st.best.bestLesson;el.bestCombo.textContent=st.best.bestCombo;}
+function ensureAudio(){if(st.audio)return;st.audio=new (window.AudioContext||window.webkitAudioContext)();}
+function tone(freq=620,dur=.08,type='sine',gain=.04){if(!st.audio)return;const t=st.audio.currentTime,o=st.audio.createOscillator(),g=st.audio.createGain();o.frequency.value=freq;o.type=type;g.gain.setValueAtTime(gain,t);g.gain.exponentialRampToValueAtTime(0.0001,t+dur);o.connect(g).connect(st.audio.destination);o.start(t);o.stop(t+dur);} 
+function sfx(kind){if(kind==='ok'){tone(980,.09,'triangle',.06);setTimeout(()=>tone(1320,.12,'triangle',.05),70);}else if(kind==='bad'){tone(220,.2,'sawtooth',.06);}else if(kind==='click'){tone(620,.04,'square',.04);}else if(kind==='done'){tone(780,.08,'triangle',.05);setTimeout(()=>tone(980,.08,'triangle',.05),90);setTimeout(()=>tone(1280,.12,'triangle',.05),180);}}
+function pulse(symbol){tone(symbol==='.'?760:480,symbol==='.'?.08:.2,'sine',.06)}
+function playTarget(){if(st.locked)return;const code=MORSE[st.target];let t=0;for(const c of code){setTimeout(()=>pulse(c),t*1000);t+=c==='.'?.12:.27;t+=.1;}}
+function pickTarget(){const pool=LESSONS[st.lesson];st.target=pool[Math.floor(Math.random()*pool.length)];st.input='';st.timeLeft=TIME_PER;st.locked=false;render();setTimeout(playTarget,180);}
+function render(){el.lesson.textContent=`${st.lesson+1} / ${LESSONS.length}`;el.round.textContent=`${st.round} / ${ROUNDS}`;el.score.textContent=st.score;el.combo.textContent=st.combo;el.miss.textContent=`${st.miss} / ${MAX_MISS}`;el.inputSignal.textContent=st.input||'· · ·';el.timerBar.style.width=`${Math.max(0,(st.timeLeft/TIME_PER)*100)}%`;el.prompt.textContent=`Lesson ${st.lesson+1}: 문자 신호 해독 (${LESSONS[st.lesson].join(' ')})`;}
+function begin(){ensureAudio();if(st.audio.state==='suspended')st.audio.resume();st.lesson=0;st.round=1;st.score=0;st.combo=0;st.bestCombo=0;st.miss=0;el.overlay.classList.add('hidden');pickTarget();clearInterval(st.loop);st.loop=setInterval(tick,100);} 
+function tick(){if(st.locked)return;st.timeLeft-=0.1;if(st.timeLeft<=0){st.timeLeft=0;judge('timeout');}render();}
+function push(ch){if(st.locked)return;if(st.input.length>=5)return;st.input+=ch;sfx('click');render();}
+function pop(){if(st.locked)return;st.input=st.input.slice(0,-1);render();}
+function clearInput(){if(st.locked)return;st.input='';render();}
+function judge(reason){if(st.locked)return;st.locked=true;const answer=MORSE[st.target],ok=(st.input===answer&&reason!=='timeout');
+if(ok){st.combo++;st.bestCombo=Math.max(st.bestCombo,st.combo);st.score+=100+st.combo*15+Math.floor(st.timeLeft*4);sfx('ok');}
+else{st.combo=0;st.miss++;sfx('bad');}
+if(st.miss>=MAX_MISS){return finish(false);} 
+if(st.round>=ROUNDS){return clearLesson();}
+st.round++;setTimeout(()=>pickTarget(),420);render();}
+function clearLesson(){if(st.lesson>=LESSONS.length-1){st.best.bestLesson=Math.max(st.best.bestLesson,LESSONS.length);finish(true);return;}st.lesson++;st.best.bestLesson=Math.max(st.best.bestLesson,st.lesson+1);st.round=1;st.miss=Math.max(0,st.miss-1);sfx('done');overlay(`Lesson ${st.lesson} Clear!`,`다음 레슨으로 이동합니다. 문자 풀이 속도가 더 빨라집니다.`,`Next Lesson`,()=>{pickTarget();});updateBest();}
+function finish(win){clearInterval(st.loop);updateBest();sfx(win?'done':'bad');overlay(win?'Graduation Complete 🎓':'Game Over',win?`최종 점수 ${st.score}. Morse Master!`:`점수 ${st.score}. 다시 도전해보세요.`,`Restart`,begin);} 
+function updateBest(){st.best.bestScore=Math.max(st.best.bestScore,st.score);st.best.bestCombo=Math.max(st.best.bestCombo,st.bestCombo);save();renderBest();}
+function overlay(title,text,btn,handler){el.ovTitle.textContent=title;el.ovText.textContent=text;const s=$('#startBtn');s.textContent=btn;s.onclick=()=>{el.overlay.classList.add('hidden');handler&&handler();};el.overlay.classList.remove('hidden');}
+
+$('#startBtn').addEventListener('click',begin);
+$('#dotBtn').addEventListener('click',()=>push('.'));
+$('#dashBtn').addEventListener('click',()=>push('-'));
+$('#backBtn').addEventListener('click',pop);
+$('#clearBtn').addEventListener('click',clearInput);
+$('#submitBtn').addEventListener('click',()=>judge('submit'));
+$('#playBtn').addEventListener('click',()=>{ensureAudio();playTarget();});
+$('#nextBtn').addEventListener('click',()=>judge('skip'));
+$('#restartBtn').addEventListener('click',begin);
+addEventListener('keydown',e=>{
+  if(el.overlay.classList.contains('hidden')===false && e.key!=='Enter')return;
+  if(e.key==='j'||e.key==='J')push('.');
+  else if(e.key==='k'||e.key==='K')push('-');
+  else if(e.key==='Enter')judge('submit');
+  else if(e.key==='Backspace'){e.preventDefault();pop();}
+  else if(e.key==='r'||e.key==='R')playTarget();
+});
+
+load();render();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Greenhouse Nightshift</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <style>
+    :root{--bg:#0a0a1a;--panel:#11142e;--line:#2de2e6;--pink:#ff4ecd;--good:#3df5a7;--warn:#ffc857;--bad:#ff647d}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,system-ui,sans-serif;color:#eaf8ff;background:radial-gradient(circle at 50% -10%,#1f2355,#0a0a1a 58%);min-height:100svh;padding:calc(10px + env(safe-area-inset-top)) 10px calc(14px + env(safe-area-inset-bottom));display:flex;justify-content:center}
+    .app{width:min(780px,100%);display:grid;gap:10px}
+    .card{background:linear-gradient(180deg,#121530,#0e1025);border:1px solid #2a4f8f;border-radius:14px;padding:12px;box-shadow:inset 0 0 20px #1e3f8224,0 0 24px #0009}
+    h1{margin:0;color:var(--line);font-size:clamp(1.2rem,2.8vw,1.7rem);text-shadow:0 0 12px #2de2e688}
+    .hud{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+    .stat{text-align:center;background:#0c1634;border:1px solid #2c4b84;border-radius:10px;padding:8px}
+    .label{font-size:.74rem;opacity:.7}.value{font-weight:700}
+    .meters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+    .meterBox{padding:10px;border:1px solid #2f4677;border-radius:10px;background:#0b1228}
+    .meterHead{display:flex;justify-content:space-between;align-items:center;font-size:.9rem;margin-bottom:6px}
+    .bar{height:12px;background:#060d1b;border-radius:999px;overflow:hidden;border:1px solid #284170;position:relative}
+    .fill{height:100%;background:linear-gradient(90deg,var(--pink),var(--line));width:50%}
+    .target{position:absolute;top:-1px;bottom:-1px;border-left:2px dashed #44fca3aa;border-right:2px dashed #44fca3aa;pointer-events:none}
+    .controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+    .ctrl{padding:10px;border:1px solid #355a9f;border-radius:10px;background:#0d1839;display:grid;gap:6px}
+    .ctrl h3{margin:0;font-size:.95rem;color:#cde7ff}
+    .row{display:flex;gap:6px}
+    button{border:1px solid #4b74c2;background:#122348;color:#f0f8ff;border-radius:9px;padding:8px;font-weight:700;flex:1}
+    button:active{transform:translateY(1px)}
+    .center{text-align:center}.hint{opacity:.75;font-size:.82rem}
+    .overlay{position:fixed;inset:0;background:#070812e6;display:grid;place-items:center;padding:16px}
+    .panel{background:#10132d;border:1px solid #335594;border-radius:14px;padding:16px;max-width:560px;width:100%;display:grid;gap:10px}
+    .panel h2{margin:0;color:var(--line)}
+    .hidden{display:none}
+    @media (max-width:620px){.hud{grid-template-columns:repeat(3,minmax(0,1fr))}.meters,.controls{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="card"><h1>🌱 Greenhouse Nightshift</h1><div class="hint">키보드: Q/A(히터), W/S(미스트), E/D(팬)</div></div>
+    <div class="card hud">
+      <div class="stat"><div class="label">Shift</div><div id="shift" class="value">1 / 6</div></div>
+      <div class="stat"><div class="label">Time</div><div id="time" class="value">45s</div></div>
+      <div class="stat"><div class="label">Growth</div><div id="growth" class="value">0 / 100</div></div>
+      <div class="stat"><div class="label">Health</div><div id="health" class="value">100</div></div>
+      <div class="stat"><div class="label">Best</div><div id="best" class="value">S1 · 0</div></div>
+    </div>
+    <div class="card meters">
+      <div class="meterBox"><div class="meterHead"><span>Temp ℃</span><b id="tempV">22.0</b></div><div class="bar"><span id="tempF" class="fill"></span><span id="tempT" class="target"></span></div></div>
+      <div class="meterBox"><div class="meterHead"><span>Humidity %</span><b id="humV">52</b></div><div class="bar"><span id="humF" class="fill"></span><span id="humT" class="target"></span></div></div>
+      <div class="meterBox"><div class="meterHead"><span>CO₂ ppm</span><b id="co2V">450</b></div><div class="bar"><span id="co2F" class="fill"></span><span id="co2T" class="target"></span></div></div>
+    </div>
+    <div class="card controls">
+      <div class="ctrl"><h3>🔥 Heater <span id="heaterV">40</span>%</h3><div class="row"><button data-act="heater" data-delta="-10">-10 (A)</button><button data-act="heater" data-delta="10">+10 (Q)</button></div></div>
+      <div class="ctrl"><h3>💧 Mister <span id="misterV">40</span>%</h3><div class="row"><button data-act="mister" data-delta="-10">-10 (S)</button><button data-act="mister" data-delta="10">+10 (W)</button></div></div>
+      <div class="ctrl"><h3>🌀 Fan <span id="fanV">40</span>%</h3><div class="row"><button data-act="fan" data-delta="-10">-10 (D)</button><button data-act="fan" data-delta="10">+10 (E)</button></div></div>
+    </div>
+    <div class="card center" id="statusText">모든 지표를 목표 구간으로 유지해 성장치를 채우세요.</div>
+  </div>
+
+  <div id="overlay" class="overlay">
+    <div class="panel">
+      <h2 id="ovTitle">Greenhouse Nightshift</h2>
+      <p id="ovText">6개의 야간 교대 근무를 버티며 온실을 안정화하세요.</p>
+      <button id="startBtn">Start Shift</button>
+    </div>
+  </div>
+
+<script>
+(()=>{
+'use strict';
+const SHIFT_MAX=6,SHIFT_TIME=45,saveKey='greenhouse-nightshift-v1';
+const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
+const $=s=>document.querySelector(s);
+const st={mode:'title',shift:1,time:SHIFT_TIME,growth:0,goal:100,health:100,temp:22,hum:52,co2:450,heater:40,mister:40,fan:40,tick:null,audio:null,best:{bestShift:1,bestGrowth:0},rng:Math.random};
+const el={shift:$('#shift'),time:$('#time'),growth:$('#growth'),health:$('#health'),best:$('#best'),tempV:$('#tempV'),humV:$('#humV'),co2V:$('#co2V'),tempF:$('#tempF'),humF:$('#humF'),co2F:$('#co2F'),tempT:$('#tempT'),humT:$('#humT'),co2T:$('#co2T'),heaterV:$('#heaterV'),misterV:$('#misterV'),fanV:$('#fanV'),status:$('#statusText'),overlay:$('#overlay'),ovTitle:$('#ovTitle'),ovText:$('#ovText')};
+function targets(){const s=st.shift;return{temp:[20+s*.4,24+s*.4],hum:[46-s*.8,60-s*.6],co2:[380+s*18,520+s*22]};}
+function load(){try{const v=JSON.parse(localStorage.getItem(saveKey)||'{}');st.best.bestShift=v.bestShift||1;st.best.bestGrowth=v.bestGrowth||0;}catch(_){}}
+function save(){localStorage.setItem(saveKey,JSON.stringify(st.best));}
+function ensureAudio(){if(st.audio)return;st.audio=new (window.AudioContext||window.webkitAudioContext)();}
+function beep(f=660,d=.07,t='sine',g=.05){if(!st.audio)return;const n=st.audio.currentTime,o=st.audio.createOscillator(),a=st.audio.createGain();o.frequency.value=f;o.type=t;a.gain.setValueAtTime(g,n);a.gain.exponentialRampToValueAtTime(0.0001,n+d);o.connect(a).connect(st.audio.destination);o.start(n);o.stop(n+d);}
+function sfx(k){if(k==='click')beep(640,.05,'square',.04);if(k==='warn')beep(220,.12,'sawtooth',.05);if(k==='clear'){beep(780,.06,'triangle',.05);setTimeout(()=>beep(980,.08,'triangle',.05),80);}if(k==='fail'){beep(180,.2,'sawtooth',.06);} }
+function overlay(title,text,btn,fn){el.ovTitle.textContent=title;el.ovText.textContent=text;const b=$('#startBtn');b.textContent=btn;b.onclick=()=>{el.overlay.classList.add('hidden');fn&&fn();};el.overlay.classList.remove('hidden');}
+function setupShift(reset=true){if(reset){st.time=SHIFT_TIME;st.growth=0;st.health=100;st.temp=22;st.hum=52;st.co2=450;st.heater=40;st.mister=40;st.fan=40;}st.goal=100+(st.shift-1)*26;renderTargets();render();}
+function renderTargets(){const t=targets();const map={temp:[10,40],hum:[20,90],co2:[250,800]};[['tempT',t.temp,map.temp],['humT',t.hum,map.hum],['co2T',t.co2,map.co2]].forEach(([id,[a,b],[min,max]])=>{const l=((a-min)/(max-min))*100,w=((b-a)/(max-min))*100;el[id].style.left=l+'%';el[id].style.width=w+'%';});}
+function meter(v,min,max){return clamp((v-min)/(max-min)*100,0,100)}
+function render(){el.shift.textContent=`${st.shift} / ${SHIFT_MAX}`;el.time.textContent=`${Math.ceil(st.time)}s`;el.growth.textContent=`${Math.floor(st.growth)} / ${st.goal}`;el.health.textContent=Math.floor(st.health);el.best.textContent=`S${st.best.bestShift} · ${Math.floor(st.best.bestGrowth)}`;
+el.tempV.textContent=st.temp.toFixed(1);el.humV.textContent=Math.round(st.hum);el.co2V.textContent=Math.round(st.co2);
+el.tempF.style.width=meter(st.temp,10,40)+'%';el.humF.style.width=meter(st.hum,20,90)+'%';el.co2F.style.width=meter(st.co2,250,800)+'%';
+el.heaterV.textContent=st.heater;el.misterV.textContent=st.mister;el.fanV.textContent=st.fan;}
+function inRange(){const t=targets();return st.temp>=t.temp[0]&&st.temp<=t.temp[1]&&st.hum>=t.hum[0]&&st.hum<=t.hum[1]&&st.co2>=t.co2[0]&&st.co2<=t.co2[1];}
+function drift(){const sev=1+(st.shift-1)*.18;
+st.temp += (-0.18*sev)+(st.heater-35)*0.015-(st.fan-35)*0.012+(st.rng()-.5)*0.25;
+st.hum += (-0.24*sev)+(st.mister-35)*0.02-(st.heater-35)*0.009-(st.fan-35)*0.013+(st.rng()-.5)*0.4;
+st.co2 += (3.6*sev)+(st.heater-35)*0.14-(st.fan-35)*0.26+(st.rng()-.5)*6;
+if(st.rng()<0.03+st.shift*0.004){const r=st.rng();if(r<.33)st.temp+=1.2*sev;else if(r<.66)st.hum-=2.6*sev;else st.co2+=25*sev;}
+st.temp=clamp(st.temp,8,44);st.hum=clamp(st.hum,10,95);st.co2=clamp(st.co2,200,900);
+const good=inRange();if(good){st.growth+=1.9;st.health=Math.min(100,st.health+0.15);el.status.textContent='✅ 안정 구간 유지 중';}
+else{let penalty=.42;const t=targets();if(st.temp<t.temp[0]||st.temp>t.temp[1])penalty+=.22;if(st.hum<t.hum[0]||st.hum>t.hum[1])penalty+=.22;if(st.co2<t.co2[0]||st.co2>t.co2[1])penalty+=.22;st.growth+=0.32;st.health-=penalty;el.status.textContent='⚠ 지표 이탈 — 출력 조절 필요';if(Math.floor(st.time)%4===0)sfx('warn');}
+st.time-=0.1;render();
+if(st.growth>=st.goal){clearInterval(st.tick);st.best.bestShift=Math.max(st.best.bestShift,st.shift);st.best.bestGrowth=Math.max(st.best.bestGrowth,st.growth);save();if(st.shift>=SHIFT_MAX){sfx('clear');overlay('All Shifts Cleared 🌟',`최종 성장치 ${Math.floor(st.growth)}로 6교대 완료!`,'Restart',startGame);return;}st.shift++;sfx('clear');overlay(`Shift ${st.shift-1} Clear`,`다음 교대는 드리프트가 더 강합니다.`,'Next Shift',()=>startShift());return;}
+if(st.health<=0||st.time<=0){clearInterval(st.tick);st.best.bestShift=Math.max(st.best.bestShift,st.shift);st.best.bestGrowth=Math.max(st.best.bestGrowth,st.growth);save();sfx('fail');overlay('Nightshift Failed',`Shift ${st.shift} · Growth ${Math.floor(st.growth)} / ${st.goal}`,'Retry',startGame);}}
+function startGame(){ensureAudio();if(st.audio.state==='suspended')st.audio.resume();st.shift=1;startShift();} 
+function startShift(){setupShift(true);clearInterval(st.tick);st.tick=setInterval(drift,100);render();}
+function adjust(k,d){st[k]=clamp(st[k]+d,0,100);sfx('click');render();}
+
+document.querySelectorAll('button[data-act]').forEach(btn=>btn.addEventListener('click',()=>adjust(btn.dataset.act,+btn.dataset.delta)));
+addEventListener('keydown',e=>{if(!el.overlay.classList.contains('hidden'))return;const m={q:['heater',10],a:['heater',-10],w:['mister',10],s:['mister',-10],e:['fan',10],d:['fan',-10]};const x=m[e.key.toLowerCase()];if(x)adjust(x[0],x[1]);});
+load();setupShift(true);overlay('Greenhouse Nightshift','6개의 교대를 버티며 온실 목표치를 유지하세요.','Start Shift',startGame);
+})();
+</script>
+</body>
+</html>

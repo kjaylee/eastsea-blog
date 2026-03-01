@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Civic Budget Commander</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <style>
+    :root{--bg:#0a0a1a;--panel:#11132b;--line:#2de2e6;--accent:#ff4ecd;--good:#4dffaf;--warn:#ffc857;--bad:#ff5d78}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,system-ui,sans-serif;background:radial-gradient(circle at 40% -20%,#1a1f48,#0a0a1a 58%);color:#edf7ff;min-height:100svh;padding:calc(12px + env(safe-area-inset-top)) 12px calc(16px + env(safe-area-inset-bottom));display:flex;justify-content:center}
+    .app{width:min(760px,100%);display:grid;gap:10px}
+    .card{background:linear-gradient(180deg,#141735,#0f1024);border:1px solid #2f508d;border-radius:14px;padding:12px;box-shadow:0 0 24px #0008,inset 0 0 20px #21407d22}
+    h1{margin:0;color:var(--line);font-size:clamp(1.2rem,2.9vw,1.7rem);text-shadow:0 0 12px #2de2e680}
+    .hud{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+    .stat{background:#0a1433;border:1px solid #29497f;border-radius:10px;padding:8px;text-align:center}
+    .label{font-size:.74rem;opacity:.75}.value{font-weight:700}
+    .event{line-height:1.45;font-size:1rem}
+    .choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+    button{border:1px solid #4e79c7;background:#13254d;color:#f2f8ff;border-radius:10px;padding:10px;text-align:left;font-weight:600}
+    button b{color:#fff}
+    button small{display:block;opacity:.78;margin-top:3px}
+    button:active{transform:translateY(1px)}
+    .legend{font-size:.82rem;opacity:.75}
+    .res{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+    .pill{padding:8px;border-radius:10px;border:1px solid #32528b;background:#0d1633}
+    .bar{height:8px;background:#060b18;border-radius:999px;overflow:hidden;border:1px solid #304a7f;margin-top:4px}
+    .fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--line));}
+    .overlay{position:fixed;inset:0;background:#060712e8;display:grid;place-items:center;padding:16px}
+    .panel{max-width:560px;width:100%;display:grid;gap:10px;background:#10132c;border:1px solid #365a9a;border-radius:14px;padding:16px}
+    .panel h2{margin:0;color:var(--line)}
+    .hidden{display:none}
+    @media (max-width:620px){.hud{grid-template-columns:repeat(3,minmax(0,1fr))}.choices{grid-template-columns:1fr}.res{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="card"><h1>🏛️ Civic Budget Commander</h1><div class="legend">매 라운드 정책 1개 선택 (키보드 1~4). 자원 하나라도 0이 되면 종료.</div></div>
+    <div class="card hud">
+      <div class="stat"><div class="label">Round</div><div id="round" class="value">1</div></div>
+      <div class="stat"><div class="label">Score</div><div id="score" class="value">0</div></div>
+      <div class="stat"><div class="label">Best Round</div><div id="bestRound" class="value">1</div></div>
+      <div class="stat"><div class="label">Best Score</div><div id="bestScore" class="value">0</div></div>
+      <div class="stat"><div class="label">Pressure</div><div id="pressure" class="value">Low</div></div>
+      <div class="stat"><div class="label">Stability</div><div id="stability" class="value">Stable</div></div>
+    </div>
+    <div class="card res">
+      <div class="pill">💰 Budget <b id="budgetV">60</b><div class="bar"><div id="budgetF" class="fill"></div></div></div>
+      <div class="pill">🤝 Trust <b id="trustV">60</b><div class="bar"><div id="trustF" class="fill"></div></div></div>
+      <div class="pill">🛡️ Safety <b id="safetyV">60</b><div class="bar"><div id="safetyF" class="fill"></div></div></div>
+      <div class="pill">🏗️ Infra <b id="infraV">60</b><div class="bar"><div id="infraF" class="fill"></div></div></div>
+    </div>
+    <div class="card event" id="eventText">도시가 당신의 결정을 기다립니다...</div>
+    <div class="card choices">
+      <button data-idx="0"><b>정책 A</b><small>-</small></button>
+      <button data-idx="1"><b>정책 B</b><small>-</small></button>
+      <button data-idx="2"><b>정책 C</b><small>-</small></button>
+      <button data-idx="3"><b>정책 D</b><small>-</small></button>
+    </div>
+  </div>
+
+  <div id="overlay" class="overlay">
+    <div class="panel">
+      <h2 id="ovTitle">Civic Budget Commander</h2>
+      <p id="ovText">도시 자원을 균형 있게 관리하며 최대 라운드 생존을 노리세요.</p>
+      <button id="startBtn">Start Governance</button>
+    </div>
+  </div>
+
+<script>
+(()=>{
+'use strict';
+const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
+const saveKey='civic-budget-commander-v1';
+const $=s=>document.querySelector(s);
+const events=[
+  {txt:'노후 교량 보수 요청이 폭증했습니다.',opts:[['긴급 전면 보수',{budget:-14,safety:+12,infra:+10,trust:+2}],['부분 보수 + 통행 제한',{budget:-8,safety:+6,infra:+4,trust:-2}],['민간 협약 발주',{budget:-5,safety:+4,infra:+6,trust:-3}],['예산 이월',{budget:+4,safety:-8,infra:-6,trust:-6}]]},
+  {txt:'폭염으로 전력 사용량이 급등했습니다.',opts:[['냉방 바우처',{budget:-12,trust:+10,safety:+3,infra:-2}],['산업 전력 제한',{budget:+3,trust:-6,safety:+2,infra:+4}],['노후 변전소 업그레이드',{budget:-10,trust:+2,safety:+5,infra:+9}],['대응 보류',{budget:+6,trust:-8,safety:-4,infra:-4}]]},
+  {txt:'청년 일자리 공약 이행 압박이 큽니다.',opts:[['공공 인턴 확대',{budget:-9,trust:+9,safety:0,infra:+2}],['스타트업 세제 지원',{budget:-7,trust:+5,safety:0,infra:+5}],['기존 사업 재배치',{budget:+1,trust:+1,safety:-2,infra:-2}],['연기 발표',{budget:+4,trust:-7,safety:0,infra:0}]]},
+  {txt:'도시 외곽 치안 불안이 확산 중입니다.',opts:[['야간 순찰 강화',{budget:-10,trust:+2,safety:+11,infra:0}],['스마트 CCTV 증설',{budget:-8,trust:+1,safety:+6,infra:+7}],['커뮤니티 지원',{budget:-6,trust:+8,safety:+4,infra:-1}],['대기',{budget:+5,trust:-5,safety:-9,infra:0}]]},
+  {txt:'폭우 예보와 배수 시설 노후 경보가 동시 발생했습니다.',opts:[['배수펌프 긴급 교체',{budget:-13,trust:+3,safety:+9,infra:+10}],['취약 구역 우선 대응',{budget:-8,trust:+2,safety:+5,infra:+4}],['자원봉사 의존',{budget:-2,trust:+1,safety:+1,infra:-3}],['조치 보류',{budget:+5,trust:-6,safety:-10,infra:-8}]]},
+  {txt:'대중교통 요금 개편안이 논란입니다.',opts:[['요금 동결 + 보조금',{budget:-11,trust:+9,safety:+1,infra:-1}],['소폭 인상 + 노선 확충',{budget:-4,trust:+1,safety:+1,infra:+8}],['피크시간 차등 요금',{budget:+2,trust:-2,safety:+1,infra:+4}],['급격 인상',{budget:+9,trust:-10,safety:-2,infra:+2}]]},
+  {txt:'데이터센터 투자 유치 제안이 들어왔습니다.',opts:[['즉시 승인',{budget:+9,trust:+2,safety:-3,infra:+8}],['환경 조건부 승인',{budget:+5,trust:+5,safety:+1,infra:+5}],['추가 검토',{budget:+1,trust:-1,safety:0,infra:+1}],['거절',{budget:-2,trust:+1,safety:+2,infra:-4}]]},
+  {txt:'시민들이 공원·문화 예산 확대를 요구합니다.',opts:[['문화 인프라 확장',{budget:-10,trust:+11,safety:+1,infra:+5}],['소규모 프로그램',{budget:-5,trust:+5,safety:0,infra:+1}],['민관 공동기금',{budget:-2,trust:+3,safety:0,infra:+2}],['보류',{budget:+4,trust:-8,safety:0,infra:0}]]}
+];
+const st={round:1,score:0,budget:60,trust:60,safety:60,infra:60,event:null,choices:[],best:{bestRound:1,bestScore:0},audio:null};
+const el={round:$('#round'),score:$('#score'),bestRound:$('#bestRound'),bestScore:$('#bestScore'),pressure:$('#pressure'),stability:$('#stability'),eventText:$('#eventText'),budgetV:$('#budgetV'),trustV:$('#trustV'),safetyV:$('#safetyV'),infraV:$('#infraV'),budgetF:$('#budgetF'),trustF:$('#trustF'),safetyF:$('#safetyF'),infraF:$('#infraF'),overlay:$('#overlay'),ovTitle:$('#ovTitle'),ovText:$('#ovText')};
+const btns=[...document.querySelectorAll('button[data-idx]')];
+function load(){try{const v=JSON.parse(localStorage.getItem(saveKey)||'{}');st.best.bestRound=v.bestRound||1;st.best.bestScore=v.bestScore||0;}catch(_){}}
+function save(){localStorage.setItem(saveKey,JSON.stringify(st.best));}
+function ensureAudio(){if(st.audio)return;st.audio=new (window.AudioContext||window.webkitAudioContext)();}
+function beep(f=660,d=.08,t='sine',g=.05){if(!st.audio)return;const n=st.audio.currentTime,o=st.audio.createOscillator(),a=st.audio.createGain();o.frequency.value=f;o.type=t;a.gain.setValueAtTime(g,n);a.gain.exponentialRampToValueAtTime(0.0001,n+d);o.connect(a).connect(st.audio.destination);o.start(n);o.stop(n+d);}
+function sfx(k){if(k==='pick')beep(640,.05,'square',.05);if(k==='warn')beep(220,.18,'sawtooth',.05);if(k==='up'){beep(760,.06,'triangle',.05);setTimeout(()=>beep(980,.07,'triangle',.05),70);}if(k==='fail')beep(170,.22,'sawtooth',.06);} 
+function overlay(t,x,b,f){el.ovTitle.textContent=t;el.ovText.textContent=x;const btn=$('#startBtn');btn.textContent=b;btn.onclick=()=>{el.overlay.classList.add('hidden');f&&f();};el.overlay.classList.remove('hidden');}
+function severity(){return Math.min(2.8,1+st.round*0.05)}
+function generate(){const e=events[Math.floor(Math.random()*events.length)],sev=severity();st.event=e.txt;st.choices=e.opts.map(([label,eff])=>({label,eff:{budget:Math.round(eff.budget*sev),trust:Math.round(eff.trust*sev),safety:Math.round(eff.safety*sev),infra:Math.round(eff.infra*sev)}}));renderChoices();}
+function apply(i){const c=st.choices[i];if(!c)return;ensureAudio();if(st.audio.state==='suspended')st.audio.resume();sfx('pick');
+for(const k of ['budget','trust','safety','infra']) st[k]=clamp(st[k]+c.eff[k],0,100);
+const decay=Math.floor(severity());st.budget=clamp(st.budget-(1+Math.floor(Math.random()*decay)),0,100);st.infra=clamp(st.infra-(Math.random()<0.45?1:0),0,100);if(st.round%5===0){st.safety=clamp(st.safety-4,0,100);st.trust=clamp(st.trust-2,0,100);} 
+st.score+=Math.max(6,Math.floor((st.budget+st.trust+st.safety+st.infra)/6)+st.round*2);
+if(st.budget<=0||st.trust<=0||st.safety<=0||st.infra<=0){gameOver();return;}st.round++;if(st.round%3===0)sfx('up');generate();render();}
+function pressureLabel(){const s=severity();if(s<1.4)return'Low';if(s<1.9)return'Mid';if(s<2.4)return'High';return'Critical';}
+function stabilityLabel(){const m=Math.min(st.budget,st.trust,st.safety,st.infra);if(m>55)return'Stable';if(m>35)return'Caution';if(m>20)return'Fragile';return'Danger';}
+function renderChoices(){btns.forEach((b,idx)=>{const c=st.choices[idx];if(!c)return;b.innerHTML=`<b>${idx+1}. ${c.label}</b><small>💰${fmt(c.eff.budget)} · 🤝${fmt(c.eff.trust)} · 🛡️${fmt(c.eff.safety)} · 🏗️${fmt(c.eff.infra)}</small>`;});el.eventText.textContent=st.event;}
+function fmt(v){return v>=0?`+${v}`:`${v}`}
+function pct(v){return clamp(v,0,100)+'%'}
+function render(){el.round.textContent=st.round;el.score.textContent=st.score;el.bestRound.textContent=st.best.bestRound;el.bestScore.textContent=st.best.bestScore;el.pressure.textContent=pressureLabel();el.stability.textContent=stabilityLabel();
+[['budget',el.budgetV,el.budgetF],['trust',el.trustV,el.trustF],['safety',el.safetyV,el.safetyF],['infra',el.infraV,el.infraF]].forEach(([k,v,f])=>{v.textContent=st[k];f.style.width=pct(st[k]);});
+if(Math.min(st.budget,st.trust,st.safety,st.infra)<25)sfx('warn');}
+function start(){st.round=1;st.score=0;st.budget=60;st.trust=60;st.safety=60;st.infra=60;generate();render();}
+function gameOver(){st.best.bestRound=Math.max(st.best.bestRound,st.round);st.best.bestScore=Math.max(st.best.bestScore,st.score);save();render();sfx('fail');overlay('Administration Collapsed',`Round ${st.round} · Score ${st.score}. 최고 기록을 갱신해보세요.`,'Restart',start);}
+btns.forEach((b,i)=>b.addEventListener('click',()=>apply(i)));
+addEventListener('keydown',e=>{if(!el.overlay.classList.contains('hidden'))return;const n=Number(e.key);if(n>=1&&n<=4)apply(n-1);});
+load();render();overlay('Civic Budget Commander','정책 카드를 선택해 도시를 오래 유지하세요.','Start Governance',start);
+})();
+</script>
+</body>
+</html>

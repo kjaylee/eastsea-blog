@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Constellation Courier Zipline</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <style>
+    :root{--bg:#0a0a1a;--panel:#12122d;--line:#2de2e6;--accent:#ff4ecd;--ok:#44ffa1;--warn:#ffcc70;--bad:#ff5f7c}
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100svh;background:radial-gradient(circle at 20% 0,#1a1a43,#0a0a1a 60%);color:#f3f8ff;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;padding:calc(12px + env(safe-area-inset-top)) 12px calc(16px + env(safe-area-inset-bottom));display:flex;justify-content:center}
+    .app{width:min(860px,100%);display:grid;gap:10px}
+    .card{background:linear-gradient(180deg,#141432,#0f1026);border:1px solid #314f8f;border-radius:14px;padding:10px;box-shadow:0 0 20px #0008,inset 0 0 20px #203b7722}
+    h1{margin:0;color:var(--line);font-size:clamp(1.1rem,2.8vw,1.6rem);text-shadow:0 0 14px #2de2e680}
+    .hint{opacity:.82;font-size:.85rem;line-height:1.4}
+    .hud{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+    .stat{background:#0b1331;border:1px solid #2f4a8a;border-radius:10px;padding:8px;text-align:center}
+    .label{font-size:.72rem;opacity:.74}.value{font-weight:800}
+    canvas{width:100%;height:auto;aspect-ratio:16/10;background:#070d1e;border:1px solid #284784;border-radius:12px;touch-action:none}
+    .controls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+    button{border:1px solid #3a5ea5;background:#12254b;color:#f5fbff;border-radius:10px;padding:11px 8px;font-weight:800}
+    .accent{background:linear-gradient(180deg,#4f2058,#2f1337);border-color:#c878e6}
+    .ok{background:#123827;border-color:#40d893}
+    .danger{background:#3a1620;border-color:#d45167}
+    .overlay{position:fixed;inset:0;background:#060916de;display:grid;place-items:center;padding:16px;z-index:40}
+    .overlay.hidden{display:none}
+    .panel{width:min(560px,100%);background:#10122a;border:1px solid #375a9c;border-radius:14px;padding:16px;display:grid;gap:10px}
+    .panel h2{margin:0;color:var(--line)}
+    @media (max-width:760px){.hud{grid-template-columns:repeat(3,minmax(0,1fr))}.controls{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="card">
+      <h1>🌌 Constellation Courier Zipline</h1>
+      <div class="hint">목표 별자리 색과 같은 패킷을 도킹 구간에서 전달하세요. 다른 색 전달은 실드가 감소합니다.</div>
+    </div>
+
+    <div class="card hud">
+      <div class="stat"><div class="label">Score</div><div id="score" class="value">0</div></div>
+      <div class="stat"><div class="label">Best</div><div id="best" class="value">0</div></div>
+      <div class="stat"><div class="label">Combo</div><div id="combo" class="value">0</div></div>
+      <div class="stat"><div class="label">Shield</div><div id="shield" class="value">5</div></div>
+      <div class="stat"><div class="label">Round</div><div id="round" class="value">1</div></div>
+      <div class="stat"><div class="label">Target</div><div id="target" class="value">CYAN</div></div>
+    </div>
+
+    <div class="card">
+      <canvas id="cv" width="960" height="600" aria-label="game canvas"></canvas>
+    </div>
+
+    <div class="card controls">
+      <button id="leftBtn">◀ Left (←/A)</button>
+      <button id="deliverBtn" class="ok">Deliver (Enter/Space)</button>
+      <button id="rightBtn">Right (→/D) ▶</button>
+      <button id="pauseBtn" class="accent">Pause (P)</button>
+      <button id="resetBtn" class="danger">Reset</button>
+    </div>
+
+    <div class="card hint">터치: 좌/우 이동 + Deliver 버튼 · 키보드: ← → A D / Enter Space / P</div>
+  </div>
+
+  <div id="overlay" class="overlay">
+    <div class="panel">
+      <h2 id="ovTitle">Constellation Courier Zipline</h2>
+      <div id="ovText">네온 항로의 우주 택배를 정확히 전달해 콤보를 유지하세요.</div>
+      <button id="ovBtn" class="ok">Start Route</button>
+    </div>
+  </div>
+
+<script>
+(()=>{
+'use strict';
+const LS_KEY='constellation-courier-zipline-v1';
+const TYPES=[
+  {name:'CYAN',color:'#2de2e6'},
+  {name:'MAGENTA',color:'#ff4ecd'},
+  {name:'AMBER',color:'#ffcc70'}
+];
+const st={score:0,best:0,combo:0,shield:5,round:1,running:false,paused:false,lane:1,target:0,speed:150,spawnT:0,targetT:0,last:0,audio:null,packets:[],raf:0};
+const ui={score:$('#score'),best:$('#best'),combo:$('#combo'),shield:$('#shield'),round:$('#round'),target:$('#target'),overlay:$('#overlay'),ovTitle:$('#ovTitle'),ovText:$('#ovText'),ovBtn:$('#ovBtn')};
+const cv=$('#cv'),ctx=cv.getContext('2d');
+const lanes=[220,480,740],dockY=510;
+
+function $(q){return document.querySelector(q);} 
+function load(){try{const d=JSON.parse(localStorage.getItem(LS_KEY)||'{}');st.best=Number(d.best||0);}catch(_){st.best=0;}}
+function save(){localStorage.setItem(LS_KEY,JSON.stringify({best:st.best}));}
+function ensureAudio(){if(st.audio)return;st.audio=new (window.AudioContext||window.webkitAudioContext)();}
+function beep(f=760,d=0.06,t='sine',g=0.05){if(!st.audio)return;const n=st.audio.currentTime,o=st.audio.createOscillator(),a=st.audio.createGain();o.type=t;o.frequency.value=f;a.gain.setValueAtTime(g,n);a.gain.exponentialRampToValueAtTime(0.0001,n+d);o.connect(a).connect(st.audio.destination);o.start(n);o.stop(n+d);} 
+function sfx(k){if(k==='ok'){beep(960,0.06,'triangle',0.06);setTimeout(()=>beep(1320,0.08,'triangle',0.05),60);}else if(k==='bad'){beep(220,0.2,'sawtooth',0.07);}else{beep(620,0.04,'square',0.04);}}
+
+function spawnPacket(){st.packets.push({lane:Math.floor(Math.random()*3),type:Math.floor(Math.random()*3),y:-20,hit:false});}
+
+function setTarget(idx){st.target=idx;ui.target.textContent=TYPES[idx].name;ui.target.style.color=TYPES[idx].color;}
+
+function renderHUD(){ui.score.textContent=Math.floor(st.score);ui.best.textContent=Math.floor(st.best);ui.combo.textContent=st.combo;ui.shield.textContent=st.shield;ui.round.textContent=st.round;}
+
+function award(ok){
+  if(ok){
+    st.combo++;
+    st.score += 8 + st.combo*2;
+    if(st.combo%6===0){st.round++;st.speed=Math.min(290,st.speed+16);}    
+    sfx('ok');
+  }else{
+    st.combo=0;
+    st.shield--;
+    sfx('bad');
+  }
+  if(st.score>st.best){st.best=st.score;save();}
+  if(st.shield<=0) return gameOver();
+  renderHUD();
+}
+
+function deliver(){
+  if(!st.running||st.paused) return;
+  ensureAudio();
+  if(st.audio.state==='suspended')st.audio.resume();
+  let candidate=null,dist=9999;
+  for(const p of st.packets){
+    if(p.hit||p.lane!==st.lane) continue;
+    const d=Math.abs(p.y-dockY);
+    if(d<dist){dist=d;candidate=p;}
+  }
+  if(candidate && dist<40){
+    candidate.hit=true;
+    award(candidate.type===st.target);
+  }else{
+    award(false);
+  }
+}
+
+function moveLane(dir){st.lane=Math.max(0,Math.min(2,st.lane+dir));sfx('tap');}
+
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  const g=ctx.createLinearGradient(0,0,0,cv.height);g.addColorStop(0,'#0b1332');g.addColorStop(1,'#070c1a');ctx.fillStyle=g;ctx.fillRect(0,0,cv.width,cv.height);
+
+  // stars
+  ctx.fillStyle='rgba(255,255,255,.35)';
+  for(let i=0;i<42;i++){ctx.fillRect((i*131)%960,(i*97 + st.last*0.03)%600,2,2);}  
+
+  // lanes + dock
+  lanes.forEach((x,i)=>{
+    ctx.strokeStyle=i===st.lane?'#ff4ecd':'#28508f';
+    ctx.lineWidth=i===st.lane?6:3;
+    ctx.beginPath();ctx.moveTo(x,50);ctx.lineTo(x,560);ctx.stroke();
+  });
+  ctx.strokeStyle='#44ffa1';ctx.lineWidth=4;ctx.strokeRect(120,dockY-30,720,60);
+  ctx.fillStyle='rgba(68,255,161,.18)';ctx.fillRect(120,dockY-30,720,60);
+
+  // ship
+  const sx=lanes[st.lane];
+  ctx.fillStyle='#d6ecff';
+  ctx.beginPath();ctx.moveTo(sx,dockY+45);ctx.lineTo(sx-24,dockY+14);ctx.lineTo(sx+24,dockY+14);ctx.closePath();ctx.fill();
+  ctx.strokeStyle=TYPES[st.target].color;ctx.lineWidth=4;ctx.stroke();
+
+  // packets
+  for(const p of st.packets){
+    if(p.hit) continue;
+    ctx.fillStyle=TYPES[p.type].color;
+    ctx.shadowBlur=18;ctx.shadowColor=TYPES[p.type].color;
+    ctx.beginPath();ctx.arc(lanes[p.lane],p.y,15,0,Math.PI*2);ctx.fill();
+  }
+  ctx.shadowBlur=0;
+
+  ctx.fillStyle='#a9c3ff';
+  ctx.font='bold 24px system-ui';
+  ctx.fillText('Target: '+TYPES[st.target].name,24,34);
+}
+
+function tick(ts){
+  if(!st.last) st.last=ts;
+  const dt=Math.min(.033,(ts-st.last)/1000);
+  st.last=ts;
+
+  if(st.running && !st.paused){
+    st.spawnT -= dt;
+    st.targetT -= dt;
+    if(st.spawnT<=0){spawnPacket();st.spawnT=Math.max(.36,1.1-(st.round-1)*0.05);}    
+    if(st.targetT<=0){setTarget((st.target+1+Math.floor(Math.random()*2))%3);st.targetT=Math.max(3.5,7-(st.round-1)*0.3);}
+
+    for(const p of st.packets){p.y += st.speed*dt;}
+
+    // missed target packet
+    for(const p of st.packets){
+      if(p.hit) continue;
+      if(p.y>dockY+60){
+        p.hit=true;
+        if(p.type===st.target) award(false);
+      }
+    }
+    st.packets=st.packets.filter(p=>!p.hit || p.y<dockY+120);
+  }
+
+  draw();
+  st.raf=requestAnimationFrame(tick);
+}
+
+function start(){
+  ensureAudio();
+  if(st.audio.state==='suspended')st.audio.resume();
+  st.score=0;st.combo=0;st.shield=5;st.round=1;st.lane=1;st.speed=150;st.spawnT=.4;st.targetT=5.5;st.packets=[];st.running=true;st.paused=false;setTarget(Math.floor(Math.random()*3));renderHUD();ui.overlay.classList.add('hidden');
+}
+function gameOver(){st.running=false;show('Route Failed',`Score ${Math.floor(st.score)} · Best ${Math.floor(st.best)}`,'Retry',start);} 
+function reset(){st.running=false;st.paused=false;st.score=0;st.combo=0;st.shield=5;st.round=1;st.packets=[];renderHUD();show('Constellation Courier Zipline','정확한 색상 패킷을 도킹 구간에서 전달하세요.','Start Route',start);} 
+function show(t,tx,b,fn){ui.ovTitle.textContent=t;ui.ovText.textContent=tx;ui.ovBtn.textContent=b;ui.ovBtn.onclick=()=>{ui.overlay.classList.add('hidden');fn&&fn();};ui.overlay.classList.remove('hidden');}
+
+function onKey(e){
+  const k=e.key.toLowerCase();
+  if(['arrowleft','arrowright','a','d','enter',' ','p'].includes(k)||e.key===' ') e.preventDefault();
+  if(k==='arrowleft'||k==='a') moveLane(-1);
+  if(k==='arrowright'||k==='d') moveLane(1);
+  if(k==='enter'||k===' ') deliver();
+  if(k==='p') st.paused=!st.paused;
+}
+
+$('#leftBtn').addEventListener('pointerdown',()=>moveLane(-1));
+$('#rightBtn').addEventListener('pointerdown',()=>moveLane(1));
+$('#deliverBtn').addEventListener('pointerdown',deliver);
+$('#pauseBtn').addEventListener('pointerdown',()=>{st.paused=!st.paused;});
+$('#resetBtn').addEventListener('pointerdown',reset);
+cv.addEventListener('pointerdown',(e)=>{
+  const r=cv.getBoundingClientRect();
+  const x=(e.clientX-r.left)*(cv.width/r.width);
+  if(x<cv.width/3) moveLane(-1);
+  else if(x>cv.width*2/3) moveLane(1);
+  else deliver();
+});
+document.addEventListener('keydown',onKey,{passive:false});
+
+load();renderHUD();setTarget(0);draw();show('Constellation Courier Zipline','좌우 이동 후 Deliver로 정확한 별자리 패킷만 전달하세요.','Start Route',start);requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Reef Ledger Keeper</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <style>
+    :root{--bg:#0a0a1a;--panel:#12122d;--line:#2de2e6;--accent:#ff4ecd;--ok:#43ff98;--warn:#ffc857;--bad:#ff5d73}
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100svh;background:radial-gradient(circle at 20% 0,#1a1a43,#0a0a1a 58%);color:#eef7ff;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;padding:calc(12px + env(safe-area-inset-top)) 12px calc(14px + env(safe-area-inset-bottom));display:flex;justify-content:center}
+    .app{width:min(900px,100%);display:grid;gap:10px}
+    .card{background:linear-gradient(180deg,#141432,#101028);border:1px solid #2f4f90;border-radius:14px;padding:10px;box-shadow:0 0 20px #0008,inset 0 0 20px #203a7628}
+    h1{margin:0;color:var(--line);font-size:clamp(1.15rem,2.8vw,1.7rem);text-shadow:0 0 14px #2de2e680}
+    .hint{opacity:.84;font-size:.84rem;line-height:1.45}
+    .hud{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+    .stat{background:#0b1332;border:1px solid #2f4a8a;border-radius:10px;padding:8px;text-align:center}
+    .label{font-size:.72rem;opacity:.74}.value{font-weight:800}
+    .meters{display:grid;gap:8px}
+    .meter{background:#0b1332;border:1px solid #2f4a8a;border-radius:10px;padding:8px}
+    .bar{height:10px;border:1px solid #2f4a8a;background:#070f22;border-radius:999px;overflow:hidden}
+    .bar>span{display:block;height:100%;background:linear-gradient(90deg,#2de2e6,#43ff98)}
+    .actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+    .action{border:1px solid #3a5ea5;background:#12254b;color:#f5fbff;border-radius:10px;padding:10px;display:grid;gap:4px;cursor:pointer}
+    .action strong{font-size:.95rem}.action small{opacity:.78}
+    .action.active{border-color:#ff4ecd;box-shadow:0 0 0 1px #ff4ecd8a,inset 0 0 16px #ff4ecd2d}
+    .controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+    button{border:1px solid #3a5ea5;background:#12254b;color:#f5fbff;border-radius:10px;padding:11px 8px;font-weight:800}
+    .ok{background:#123a2a;border-color:#3ad38d}
+    .accent{background:linear-gradient(180deg,#531f5b,#2f1239);border-color:#cb73e8}
+    .danger{background:#3a141f;border-color:#d44f61}
+    .log{min-height:72px;background:#0b1332;border:1px dashed #35589d;border-radius:10px;padding:8px;line-height:1.45}
+    .overlay{position:fixed;inset:0;background:#060814de;display:grid;place-items:center;padding:16px;z-index:50}
+    .overlay.hidden{display:none}
+    .panel{width:min(560px,100%);background:#0f1128;border:1px solid #335493;border-radius:14px;padding:16px;display:grid;gap:10px}
+    .panel h2{margin:0;color:var(--line)}
+    @media (max-width:760px){.hud{grid-template-columns:repeat(3,minmax(0,1fr))}.actions{grid-template-columns:1fr}.controls{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="card">
+      <h1>🐠 Reef Ledger Keeper</h1>
+      <div class="hint">분기마다 정책을 선택해 산소/생물다양성/관광/예산을 균형 유지하세요. 극단 수치에 도달하면 운영 종료됩니다.</div>
+    </div>
+
+    <div class="card hud">
+      <div class="stat"><div class="label">Quarter</div><div id="quarter" class="value">1</div></div>
+      <div class="stat"><div class="label">Score</div><div id="score" class="value">0</div></div>
+      <div class="stat"><div class="label">Best</div><div id="best" class="value">0</div></div>
+      <div class="stat"><div class="label">Stability</div><div id="streak" class="value">0</div></div>
+      <div class="stat"><div class="label">Selected</div><div id="selected" class="value">1</div></div>
+    </div>
+
+    <div class="card meters" id="meters"></div>
+
+    <div class="card actions" id="actions"></div>
+
+    <div class="card controls">
+      <button id="advanceBtn" class="ok">Advance Quarter (Enter/Space)</button>
+      <button id="pauseBtn" class="accent">Pause (P)</button>
+      <button id="resetBtn" class="danger">Reset</button>
+    </div>
+
+    <div class="card log" id="log">정책을 선택하고 분기를 진행하세요. 키보드 1~4로 정책 선택 가능.</div>
+  </div>
+
+  <div id="overlay" class="overlay">
+    <div class="panel">
+      <h2 id="ovTitle">Reef Ledger Keeper</h2>
+      <div id="ovText">해양 거버넌스 대시보드를 열고 4개 지표를 안정 구간으로 유지하세요.</div>
+      <button id="ovBtn" class="ok">Start Governance</button>
+    </div>
+  </div>
+
+<script>
+(()=>{
+'use strict';
+const LS_KEY='reef-ledger-keeper-v1';
+const METRICS=[
+  {key:'oxygen',label:'Oxygen'},
+  {key:'bio',label:'Biodiversity'},
+  {key:'tourism',label:'Tourism'},
+  {key:'budget',label:'Budget'}
+];
+const ACTIONS=[
+  {name:'1. Clean Sweep',desc:'산호초 쓰레기 정화',delta:{oxygen:+16,bio:+2,tourism:-3,budget:-12}},
+  {name:'2. Coral Seeding',desc:'유전자 다양성 강화',delta:{oxygen:+6,bio:+14,tourism:+3,budget:-10}},
+  {name:'3. Ranger Patrol',desc:'밀렵 단속/관람 동선 관리',delta:{oxygen:+1,bio:+6,tourism:+10,budget:-8}},
+  {name:'4. Research Grants',desc:'연구기금으로 기술 고도화',delta:{oxygen:+4,bio:+4,tourism:-2,budget:+14}}
+];
+const EVENTS=[
+  {name:'Heatwave',delta:{oxygen:-9,bio:-6,tourism:+4,budget:-2}},
+  {name:'Blue Tide',delta:{oxygen:+6,bio:+8,tourism:+2,budget:-3}},
+  {name:'Storm Repair',delta:{oxygen:-3,bio:-2,tourism:-9,budget:-10}},
+  {name:'Eco Festival',delta:{oxygen:+1,bio:+2,tourism:+12,budget:+4}},
+  {name:'Illegal Net Crackdown',delta:{oxygen:+2,bio:+9,tourism:-3,budget:-5}}
+];
+
+const st={oxygen:62,bio:58,tourism:52,budget:70,quarter:1,score:0,best:0,streak:0,selected:0,running:false,paused:false,audio:null};
+const ui={meters:$('#meters'),actions:$('#actions'),quarter:$('#quarter'),score:$('#score'),best:$('#best'),streak:$('#streak'),selected:$('#selected'),log:$('#log'),overlay:$('#overlay'),ovTitle:$('#ovTitle'),ovText:$('#ovText'),ovBtn:$('#ovBtn')};
+
+function $(q){return document.querySelector(q);} 
+function load(){try{const d=JSON.parse(localStorage.getItem(LS_KEY)||'{}');st.best=Number(d.best||0);}catch(_){st.best=0;}}
+function save(){localStorage.setItem(LS_KEY,JSON.stringify({best:st.best}));}
+function ensureAudio(){if(st.audio)return;st.audio=new (window.AudioContext||window.webkitAudioContext)();}
+function beep(f=780,d=.06,t='sine',g=.05){if(!st.audio)return;const n=st.audio.currentTime,o=st.audio.createOscillator(),a=st.audio.createGain();o.type=t;o.frequency.value=f;a.gain.setValueAtTime(g,n);a.gain.exponentialRampToValueAtTime(0.0001,n+d);o.connect(a).connect(st.audio.destination);o.start(n);o.stop(n+d);} 
+function sfx(k){if(k==='ok'){beep(920,.07,'triangle',.06);setTimeout(()=>beep(1280,.08,'triangle',.05),70);}else if(k==='bad'){beep(210,.2,'sawtooth',.07);}else{beep(600,.04,'square',.04);}}
+
+function clamp(v){return Math.max(0,Math.min(100,v));}
+function applyDelta(d){for(const k of Object.keys(d)){st[k]=clamp(st[k]+d[k]);}}
+
+function renderMeters(){
+  ui.meters.innerHTML='';
+  for(const m of METRICS){
+    const v=st[m.key];
+    const meter=document.createElement('div');
+    meter.className='meter';
+    meter.innerHTML=`<div style="display:flex;justify-content:space-between"><strong>${m.label}</strong><span>${v}</span></div><div class="bar"><span style="width:${v}%;background:${v<25?'linear-gradient(90deg,#ff5d73,#ff8a9f)':v>80?'linear-gradient(90deg,#ffc857,#ff9f43)':'linear-gradient(90deg,#2de2e6,#43ff98)'}"></span></div>`;
+    ui.meters.appendChild(meter);
+  }
+}
+
+function renderActions(){
+  ui.actions.innerHTML='';
+  ACTIONS.forEach((a,i)=>{
+    const d=document.createElement('div');
+    d.className='action'+(i===st.selected?' active':'');
+    d.innerHTML=`<strong>${a.name}</strong><small>${a.desc}</small><small>Δ O2 ${fmt(a.delta.oxygen)} · BIO ${fmt(a.delta.bio)} · TOUR ${fmt(a.delta.tourism)} · BUD ${fmt(a.delta.budget)}</small>`;
+    d.addEventListener('pointerdown',()=>{st.selected=i;render();sfx('tap');});
+    ui.actions.appendChild(d);
+  });
+}
+function fmt(n){return n>=0?`+${n}`:`${n}`;}
+
+function render(){
+  ui.quarter.textContent=st.quarter;
+  ui.score.textContent=Math.floor(st.score);
+  ui.best.textContent=Math.floor(st.best);
+  ui.streak.textContent=st.streak;
+  ui.selected.textContent=String(st.selected+1);
+  renderMeters();
+  renderActions();
+}
+
+function evaluateState(){
+  const stable=[st.oxygen,st.bio,st.tourism,st.budget].every(v=>v>=35&&v<=75);
+  if(stable){st.streak++;st.score+=8+st.streak*2;}else{st.streak=0;st.score+=4;}
+  if(st.score>st.best){st.best=st.score;save();}
+  const fail=[st.oxygen,st.bio,st.tourism,st.budget].some(v=>v<=8||v>=95);
+  if(fail){return gameOver();}
+}
+
+function advance(){
+  if(!st.running||st.paused) return;
+  ensureAudio();
+  if(st.audio.state==='suspended')st.audio.resume();
+
+  const action=ACTIONS[st.selected];
+  const event=EVENTS[Math.floor(Math.random()*EVENTS.length)];
+
+  // natural drift by quarter
+  applyDelta({oxygen:-4-Math.floor(st.quarter/4),bio:-3-Math.floor(st.quarter/5),tourism:+2,budget:+1});
+  applyDelta(action.delta);
+  applyDelta(event.delta);
+
+  st.quarter++;
+  evaluateState();
+  render();
+
+  ui.log.innerHTML=`Q${st.quarter-1} 실행: <strong>${action.name}</strong><br>이벤트: <strong>${event.name}</strong><br>현재 지표가 안정 범위(35~75)에 있으면 Stability 보너스가 누적됩니다.`;
+  sfx('ok');
+}
+
+function start(){ensureAudio();if(st.audio.state==='suspended')st.audio.resume();st.oxygen=62;st.bio=58;st.tourism=52;st.budget=70;st.quarter=1;st.score=0;st.streak=0;st.selected=0;st.running=true;st.paused=false;render();ui.log.textContent='정책을 선택하고 Advance Quarter를 눌러 시뮬레이션을 진행하세요.';ui.overlay.classList.add('hidden');}
+function gameOver(){st.running=false;sfx('bad');show('Reef Governance Failed',`Q${st.quarter} · Score ${Math.floor(st.score)} · Best ${Math.floor(st.best)}`,'Retry',start);} 
+function reset(){st.running=false;st.paused=false;show('Reef Ledger Keeper','4개 지표가 극단(<=8 또는 >=95)에 닿지 않게 조정하세요.','Start Governance',start);} 
+function show(t,tx,b,fn){ui.ovTitle.textContent=t;ui.ovText.textContent=tx;ui.ovBtn.textContent=b;ui.ovBtn.onclick=()=>{ui.overlay.classList.add('hidden');fn&&fn();};ui.overlay.classList.remove('hidden');}
+
+function onKey(e){
+  const k=e.key.toLowerCase();
+  if(['1','2','3','4','enter',' ','p'].includes(k)||e.key===' ') e.preventDefault();
+  if(k>='1'&&k<='4'){st.selected=Number(k)-1;render();sfx('tap');}
+  if(k==='enter'||k===' ') advance();
+  if(k==='p') st.paused=!st.paused;
+}
+
+$('#advanceBtn').addEventListener('pointerdown',advance);
+$('#pauseBtn').addEventListener('pointerdown',()=>{st.paused=!st.paused;});
+$('#resetBtn').addEventListener('pointerdown',reset);
+document.addEventListener('keydown',onKey,{passive:false});
+
+load();render();show('Reef Ledger Keeper','분기별 정책 선택으로 산호 생태계를 지속가능하게 운영하세요.','Start Governance',start);
+})();
+</script>
+</body>
+</html>

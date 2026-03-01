@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Origami Rescue Grid</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <style>
+    :root{--bg:#0a0a1a;--panel:#12122d;--line:#2de2e6;--accent:#ff4ecd;--ok:#43ff98;--warn:#ffc857;--bad:#ff5d73}
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100svh;background:radial-gradient(circle at 20% 0,#1a1a43,#0a0a1a 58%);color:#eef7ff;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;padding:calc(12px + env(safe-area-inset-top)) 12px calc(16px + env(safe-area-inset-bottom));display:flex;justify-content:center}
+    .app{width:min(860px,100%);display:grid;gap:10px}
+    .card{background:linear-gradient(180deg,#141432,#101028);border:1px solid #2f4f90;border-radius:14px;padding:10px;box-shadow:0 0 20px #0008,inset 0 0 20px #203a7628}
+    h1{margin:0;color:var(--line);font-size:clamp(1.15rem,2.8vw,1.7rem);text-shadow:0 0 14px #2de2e680}
+    .hint{opacity:.84;font-size:.84rem;line-height:1.45}
+    .hud{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+    .stat{background:#0b1332;border:1px solid #2f4a8a;border-radius:10px;padding:8px;text-align:center}
+    .label{font-size:.72rem;opacity:.74}.value{font-weight:800}
+    .grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px;touch-action:manipulation}
+    .cell{aspect-ratio:1/1;border:1px solid #365a9f;border-radius:10px;display:grid;place-items:center;background:#0b1433;font-size:1.18rem;font-weight:800;user-select:none;cursor:pointer}
+    .cell.wall{background:#1e2238;border-color:#4b5373;color:#8088a3}
+    .cell.start{border-color:#43ff98;box-shadow:inset 0 0 14px #43ff9833}
+    .cell.goal{border-color:#ffc857;box-shadow:inset 0 0 14px #ffc85733}
+    .cell.cursor{outline:2px solid #ff4ecd;outline-offset:1px}
+    .cell.path{box-shadow:0 0 0 1px #2de2e699,inset 0 0 12px #2de2e644}
+    .controls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+    button{border:1px solid #3a5ea5;background:#12254b;color:#f5fbff;border-radius:10px;padding:11px 8px;font-weight:800}
+    .ok{background:#123a2a;border-color:#3ad38d}
+    .accent{background:linear-gradient(180deg,#531f5b,#2f1239);border-color:#cb73e8}
+    .danger{background:#3a141f;border-color:#d44f61}
+    .overlay{position:fixed;inset:0;background:#060814de;display:grid;place-items:center;padding:16px;z-index:50}
+    .overlay.hidden{display:none}
+    .panel{width:min(560px,100%);background:#0f1128;border:1px solid #335493;border-radius:14px;padding:16px;display:grid;gap:10px}
+    .panel h2{margin:0;color:var(--line)}
+    @media (max-width:760px){.hud{grid-template-columns:repeat(3,minmax(0,1fr))}.controls{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="card">
+      <h1>🕊️ Origami Rescue Grid</h1>
+      <div class="hint">타일 화살표를 회전해 종이 새를 출구까지 유도하세요. 화살표/WASD로 커서 이동, R 회전, Enter 실행.</div>
+    </div>
+
+    <div class="card hud">
+      <div class="stat"><div class="label">Level</div><div id="level" class="value">1</div></div>
+      <div class="stat"><div class="label">Best</div><div id="best" class="value">1</div></div>
+      <div class="stat"><div class="label">Energy</div><div id="energy" class="value">12</div></div>
+      <div class="stat"><div class="label">Score</div><div id="score" class="value">0</div></div>
+      <div class="stat"><div class="label">Steps</div><div id="steps" class="value">0</div></div>
+    </div>
+
+    <div id="grid" class="card grid"></div>
+
+    <div class="card controls">
+      <button id="rotateBtn" class="accent">Rotate (R)</button>
+      <button id="runBtn" class="ok">Run Route (Enter/Space)</button>
+      <button id="pauseBtn">Pause (P)</button>
+      <button id="resetBtn" class="danger">Reset</button>
+    </div>
+
+    <div class="card hint" id="status">커서를 이동 후 타일을 회전하세요. 시작점 S에서 목표점 G로 도달하면 클리어.</div>
+  </div>
+
+  <div id="overlay" class="overlay">
+    <div class="panel">
+      <h2 id="ovTitle">Origami Rescue Grid</h2>
+      <div id="ovText">6개 구조의 구조망을 복구해 종이 새를 안전하게 유도하세요.</div>
+      <button id="ovBtn" class="ok">Start Mission</button>
+    </div>
+  </div>
+
+<script>
+(()=>{
+'use strict';
+const LS_KEY='origami-rescue-grid-v1';
+const ARROW={1:'↑',2:'→',3:'↓',4:'←'};
+const DIR={1:[0,-1],2:[1,0],3:[0,1],4:[-1,0]};
+const LEVELS=[
+  {start:[0,5],goal:[5,0],walls:[[1,3],[2,3],[4,2]],arrows:[[0,5,2],[1,5,2],[2,5,1],[2,4,1],[2,2,2],[3,2,2],[4,2,1],[4,1,1],[4,0,2]]},
+  {start:[0,0],goal:[5,5],walls:[[2,1],[2,2],[2,3],[4,4]],arrows:[[0,0,2],[1,0,2],[3,0,3],[3,1,3],[3,2,2],[4,2,3],[4,3,3],[5,3,3],[5,4,3]]},
+  {start:[5,0],goal:[0,5],walls:[[1,1],[1,2],[3,3],[4,3]],arrows:[[5,0,3],[5,1,3],[5,2,4],[4,2,4],[3,2,3],[3,4,4],[2,4,4],[1,4,3],[1,5,4]]},
+  {start:[0,2],goal:[5,2],walls:[[2,2],[2,1],[2,3],[4,1]],arrows:[[0,2,1],[0,1,2],[1,1,3],[1,3,2],[3,3,1],[3,2,2],[4,2,2]]},
+  {start:[1,5],goal:[4,0],walls:[[1,2],[2,2],[3,2],[4,2]],arrows:[[1,5,1],[1,4,2],[2,4,2],[3,4,1],[3,3,1],[3,1,2],[4,1,1]]},
+  {start:[5,5],goal:[0,0],walls:[[3,5],[3,4],[2,3],[1,1],[4,2]],arrows:[[5,5,4],[4,5,1],[4,4,4],[2,4,1],[2,2,4],[1,2,1],[1,0,4]]}
+];
+
+const st={level:0,best:1,energy:12,score:0,steps:0,cx:0,cy:0,running:false,paused:false,resolving:false,audio:null,board:null,path:[]};
+const ui={grid:$('#grid'),level:$('#level'),best:$('#best'),energy:$('#energy'),score:$('#score'),steps:$('#steps'),status:$('#status'),overlay:$('#overlay'),ovTitle:$('#ovTitle'),ovText:$('#ovText'),ovBtn:$('#ovBtn')};
+
+function $(q){return document.querySelector(q);} 
+function load(){try{const d=JSON.parse(localStorage.getItem(LS_KEY)||'{}');st.best=Math.max(1,Number(d.best||1));}catch(_){st.best=1;}}
+function save(){localStorage.setItem(LS_KEY,JSON.stringify({best:st.best}));}
+function ensureAudio(){if(st.audio)return;st.audio=new (window.AudioContext||window.webkitAudioContext)();}
+function beep(f=740,d=.06,t='sine',g=.05){if(!st.audio)return;const n=st.audio.currentTime,o=st.audio.createOscillator(),a=st.audio.createGain();o.type=t;o.frequency.value=f;a.gain.setValueAtTime(g,n);a.gain.exponentialRampToValueAtTime(0.0001,n+d);o.connect(a).connect(st.audio.destination);o.start(n);o.stop(n+d);} 
+function sfx(k){if(k==='ok'){beep(940,.06,'triangle',.06);setTimeout(()=>beep(1260,.08,'triangle',.05),65);}else if(k==='bad'){beep(210,.2,'sawtooth',.07);}else{beep(610,.04,'square',.04);}}
+
+function buildBoard(){
+  const lv=LEVELS[st.level];
+  const b=Array.from({length:6},()=>Array(6).fill(0));
+  for(const [x,y] of lv.walls) b[y][x]=9;
+  for(const [x,y,d] of lv.arrows) b[y][x]=d;
+  st.board=b;
+  st.cx=lv.start[0];st.cy=lv.start[1];
+  st.steps=0;st.path=[];
+}
+
+function cellClass(x,y){
+  const lv=LEVELS[st.level];
+  const atStart=(x===lv.start[0]&&y===lv.start[1]);
+  const atGoal=(x===lv.goal[0]&&y===lv.goal[1]);
+  let c='cell';
+  if(st.board[y][x]===9) c+=' wall';
+  if(atStart) c+=' start';
+  if(atGoal) c+=' goal';
+  if(x===st.cx&&y===st.cy) c+=' cursor';
+  if(st.path.some(p=>p[0]===x&&p[1]===y)) c+=' path';
+  return c;
+}
+
+function symbolAt(x,y){
+  const lv=LEVELS[st.level];
+  if(x===lv.start[0]&&y===lv.start[1]) return 'S';
+  if(x===lv.goal[0]&&y===lv.goal[1]) return 'G';
+  const v=st.board[y][x];
+  if(v===9) return '■';
+  return ARROW[v]||'·';
+}
+
+function render(){
+  ui.level.textContent=st.level+1;
+  ui.best.textContent=st.best;
+  ui.energy.textContent=st.energy;
+  ui.score.textContent=Math.floor(st.score);
+  ui.steps.textContent=st.steps;
+
+  ui.grid.innerHTML='';
+  for(let y=0;y<6;y++){
+    for(let x=0;x<6;x++){
+      const d=document.createElement('div');
+      d.className=cellClass(x,y);
+      d.textContent=symbolAt(x,y);
+      d.addEventListener('pointerdown',()=>{if(st.resolving||st.paused)return;st.cx=x;st.cy=y;rotateAt(x,y,true);});
+      ui.grid.appendChild(d);
+    }
+  }
+}
+
+function movable(x,y){
+  const lv=LEVELS[st.level];
+  if(x===lv.start[0]&&y===lv.start[1]) return false;
+  if(x===lv.goal[0]&&y===lv.goal[1]) return false;
+  return st.board[y][x]!==9;
+}
+
+function rotateAt(x,y,fromTap=false){
+  if(!st.running||st.paused||st.resolving) return;
+  if(!movable(x,y)) {if(fromTap){st.cx=x;st.cy=y;render();}return;}
+  const v=st.board[y][x];
+  st.board[y][x]=v===0?1:(v%4)+1;
+  st.steps++;
+  st.cx=x;st.cy=y;
+  ui.status.textContent='타일 회전 완료. 경로가 연결되면 Run Route를 실행하세요.';
+  sfx('tap');
+  render();
+}
+
+function moveCursor(dx,dy){
+  if(st.resolving||!st.running||st.paused) return;
+  st.cx=Math.max(0,Math.min(5,st.cx+dx));
+  st.cy=Math.max(0,Math.min(5,st.cy+dy));
+  sfx('tap');
+  render();
+}
+
+function runRoute(){
+  if(!st.running||st.paused||st.resolving) return;
+  ensureAudio();
+  if(st.audio.state==='suspended')st.audio.resume();
+
+  const lv=LEVELS[st.level];
+  let x=lv.start[0], y=lv.start[1];
+  const visited=[];
+  for(let i=0;i<30;i++){
+    visited.push([x,y]);
+    if(x===lv.goal[0]&&y===lv.goal[1]){
+      return resolveSuccess(visited,i);
+    }
+    const t=st.board[y][x];
+    if(!DIR[t]) break;
+    x += DIR[t][0];
+    y += DIR[t][1];
+    if(x<0||x>5||y<0||y>5) break;
+    if(st.board[y][x]===9) break;
+  }
+  resolveFail(visited);
+}
+
+function resolveSuccess(path,stepsUsed){
+  st.resolving=true;
+  animatePath(path,()=>{
+    st.path=[];
+    st.score += Math.max(20,80 - st.steps*2 - stepsUsed);
+    st.energy=Math.min(12,st.energy+1);
+    st.level++;
+    if(st.level+1>st.best){st.best=st.level+1;save();}
+    sfx('ok');
+
+    if(st.level>=LEVELS.length){
+      st.running=false;
+      return show('Mission Complete',`All levels clear! Score ${Math.floor(st.score)} · Best Lv ${st.best}`,'Play Again',start);
+    }
+    buildBoard();
+    st.resolving=false;
+    ui.status.textContent='클리어! 다음 구조망으로 이동합니다.';
+    render();
+  });
+}
+
+function resolveFail(path){
+  st.resolving=true;
+  animatePath(path,()=>{
+    st.path=[];
+    st.energy--;
+    st.score=Math.max(0,st.score-8);
+    sfx('bad');
+    if(st.energy<=0){
+      st.running=false;
+      st.resolving=false;
+      return show('Energy Depleted',`Score ${Math.floor(st.score)} · Best Lv ${st.best}`,'Retry',start);
+    }
+    buildBoard();
+    st.resolving=false;
+    ui.status.textContent='경로 실패. 에너지 -1, 보드 재구성.';
+    render();
+  });
+}
+
+function animatePath(path,done){
+  let i=0;
+  const t=setInterval(()=>{
+    st.path=path.slice(0,i+1);
+    render();
+    i++;
+    if(i>=path.length){clearInterval(t);done&&done();}
+  },80);
+}
+
+function start(){
+  ensureAudio();
+  if(st.audio.state==='suspended')st.audio.resume();
+  st.level=0;st.energy=12;st.score=0;st.paused=false;st.running=true;st.resolving=false;buildBoard();ui.status.textContent='타일 회전 후 Run Route를 실행하세요.';render();ui.overlay.classList.add('hidden');
+}
+function reset(){st.running=false;st.paused=false;show('Origami Rescue Grid','6개 스테이지 구조망을 복구해 종이 새를 출구까지 유도하세요.','Start Mission',start);} 
+function show(t,tx,b,fn){ui.ovTitle.textContent=t;ui.ovText.textContent=tx;ui.ovBtn.textContent=b;ui.ovBtn.onclick=()=>{ui.overlay.classList.add('hidden');fn&&fn();};ui.overlay.classList.remove('hidden');}
+
+function onKey(e){
+  const k=e.key.toLowerCase();
+  if(['arrowleft','arrowright','arrowup','arrowdown','a','d','w','s','r','enter',' ','p'].includes(k)||e.key===' ') e.preventDefault();
+  if(k==='arrowleft'||k==='a') moveCursor(-1,0);
+  if(k==='arrowright'||k==='d') moveCursor(1,0);
+  if(k==='arrowup'||k==='w') moveCursor(0,-1);
+  if(k==='arrowdown'||k==='s') moveCursor(0,1);
+  if(k==='r') rotateAt(st.cx,st.cy,false);
+  if(k==='enter'||k===' ') runRoute();
+  if(k==='p') st.paused=!st.paused;
+}
+
+$('#rotateBtn').addEventListener('pointerdown',()=>rotateAt(st.cx,st.cy,false));
+$('#runBtn').addEventListener('pointerdown',runRoute);
+$('#pauseBtn').addEventListener('pointerdown',()=>{st.paused=!st.paused;});
+$('#resetBtn').addEventListener('pointerdown',reset);
+document.addEventListener('keydown',onKey,{passive:false});
+
+load();buildBoard();render();show('Origami Rescue Grid','터치로 타일 회전, 키보드로 정밀 조작 후 Run으로 경로를 검증하세요.','Start Mission',start);
+})();
+</script>
+</body>
+</html>

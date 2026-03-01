@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Tidal Ledger Tycoon</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <style>
+    :root{
+      --bg:#0a0a1a;
+      --panel:#14152e;
+      --neon:#5df0ff;
+      --accent:#ff6be1;
+      --ok:#76ff9f;
+      --warn:#ffd166;
+      --bad:#ff5f7d;
+      --text:#eef3ff;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      min-height:100vh;
+      background:radial-gradient(circle at 50% 0%, #1f2146, #0a0a1a 54%);
+      color:var(--text);
+      font-family:"Pretendard","Apple SD Gothic Neo",system-ui,sans-serif;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:16px;
+    }
+    .app{
+      width:min(95vw,500px);
+      background:rgba(14,14,32,.95);
+      border:1px solid rgba(93,240,255,.34);
+      border-radius:18px;
+      box-shadow:0 0 30px rgba(93,240,255,.2);
+      padding:14px;
+    }
+    h1{margin:0 0 6px;font-size:clamp(1.05rem,4.2vw,1.45rem)}
+    p{margin:.2rem 0 .7rem;color:#b8c5e7;font-size:.9rem}
+    .top{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
+    .box{background:#12132b;border:1px solid rgba(255,255,255,.09);border-radius:10px;padding:8px;text-align:center;font-size:.8rem}
+    .box b{display:block;font-size:1rem;color:var(--neon)}
+
+    .zone{background:#101226;border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:10px;margin-bottom:8px}
+    .zone .head{display:flex;justify-content:space-between;gap:8px;margin-bottom:6px}
+    .tag{font-weight:700}
+    .meter{height:10px;background:#1d2348;border-radius:8px;overflow:hidden}
+    .fill{height:100%;background:linear-gradient(90deg,var(--neon),#8bffca);transition:width .2s}
+    .ctrl{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+    button{
+      border:none;
+      border-radius:10px;
+      padding:11px 8px;
+      color:#fff;
+      font-weight:700;
+      background:#1a1d3b;
+      border:1px solid rgba(255,255,255,.13);
+      touch-action:manipulation;
+    }
+    .log{margin-top:8px;font-size:.78rem;color:#9da9cb;min-height:1.2em}
+    .danger{color:#ff89a2}
+  </style>
+</head>
+<body>
+<main class="app">
+  <h1>🌊 Tidal Ledger Tycoon</h1>
+  <p>항만 3구역의 안정도를 유지하며 신뢰와 현금을 지켜 최대 성과를 기록하세요.</p>
+
+  <section class="top">
+    <div class="box">Time<b id="time">0</b></div>
+    <div class="box">Cash<b id="cash">120</b></div>
+    <div class="box">Best<b id="best">0</b></div>
+  </section>
+
+  <section id="zones"></section>
+
+  <div class="ctrl">
+    <button id="btn1">1 물류 +12</button>
+    <button id="btn2">2 에너지 +12</button>
+    <button id="btn3">3 복지 +12</button>
+  </div>
+
+  <div class="ctrl">
+    <button id="policyA">Q 효율화 (+cash)</button>
+    <button id="policyB">W 광고 (+trust)</button>
+    <button id="restart">ENTER 재시작</button>
+  </div>
+
+  <div id="log" class="log">키보드 1/2/3/Q/W 지원 · 터치 버튼 가능</div>
+</main>
+
+<script>
+(() => {
+  const zoneNames = ['물류 Logistics', '에너지 Energy', '복지 Welfare'];
+  const zoneEl = document.getElementById('zones');
+  const timeEl = document.getElementById('time');
+  const cashEl = document.getElementById('cash');
+  const bestEl = document.getElementById('best');
+  const logEl = document.getElementById('log');
+  const storeKey = 'tidal-ledger-tycoon-best';
+
+  let best = Number(localStorage.getItem(storeKey) || 0);
+  bestEl.textContent = best;
+
+  let audioCtx;
+  function tone(f=420,d=0.08,t='sine',v=0.04){
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type=t;o.frequency.value=f;g.gain.value=v;
+    o.connect(g);g.connect(audioCtx.destination);o.start();
+    o.stop(audioCtx.currentTime+d);
+  }
+
+  let state;
+  function reset(){
+    state = {
+      t:0,
+      cash:120,
+      trust:80,
+      zones:[72,68,74],
+      over:false,
+      frame:0,
+      score:0
+    };
+    render();
+    log('운영 시작: 붕괴를 막으세요.');
+  }
+
+  function log(msg,bad=false){
+    logEl.textContent = msg;
+    logEl.className = 'log' + (bad ? ' danger':'');
+  }
+
+  function clamp(v){ return Math.max(0, Math.min(100, v)); }
+
+  function actionZone(i){
+    if(state.over) return;
+    state.zones[i] = clamp(state.zones[i] + 12);
+    state.cash -= 11;
+    state.trust = clamp(state.trust + 1);
+    tone(520 + i*70,.06,'triangle',.05);
+    log(`${zoneNames[i]} 긴급 투입`);
+    render();
+  }
+
+  function policyEfficiency(){
+    if(state.over) return;
+    const idx = Math.floor(Math.random()*3);
+    state.zones[idx] = clamp(state.zones[idx] - 9);
+    state.cash += 24;
+    state.trust = clamp(state.trust - 4);
+    tone(300,.08,'square',.05);
+    log('효율화 시행: 현금 확보, 한 구역 악화');
+    render();
+  }
+
+  function policyCampaign(){
+    if(state.over) return;
+    state.cash -= 16;
+    state.trust = clamp(state.trust + 11);
+    tone(680,.07,'sine',.05);
+    log('신뢰 캠페인 성공');
+    render();
+  }
+
+  function tick(){
+    if(state.over) return;
+    state.frame++;
+    if(state.frame % 30 === 0){
+      state.t++;
+      for(let i=0;i<3;i++){
+        state.zones[i] = clamp(state.zones[i] - (2 + Math.random()*4));
+      }
+      const danger = state.zones.filter(v=>v<28).length;
+      state.cash += 6 - danger*5;
+      state.trust = clamp(state.trust - danger*3 + 0.6);
+      state.score = Math.floor(state.t * 9 + state.cash + state.trust * 1.5);
+      if(state.trust <= 0 || state.cash < -60 || state.zones.some(v=>v<=0)){
+        state.over = true;
+        tone(150,.2,'sawtooth',.07);
+        if(state.score > best){
+          best = state.score;
+          localStorage.setItem(storeKey, best);
+        }
+        log(`운영 붕괴! 점수 ${state.score} (Enter 재시작)`, true);
+      }
+      render();
+    }
+    requestAnimationFrame(tick);
+  }
+
+  function render(){
+    timeEl.textContent = `${state.t}s`;
+    cashEl.textContent = `${Math.floor(state.cash)} / 신뢰 ${Math.floor(state.trust)}`;
+    bestEl.textContent = best;
+
+    zoneEl.innerHTML = '';
+    state.zones.forEach((v,i)=>{
+      const sec = document.createElement('section');
+      sec.className = 'zone';
+      sec.innerHTML = `
+        <div class="head">
+          <span class="tag">${zoneNames[i]}</span>
+          <span>${Math.floor(v)}%</span>
+        </div>
+        <div class="meter"><div class="fill" style="width:${v}%"></div></div>
+      `;
+      zoneEl.appendChild(sec);
+    });
+  }
+
+  document.getElementById('btn1').addEventListener('click',()=>actionZone(0));
+  document.getElementById('btn2').addEventListener('click',()=>actionZone(1));
+  document.getElementById('btn3').addEventListener('click',()=>actionZone(2));
+  document.getElementById('policyA').addEventListener('click',policyEfficiency);
+  document.getElementById('policyB').addEventListener('click',policyCampaign);
+  document.getElementById('restart').addEventListener('click',()=>{ if(state.over) reset(); });
+
+  ['btn1','btn2','btn3','policyA','policyB','restart'].forEach(id => {
+    document.getElementById(id).addEventListener('touchstart', e => {
+      e.preventDefault();
+      document.getElementById(id).click();
+    }, {passive:false});
+  });
+
+  window.addEventListener('keydown',e => {
+    if(['1','2','3','q','Q','w','W','Enter'].includes(e.key)) e.preventDefault();
+    if(e.key==='1') actionZone(0);
+    if(e.key==='2') actionZone(1);
+    if(e.key==='3') actionZone(2);
+    if(e.key==='q' || e.key==='Q') policyEfficiency();
+    if(e.key==='w' || e.key==='W') policyCampaign();
+    if(e.key==='Enter' && state.over) reset();
+  }, {passive:false});
+
+  reset();
+  tick();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Chrono Coral Loom</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <style>
+    :root{
+      --bg:#0a0a1a;
+      --panel:#13132a;
+      --neon:#58f3ff;
+      --accent:#ff7adf;
+      --text:#eef3ff;
+      --cell:#1a1f3d;
+      --cell-on:#6effd9;
+      --target:#ffcf66;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      min-height:100vh;
+      background:radial-gradient(circle at 20% 0%, #1a1a39, var(--bg) 54%);
+      color:var(--text);
+      font-family:"Pretendard","Apple SD Gothic Neo",system-ui,sans-serif;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:16px;
+    }
+    .app{
+      width:min(94vw,480px);
+      background:rgba(14,14,31,.95);
+      border-radius:18px;
+      border:1px solid rgba(88,243,255,.35);
+      box-shadow:0 0 30px rgba(88,243,255,.18);
+      padding:14px;
+    }
+    h1{margin:0 0 6px;font-size:clamp(1.1rem,4.4vw,1.45rem)}
+    p{margin:.3rem 0 .7rem;color:#b8c6e8;font-size:.92rem}
+    .hud{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
+    .item{background:#11112a;border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:8px;text-align:center;font-size:.8rem}
+    .item b{display:block;font-size:1rem;color:var(--neon)}
+
+    .board{display:grid;grid-template-columns:repeat(5,1fr);gap:7px}
+    .cell{
+      aspect-ratio:1;
+      border-radius:10px;
+      border:1px solid rgba(255,255,255,.11);
+      background:var(--cell);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.03);
+      cursor:pointer;
+      touch-action:manipulation;
+    }
+    .cell.on{background:linear-gradient(145deg,#1f4461,var(--cell-on));}
+    .cell.cursor{outline:3px solid var(--accent)}
+    .cell.targetMark{box-shadow:0 0 0 2px rgba(255,207,102,.42) inset}
+
+    .row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:11px}
+    button{
+      border:none;
+      border-radius:11px;
+      padding:11px 8px;
+      background:#1a1a36;
+      color:#fff;
+      font-weight:700;
+      border:1px solid rgba(255,255,255,.12);
+    }
+    .primary{background:linear-gradient(120deg,#2f1f54,#4c2f79)}
+    .hint{font-size:.78rem;color:#95a3c7;margin-top:8px}
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>🪸 Chrono Coral Loom</h1>
+    <p>선택 셀의 행·열을 뒤집어 목표 산호 패턴을 완성하세요.</p>
+
+    <section class="hud">
+      <div class="item">Stage<b id="stage">1</b></div>
+      <div class="item">Moves<b id="moves">0</b></div>
+      <div class="item">Best<b id="best">1</b></div>
+    </section>
+
+    <section id="board" class="board" aria-label="puzzle board"></section>
+
+    <div class="row">
+      <button id="leftBtn">◀</button>
+      <button id="applyBtn" class="primary">TOGGLE</button>
+      <button id="rightBtn">▶</button>
+    </div>
+    <div class="row">
+      <button id="upBtn">▲</button>
+      <button id="downBtn">▼</button>
+      <button id="restartBtn">RESTART</button>
+    </div>
+    <div class="hint">키보드: 방향키 이동 · Space/Enter 토글 · R 재시작</div>
+  </main>
+
+<script>
+(() => {
+  const size = 5;
+  const boardEl = document.getElementById('board');
+  const stageEl = document.getElementById('stage');
+  const movesEl = document.getElementById('moves');
+  const bestEl = document.getElementById('best');
+  const storeKey = 'chrono-coral-loom-best-stage';
+
+  let best = Number(localStorage.getItem(storeKey) || 1);
+  bestEl.textContent = best;
+
+  let audioCtx;
+  function sfx(f=430,d=0.08,t='sine',v=0.04){
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type=t;o.frequency.value=f;g.gain.value=v;
+    o.connect(g);g.connect(audioCtx.destination);o.start();
+    o.stop(audioCtx.currentTime+d);
+  }
+
+  let state;
+
+  function createPattern(seed){
+    const pattern = Array.from({length:size*size},()=>0);
+    for(let i=0;i<size*size;i++){
+      pattern[i] = Math.random() < Math.min(0.38 + seed*0.02, 0.62) ? 1 : 0;
+    }
+    if(pattern.every(v=>v===0)) pattern[Math.floor(Math.random()*pattern.length)] = 1;
+    return pattern;
+  }
+
+  function idx(r,c){ return r*size+c; }
+
+  function newStage(level){
+    const target = createPattern(level);
+    const board = createPattern(level-1);
+    state = {
+      level,
+      target,
+      board,
+      cursor: Math.floor(size*size/2),
+      movesLeft: 8 + Math.floor(level*1.3)
+    };
+    updateHud();
+    render();
+  }
+
+  function updateHud(){
+    stageEl.textContent = state.level;
+    movesEl.textContent = state.movesLeft;
+    bestEl.textContent = best;
+  }
+
+  function toggleCross(cell){
+    const r = Math.floor(cell/size), c = cell%size;
+    for(let i=0;i<size;i++){
+      state.board[idx(r,i)] = state.board[idx(r,i)] ? 0 : 1;
+      if(i!==r) state.board[idx(i,c)] = state.board[idx(i,c)] ? 0 : 1;
+    }
+    state.movesLeft--;
+    sfx(540,.05,'triangle',.05);
+    const same = state.board.every((v,i)=>v===state.target[i]);
+    if(same){
+      sfx(760,.12,'square',.06);
+      const next = state.level + 1;
+      if(next > best){ best = next; localStorage.setItem(storeKey, best); }
+      newStage(next);
+      return;
+    }
+    if(state.movesLeft <= 0){
+      sfx(160,.18,'sawtooth',.06);
+      newStage(1);
+      return;
+    }
+    updateHud();
+    render();
+  }
+
+  function moveCursor(dr,dc){
+    const r = Math.floor(state.cursor/size);
+    const c = state.cursor%size;
+    const nr = (r + dr + size) % size;
+    const nc = (c + dc + size) % size;
+    state.cursor = idx(nr,nc);
+    sfx(300 + nc*30,.04,'triangle',.03);
+    render();
+  }
+
+  function render(){
+    boardEl.innerHTML = '';
+    for(let i=0;i<size*size;i++){
+      const btn = document.createElement('button');
+      btn.className = 'cell' + (state.board[i] ? ' on' : '') + (state.cursor===i ? ' cursor':'') + (state.target[i] ? ' targetMark' : '');
+      btn.setAttribute('aria-label', `cell ${i}`);
+      btn.addEventListener('click', () => { state.cursor=i; toggleCross(i); });
+      btn.addEventListener('touchstart', e => { e.preventDefault(); state.cursor=i; toggleCross(i); }, {passive:false});
+      boardEl.appendChild(btn);
+    }
+  }
+
+  document.getElementById('leftBtn').addEventListener('click',()=>moveCursor(0,-1));
+  document.getElementById('rightBtn').addEventListener('click',()=>moveCursor(0,1));
+  document.getElementById('upBtn').addEventListener('click',()=>moveCursor(-1,0));
+  document.getElementById('downBtn').addEventListener('click',()=>moveCursor(1,0));
+  document.getElementById('applyBtn').addEventListener('click',()=>toggleCross(state.cursor));
+  document.getElementById('restartBtn').addEventListener('click',()=>newStage(1));
+
+  const touchButtons = ['leftBtn','rightBtn','upBtn','downBtn','applyBtn','restartBtn'];
+  touchButtons.forEach(id => {
+    document.getElementById(id).addEventListener('touchstart', e => {
+      e.preventDefault();
+      document.getElementById(id).click();
+    }, {passive:false});
+  });
+
+  window.addEventListener('keydown',e => {
+    if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' ','Enter','r','R'].includes(e.key)) e.preventDefault();
+    if(e.key==='ArrowLeft') moveCursor(0,-1);
+    if(e.key==='ArrowRight') moveCursor(0,1);
+    if(e.key==='ArrowUp') moveCursor(-1,0);
+    if(e.key==='ArrowDown') moveCursor(1,0);
+    if(e.key===' ' || e.key==='Enter') toggleCross(state.cursor);
+    if(e.key==='r' || e.key==='R') newStage(1);
+  }, {passive:false});
+
+  newStage(1);
+})();
+</script>
+</body>
+</html>

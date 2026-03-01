@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Tidal Signal Cartographer</title>
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0a0a1a;
+      --panel: #111a34;
+      --line: #2c417c;
+      --text: #eaf1ff;
+      --muted: #98add8;
+      --good: #66f7ff;
+      --warn: #ffd86f;
+      --bad: #ff6ca9;
+      font-family: "Pretendard", "Noto Sans KR", system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      display: flex;
+      justify-content: center;
+      padding: 12px;
+      background: radial-gradient(circle at 50% 0%, #1b2450 0%, var(--bg) 58%);
+      color: var(--text);
+    }
+    .app { width: min(560px, 100%); display: grid; gap: 10px; }
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 8px;
+      font-size: 12px;
+    }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: linear-gradient(180deg, #182449, #111833);
+      padding: 8px;
+      text-align: center;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+      touch-action: manipulation;
+    }
+    .cell {
+      border: 1px solid #344d8d;
+      border-radius: 12px;
+      min-height: clamp(52px, 12vw, 72px);
+      background: #0e1530;
+      color: var(--text);
+      font-weight: 700;
+      cursor: pointer;
+      padding: 0;
+    }
+    .cell.start { border-color: #66f7ff; box-shadow: 0 0 0 1px #66f7ff66 inset; }
+    .cell.goal { border-color: #ffd86f; box-shadow: 0 0 0 1px #ffd86f66 inset; }
+    .cell.path { background: #20356d; }
+    .cell.preview { background: #254e86; }
+    .cell.cursor { outline: 2px solid #ff98c2; outline-offset: -2px; }
+    .actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    button {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel);
+      color: var(--text);
+      padding: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    button:active,
+    button.on { transform: translateY(1px) scale(0.99); border-color: var(--good); }
+    .hint {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+      text-align: center;
+    }
+    @media (max-width: 480px) {
+      .hud { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .actions { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="hud">
+      <div class="card">ROUND<br><strong id="round">1</strong></div>
+      <div class="card">BEST<br><strong id="best">1</strong></div>
+      <div class="card">TURNS<br><strong id="turns">0</strong></div>
+      <div class="card">ERROR<br><strong id="error">0</strong></div>
+      <div class="card">GOAL<br><strong id="goal">0,0</strong></div>
+      <div class="card">STATUS<br><strong id="status">MEMO</strong></div>
+    </section>
+
+    <section class="grid" id="grid" aria-label="5x5 map grid"></section>
+
+    <section class="actions">
+      <button id="commit">ENTER / TAP: COMMIT TILE</button>
+      <button id="reset">R: RESET ROUTE</button>
+    </section>
+
+    <p class="hint">화살표로 커서 이동 + Enter 확정. 터치로 타일 탭 가능. 시작점에서 목표점까지 신호 경로를 기억해 연결하세요.</p>
+  </main>
+
+  <script>
+    (() => {
+      const KEY = 'best-tidal-signal-cartographer';
+      const SIZE = 5;
+      const gridEl = document.getElementById('grid');
+      const roundEl = document.getElementById('round');
+      const bestEl = document.getElementById('best');
+      const turnsEl = document.getElementById('turns');
+      const errorEl = document.getElementById('error');
+      const goalEl = document.getElementById('goal');
+      const statusEl = document.getElementById('status');
+      const commitBtn = document.getElementById('commit');
+      const resetBtn = document.getElementById('reset');
+
+      let audio;
+      function beep(freq = 450, dur = 0.05, type = 'sine', vol = 0.02) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        if (!audio) audio = new AC();
+        if (audio.state === 'suspended') audio.resume();
+        const osc = audio.createOscillator();
+        const gain = audio.createGain();
+        osc.type = type;
+        osc.frequency.value = freq;
+        gain.gain.value = vol;
+        osc.connect(gain).connect(audio.destination);
+        osc.start();
+        osc.stop(audio.currentTime + dur);
+      }
+
+      let best = Number(localStorage.getItem(KEY) || 1);
+      let state;
+
+      function id(x, y) { return `${x},${y}`; }
+      function parse(idText) {
+        const [x, y] = idText.split(',').map(Number);
+        return { x, y };
+      }
+      function neighbors(a, b) {
+        return Math.abs(a.x - b.x) + Math.abs(a.y - b.y) === 1;
+      }
+
+      function randCell() {
+        return { x: Math.floor(Math.random() * SIZE), y: Math.floor(Math.random() * SIZE) };
+      }
+
+      function buildTarget(round) {
+        const len = Math.min(14, 5 + round);
+        const start = randCell();
+        const path = [id(start.x, start.y)];
+        let cur = { ...start };
+        for (let i = 1; i < len; i++) {
+          const cand = [];
+          if (cur.x > 0) cand.push({ x: cur.x - 1, y: cur.y });
+          if (cur.x < SIZE - 1) cand.push({ x: cur.x + 1, y: cur.y });
+          if (cur.y > 0) cand.push({ x: cur.x, y: cur.y - 1 });
+          if (cur.y < SIZE - 1) cand.push({ x: cur.x, y: cur.y + 1 });
+
+          cand.sort(() => Math.random() - 0.5);
+          let next = cand.find((p) => !path.includes(id(p.x, p.y)));
+          if (!next) next = cand[0];
+          cur = next;
+          path.push(id(cur.x, cur.y));
+        }
+        return path;
+      }
+
+      function resetRoute() {
+        state.route = [state.target[0]];
+        state.turnsLeft = state.maxTurns;
+        state.errors = 0;
+        state.previewUntil = performance.now() + 1500;
+        state.cursor = parse(state.target[0]);
+        statusEl.textContent = 'MEMO';
+        beep(390, 0.04, 'triangle', 0.018);
+        render();
+      }
+
+      function newRound(nextRound = 1) {
+        state = {
+          active: true,
+          round: nextRound,
+          target: buildTarget(nextRound),
+          route: [],
+          turnsLeft: 0,
+          maxTurns: 0,
+          errors: 0,
+          cursor: { x: 0, y: 0 },
+          previewUntil: 0
+        };
+        state.maxTurns = state.target.length + 2;
+        resetRoute();
+      }
+
+      function endGame(reason) {
+        state.active = false;
+        if (state.round > best) {
+          best = state.round;
+          localStorage.setItem(KEY, String(best));
+        }
+        statusEl.textContent = reason;
+        beep(170, 0.15, 'sawtooth', 0.04);
+        render();
+      }
+
+      function applyStep(nextId) {
+        if (!state.active) return;
+        const last = parse(state.route[state.route.length - 1]);
+        const next = parse(nextId);
+
+        if (!neighbors(last, next)) {
+          state.errors += 1;
+          state.turnsLeft -= 1;
+          statusEl.textContent = 'NON-ADJ';
+          beep(220, 0.08, 'square', 0.03);
+        } else {
+          const expected = state.target[state.route.length];
+          if (nextId !== expected) {
+            state.errors += 1;
+            state.turnsLeft -= 1;
+            state.route = [state.target[0]];
+            state.cursor = parse(state.target[0]);
+            statusEl.textContent = 'WRONG PATH';
+            beep(210, 0.09, 'square', 0.03);
+          } else {
+            state.route.push(nextId);
+            state.turnsLeft -= 1;
+            state.cursor = next;
+            statusEl.textContent = 'LOCKED';
+            beep(560 + state.route.length * 24, 0.045, 'triangle', 0.024);
+
+            if (state.route.length === state.target.length) {
+              statusEl.textContent = 'CLEAR';
+              beep(860, 0.08, 'triangle', 0.03);
+              setTimeout(() => newRound(state.round + 1), 280);
+            }
+          }
+        }
+
+        if (state.errors >= 3) endGame('3 ERRORS');
+        else if (state.turnsLeft <= 0 && state.route.length < state.target.length) endGame('NO TURNS');
+
+        render();
+      }
+
+      function moveCursor(dx, dy) {
+        if (!state.active) return;
+        state.cursor.x = Math.max(0, Math.min(SIZE - 1, state.cursor.x + dx));
+        state.cursor.y = Math.max(0, Math.min(SIZE - 1, state.cursor.y + dy));
+        beep(330, 0.02, 'sine', 0.01);
+        render();
+      }
+
+      function commitCursor() {
+        applyStep(id(state.cursor.x, state.cursor.y));
+      }
+
+      function render() {
+        roundEl.textContent = state.round;
+        bestEl.textContent = best;
+        turnsEl.textContent = Math.max(0, state.turnsLeft);
+        errorEl.textContent = state.errors;
+        goalEl.textContent = state.target[state.target.length - 1];
+
+        const startId = state.target[0];
+        const goalId = state.target[state.target.length - 1];
+        const now = performance.now();
+        const preview = now < state.previewUntil;
+
+        gridEl.innerHTML = '';
+        for (let y = 0; y < SIZE; y++) {
+          for (let x = 0; x < SIZE; x++) {
+            const cellId = id(x, y);
+            const btn = document.createElement('button');
+            btn.className = 'cell';
+            if (cellId === startId) btn.classList.add('start');
+            if (cellId === goalId) btn.classList.add('goal');
+            if (state.route.includes(cellId)) btn.classList.add('path');
+            if (preview && state.target.includes(cellId)) btn.classList.add('preview');
+            if (state.cursor.x === x && state.cursor.y === y) btn.classList.add('cursor');
+            btn.setAttribute('aria-label', `cell ${x},${y}`);
+            btn.addEventListener('pointerdown', (e) => {
+              e.preventDefault();
+              state.cursor = { x, y };
+              if (cellId !== state.route[state.route.length - 1]) commitCursor();
+              else render();
+            });
+            gridEl.appendChild(btn);
+          }
+        }
+      }
+
+      commitBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        commitBtn.classList.add('on');
+        commitCursor();
+      });
+      commitBtn.addEventListener('pointerup', () => commitBtn.classList.remove('on'));
+      commitBtn.addEventListener('pointerleave', () => commitBtn.classList.remove('on'));
+      commitBtn.addEventListener('pointercancel', () => commitBtn.classList.remove('on'));
+
+      resetBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        resetBtn.classList.add('on');
+        if (state.active) resetRoute();
+        else newRound(1);
+      });
+      resetBtn.addEventListener('pointerup', () => resetBtn.classList.remove('on'));
+      resetBtn.addEventListener('pointerleave', () => resetBtn.classList.remove('on'));
+      resetBtn.addEventListener('pointercancel', () => resetBtn.classList.remove('on'));
+
+      document.addEventListener('keydown', (e) => {
+        if (!state) return;
+        if (e.key === 'ArrowUp') moveCursor(0, -1);
+        if (e.key === 'ArrowDown') moveCursor(0, 1);
+        if (e.key === 'ArrowLeft') moveCursor(-1, 0);
+        if (e.key === 'ArrowRight') moveCursor(1, 0);
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          commitCursor();
+        }
+        if (e.key.toLowerCase() === 'r') {
+          if (state.active) resetRoute();
+          else newRound(1);
+        }
+      });
+
+      newRound(1);
+    })();
+  </script>
+</body>
+</html>

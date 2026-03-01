@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Quantum Kimchi Courier</title>
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0a0a1a;
+      --panel: #121b37;
+      --line: #2d437f;
+      --text: #ebf2ff;
+      --muted: #9ab0da;
+      --good: #6bf7cc;
+      --warn: #ffd46f;
+      --bad: #ff6ca9;
+      --accent: #64f7ff;
+      font-family: "Pretendard", "Noto Sans KR", system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      padding: 12px;
+      display: flex;
+      justify-content: center;
+      background: radial-gradient(circle at 50% 0%, #192651 0%, var(--bg) 58%);
+      color: var(--text);
+    }
+    .app { width: min(560px, 100%); display: grid; gap: 10px; }
+    .top {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+      font-size: 12px;
+    }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: linear-gradient(180deg, #18264d, #101933);
+      padding: 8px;
+      text-align: center;
+    }
+    .zones {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .zone {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #0f1630;
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+    }
+    .zone.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px #64f7ff66 inset;
+    }
+    .bar {
+      background: #080d20;
+      border: 1px solid #293965;
+      border-radius: 999px;
+      overflow: hidden;
+      height: 10px;
+    }
+    .fill { height: 100%; width: 0; transition: width 0.15s ease; }
+    .load { background: linear-gradient(90deg, #64f7ff, #3db0ff); }
+    .heat { background: linear-gradient(90deg, #ffd46f, #ff9d59); }
+    .spoil { background: linear-gradient(90deg, #ff7daa, #ff5d7f); }
+    .actions {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .zones-select {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+    button {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel);
+      color: var(--text);
+      padding: 11px 8px;
+      font-weight: 700;
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    button.active,
+    button:active {
+      transform: translateY(1px) scale(0.99);
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px #64f7ff66 inset;
+    }
+    .log {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #0e152d;
+      padding: 10px;
+      font-size: 12px;
+      color: var(--muted);
+      min-height: 70px;
+      line-height: 1.35;
+    }
+    .hint {
+      margin: 0;
+      text-align: center;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    @media (max-width: 500px) {
+      .top { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .zones { grid-template-columns: 1fr; }
+      .zones-select { grid-template-columns: 1fr; }
+      .actions { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="top">
+      <div class="card">CASH<br><strong id="cash">0</strong></div>
+      <div class="card">BEST<br><strong id="best">0</strong></div>
+      <div class="card">TRUST<br><strong id="trust">100</strong></div>
+      <div class="card">ORDERS<br><strong id="orders">30</strong></div>
+      <div class="card">SHIFT<br><strong id="shift">1</strong></div>
+    </section>
+
+    <section class="zones" id="zones"></section>
+
+    <section class="zones-select" aria-label="zone select">
+      <button data-zone="0">1) Ferment</button>
+      <button data-zone="1">2) Pack</button>
+      <button data-zone="2">3) Deliver</button>
+    </section>
+
+    <section class="actions" aria-label="actions">
+      <button id="actBoost">Q) BOOST</button>
+      <button id="actCool">W) COOL</button>
+      <button id="actShip">E) SHIP</button>
+    </section>
+
+    <button id="restart">RESTART SHIFT</button>
+    <div class="log" id="log">도시 주문이 밀려옵니다. 구역을 선택하고 Q/W/E 액션으로 지표를 안정화하세요.</div>
+    <p class="hint">키보드: 1/2/3 구역 선택, Q/W/E 액션 · 터치 버튼 동일. Trust 0 또는 Spoilage 100이면 종료.</p>
+  </main>
+
+  <script>
+    (() => {
+      const KEY = 'best-quantum-kimchi-courier';
+      const zoneNames = ['Ferment', 'Pack', 'Deliver'];
+      const zoneButtons = [...document.querySelectorAll('[data-zone]')];
+      const zonesWrap = document.getElementById('zones');
+      const logEl = document.getElementById('log');
+
+      const cashEl = document.getElementById('cash');
+      const bestEl = document.getElementById('best');
+      const trustEl = document.getElementById('trust');
+      const ordersEl = document.getElementById('orders');
+      const shiftEl = document.getElementById('shift');
+
+      const boostBtn = document.getElementById('actBoost');
+      const coolBtn = document.getElementById('actCool');
+      const shipBtn = document.getElementById('actShip');
+      const restartBtn = document.getElementById('restart');
+
+      let audio;
+      function beep(freq = 420, dur = 0.05, type = 'sine', vol = 0.02) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        if (!audio) audio = new AC();
+        if (audio.state === 'suspended') audio.resume();
+        const osc = audio.createOscillator();
+        const gain = audio.createGain();
+        osc.type = type;
+        osc.frequency.value = freq;
+        gain.gain.value = vol;
+        osc.connect(gain).connect(audio.destination);
+        osc.start();
+        osc.stop(audio.currentTime + dur);
+      }
+
+      let best = Number(localStorage.getItem(KEY) || 0);
+      let last = performance.now();
+      let tick = 0;
+      let state;
+
+      function zoneTemplate(name) {
+        return {
+          name,
+          load: 45 + Math.random() * 15,
+          heat: 20 + Math.random() * 20,
+          spoil: 8 + Math.random() * 6,
+          boost: 0,
+          cool: 0
+        };
+      }
+
+      function reset() {
+        state = {
+          active: true,
+          cash: 0,
+          trust: 100,
+          orders: 30,
+          shift: 1,
+          combo: 0,
+          selected: 0,
+          zones: zoneNames.map(zoneTemplate)
+        };
+        tick = 0;
+        renderZones();
+        updateHud();
+        writeLog('교대 시작. 병목 구역을 선택해 Boost/Cool/Ship을 섞어 운영하세요.');
+      }
+
+      function writeLog(msg) {
+        logEl.textContent = msg;
+      }
+
+      function clamp(v, min, max) {
+        return Math.max(min, Math.min(max, v));
+      }
+
+      function updateHud() {
+        cashEl.textContent = Math.floor(state.cash);
+        bestEl.textContent = best;
+        trustEl.textContent = Math.round(state.trust);
+        ordersEl.textContent = Math.round(state.orders);
+        shiftEl.textContent = state.shift;
+      }
+
+      function renderZones() {
+        zonesWrap.innerHTML = '';
+        state.zones.forEach((z, i) => {
+          const el = document.createElement('article');
+          el.className = 'zone' + (state.selected === i ? ' active' : '');
+          el.innerHTML = `
+            <strong>${z.name}</strong>
+            <div>LOAD ${Math.round(z.load)}</div>
+            <div class="bar"><div class="fill load" style="width:${z.load}%"></div></div>
+            <div>HEAT ${Math.round(z.heat)}</div>
+            <div class="bar"><div class="fill heat" style="width:${z.heat}%"></div></div>
+            <div>SPOIL ${Math.round(z.spoil)}</div>
+            <div class="bar"><div class="fill spoil" style="width:${z.spoil}%"></div></div>
+          `;
+          el.addEventListener('pointerdown', () => selectZone(i));
+          zonesWrap.appendChild(el);
+        });
+
+        zoneButtons.forEach((btn, i) => btn.classList.toggle('active', i === state.selected));
+      }
+
+      function selectZone(idx) {
+        if (!state.active) return;
+        state.selected = idx;
+        renderZones();
+        beep(360 + idx * 100, 0.03, 'triangle', 0.015);
+      }
+
+      function actionBoost() {
+        if (!state.active) return;
+        const z = state.zones[state.selected];
+        z.load = clamp(z.load - (12 + Math.random() * 8), 0, 100);
+        z.heat = clamp(z.heat + 12, 0, 100);
+        z.spoil = clamp(z.spoil + 6, 0, 100);
+        state.cash += 6 + state.combo;
+        state.combo += 1;
+        writeLog(`${z.name} BOOST: 처리량 상승, heat/spoil 증가.`);
+        beep(620, 0.05, 'square', 0.022);
+      }
+
+      function actionCool() {
+        if (!state.active) return;
+        const z = state.zones[state.selected];
+        z.heat = clamp(z.heat - (18 + Math.random() * 6), 0, 100);
+        z.spoil = clamp(z.spoil - (10 + Math.random() * 5), 0, 100);
+        state.cash = Math.max(0, state.cash - 2);
+        state.combo = Math.max(0, state.combo - 1);
+        writeLog(`${z.name} COOL: 손실률 안정화.`);
+        beep(440, 0.05, 'sine', 0.02);
+      }
+
+      function actionShip() {
+        if (!state.active) return;
+        const deliver = state.zones[2];
+        const pack = state.zones[1];
+        const capacity = 8 + Math.floor((100 - deliver.load) / 12) + Math.floor((100 - pack.heat) / 20);
+        const shipped = Math.min(state.orders, Math.max(2, capacity));
+        state.orders -= shipped;
+        state.cash += shipped * (2 + Math.min(5, state.combo * 0.4));
+        state.trust = clamp(state.trust + shipped * 0.25, 0, 100);
+        state.combo += 1;
+        deliver.load = clamp(deliver.load + 8, 0, 100);
+        writeLog(`SHIP 완료: ${shipped}건 배송, trust 회복.`);
+        beep(700, 0.05, 'triangle', 0.024);
+      }
+
+      function endGame(reason) {
+        state.active = false;
+        if (state.cash > best) {
+          best = Math.floor(state.cash);
+          localStorage.setItem(KEY, String(best));
+        }
+        writeLog(`운영 종료 — ${reason} | Cash ${Math.floor(state.cash)} / Best ${best}`);
+        beep(170, 0.16, 'sawtooth', 0.04);
+        updateHud();
+      }
+
+      function simulationStep() {
+        if (!state.active) return;
+
+        state.shift = 1 + Math.floor(tick / 28);
+        const pressure = 1 + state.shift * 0.22;
+        state.orders += 2.8 * pressure + Math.random() * 2;
+
+        let avgSpoil = 0;
+        let avgHeat = 0;
+
+        state.zones.forEach((z, i) => {
+          z.load = clamp(z.load + (Math.random() * 10 - 3) + pressure * 2.2, 0, 100);
+          z.heat = clamp(z.heat + z.load * 0.04 + (Math.random() * 4 - 1.6), 0, 100);
+          z.spoil = clamp(z.spoil + z.heat * 0.035 + (Math.random() * 3 - 1), 0, 100);
+
+          if (i === 0) {
+            const fermentOut = Math.max(0, 8 - z.load * 0.05 - z.spoil * 0.03);
+            state.zones[1].load = clamp(state.zones[1].load - fermentOut * 0.4, 0, 100);
+          }
+          if (i === 1) {
+            const packedOut = Math.max(0, 6 - z.load * 0.05 - z.heat * 0.03);
+            state.zones[2].load = clamp(state.zones[2].load - packedOut * 0.35, 0, 100);
+          }
+          if (i === 2) {
+            const autoShip = Math.max(0, 4 - z.load * 0.04 - z.spoil * 0.03);
+            const done = Math.min(state.orders, autoShip);
+            state.orders -= done;
+            state.cash += done * 0.9;
+          }
+
+          avgSpoil += z.spoil;
+          avgHeat += z.heat;
+        });
+
+        avgSpoil /= 3;
+        avgHeat /= 3;
+
+        state.trust = clamp(state.trust - (state.orders * 0.022 + avgSpoil * 0.018 - 0.2), 0, 100);
+        if (state.orders < 15) state.trust = clamp(state.trust + 0.8, 0, 100);
+
+        state.cash += Math.max(0, 2 - avgSpoil * 0.01);
+
+        if (avgSpoil > 85) {
+          state.trust -= 1.8;
+          beep(210, 0.04, 'square', 0.02);
+        }
+
+        if (state.orders > 160) {
+          state.trust -= 2.3;
+          state.combo = 0;
+        }
+
+        if (state.orders <= 0) {
+          state.orders = 14 + state.shift * 8;
+          state.cash += 20;
+          state.combo += 2;
+          beep(820, 0.05, 'triangle', 0.028);
+          writeLog('주문 물결 정리 성공! 다음 물량 유입 준비.');
+        }
+
+        if (state.trust <= 0) {
+          state.trust = 0;
+          endGame('신뢰도 붕괴');
+        } else if (avgSpoil >= 100) {
+          endGame('폐기율 임계 초과');
+        }
+
+        renderZones();
+        updateHud();
+      }
+
+      function pulse(btn) {
+        btn.classList.add('active');
+        setTimeout(() => btn.classList.remove('active'), 120);
+      }
+
+      zoneButtons.forEach((btn) => {
+        btn.addEventListener('pointerdown', () => selectZone(Number(btn.dataset.zone)));
+      });
+
+      boostBtn.addEventListener('pointerdown', () => { actionBoost(); pulse(boostBtn); });
+      coolBtn.addEventListener('pointerdown', () => { actionCool(); pulse(coolBtn); });
+      shipBtn.addEventListener('pointerdown', () => { actionShip(); pulse(shipBtn); });
+
+      restartBtn.addEventListener('click', () => {
+        beep(510, 0.05, 'triangle', 0.02);
+        reset();
+      });
+
+      document.addEventListener('keydown', (e) => {
+        if (e.key === '1') selectZone(0);
+        if (e.key === '2') selectZone(1);
+        if (e.key === '3') selectZone(2);
+        if (e.key.toLowerCase() === 'q') { actionBoost(); pulse(boostBtn); }
+        if (e.key.toLowerCase() === 'w') { actionCool(); pulse(coolBtn); }
+        if (e.key.toLowerCase() === 'e') { actionShip(); pulse(shipBtn); }
+      });
+
+      function loop(now) {
+        const dt = (now - last) / 1000;
+        last = now;
+        tick += dt;
+        while (tick >= 1) {
+          simulationStep();
+          tick -= 1;
+        }
+        requestAnimationFrame(loop);
+      }
+
+      reset();
+      requestAnimationFrame(loop);
+    })();
+  </script>
+</body>
+</html>

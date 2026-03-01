@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Seismograph Scribe</title>
+  <style>
+    :root {
+      --bg: #0a0a1a;
+      --panel: #12122a;
+      --line: #4de2ff;
+      --accent: #ff66d9;
+      --ok: #56ff9f;
+      --warn: #ff6f91;
+      --text: #e7f7ff;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(circle at 20% 0%, #1a1a3f, var(--bg) 58%);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 12px;
+    }
+    .app {
+      width: min(860px, 100%);
+      background: rgba(10, 10, 26, 0.92);
+      border: 1px solid #2e2e66;
+      border-radius: 18px;
+      box-shadow: 0 0 24px rgba(77, 226, 255, 0.18);
+      padding: 14px;
+      display: grid;
+      gap: 10px;
+    }
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid #2a2a54;
+      border-radius: 10px;
+      padding: 8px;
+      text-align: center;
+    }
+    .card strong { display: block; font-size: 1.05rem; color: var(--line); margin-top: 3px; }
+    canvas {
+      width: 100%;
+      height: min(52vh, 360px);
+      border-radius: 12px;
+      border: 1px solid #2a2a54;
+      background: linear-gradient(180deg, #090917, #0e1030);
+      touch-action: none;
+    }
+    .controls {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: 1fr 1fr 1fr;
+      align-items: stretch;
+    }
+    button {
+      border: 1px solid #3a3a70;
+      background: #17173b;
+      color: var(--text);
+      border-radius: 10px;
+      padding: 12px 8px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button:active { transform: scale(0.98); }
+    .up { box-shadow: inset 0 0 0 1px #355f93, 0 0 14px rgba(77, 226, 255, 0.25); }
+    .down { box-shadow: inset 0 0 0 1px #7a2e7d, 0 0 14px rgba(255, 102, 217, 0.25); }
+    .start { background: linear-gradient(90deg, #24467a, #5c2b74); }
+    .hint { font-size: .9rem; opacity: .86; text-align: center; }
+    .danger { color: var(--warn); }
+    @media (max-width: 680px) {
+      .hud { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .controls { grid-template-columns: 1fr 1fr; }
+      .start { grid-column: span 2; }
+      canvas { height: 44vh; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="hud">
+      <div class="card">점수<strong id="score">0</strong></div>
+      <div class="card">콤보<strong id="combo">0</strong></div>
+      <div class="card">정확도<strong id="accuracy">0%</strong></div>
+      <div class="card">시간<strong id="time">75.0s</strong></div>
+      <div class="card">최고<strong id="best">0 / 0%</strong></div>
+    </section>
+
+    <canvas id="stage" width="900" height="360" aria-label="Seismograph playfield"></canvas>
+
+    <section class="controls">
+      <button class="up" id="upBtn">▲ UP (W/↑)</button>
+      <button class="down" id="downBtn">▼ DOWN (S/↓)</button>
+      <button class="start" id="startBtn">START / RESTART</button>
+    </section>
+
+    <div class="hint" id="status">파형 중심선을 따라가세요. 오차가 작을수록 콤보가 유지됩니다.</div>
+  </main>
+
+  <script>
+    (() => {
+      const $ = (id) => document.getElementById(id);
+      const c = $('stage');
+      const ctx = c.getContext('2d');
+      const scoreEl = $('score');
+      const comboEl = $('combo');
+      const accEl = $('accuracy');
+      const timeEl = $('time');
+      const bestEl = $('best');
+      const statusEl = $('status');
+
+      const LS_SCORE = 'seismographScribe.bestScore';
+      const LS_ACC = 'seismographScribe.bestAcc';
+      let bestScore = Number(localStorage.getItem(LS_SCORE) || 0);
+      let bestAcc = Number(localStorage.getItem(LS_ACC) || 0);
+      bestEl.textContent = `${bestScore} / ${bestAcc.toFixed(1)}%`;
+
+      let audioCtx;
+      const beep = (freq = 330, dur = 0.05, gain = 0.03, type = 'sine') => {
+        if (!audioCtx) return;
+        const t0 = audioCtx.currentTime;
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.type = type; o.frequency.value = freq;
+        g.gain.value = gain;
+        o.connect(g); g.connect(audioCtx.destination);
+        o.start(t0);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+        o.stop(t0 + dur);
+      };
+      const initAudio = async () => {
+        if (!audioCtx) {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioCtx.state === 'suspended') await audioCtx.resume();
+      };
+
+      const state = {
+        running: false,
+        y: c.height / 2,
+        vy: 0,
+        t: 0,
+        remain: 75,
+        score: 0,
+        combo: 0,
+        samples: 0,
+        good: 0,
+        up: false,
+        down: false,
+        flash: 0,
+        lastMissAt: 0
+      };
+
+      const wave = (x, t) => {
+        const a = 74 + 34 * Math.sin(t * 0.26);
+        const b = 28 + 16 * Math.sin(t * 0.53 + 2.1);
+        return c.height * 0.5 + Math.sin(x * 0.019 + t * 3.1) * a + Math.cos(x * 0.041 - t * 2.3) * b;
+      };
+
+      function reset() {
+        state.running = true;
+        state.y = c.height / 2;
+        state.vy = 0;
+        state.t = 0;
+        state.remain = 75;
+        state.score = 0;
+        state.combo = 0;
+        state.samples = 0;
+        state.good = 0;
+        state.flash = 0;
+        statusEl.textContent = '정밀 트레이싱 진행 중…';
+        statusEl.classList.remove('danger');
+      }
+
+      function endGame() {
+        state.running = false;
+        const acc = state.samples ? (state.good / state.samples) * 100 : 0;
+        if (state.score > bestScore) {
+          bestScore = state.score;
+          localStorage.setItem(LS_SCORE, String(bestScore));
+        }
+        if (acc > bestAcc) {
+          bestAcc = acc;
+          localStorage.setItem(LS_ACC, String(bestAcc));
+        }
+        bestEl.textContent = `${bestScore} / ${bestAcc.toFixed(1)}%`;
+        statusEl.textContent = `세션 종료. 점수 ${state.score}, 정확도 ${acc.toFixed(1)}%`;
+        statusEl.classList.remove('danger');
+        beep(220, 0.16, 0.05, 'triangle');
+      }
+
+      function update(dt) {
+        if (!state.running) return;
+        state.remain -= dt;
+        if (state.remain <= 0) {
+          state.remain = 0;
+          endGame();
+        }
+
+        const accel = 980;
+        if (state.up) state.vy -= accel * dt;
+        if (state.down) state.vy += accel * dt;
+        state.vy *= 0.9;
+        state.y += state.vy * dt;
+        state.y = Math.max(12, Math.min(c.height - 12, state.y));
+
+        state.t += dt * 0.9;
+        const cursorX = c.width * 0.24;
+        const target = wave(cursorX, state.t);
+        const err = Math.abs(target - state.y);
+        const threshold = 28;
+
+        state.samples++;
+        const near = err < threshold;
+        if (near) {
+          state.good++;
+          state.combo = Math.min(99, state.combo + 1);
+          const gain = 2 + Math.floor(state.combo / 8);
+          state.score += gain;
+          if (state.combo % 12 === 0) {
+            beep(420 + state.combo * 2, 0.04, 0.022);
+            state.flash = 1;
+          }
+        } else {
+          if (state.combo > 0 && performance.now() - state.lastMissAt > 180) {
+            beep(150, 0.05, 0.03, 'square');
+            state.lastMissAt = performance.now();
+          }
+          state.combo = Math.max(0, state.combo - 2);
+        }
+
+        const acc = state.samples ? (state.good / state.samples) * 100 : 0;
+        scoreEl.textContent = state.score;
+        comboEl.textContent = state.combo;
+        accEl.textContent = `${acc.toFixed(1)}%`;
+        timeEl.textContent = `${state.remain.toFixed(1)}s`;
+
+        if (state.remain < 12) {
+          statusEl.textContent = '마무리 구간: 콤보 유지에 집중하세요!';
+          statusEl.classList.add('danger');
+        }
+      }
+
+      function draw() {
+        ctx.clearRect(0, 0, c.width, c.height);
+
+        ctx.fillStyle = '#0a0f23';
+        ctx.fillRect(0, 0, c.width, c.height);
+
+        ctx.strokeStyle = '#1f2e57';
+        ctx.lineWidth = 1;
+        for (let x = 0; x <= c.width; x += 60) {
+          ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, c.height); ctx.stroke();
+        }
+        for (let y = 0; y <= c.height; y += 45) {
+          ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(c.width, y); ctx.stroke();
+        }
+
+        ctx.strokeStyle = '#4de2ff';
+        ctx.lineWidth = 2.6;
+        ctx.shadowColor = 'rgba(77,226,255,0.8)';
+        ctx.shadowBlur = 9;
+        ctx.beginPath();
+        for (let x = 0; x < c.width; x += 3) {
+          const y = wave(x, state.t);
+          if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+
+        const cursorX = c.width * 0.24;
+        const targetY = wave(cursorX, state.t);
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = '#ff66d9';
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.moveTo(cursorX, 0); ctx.lineTo(cursorX, c.height); ctx.stroke();
+
+        ctx.fillStyle = '#56ff9f';
+        ctx.beginPath();
+        ctx.arc(cursorX, state.y, 9, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#ff66d9';
+        ctx.beginPath();
+        ctx.arc(cursorX, targetY, 6, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (state.flash > 0) {
+          ctx.fillStyle = `rgba(86,255,159,${0.15 * state.flash})`;
+          ctx.fillRect(0, 0, c.width, c.height);
+          state.flash = Math.max(0, state.flash - 0.06);
+        }
+
+        if (!state.running) {
+          ctx.fillStyle = 'rgba(0,0,0,0.52)';
+          ctx.fillRect(0, 0, c.width, c.height);
+          ctx.fillStyle = '#e7f7ff';
+          ctx.font = '700 34px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('SEISMOGRAPH SCRIBE', c.width / 2, c.height / 2 - 8);
+          ctx.font = '500 18px sans-serif';
+          ctx.fillText('START를 눌러 파형 추적을 시작하세요', c.width / 2, c.height / 2 + 28);
+        }
+      }
+
+      let last = performance.now();
+      function loop(now) {
+        const dt = Math.min(0.033, (now - last) / 1000);
+        last = now;
+        update(dt);
+        draw();
+        requestAnimationFrame(loop);
+      }
+      requestAnimationFrame(loop);
+
+      const setKey = (v) => (e) => {
+        const key = e.key.toLowerCase();
+        if (['w', 'arrowup'].includes(key)) { state.up = v; e.preventDefault(); }
+        if (['s', 'arrowdown'].includes(key)) { state.down = v; e.preventDefault(); }
+      };
+      window.addEventListener('keydown', setKey(true), { passive: false });
+      window.addEventListener('keyup', setKey(false), { passive: false });
+
+      function bindHold(btn, name) {
+        const down = async () => { await initAudio(); state[name] = true; };
+        const up = () => { state[name] = false; };
+        btn.addEventListener('pointerdown', down);
+        btn.addEventListener('pointerup', up);
+        btn.addEventListener('pointercancel', up);
+        btn.addEventListener('pointerleave', up);
+      }
+      bindHold($('upBtn'), 'up');
+      bindHold($('downBtn'), 'down');
+
+      $('startBtn').addEventListener('click', async () => {
+        await initAudio();
+        beep(360, 0.08, 0.04);
+        reset();
+      });
+
+      draw();
+    })();
+  </script>
+</body>
+</html>

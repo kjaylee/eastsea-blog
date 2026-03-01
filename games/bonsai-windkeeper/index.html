@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Bonsai Windkeeper</title>
+  <style>
+    :root{
+      --bg:#0a0a1a;
+      --panel:#111128;
+      --line:#48e4ff;
+      --ok:#7bffa5;
+      --warn:#ff7d9d;
+      --txt:#e8f6ff;
+    }
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    body{
+      margin:0;
+      background:radial-gradient(circle at 15% 0%,#1a1840,var(--bg) 58%);
+      color:var(--txt);
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+      min-height:100vh;
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      padding:12px;
+    }
+    .app{
+      width:min(900px,100%);
+      border:1px solid #2f2f63;
+      border-radius:18px;
+      background:rgba(10,10,26,.95);
+      box-shadow:0 0 24px rgba(72,228,255,.16);
+      padding:14px;
+      display:grid;
+      gap:10px;
+    }
+    .top{display:grid;gap:8px;grid-template-columns:repeat(4,minmax(0,1fr));}
+    .stat{background:var(--panel);border:1px solid #2a2a54;border-radius:10px;padding:8px;text-align:center}
+    .stat strong{display:block;color:var(--line);font-size:1.05rem;margin-top:3px}
+    .trees{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+    .tree{background:var(--panel);border:1px solid #2a2a54;border-radius:12px;padding:10px;position:relative}
+    .tree.active{border-color:#58b6ff;box-shadow:0 0 14px rgba(88,182,255,.25)}
+    .tree h3{margin:0 0 7px;font-size:1rem}
+    .meter{margin:6px 0}
+    .meter label{display:flex;justify-content:space-between;font-size:.82rem;opacity:.87}
+    .bar{height:8px;background:#252548;border-radius:99px;overflow:hidden;margin-top:3px}
+    .fill{height:100%;background:linear-gradient(90deg,#4de2ff,#7bffa5)}
+    .danger .fill{background:linear-gradient(90deg,#ff7d9d,#ffba7d)}
+    .controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+    .actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+    button{
+      border:1px solid #3c3c70;
+      border-radius:10px;
+      padding:11px 8px;
+      background:#17173c;
+      color:var(--txt);
+      font-weight:700;
+      cursor:pointer;
+    }
+    button:active{transform:scale(.98)}
+    .start{background:linear-gradient(90deg,#27497b,#5b2a72)}
+    .hint{text-align:center;font-size:.9rem;opacity:.9}
+    @media(max-width:760px){
+      .top{grid-template-columns:repeat(2,minmax(0,1fr));}
+      .trees{grid-template-columns:1fr;}
+      .controls,.actions{grid-template-columns:1fr 1fr 1fr;}
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="top">
+      <div class="stat">라운드<strong id="round">0</strong></div>
+      <div class="stat">세레니티<strong id="score">0</strong></div>
+      <div class="stat">최고 라운드<strong id="bestRound">0</strong></div>
+      <div class="stat">최고 점수<strong id="bestScore">0</strong></div>
+    </section>
+
+    <section id="trees" class="trees"></section>
+
+    <section class="controls" id="selectButtons"></section>
+    <section class="actions">
+      <button data-action="mist">Q · MIST +수분</button>
+      <button data-action="fan">W · FAN +바람</button>
+      <button data-action="lamp">E · LAMP +광량</button>
+    </section>
+    <button class="start" id="startBtn">START / RESTART</button>
+    <div class="hint" id="status">1/2/3으로 분재 선택 후 Q/W/E로 환경을 조절하세요.</div>
+  </main>
+
+  <script>
+    (() => {
+      const LS_ROUND = 'bonsaiWindkeeper.bestRound';
+      const LS_SCORE = 'bonsaiWindkeeper.bestScore';
+      let bestRound = Number(localStorage.getItem(LS_ROUND) || 0);
+      let bestScore = Number(localStorage.getItem(LS_SCORE) || 0);
+      document.getElementById('bestRound').textContent = bestRound;
+      document.getElementById('bestScore').textContent = bestScore;
+
+      let audioCtx;
+      const initAudio = async () => {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') await audioCtx.resume();
+      };
+      const chirp = (f = 320, d = 0.06, g = 0.03, t = 'triangle') => {
+        if (!audioCtx) return;
+        const o = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        const now = audioCtx.currentTime;
+        o.type = t; o.frequency.value = f;
+        gain.gain.value = g;
+        o.connect(gain); gain.connect(audioCtx.destination);
+        o.start(now); gain.gain.exponentialRampToValueAtTime(0.0001, now + d); o.stop(now + d);
+      };
+
+      const treesWrap = document.getElementById('trees');
+      const selectWrap = document.getElementById('selectButtons');
+      const statusEl = document.getElementById('status');
+      const roundEl = document.getElementById('round');
+      const scoreEl = document.getElementById('score');
+
+      const names = ['Aster', 'Mori', 'Sora'];
+      const state = {
+        running: false,
+        selected: 0,
+        round: 0,
+        score: 0,
+        trees: names.map((n) => ({
+          name: n,
+          moisture: 50,
+          wind: 50,
+          light: 50,
+          vitality: 100
+        }))
+      };
+
+      function clamp(v) { return Math.max(0, Math.min(100, v)); }
+      function drift(tree, round) {
+        const chaos = Math.min(12, 4 + round * 0.14);
+        tree.moisture = clamp(tree.moisture + (Math.random() * chaos * 2 - chaos) - 1.2);
+        tree.wind = clamp(tree.wind + (Math.random() * chaos * 2 - chaos));
+        tree.light = clamp(tree.light + (Math.random() * chaos * 2 - chaos) + 0.8);
+
+        const dist = (Math.abs(tree.moisture - 50) + Math.abs(tree.wind - 50) + Math.abs(tree.light - 50)) / 3;
+        tree.vitality = clamp(tree.vitality - dist * 0.09 + 1.4);
+      }
+
+      function action(kind) {
+        if (!state.running) return;
+        const t = state.trees[state.selected];
+        if (!t) return;
+
+        if (kind === 'mist') {
+          t.moisture = clamp(t.moisture + 18);
+          t.light = clamp(t.light - 4);
+          chirp(340);
+        } else if (kind === 'fan') {
+          t.wind = clamp(t.wind + 18);
+          t.moisture = clamp(t.moisture - 5);
+          chirp(460);
+        } else if (kind === 'lamp') {
+          t.light = clamp(t.light + 16);
+          t.moisture = clamp(t.moisture - 4);
+          chirp(560);
+        }
+        state.score += 3;
+        render();
+      }
+
+      function tick() {
+        if (!state.running) return;
+        state.round += 1;
+        for (const t of state.trees) drift(t, state.round);
+        const avgVitality = state.trees.reduce((a, t) => a + t.vitality, 0) / state.trees.length;
+        state.score += Math.floor(avgVitality / 7);
+
+        const critical = state.trees.some((t) => t.vitality <= 0.5);
+        if (critical) {
+          state.running = false;
+          statusEl.textContent = `생육 붕괴 발생. 라운드 ${state.round}, 세레니티 ${state.score}`;
+          chirp(170, 0.16, 0.05, 'sawtooth');
+          if (state.round > bestRound) {
+            bestRound = state.round;
+            localStorage.setItem(LS_ROUND, String(bestRound));
+          }
+          if (state.score > bestScore) {
+            bestScore = state.score;
+            localStorage.setItem(LS_SCORE, String(bestScore));
+          }
+          document.getElementById('bestRound').textContent = bestRound;
+          document.getElementById('bestScore').textContent = bestScore;
+          render();
+          return;
+        }
+
+        if (avgVitality < 40 && state.round % 3 === 0) chirp(220, 0.08, 0.022, 'square');
+        render();
+      }
+
+      function setSelected(i) {
+        state.selected = i;
+        render();
+      }
+
+      function renderBar(label, value) {
+        const danger = Math.abs(value - 50) > 30 ? 'danger' : '';
+        return `<div class="meter ${danger}"><label><span>${label}</span><span>${value.toFixed(0)}</span></label><div class="bar"><div class="fill" style="width:${value}%"></div></div></div>`;
+      }
+
+      function render() {
+        treesWrap.innerHTML = state.trees.map((t, i) => {
+          const active = i === state.selected ? 'active' : '';
+          const vDanger = t.vitality < 32 ? 'danger' : '';
+          return `<article class="tree ${active}">
+            <h3>${i + 1}. ${t.name} <small style="opacity:.75">Vitality ${t.vitality.toFixed(0)}</small></h3>
+            ${renderBar('Moisture', t.moisture)}
+            ${renderBar('Wind', t.wind)}
+            ${renderBar('Light', t.light)}
+            <div class="meter ${vDanger}">${renderBar('Vitality', t.vitality)}</div>
+          </article>`;
+        }).join('');
+
+        selectWrap.innerHTML = state.trees.map((t, i) =>
+          `<button data-select="${i}" ${i === state.selected ? 'style="box-shadow:0 0 12px rgba(72,228,255,.35);border-color:#58b6ff"' : ''}>${i + 1} · ${t.name}</button>`
+        ).join('');
+
+        selectWrap.querySelectorAll('button').forEach((btn) => {
+          const handler = async () => { await initAudio(); setSelected(Number(btn.dataset.select)); chirp(300, 0.04, 0.018); };
+          btn.addEventListener('click', handler);
+          btn.addEventListener('pointerdown', handler);
+        });
+
+        roundEl.textContent = state.round;
+        scoreEl.textContent = state.score;
+      }
+
+      function reset() {
+        state.running = true;
+        state.round = 0;
+        state.score = 0;
+        state.selected = 0;
+        state.trees = names.map((n) => ({ name: n, moisture: 50, wind: 50, light: 50, vitality: 100 }));
+        statusEl.textContent = '운영 시작: 균형 50 근처를 유지하면 vitality가 회복됩니다.';
+        render();
+      }
+
+      document.getElementById('startBtn').addEventListener('click', async () => {
+        await initAudio();
+        chirp(380, 0.08, 0.04);
+        reset();
+      });
+
+      document.querySelectorAll('.actions button').forEach((btn) => {
+        const handler = async () => { await initAudio(); action(btn.dataset.action); };
+        btn.addEventListener('click', handler);
+        btn.addEventListener('pointerdown', handler);
+      });
+
+      window.addEventListener('keydown', async (e) => {
+        const k = e.key.toLowerCase();
+        if (['1', '2', '3'].includes(k)) {
+          await initAudio();
+          setSelected(Number(k) - 1);
+          chirp(300 + Number(k) * 40, 0.05, 0.02);
+        }
+        if (k === 'q') { await initAudio(); action('mist'); }
+        if (k === 'w') { await initAudio(); action('fan'); }
+        if (k === 'e') { await initAudio(); action('lamp'); }
+      });
+
+      setInterval(tick, 1000);
+      render();
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Paper Plane Thermals</title>
+  <style>
+    :root{
+      --bg:#0a0a1a;
+      --panel:#11112a;
+      --line:#4de2ff;
+      --accent:#ff66d9;
+      --ok:#7bffa5;
+      --warn:#ff7f9f;
+      --text:#e8f6ff;
+    }
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    body{
+      margin:0;
+      background:radial-gradient(circle at 20% 0%,#1a1a3f,var(--bg) 58%);
+      color:var(--text);
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+      min-height:100vh;
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      padding:12px;
+    }
+    .app{
+      width:min(860px,100%);
+      border:1px solid #2d2d63;
+      border-radius:18px;
+      background:rgba(10,10,26,.95);
+      box-shadow:0 0 26px rgba(77,226,255,.17);
+      padding:14px;
+      display:grid;
+      gap:10px;
+    }
+    .hud{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+    .hud div{background:var(--panel);border:1px solid #2a2a54;border-radius:10px;padding:8px;text-align:center}
+    .hud strong{display:block;color:var(--line);font-size:1.05rem;margin-top:3px}
+    canvas{
+      width:100%;
+      height:min(50vh,360px);
+      background:linear-gradient(180deg,#121238,#0b0b1b);
+      border:1px solid #2a2a54;
+      border-radius:12px;
+      touch-action:none;
+    }
+    .controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+    button{
+      border:1px solid #3a3a70;
+      border-radius:10px;
+      padding:12px 8px;
+      background:#17173c;
+      color:var(--text);
+      font-weight:700;
+      cursor:pointer;
+    }
+    button:active{transform:scale(.98)}
+    .boost{background:linear-gradient(90deg,#264a7b,#632e79)}
+    .start{background:linear-gradient(90deg,#2f6e66,#5243a8)}
+    .hint{font-size:.9rem;text-align:center;opacity:.88}
+    @media(max-width:700px){
+      .hud{grid-template-columns:repeat(2,minmax(0,1fr));}
+      .controls{grid-template-columns:1fr 1fr;}
+      .boost,.start{grid-column:span 2;}
+      canvas{height:44vh}
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="hud">
+      <div>거리<strong id="distance">0</strong></div>
+      <div>콤보<strong id="combo">0</strong></div>
+      <div>라이프<strong id="lives">3</strong></div>
+      <div>최고거리<strong id="bestDist">0</strong></div>
+      <div>최고콤보<strong id="bestCombo">0</strong></div>
+    </section>
+
+    <canvas id="stage" width="900" height="360" aria-label="Paper Plane playfield"></canvas>
+
+    <section class="controls">
+      <button id="climbBtn">▲ CLIMB (W/↑)</button>
+      <button id="diveBtn">▼ DIVE (S/↓)</button>
+      <button id="boostBtn" class="boost">BOOST (Space)</button>
+      <button id="startBtn" class="start">START / RESTART</button>
+    </section>
+    <div class="hint" id="status">열기류 링을 통과해 콤보를 쌓고, 폭풍 구름을 피하세요.</div>
+  </main>
+
+  <script>
+    (() => {
+      const c = document.getElementById('stage');
+      const ctx = c.getContext('2d');
+      const distanceEl = document.getElementById('distance');
+      const comboEl = document.getElementById('combo');
+      const livesEl = document.getElementById('lives');
+      const statusEl = document.getElementById('status');
+
+      const LS_DIST = 'paperPlaneThermals.bestDistance';
+      const LS_COMBO = 'paperPlaneThermals.bestCombo';
+      let bestDistance = Number(localStorage.getItem(LS_DIST) || 0);
+      let bestCombo = Number(localStorage.getItem(LS_COMBO) || 0);
+      document.getElementById('bestDist').textContent = bestDistance;
+      document.getElementById('bestCombo').textContent = bestCombo;
+
+      let audioCtx;
+      const initAudio = async () => {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') await audioCtx.resume();
+      };
+      const blip = (f = 330, d = 0.05, g = 0.03, type = 'triangle') => {
+        if (!audioCtx) return;
+        const o = audioCtx.createOscillator();
+        const ga = audioCtx.createGain();
+        const t = audioCtx.currentTime;
+        o.type = type; o.frequency.value = f;
+        ga.gain.value = g;
+        o.connect(ga); ga.connect(audioCtx.destination);
+        o.start(t); ga.gain.exponentialRampToValueAtTime(0.0001, t + d); o.stop(t + d);
+      };
+
+      const state = {
+        running: false,
+        y: c.height * 0.5,
+        vy: 0,
+        climb: false,
+        dive: false,
+        boost: 0,
+        distance: 0,
+        combo: 0,
+        lives: 3,
+        speed: 210,
+        rings: [],
+        clouds: [],
+        ringCooldown: 0,
+        cloudCooldown: 0,
+        immune: 0
+      };
+
+      const plane = { x: c.width * 0.22, r: 12 };
+
+      function reset() {
+        state.running = true;
+        state.y = c.height * 0.5;
+        state.vy = 0;
+        state.climb = false;
+        state.dive = false;
+        state.boost = 0;
+        state.distance = 0;
+        state.combo = 0;
+        state.lives = 3;
+        state.speed = 210;
+        state.rings = [];
+        state.clouds = [];
+        state.ringCooldown = 0.7;
+        state.cloudCooldown = 1.1;
+        state.immune = 0;
+        statusEl.textContent = '비행 시작!';
+      }
+
+      function spawnRing() {
+        const y = 50 + Math.random() * (c.height - 100);
+        state.rings.push({ x: c.width + 26, y, r: 18 + Math.random() * 8, hit: false });
+      }
+      function spawnCloud() {
+        const y = 42 + Math.random() * (c.height - 84);
+        const w = 42 + Math.random() * 34;
+        const h = 24 + Math.random() * 18;
+        state.clouds.push({ x: c.width + w, y, w, h });
+      }
+
+      function hitCloud() {
+        if (state.immune > 0) return;
+        state.lives -= 1;
+        state.combo = 0;
+        state.immune = 1.2;
+        blip(160, 0.14, 0.06, 'sawtooth');
+        if (state.lives <= 0) {
+          endGame();
+        }
+      }
+
+      function endGame() {
+        state.running = false;
+        if (state.distance > bestDistance) {
+          bestDistance = Math.floor(state.distance);
+          localStorage.setItem(LS_DIST, String(bestDistance));
+        }
+        if (state.combo > bestCombo) {
+          bestCombo = state.combo;
+          localStorage.setItem(LS_COMBO, String(bestCombo));
+        }
+        document.getElementById('bestDist').textContent = bestDistance;
+        document.getElementById('bestCombo').textContent = bestCombo;
+        statusEl.textContent = `추락. 거리 ${Math.floor(state.distance)}, 최고 콤보 ${state.combo}`;
+        blip(220, 0.18, 0.05, 'triangle');
+      }
+
+      function update(dt) {
+        if (!state.running) return;
+
+        const gravity = 540;
+        if (state.climb) state.vy -= 640 * dt;
+        if (state.dive) state.vy += 560 * dt;
+        state.vy += gravity * dt;
+        state.vy *= 0.988;
+        state.y += state.vy * dt;
+
+        if (state.y < 14) { state.y = 14; state.vy = 0; }
+        if (state.y > c.height - 14) { state.y = c.height - 14; state.vy = 0; hitCloud(); }
+
+        if (state.boost > 0) {
+          state.boost -= dt;
+        }
+        if (state.immune > 0) state.immune -= dt;
+
+        const speed = state.speed + (state.boost > 0 ? 110 : 0);
+        state.distance += speed * dt * 0.12;
+        state.speed = Math.min(360, state.speed + dt * 2.6);
+
+        state.ringCooldown -= dt;
+        state.cloudCooldown -= dt;
+        if (state.ringCooldown <= 0) {
+          spawnRing();
+          state.ringCooldown = 0.7 + Math.random() * 0.6;
+        }
+        if (state.cloudCooldown <= 0) {
+          spawnCloud();
+          state.cloudCooldown = 1.0 + Math.random() * 0.9;
+        }
+
+        for (const ring of state.rings) {
+          ring.x -= speed * dt;
+          const d = Math.hypot(ring.x - plane.x, ring.y - state.y);
+          if (!ring.hit && d < ring.r + plane.r) {
+            ring.hit = true;
+            state.combo += 1;
+            state.distance += 24 + state.combo * 3;
+            blip(430 + Math.min(280, state.combo * 12), 0.04, 0.03);
+          }
+        }
+        state.rings = state.rings.filter((r) => r.x > -40);
+
+        for (const cloud of state.clouds) {
+          cloud.x -= speed * dt;
+          const px = plane.x, py = state.y;
+          const inX = px > cloud.x - cloud.w * 0.5 - plane.r && px < cloud.x + cloud.w * 0.5 + plane.r;
+          const inY = py > cloud.y - cloud.h * 0.5 - plane.r && py < cloud.y + cloud.h * 0.5 + plane.r;
+          if (inX && inY) hitCloud();
+        }
+        state.clouds = state.clouds.filter((cl) => cl.x > -90);
+
+        distanceEl.textContent = Math.floor(state.distance);
+        comboEl.textContent = state.combo;
+        livesEl.textContent = state.lives;
+      }
+
+      function drawPlane() {
+        ctx.save();
+        ctx.translate(plane.x, state.y);
+        ctx.rotate(state.vy * 0.0015);
+        ctx.fillStyle = state.immune > 0 ? '#ffd6f3' : '#eaf9ff';
+        ctx.beginPath();
+        ctx.moveTo(14, 0);
+        ctx.lineTo(-10, -8);
+        ctx.lineTo(-6, 0);
+        ctx.lineTo(-10, 8);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = '#6bdfff';
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      function draw() {
+        ctx.clearRect(0, 0, c.width, c.height);
+        const g = ctx.createLinearGradient(0, 0, 0, c.height);
+        g.addColorStop(0, '#11143f');
+        g.addColorStop(1, '#090b1d');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, c.width, c.height);
+
+        for (let i = 0; i < 40; i++) {
+          const x = (i * 157 + state.distance * 9) % c.width;
+          const y = (i * 73) % c.height;
+          ctx.fillStyle = 'rgba(255,255,255,0.18)';
+          ctx.fillRect(x, y, 2, 2);
+        }
+
+        for (const ring of state.rings) {
+          ctx.strokeStyle = ring.hit ? '#7bffa5' : '#ff66d9';
+          ctx.lineWidth = 4;
+          ctx.shadowColor = ring.hit ? 'rgba(123,255,165,0.8)' : 'rgba(255,102,217,0.8)';
+          ctx.shadowBlur = 10;
+          ctx.beginPath(); ctx.arc(ring.x, ring.y, ring.r, 0, Math.PI * 2); ctx.stroke();
+          ctx.shadowBlur = 0;
+        }
+
+        for (const cloud of state.clouds) {
+          ctx.fillStyle = 'rgba(149,170,255,0.42)';
+          ctx.beginPath();
+          ctx.ellipse(cloud.x, cloud.y, cloud.w * 0.5, cloud.h * 0.5, 0, 0, Math.PI * 2);
+          ctx.ellipse(cloud.x - cloud.w * 0.3, cloud.y + 5, cloud.w * 0.3, cloud.h * 0.35, 0, 0, Math.PI * 2);
+          ctx.ellipse(cloud.x + cloud.w * 0.28, cloud.y + 3, cloud.w * 0.28, cloud.h * 0.3, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        if (state.boost > 0) {
+          ctx.strokeStyle = 'rgba(123,255,165,0.9)';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(plane.x - 16, state.y);
+          ctx.lineTo(plane.x - 40 - Math.random() * 10, state.y + (Math.random() * 10 - 5));
+          ctx.stroke();
+        }
+
+        drawPlane();
+
+        if (!state.running) {
+          ctx.fillStyle = 'rgba(0,0,0,0.5)';
+          ctx.fillRect(0, 0, c.width, c.height);
+          ctx.fillStyle = '#e7f7ff';
+          ctx.font = '700 34px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('PAPER PLANE THERMALS', c.width / 2, c.height / 2 - 10);
+          ctx.font = '500 18px sans-serif';
+          ctx.fillText('START 버튼으로 비행을 시작하세요', c.width / 2, c.height / 2 + 24);
+        }
+      }
+
+      let last = performance.now();
+      function frame(now) {
+        const dt = Math.min(0.033, (now - last) / 1000);
+        last = now;
+        update(dt);
+        draw();
+        requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+
+      function bindHold(el, key) {
+        const on = () => state[key] = true;
+        const off = () => state[key] = false;
+        el.addEventListener('pointerdown', on);
+        el.addEventListener('pointerup', off);
+        el.addEventListener('pointercancel', off);
+        el.addEventListener('pointerleave', off);
+      }
+      bindHold(document.getElementById('climbBtn'), 'climb');
+      bindHold(document.getElementById('diveBtn'), 'dive');
+
+      document.getElementById('boostBtn').addEventListener('click', async () => {
+        await initAudio();
+        if (!state.running) return;
+        state.boost = 1.1;
+        blip(620, 0.08, 0.04);
+      });
+
+      document.getElementById('startBtn').addEventListener('click', async () => {
+        await initAudio();
+        blip(360, 0.08, 0.04);
+        reset();
+      });
+
+      window.addEventListener('keydown', async (e) => {
+        const k = e.key.toLowerCase();
+        if (k === 'arrowup' || k === 'w') { state.climb = true; e.preventDefault(); }
+        if (k === 'arrowdown' || k === 's') { state.dive = true; e.preventDefault(); }
+        if (k === ' ') {
+          await initAudio();
+          if (state.running) {
+            state.boost = 1.1;
+            blip(620, 0.08, 0.04);
+          }
+          e.preventDefault();
+        }
+      }, { passive:false });
+
+      window.addEventListener('keyup', (e) => {
+        const k = e.key.toLowerCase();
+        if (k === 'arrowup' || k === 'w') state.climb = false;
+        if (k === 'arrowdown' || k === 's') state.dive = false;
+      });
+
+      draw();
+    })();
+  </script>
+</body>
+</html>

@@ -12,6 +12,13 @@ echo "📡 Syncing games-list.json ($COUNT games) to MiniPC..."
 # Method 1: Direct Tailscale
 if ssh -o ConnectTimeout=5 spritz@100.80.169.94 "echo ok" 2>/dev/null; then
   scp "$LIST" spritz@100.80.169.94:/var/www/games/games-list.json
+  # Sync any new game dirs
+  rsync -az --ignore-existing \
+    --include '*/' --include '*/index.html' --include '*/manifest.webmanifest' --exclude '*' \
+    --exclude '_engine/' \
+    "$GAMES_DIR/" spritz@100.80.169.94:/var/www/games/ 2>/dev/null || true
+  # Fix permissions
+  ssh spritz@100.80.169.94 "sudo chmod -R a+rX /var/www/games/ 2>/dev/null" || true
   echo "✅ Direct sync to MiniPC: $COUNT games"
   exit 0
 fi

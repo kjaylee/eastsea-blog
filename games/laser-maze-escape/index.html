@@ -1,0 +1,325 @@
+<!DOCTYPE html><head>
+<title>Laser Maze Escape</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<link rel="manifest" href="manifest.webmanifest">
+<style>body{margin:0;background:#0a0a1a;overflow:hidden}</style>
+</head><body>
+<script src="https://cdn.jsdelivr.net/npm/littlejsengine/dist/littlejs.min.js"></script>
+<script>'use strict';
+showSplashScreen=false;
+debugWatermark=false;
+showEngineVersion=false;
+canvasClearColor=hsl(0,0,.04);
+touchGamepadEnable=true;
+cameraScale=36;
+gravity=vec2(0,0);
+
+const SAVE_KEY='littlejs-laser-maze-escape-best';
+
+const moveSound=new Sound([.35,.02,280,.002,0,.03,0,1.5,1,0,0,0,0,0,0,0,0,.55]);
+const clearSound=new Sound([.9,.01,740,.01,0,.2,0,1.5,6,0,0,0,0,0,0,0,0,.85]);
+const hitSound=new Sound([1,.02,180,.02,0,.25,0,1.9,-4,0,0,0,0,0,0,0,0,.8]);
+const overSound=new Sound([.85,.02,130,.02,0,.35,0,2,-6,0,0,0,0,0,0,0,0,.8]);
+
+const levels=[
+  {
+    start:[-11,-6],goal:[11,6],
+    walls:[[-2,-4,12,.5],[2,0,14,.5],[-3,4,12,.5],[-8,1,.5,6],[8,-1,.5,6]],
+    lasers:[
+      {origin:[0,-1],len:12,base:0,amp:1.2,speed:1.15,phase:0,travel:[0,2.4]},
+      {origin:[6,5],len:9,base:-PI/2,amp:.72,speed:1.7,phase:1.2,travel:[2.4,0]}
+    ]
+  },
+  {
+    start:[-11,6],goal:[11,-6],
+    walls:[[-2,5,14,.5],[2,1,14,.5],[-2,-3,14,.5],[2,-7,14,.5],[0,-1,.5,10],[-9,-2,.5,8],[9,2,.5,8]],
+    lasers:[
+      {origin:[-6,3],len:11,base:0,amp:1.35,speed:1.45,phase:.4,travel:[0,2]},
+      {origin:[0,-5],len:16,base:PI/2,amp:.9,speed:1.95,phase:1.8,travel:[4,0]},
+      {origin:[7,4],len:10,base:PI,amp:1.1,speed:1.3,phase:2.7,travel:[0,2.1]}
+    ]
+  },
+  {
+    start:[-11,0],goal:[11,0],
+    walls:[[-6,3,8,.5],[6,-3,8,.5],[0,0,.5,12],[-3,-5,8,.5],[3,5,8,.5],[-9,0,.5,8],[9,0,.5,8]],
+    lasers:[
+      {origin:[-2,0],len:10,base:PI/2,amp:1.5,speed:2.2,phase:.3,travel:[0,3]},
+      {origin:[2,0],len:10,base:-PI/2,amp:1.5,speed:2.45,phase:1.5,travel:[0,3]},
+      {origin:[0,6],len:20,base:0,amp:.45,speed:1.4,phase:2.1,travel:[4,0]}
+    ]
+  }
+];
+
+let state='start';
+let walls=[],lasers=[],stars=[];
+let player;
+let goal=vec2();
+let levelIndex=0;
+let score=0,bestScore=0;
+let runClock=0;
+let runResult='';
+let stepClock=0;
+
+class MazeWall extends EngineObject {
+  constructor(pos,size){
+    super(pos,size);
+    this.mass=0;
+    this.setCollision(true,true,true,true);
+    this.color=hsl(.59,.8,.24,.92);
+  }
+  render(){
+    drawRect(this.pos,this.size,this.color);
+    drawRect(this.pos,this.size.scale(1.15),hsl(.56,1,.56,.08));
+  }
+}
+
+class Runner extends EngineObject {
+  constructor(pos){
+    super(vec2(pos[0],pos[1]),vec2(.42,.42));
+    this.setCollision(true,true,true,true);
+    this.restitution=0;
+    this.friction=.9;
+    this.damping=.86;
+    this.gravityScale=0;
+    this.moveTick=0;
+  }
+  update(){
+    const dt=timeDelta||1/60;
+    if(state==='play'){
+      const inVec=getMoveInput();
+      const accel=12;
+      this.velocity.x+=inVec.x*accel*dt;
+      this.velocity.y+=inVec.y*accel*dt;
+
+      const speed=Math.hypot(this.velocity.x,this.velocity.y);
+      const maxSpeed=4.3;
+      if(speed>maxSpeed){
+        const s=maxSpeed/speed;
+        this.velocity.x*=s;
+        this.velocity.y*=s;
+      }
+
+      if(Math.abs(inVec.x)+Math.abs(inVec.y)>.1){
+        this.moveTick-=dt;
+        if(this.moveTick<=0){
+          moveSound.play(this.pos,.25);
+          this.moveTick=.12;
+        }
+      }
+      else this.moveTick=0;
+    }
+    else this.velocity=vec2();
+
+    super.update();
+  }
+  render(){
+    drawRect(this.pos,this.size,hsl(.33,1,.66));
+    drawRect(this.pos,this.size.scale(1.6),hsl(.33,1,.55,.14));
+  }
+}
+
+function burst(pos,color,count,size){
+  new ParticleEmitter(
+    pos,0,.1,.08,count*34,PI,undefined,
+    color,color.mutate(.2,.1),hsl(0,0,0,0),hsl(0,0,0,0),
+    .45,size||.05,.33,.14,.05,.96,1,.25,PI,.15,.45,false,true,true,1,false
+  );
+}
+
+function actionPressed(){
+  return keyWasPressed('Space')||keyWasPressed('Enter')||mouseWasPressed(0);
+}
+
+function getMoveInput(){
+  let x=(keyIsDown('ArrowRight')||keyIsDown('KeyD')?1:0)-(keyIsDown('ArrowLeft')||keyIsDown('KeyA')?1:0);
+  let y=(keyIsDown('ArrowUp')||keyIsDown('KeyW')?1:0)-(keyIsDown('ArrowDown')||keyIsDown('KeyS')?1:0);
+
+  if(mouseIsDown(0)&&state==='play'){
+    const dx=mousePos.x-player.pos.x;
+    const dy=mousePos.y-player.pos.y;
+    const len=Math.hypot(dx,dy);
+    if(len>.2){
+      x=dx/len;
+      y=dy/len;
+    }
+  }
+
+  return vec2(x,y);
+}
+
+function distPointToSegment(p,a,b){
+  const vx=b.x-a.x, vy=b.y-a.y;
+  const wx=p.x-a.x, wy=p.y-a.y;
+  const c2=vx*vx+vy*vy||1;
+  let t=(vx*wx+vy*wy)/c2;
+  t=clamp(t,0,1);
+  const px=a.x+vx*t, py=a.y+vy*t;
+  return Math.hypot(p.x-px,p.y-py);
+}
+
+function makeBoundary(){
+  walls.push(new MazeWall(vec2(0,9),vec2(28,.6)));
+  walls.push(new MazeWall(vec2(0,-9),vec2(28,.6)));
+  walls.push(new MazeWall(vec2(-14,0),vec2(.6,18)));
+  walls.push(new MazeWall(vec2(14,0),vec2(.6,18)));
+}
+
+function loadLevel(i){
+  engineObjectsDestroy();
+  walls=[];
+  lasers=[];
+  const lv=levels[i];
+  goal=vec2(lv.goal[0],lv.goal[1]);
+  player=new Runner(lv.start);
+
+  makeBoundary();
+  for(const w of lv.walls)
+    walls.push(new MazeWall(vec2(w[0],w[1]),vec2(w[2],w[3])));
+
+  lasers=lv.lasers.map(l=>({
+    baseOrigin:vec2(l.origin[0],l.origin[1]),
+    travel:vec2((l.travel&&l.travel[0])||0,(l.travel&&l.travel[1])||0),
+    len:l.len,base:l.base,amp:l.amp,speed:l.speed,phase:l.phase,
+    a:vec2(),b:vec2(),danger:0
+  }));
+
+  stepClock=0;
+  state='play';
+}
+
+function startRun(){
+  levelIndex=0;
+  score=0;
+  runClock=0;
+  runResult='';
+  loadLevel(levelIndex);
+}
+
+function failRun(reason){
+  if(state!=='play') return;
+  state='gameover';
+  runResult=reason;
+  hitSound.play(player.pos);
+  overSound.play();
+  burst(player.pos,hsl(.01,1,.62),24,.07);
+  if(score>bestScore){
+    bestScore=score;
+    localStorage.setItem(SAVE_KEY,String(bestScore));
+  }
+}
+
+function clearLevel(){
+  const bonus=Math.max(0,Math.floor(160-stepClock*10));
+  score+=120+bonus;
+  clearSound.play(goal);
+  burst(goal,hsl(.33,1,.67),28,.08);
+
+  if(levelIndex>=levels.length-1){
+    state='gameover';
+    runResult='All mazes escaped';
+    if(score>bestScore){
+      bestScore=score;
+      localStorage.setItem(SAVE_KEY,String(bestScore));
+    }
+    return;
+  }
+
+  levelIndex++;
+  loadLevel(levelIndex);
+}
+
+function updateLasers(){
+  for(const l of lasers){
+    const t=runClock;
+    const ox=l.baseOrigin.x+Math.sin(t*l.speed*.63+l.phase)*l.travel.x;
+    const oy=l.baseOrigin.y+Math.cos(t*l.speed*.57+l.phase)*l.travel.y;
+    const angle=l.base+Math.sin(t*l.speed+l.phase)*l.amp;
+    l.a=vec2(ox,oy);
+    l.b=vec2(ox+Math.cos(angle)*l.len,oy+Math.sin(angle)*l.len);
+
+    const hitDist=distPointToSegment(player.pos,l.a,l.b);
+    l.danger=clamp(1-hitDist/1.2,0,1);
+    if(hitDist<player.size.x*.9){
+      failRun('Laser contact');
+      return;
+    }
+  }
+}
+
+function gameInit(){
+  bestScore=Number(localStorage.getItem(SAVE_KEY)||0);
+  for(let i=0;i<160;i++)
+    stars.push(vec2(rand(-18,18),rand(-11,11)));
+}
+
+function gameUpdate(){
+  if(state==='start'){
+    if(actionPressed()) startRun();
+    return;
+  }
+
+  if(state==='gameover'){
+    if(actionPressed()) startRun();
+    return;
+  }
+
+  const dt=timeDelta||1/60;
+  runClock+=dt;
+  stepClock+=dt;
+
+  updateLasers();
+  if(state!=='play') return;
+
+  const dx=player.pos.x-goal.x, dy=player.pos.y-goal.y;
+  if(Math.hypot(dx,dy)<.78) clearLevel();
+}
+
+function gameUpdatePost(){
+  cameraPos=cameraPos.lerp(vec2(0,0),.12);
+}
+
+function gameRender(){
+  for(const s of stars)
+    drawCircle(s,.05,hsl(.6,1,.8,.33));
+
+  drawCircle(goal,.52,hsl(.33,1,.68));
+  drawCircle(goal,.95,hsl(.33,1,.56,.16));
+
+  const blink=.35+.25*Math.sin(runClock*8);
+  for(const l of lasers){
+    const c=hsl(.01,1,.6,.55+.3*l.danger+blink);
+    drawLine(l.a,l.b,.08,c);
+    drawCircle(l.a,.16,hsl(.08,1,.65));
+  }
+}
+
+function gameRenderPost(){
+  const W=mainCanvasSize.x,H=mainCanvasSize.y;
+  drawTextScreen('LASER MAZE ESCAPE',vec2(W/2,40),44,hsl(.56,1,.72),3,hsl(0,0,0));
+  drawTextScreen(`BEST ${bestScore}`,vec2(W-120,28),24,hsl(.33,1,.68),2,hsl(0,0,0));
+
+  if(state==='start'){
+    drawTextScreen('Reach the green exit. Avoid moving laser beams.',vec2(W/2,H/2-28),30,hsl(.57,.72,.77),2,hsl(0,0,0));
+    drawTextScreen('Move: WASD/Arrows or drag toward your path',vec2(W/2,H/2+14),24,hsl(.15,1,.66),2,hsl(0,0,0));
+    drawTextScreen('One hit ends the run',vec2(W/2,H/2+52),24,hsl(.02,1,.64),2,hsl(0,0,0));
+    drawTextScreen('TAP / SPACE TO START',vec2(W/2,H/2+112),38,hsl(.33,1,.67),3,hsl(0,0,0));
+    return;
+  }
+
+  drawTextScreen(`LEVEL ${levelIndex+1}/${levels.length}`,vec2(108,30),24,hsl(.56,1,.73),2,hsl(0,0,0));
+  drawTextScreen(`SCORE ${score}`,vec2(98,58),24,hsl(.15,1,.67),2,hsl(0,0,0));
+  drawTextScreen(`TIME ${runClock.toFixed(1)}s`,vec2(106,84),20,hsl(.58,.6,.78),1,hsl(0,0,0));
+  drawTextScreen('Drag or WASD to move',vec2(W/2,H-20),18,hsl(0,0,.78),1,hsl(0,0,0));
+
+  if(state==='gameover'){
+    const clear=runResult==='All mazes escaped';
+    drawTextScreen(clear?'ESCAPE COMPLETE':'SYSTEM LOCKDOWN',vec2(W/2,H/2-20),58,clear?hsl(.33,1,.67):hsl(.01,1,.62),4,hsl(0,0,0));
+    drawTextScreen(runResult||'Try another route',vec2(W/2,H/2+28),30,hsl(.56,1,.75),2,hsl(0,0,0));
+    drawTextScreen(`FINAL SCORE ${score}`,vec2(W/2,H/2+70),30,hsl(.15,1,.67),2,hsl(0,0,0));
+    drawTextScreen('TAP / SPACE TO RETRY',vec2(W/2,H/2+112),30,hsl(.33,1,.67),2,hsl(0,0,0));
+  }
+}
+
+engineInit(gameInit,gameUpdate,gameUpdatePost,gameRender,gameRenderPost);
+</script></body></html>

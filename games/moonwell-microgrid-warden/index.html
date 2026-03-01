@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Moonwell Microgrid Warden</title>
+  <style>
+    :root {
+      --bg: #0a0a1a;
+      --panel: #14162b;
+      --ink: #eaf3ff;
+      --cyan: #6cfbff;
+      --pink: #ff71d0;
+      --lime: #89ffb4;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: radial-gradient(circle at 80% -20%, #1f2258 0%, #0a0a1a 58%);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      min-height: 100dvh;
+      display: grid;
+      place-items: center;
+      padding: 12px;
+    }
+    .app {
+      width: min(96vw, 560px);
+      background: linear-gradient(180deg, #12142d, #0f1125);
+      border-radius: 16px;
+      border: 1px solid #284674;
+      padding: 12px;
+      box-shadow: 0 0 26px #6cfbff26;
+    }
+    h1 {
+      margin: 4px 0 10px;
+      text-align: center;
+      color: var(--cyan);
+      font-size: clamp(18px, 4.5vw, 24px);
+      text-shadow: 0 0 15px #6cfbff66;
+    }
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .tile {
+      background: #0f1732;
+      border: 1px solid #30588d;
+      border-radius: 10px;
+      padding: 6px;
+      text-align: center;
+      font-size: 12px;
+    }
+    .tile b { display: block; font-size: 16px; margin-top: 1px; }
+    .districts {
+      display: grid;
+      gap: 8px;
+    }
+    .district {
+      background: #0e142a;
+      border: 1px solid #274878;
+      border-radius: 10px;
+      padding: 8px;
+    }
+    .district.active {
+      border-color: #6cfbff;
+      box-shadow: 0 0 14px #6cfbff44;
+    }
+    .district h3 {
+      margin: 0 0 6px;
+      font-size: 14px;
+      display: flex;
+      justify-content: space-between;
+      color: #eaf6ff;
+    }
+    .bar {
+      height: 8px;
+      border-radius: 6px;
+      background: #1a2447;
+      overflow: hidden;
+      margin: 4px 0 6px;
+    }
+    .fill { height: 100%; transition: width 0.25s linear; }
+    .label { font-size: 11px; color: #bfd3ff; display: flex; justify-content: space-between; }
+    .actions, .selectors {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .selectors { grid-template-columns: repeat(3, 1fr); }
+    .actions { grid-template-columns: repeat(2, 1fr); }
+    button {
+      background: #152643;
+      color: #eaf6ff;
+      border: 1px solid #2d5d90;
+      border-radius: 10px;
+      padding: 10px 8px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button:active { transform: translateY(1px) scale(0.99); }
+    #startBtn { width: 100%; margin-top: 10px; background: linear-gradient(180deg, #1c3d6f, #173360); }
+    .hint {
+      margin: 10px 0 0;
+      font-size: 12px;
+      line-height: 1.45;
+      color: #c4d9ff;
+      text-align: center;
+    }
+    @media (max-width: 460px) {
+      .hud { grid-template-columns: repeat(2, 1fr); }
+      .actions { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>🌙 Moonwell Microgrid Warden</h1>
+    <section class="hud">
+      <div class="tile">Wave<b id="wave">1</b></div>
+      <div class="tile">Score<b id="score">0</b></div>
+      <div class="tile">Best<b id="best">0</b></div>
+      <div class="tile">Pressure<b id="pressure">1</b></div>
+    </section>
+
+    <section class="districts" id="districts"></section>
+
+    <div class="selectors">
+      <button data-select="0">1) Tide Ward</button>
+      <button data-select="1">2) Beacon Row</button>
+      <button data-select="2">3) Forge Deck</button>
+    </div>
+
+    <div class="actions">
+      <button data-act="charge">Q) Charge (+Energy, +Heat)</button>
+      <button data-act="cool">W) Cool (-Heat)</button>
+      <button data-act="route">E) Route (+All Energy, -Active)</button>
+      <button data-act="support">R) Support (+Morale, -Energy)</button>
+    </div>
+
+    <button id="startBtn">Start / Restart</button>
+    <p class="hint">키보드: 1/2/3 구역 선택, Q/W/E/R 운영 액션<br />압력 상승 속에서 Energy/Heat/Morale 붕괴를 막아 최고 wave를 기록하세요.</p>
+  </main>
+
+  <script>
+    (() => {
+      const LS_BEST = 'p1w_moonwell_best';
+      const LS_WAVE = 'p1w_moonwell_best_wave';
+
+      const districtsEl = document.getElementById('districts');
+      const waveEl = document.getElementById('wave');
+      const scoreEl = document.getElementById('score');
+      const bestEl = document.getElementById('best');
+      const pressureEl = document.getElementById('pressure');
+      const startBtn = document.getElementById('startBtn');
+
+      const state = {
+        running: false,
+        tickHandle: 0,
+        selected: 0,
+        wave: 1,
+        score: 0,
+        pressure: 1,
+        elapsedTicks: 0,
+        best: Number(localStorage.getItem(LS_BEST) || 0),
+        bestWave: Number(localStorage.getItem(LS_WAVE) || 1),
+        districts: []
+      };
+
+      let audio;
+      function ensureAudio() {
+        if (!audio) {
+          const Ctx = window.AudioContext || window.webkitAudioContext;
+          audio = Ctx ? new Ctx() : null;
+        }
+        if (audio && audio.state === 'suspended') audio.resume();
+      }
+      function tone(freq = 420, dur = 0.07, type = 'triangle', gain = 0.04) {
+        if (!audio) return;
+        const t = audio.currentTime;
+        const osc = audio.createOscillator();
+        const g = audio.createGain();
+        osc.frequency.value = freq;
+        osc.type = type;
+        g.gain.setValueAtTime(gain, t);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        osc.connect(g).connect(audio.destination);
+        osc.start(t);
+        osc.stop(t + dur);
+      }
+
+      function makeDistrict(name) {
+        return {
+          name,
+          energy: 78 + Math.random() * 8,
+          heat: 25 + Math.random() * 8,
+          morale: 76 + Math.random() * 10
+        };
+      }
+
+      function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+
+      function setup() {
+        state.running = true;
+        state.selected = 0;
+        state.wave = 1;
+        state.score = 0;
+        state.pressure = 1;
+        state.elapsedTicks = 0;
+        state.districts = [
+          makeDistrict('Tide Ward'),
+          makeDistrict('Beacon Row'),
+          makeDistrict('Forge Deck')
+        ];
+        clearInterval(state.tickHandle);
+        state.tickHandle = setInterval(step, 850);
+        render();
+      }
+
+      function endGame() {
+        state.running = false;
+        clearInterval(state.tickHandle);
+        if (state.score > state.best) {
+          state.best = Math.floor(state.score);
+          localStorage.setItem(LS_BEST, String(state.best));
+        }
+        if (state.wave > state.bestWave) {
+          state.bestWave = state.wave;
+          localStorage.setItem(LS_WAVE, String(state.bestWave));
+        }
+        tone(120, 0.18, 'sawtooth', 0.06);
+        render();
+      }
+
+      function step() {
+        if (!state.running) return;
+        state.elapsedTicks += 1;
+
+        if (state.elapsedTicks % 12 === 0) {
+          state.wave += 1;
+          state.pressure += 0.24;
+          tone(660, 0.05, 'sine');
+        }
+
+        for (const d of state.districts) {
+          d.energy -= 2.3 + state.pressure * 0.7;
+          d.heat += 1.8 + state.pressure * 0.8;
+          d.morale -= 1.3 + state.pressure * 0.5;
+
+          if (d.energy > 70 && d.heat < 55) d.morale += 0.8;
+
+          d.energy = clamp(d.energy, 0, 100);
+          d.heat = clamp(d.heat, 0, 120);
+          d.morale = clamp(d.morale, 0, 100);
+        }
+
+        const stable = state.districts.filter(d => d.energy > 30 && d.heat < 85 && d.morale > 30).length;
+        state.score += 8 + stable * 6 + Math.floor(state.wave * 0.5);
+
+        if (state.districts.some(d => d.energy <= 0 || d.heat >= 120 || d.morale <= 0)) {
+          endGame();
+          return;
+        }
+
+        render();
+      }
+
+      function applyAction(action) {
+        if (!state.running) return;
+        ensureAudio();
+        const active = state.districts[state.selected];
+        if (!active) return;
+
+        if (action === 'charge') {
+          active.energy = clamp(active.energy + 18, 0, 100);
+          active.heat = clamp(active.heat + 8, 0, 120);
+          state.score += 4;
+          tone(300, 0.06, 'square');
+        }
+
+        if (action === 'cool') {
+          active.heat = clamp(active.heat - 22, 0, 120);
+          active.energy = clamp(active.energy - 5, 0, 100);
+          state.score += 5;
+          tone(240, 0.05, 'triangle');
+        }
+
+        if (action === 'route') {
+          let drained = 12;
+          if (active.energy < drained) drained = active.energy;
+          active.energy = clamp(active.energy - drained, 0, 100);
+          state.districts.forEach((d, idx) => {
+            if (idx !== state.selected) d.energy = clamp(d.energy + drained / 2, 0, 100);
+          });
+          state.score += 8;
+          tone(510, 0.05, 'sine');
+        }
+
+        if (action === 'support') {
+          active.morale = clamp(active.morale + 18, 0, 100);
+          active.energy = clamp(active.energy - 8, 0, 100);
+          active.heat = clamp(active.heat - 4, 0, 120);
+          state.score += 6;
+          tone(700, 0.07, 'triangle');
+        }
+
+        render();
+      }
+
+      function bar(label, value, color, max = 100) {
+        const pct = clamp((value / max) * 100, 0, 100).toFixed(1);
+        return `
+          <div class="label"><span>${label}</span><span>${value.toFixed(0)}</span></div>
+          <div class="bar"><div class="fill" style="width:${pct}%;background:${color}"></div></div>
+        `;
+      }
+
+      function render() {
+        waveEl.textContent = `${state.wave} (best ${state.bestWave})`;
+        scoreEl.textContent = Math.floor(state.score);
+        bestEl.textContent = Math.floor(state.best);
+        pressureEl.textContent = state.pressure.toFixed(1);
+
+        districtsEl.innerHTML = state.districts.map((d, idx) => `
+          <article class="district ${idx === state.selected ? 'active' : ''}">
+            <h3><span>${idx + 1}. ${d.name}</span><span>${idx === state.selected ? 'ACTIVE' : ''}</span></h3>
+            ${bar('Energy', d.energy, '#6cfbff')}
+            ${bar('Heat', d.heat, '#ff6a90', 120)}
+            ${bar('Morale', d.morale, '#89ffb4')}
+          </article>
+        `).join('');
+
+        if (!state.running) {
+          districtsEl.insertAdjacentHTML('beforeend', `
+            <article class="district" style="border-color:#6cfbff88; text-align:center;">
+              <h3 style="justify-content:center; color:#6cfbff;">Ready for Night Shift</h3>
+              <div style="font-size:13px; color:#c9dcff;">Start / Restart를 눌러 운용을 시작하세요.</div>
+            </article>
+          `);
+        }
+      }
+
+      document.querySelectorAll('[data-select]').forEach(btn => {
+        btn.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          ensureAudio();
+          state.selected = Number(btn.dataset.select);
+          tone(460, 0.04, 'square');
+          render();
+        });
+      });
+
+      document.querySelectorAll('[data-act]').forEach(btn => {
+        btn.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          applyAction(btn.dataset.act);
+        });
+      });
+
+      document.addEventListener('keydown', (e) => {
+        const k = e.key.toLowerCase();
+        if (['1', '2', '3'].includes(k)) {
+          ensureAudio();
+          state.selected = Number(k) - 1;
+          tone(440 + (Number(k) * 30), 0.04, 'square');
+          render();
+        }
+        if (k === 'q') applyAction('charge');
+        if (k === 'w') applyAction('cool');
+        if (k === 'e') applyAction('route');
+        if (k === 'r') applyAction('support');
+      });
+
+      startBtn.addEventListener('click', () => {
+        ensureAudio();
+        setup();
+        tone(280, 0.09, 'triangle');
+      });
+
+      render();
+    })();
+  </script>
+</body>
+</html>

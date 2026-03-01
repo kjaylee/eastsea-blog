@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Sigil Spin Vault</title>
+  <style>
+    :root {
+      --bg: #0a0a1a;
+      --panel: #12132a;
+      --ink: #edf5ff;
+      --cyan: #6cfbff;
+      --pink: #ff6ed5;
+      --gold: #ffd36e;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      display: grid;
+      place-items: center;
+      background: radial-gradient(circle at 50% -10%, #202560 0%, var(--bg) 55%);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      padding: 12px;
+    }
+    .app {
+      width: min(95vw, 520px);
+      background: linear-gradient(180deg, #151736, #0f1024);
+      border: 1px solid #2b4d7a;
+      border-radius: 16px;
+      padding: 12px;
+      box-shadow: 0 0 22px #6cfbff2a;
+    }
+    h1 {
+      margin: 4px 0 10px;
+      text-align: center;
+      color: var(--cyan);
+      font-size: clamp(18px, 4.5vw, 24px);
+      text-shadow: 0 0 13px #6cfbff66;
+    }
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .tile {
+      background: #0d1731;
+      border: 1px solid #305c91;
+      border-radius: 10px;
+      text-align: center;
+      padding: 6px;
+      font-size: 12px;
+    }
+    .tile b { display:block; font-size: 16px; margin-top: 2px; }
+    .board {
+      background: #0d142c;
+      border: 1px solid #2c4f80;
+      border-radius: 12px;
+      padding: 12px;
+    }
+    .target {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 10px;
+      font-weight: 700;
+      font-size: 15px;
+      color: #ffe3a0;
+    }
+    .rings { display: grid; gap: 8px; }
+    .ring {
+      display: grid;
+      grid-template-columns: 46px 1fr;
+      align-items: center;
+      gap: 8px;
+      background: #131d3f;
+      border: 1px solid #355d91;
+      border-radius: 10px;
+      padding: 8px;
+    }
+    .ring.active {
+      border-color: var(--pink);
+      box-shadow: 0 0 12px #ff6ed555;
+    }
+    .ring .name {
+      text-align: center;
+      font-size: 12px;
+      color: #d6e5ff;
+      font-weight: 700;
+    }
+    .ring .view {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      text-align: center;
+      font-size: clamp(18px, 5vw, 26px);
+    }
+    .ring .cell {
+      background: #0e152e;
+      border: 1px solid #355b8b;
+      border-radius: 8px;
+      padding: 6px;
+    }
+    .ring .center {
+      border-color: #ffd36e;
+      box-shadow: inset 0 0 14px #ffd36e3b;
+    }
+    .controls, .select {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .select { grid-template-columns: repeat(3, 1fr); }
+    .controls { grid-template-columns: repeat(3, 1fr); }
+    button {
+      border: 1px solid #2d5f93;
+      border-radius: 10px;
+      background: #162646;
+      color: #eef6ff;
+      padding: 10px 8px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button:active { transform: translateY(1px) scale(0.99); }
+    #startBtn { width: 100%; margin-top: 10px; background: linear-gradient(180deg, #204474, #183866); }
+    .note {
+      margin: 10px 0 0;
+      text-align: center;
+      font-size: 12px;
+      color: #c6dcff;
+      line-height: 1.45;
+    }
+    @media (max-width: 460px) {
+      .hud { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>🜁 Sigil Spin Vault</h1>
+    <section class="hud">
+      <div class="tile">Stage<b id="stage">1</b></div>
+      <div class="tile">Locks<b id="locks">2</b></div>
+      <div class="tile">Moves<b id="moves">18</b></div>
+      <div class="tile">Time<b id="time">30</b></div>
+      <div class="tile">Score<b id="score">0</b></div>
+      <div class="tile">Best<b id="best">0</b></div>
+      <div class="tile">Best Stage<b id="bestStage">1</b></div>
+      <div class="tile">Ring<b id="activeRing">1</b></div>
+    </section>
+
+    <section class="board">
+      <div class="target" id="target"></div>
+      <div class="rings" id="rings"></div>
+    </section>
+
+    <div class="select">
+      <button data-select="0">A) Ring 1</button>
+      <button data-select="1">S) Ring 2</button>
+      <button data-select="2">D) Ring 3</button>
+    </div>
+    <div class="controls">
+      <button data-act="left">⬅ Rotate</button>
+      <button data-act="check">Enter Check</button>
+      <button data-act="right">Rotate ➡</button>
+    </div>
+    <button id="startBtn">Start / Restart</button>
+    <p class="note">키보드: A/S/D 링 선택, ←/→ 회전, Enter 판정<br />목표 조합을 연속 해제하며 lock을 모두 열면 다음 stage로 이동합니다.</p>
+  </main>
+
+  <script>
+    (() => {
+      const LS_SCORE = 'p1w_sigil_best_score';
+      const LS_STAGE = 'p1w_sigil_best_stage';
+      const BASE_SYMBOLS = ['☀', '☾', '✶', '◇', '△', '◈', '✦', '⬢'];
+
+      const stageEl = document.getElementById('stage');
+      const locksEl = document.getElementById('locks');
+      const movesEl = document.getElementById('moves');
+      const timeEl = document.getElementById('time');
+      const scoreEl = document.getElementById('score');
+      const bestEl = document.getElementById('best');
+      const bestStageEl = document.getElementById('bestStage');
+      const activeRingEl = document.getElementById('activeRing');
+      const targetEl = document.getElementById('target');
+      const ringsEl = document.getElementById('rings');
+      const startBtn = document.getElementById('startBtn');
+
+      const state = {
+        running: false,
+        stage: 1,
+        locksLeft: 2,
+        movesLeft: 18,
+        timeLeft: 32,
+        selected: 0,
+        score: 0,
+        bestScore: Number(localStorage.getItem(LS_SCORE) || 0),
+        bestStage: Number(localStorage.getItem(LS_STAGE) || 1),
+        rings: [],
+        offsets: [0, 0, 0],
+        target: ['☀', '☀', '☀'],
+        timerHandle: 0
+      };
+
+      let audio;
+      function ensureAudio() {
+        if (!audio) {
+          const Ctx = window.AudioContext || window.webkitAudioContext;
+          audio = Ctx ? new Ctx() : null;
+        }
+        if (audio && audio.state === 'suspended') audio.resume();
+      }
+      function ping(freq = 440, dur = 0.07, type = 'triangle', gain = 0.04) {
+        if (!audio) return;
+        const t = audio.currentTime;
+        const osc = audio.createOscillator();
+        const g = audio.createGain();
+        osc.frequency.value = freq;
+        osc.type = type;
+        g.gain.setValueAtTime(gain, t);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        osc.connect(g).connect(audio.destination);
+        osc.start(t);
+        osc.stop(t + dur);
+      }
+
+      function shuffle(arr) {
+        const a = arr.slice();
+        for (let i = a.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [a[i], a[j]] = [a[j], a[i]];
+        }
+        return a;
+      }
+
+      function symbolAt(ringIndex, relative = 0) {
+        const ring = state.rings[ringIndex];
+        const len = ring.length;
+        const idx = (state.offsets[ringIndex] + relative + len) % len;
+        return ring[idx];
+      }
+
+      function newTarget() {
+        state.target = [0, 1, 2].map(i => state.rings[i][Math.floor(Math.random() * state.rings[i].length)]);
+      }
+
+      function configureStage() {
+        state.locksLeft = Math.min(6, 1 + Math.floor(state.stage / 2) + 1);
+        state.movesLeft = Math.max(8, 21 - state.stage);
+        state.timeLeft = Math.max(14, 34 - Math.floor(state.stage * 1.5));
+        state.rings = [shuffle(BASE_SYMBOLS), shuffle(BASE_SYMBOLS), shuffle(BASE_SYMBOLS)];
+        state.offsets = [
+          Math.floor(Math.random() * BASE_SYMBOLS.length),
+          Math.floor(Math.random() * BASE_SYMBOLS.length),
+          Math.floor(Math.random() * BASE_SYMBOLS.length)
+        ];
+        state.selected = 0;
+        newTarget();
+      }
+
+      function startGame() {
+        state.running = true;
+        state.stage = 1;
+        state.score = 0;
+        configureStage();
+        clearInterval(state.timerHandle);
+        state.timerHandle = setInterval(() => {
+          if (!state.running) return;
+          state.timeLeft -= 1;
+          if (state.timeLeft <= 0) {
+            state.timeLeft = 0;
+            finish();
+          }
+          render();
+        }, 1000);
+        render();
+      }
+
+      function finish() {
+        state.running = false;
+        clearInterval(state.timerHandle);
+        if (state.score > state.bestScore) {
+          state.bestScore = Math.floor(state.score);
+          localStorage.setItem(LS_SCORE, String(state.bestScore));
+        }
+        if (state.stage > state.bestStage) {
+          state.bestStage = state.stage;
+          localStorage.setItem(LS_STAGE, String(state.bestStage));
+        }
+        ping(130, 0.2, 'sawtooth', 0.06);
+        render();
+      }
+
+      function selectRing(index) {
+        state.selected = Math.max(0, Math.min(2, index));
+        ping(520 + state.selected * 60, 0.04, 'square');
+        render();
+      }
+
+      function rotate(dir) {
+        if (!state.running || state.movesLeft <= 0) return;
+        const len = BASE_SYMBOLS.length;
+        state.offsets[state.selected] = (state.offsets[state.selected] + dir + len) % len;
+        state.movesLeft -= 1;
+        state.score = Math.max(0, state.score - 1);
+        ping(260 + state.selected * 50, 0.05, 'triangle');
+        if (state.movesLeft <= 0) {
+          state.movesLeft = 0;
+          finish();
+        }
+        render();
+      }
+
+      function checkMatch() {
+        if (!state.running) return;
+        const aligned = [symbolAt(0), symbolAt(1), symbolAt(2)];
+        const ok = aligned.every((v, i) => v === state.target[i]);
+
+        if (ok) {
+          state.locksLeft -= 1;
+          state.score += 40 + state.stage * 12 + state.movesLeft;
+          state.timeLeft = Math.min(45, state.timeLeft + 4);
+          ping(760, 0.09, 'sine');
+          if (state.locksLeft <= 0) {
+            state.stage += 1;
+            ping(920, 0.12, 'triangle');
+            configureStage();
+          } else {
+            newTarget();
+          }
+        } else {
+          state.movesLeft = Math.max(0, state.movesLeft - 2);
+          state.timeLeft = Math.max(0, state.timeLeft - 3);
+          state.score = Math.max(0, state.score - 12);
+          ping(180, 0.1, 'square');
+          if (state.movesLeft <= 0 || state.timeLeft <= 0) finish();
+        }
+
+        render();
+      }
+
+      function render() {
+        stageEl.textContent = state.stage;
+        locksEl.textContent = state.locksLeft;
+        movesEl.textContent = state.movesLeft;
+        timeEl.textContent = state.timeLeft;
+        scoreEl.textContent = Math.floor(state.score);
+        bestEl.textContent = Math.floor(state.bestScore);
+        bestStageEl.textContent = state.bestStage;
+        activeRingEl.textContent = state.selected + 1;
+
+        targetEl.innerHTML = `Target: <span>${state.target[0]}</span><span>${state.target[1]}</span><span>${state.target[2]}</span>`;
+
+        ringsEl.innerHTML = [0, 1, 2].map(i => `
+          <article class="ring ${i === state.selected ? 'active' : ''}">
+            <div class="name">Ring ${i + 1}</div>
+            <div class="view">
+              <div class="cell">${symbolAt(i, -1)}</div>
+              <div class="cell center">${symbolAt(i, 0)}</div>
+              <div class="cell">${symbolAt(i, 1)}</div>
+            </div>
+          </article>
+        `).join('');
+
+        if (!state.running) {
+          ringsEl.insertAdjacentHTML('beforeend', `
+            <article class="ring" style="border-color:#6cfbff88; text-align:center;">
+              <div class="name" style="grid-column:1 / -1; color:#6cfbff;">Vault Idle</div>
+              <div style="grid-column:1 / -1; font-size:13px; color:#c8dcff;">Start / Restart를 눌러 새 stage를 시작하세요.</div>
+            </article>
+          `);
+        }
+      }
+
+      document.querySelectorAll('[data-select]').forEach(btn => {
+        btn.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          ensureAudio();
+          selectRing(Number(btn.dataset.select));
+        });
+      });
+
+      document.querySelectorAll('[data-act]').forEach(btn => {
+        btn.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          ensureAudio();
+          if (btn.dataset.act === 'left') rotate(-1);
+          if (btn.dataset.act === 'right') rotate(1);
+          if (btn.dataset.act === 'check') checkMatch();
+        });
+      });
+
+      document.addEventListener('keydown', (e) => {
+        const k = e.key.toLowerCase();
+        if (k === 'a') { ensureAudio(); selectRing(0); }
+        if (k === 's') { ensureAudio(); selectRing(1); }
+        if (k === 'd') { ensureAudio(); selectRing(2); }
+        if (e.key === 'ArrowLeft') { e.preventDefault(); ensureAudio(); rotate(-1); }
+        if (e.key === 'ArrowRight') { e.preventDefault(); ensureAudio(); rotate(1); }
+        if (e.key === 'Enter') { e.preventDefault(); ensureAudio(); checkMatch(); }
+      }, { passive: false });
+
+      startBtn.addEventListener('click', () => {
+        ensureAudio();
+        startGame();
+        ping(280, 0.09, 'triangle');
+      });
+
+      render();
+    })();
+  </script>
+</body>
+</html>

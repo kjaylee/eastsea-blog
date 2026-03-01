@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>Moth Lantern Ascent</title>
+  <meta name="theme-color" content="#0a0a1a" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <style>
+    :root{--bg:#0a0a1a;--panel:#151533;--ink:#eff7ff;--neon:#6af4ff;--pink:#ff76e7;--warn:#ffd166;--bad:#ff6b6b}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:radial-gradient(circle at 50% 0,#202050,#0a0a1a 60%,#060610);color:var(--ink);display:flex;justify-content:center;min-height:100vh}
+    .app{width:min(860px,100%);padding:12px;display:flex;flex-direction:column;gap:10px}
+    .hud{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+    .box{background:rgba(21,21,51,.86);border:1px solid #3f3f8e;border-radius:11px;padding:8px;text-align:center}
+    .box b{display:block;color:var(--neon);font-size:1.03rem}
+    .panel{background:rgba(10,10,26,.8);border:1px solid #37377a;border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px}
+    canvas{width:100%;max-width:420px;aspect-ratio:3/5;margin:0 auto;border-radius:12px;border:1px solid #3f3f92;background:linear-gradient(180deg,#0f1026,#070714)}
+    .controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+    button{background:#1b1b49;color:#fff;border:1px solid #4b4ba0;border-radius:11px;min-height:46px;padding:10px;font-weight:800}
+    button:active{transform:translateY(1px)}
+    .hint{font-size:.9rem;line-height:1.45;color:#cde4ff}
+    .bar{height:11px;border-radius:999px;background:#1b1b43;border:1px solid #44448f;overflow:hidden}
+    .bar i{display:block;height:100%;background:linear-gradient(90deg,#6af4ff,#7a9cff)}
+    .overlay{position:fixed;inset:0;background:#030312e8;display:none;justify-content:center;align-items:center;padding:20px}
+    .overlay.show{display:flex}
+    .card{width:min(430px,100%);background:#121230;border:1px solid #4b4b9f;border-radius:14px;padding:18px;text-align:center}
+    .card h2{margin:0 0 10px;color:var(--pink)}
+    @media (max-width:760px){.hud{grid-template-columns:repeat(3,minmax(0,1fr))}}
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="hud">
+      <div class="box">Score<b id="score">0</b></div>
+      <div class="box">Distance<b id="distance">0m</b></div>
+      <div class="box">Durability<b id="hp">3</b></div>
+      <div class="box">Best Score<b id="bestScore">0</b></div>
+      <div class="box">Best Dist<b id="bestDist">0m</b></div>
+      <div class="box">Boost<b id="boost">Ready</b></div>
+    </section>
+
+    <section class="panel">
+      <canvas id="game" width="420" height="700" aria-label="moth lantern ascent playfield"></canvas>
+      <div class="bar"><i id="energy" style="width:100%"></i></div>
+      <div class="controls">
+        <button id="leftBtn">◀ Left</button>
+        <button id="boostBtn">Space · Boost</button>
+        <button id="rightBtn">Right ▶</button>
+      </div>
+      <div class="hint" id="msg">좌우 이동과 부스트로 그림자를 회피하고 랜턴 에너지를 모으세요. 에너지 0 또는 내구 0이면 종료.</div>
+    </section>
+  </main>
+
+  <div id="overlay" class="overlay" role="dialog" aria-modal="true">
+    <div class="card">
+      <h2>Lantern Flame Faded</h2>
+      <p id="final"></p>
+      <button id="retryBtn">다시 비행</button>
+    </div>
+  </div>
+
+  <script>
+    (()=>{
+      const canvas=document.getElementById('game'),ctx=canvas.getContext('2d');
+      const scoreEl=document.getElementById('score');
+      const distanceEl=document.getElementById('distance');
+      const hpEl=document.getElementById('hp');
+      const bestScoreEl=document.getElementById('bestScore');
+      const bestDistEl=document.getElementById('bestDist');
+      const boostEl=document.getElementById('boost');
+      const energyEl=document.getElementById('energy');
+      const msgEl=document.getElementById('msg');
+      const overlay=document.getElementById('overlay');
+      const finalEl=document.getElementById('final');
+      const key='mothLanternAscent.v1';
+
+      const audio={ctx:null};
+      const initAudio=()=>{if(!audio.ctx){const C=window.AudioContext||window.webkitAudioContext;if(C)audio.ctx=new C();}};
+      const tone=(f=440,d=.08,t='triangle',g=.05)=>{
+        if(!audio.ctx)return;
+        const n=audio.ctx.currentTime,o=audio.ctx.createOscillator(),gn=audio.ctx.createGain();
+        o.type=t;o.frequency.setValueAtTime(f,n);gn.gain.setValueAtTime(g,n);gn.gain.exponentialRampToValueAtTime(.0001,n+d);
+        o.connect(gn).connect(audio.ctx.destination);o.start(n);o.stop(n+d);
+      };
+      ['pointerdown','keydown'].forEach(ev=>window.addEventListener(ev,initAudio,{once:true}));
+
+      let best={score:0,distance:0};
+      try{best=Object.assign(best,JSON.parse(localStorage.getItem(key)||'{}'));}catch{}
+
+      const S={running:true,left:false,right:false,score:0,distance:0,hp:3,energy:100,boostCd:0,obstacles:[],lanterns:[],stars:[],last:0,spawnObs:0,spawnLan:0,speed:180};
+      const player={x:canvas.width/2,y:canvas.height-120,r:16,vx:0,vy:0};
+
+      for(let i=0;i<60;i++)S.stars.push({x:Math.random()*canvas.width,y:Math.random()*canvas.height,s:1+Math.random()*2});
+
+      function reset(){
+        S.running=true;S.left=false;S.right=false;S.score=0;S.distance=0;S.hp=3;S.energy=100;S.boostCd=0;S.obstacles=[];S.lanterns=[];S.last=performance.now();S.spawnObs=.7;S.spawnLan=1.2;S.speed=180;
+        player.x=canvas.width/2;player.y=canvas.height-120;player.vx=0;player.vy=0;
+        overlay.classList.remove('show');
+        msgEl.textContent='비행 재시작. 랜턴을 모아 에너지를 유지하세요.';
+        syncHud();
+        requestAnimationFrame(loop);
+      }
+
+      function syncHud(){
+        scoreEl.textContent=String(Math.floor(S.score));
+        distanceEl.textContent=`${Math.floor(S.distance)}m`;
+        hpEl.textContent=String(S.hp);
+        bestScoreEl.textContent=String(Math.floor(best.score));
+        bestDistEl.textContent=`${Math.floor(best.distance)}m`;
+        boostEl.textContent=S.boostCd<=0?'Ready':`${S.boostCd.toFixed(1)}s`;
+        energyEl.style.width=Math.max(0,S.energy)+'%';
+      }
+
+      function end(){
+        S.running=false;
+        if(S.score>best.score||S.distance>best.distance){best.score=Math.max(best.score,S.score);best.distance=Math.max(best.distance,S.distance);localStorage.setItem(key,JSON.stringify(best));}
+        finalEl.textContent=`Score ${Math.floor(S.score)} · Distance ${Math.floor(S.distance)}m · Best ${Math.floor(best.score)}/${Math.floor(best.distance)}m`;
+        overlay.classList.add('show');
+        tone(140,.18,'triangle',.06);setTimeout(()=>tone(100,.24,'sawtooth',.05),150);
+      }
+
+      function spawnObstacle(){
+        const gapW=90+Math.random()*70;
+        const gapX=20+Math.random()*(canvas.width-gapW-40);
+        const h=26;
+        S.obstacles.push({y:-h,gapX,gapW,h,hit:false});
+      }
+
+      function spawnLantern(){
+        S.lanterns.push({x:25+Math.random()*(canvas.width-50),y:-20,r:10+Math.random()*4});
+      }
+
+      function useBoost(){
+        if(!S.running||S.boostCd>0)return;
+        player.vy-=260;
+        S.boostCd=1.8;
+        S.energy=Math.max(0,S.energy-4);
+        tone(780,.09,'square',.05);
+      }
+
+      function circleRect(cx,cy,cr,rx,ry,rw,rh){
+        const nx=Math.max(rx,Math.min(cx,rx+rw));
+        const ny=Math.max(ry,Math.min(cy,ry+rh));
+        const dx=cx-nx,dy=cy-ny;
+        return dx*dx+dy*dy<cr*cr;
+      }
+
+      function update(dt){
+        S.speed=180+Math.min(220,S.distance*0.35);
+        S.distance+=dt*(S.speed*0.09);
+        S.score+=dt*14;
+        S.energy-=dt*7.8;
+        if(S.energy<=0){S.energy=0;msgEl.textContent='에너지가 고갈되었습니다.';end();return;}
+
+        if(S.left)player.vx-=560*dt;
+        if(S.right)player.vx+=560*dt;
+        player.vx*=0.86;
+        player.x+=player.vx*dt;
+        player.x=Math.max(player.r,Math.min(canvas.width-player.r,player.x));
+
+        player.vy+=240*dt;
+        player.y+=player.vy*dt;
+        player.y=Math.max(player.r+20,Math.min(canvas.height-player.r-20,player.y));
+        if(player.y>=canvas.height-player.r-20)player.vy*=0.2;
+
+        S.spawnObs-=dt;
+        if(S.spawnObs<=0){spawnObstacle();S.spawnObs=Math.max(.55,1.15-S.distance*0.0025);}
+        S.spawnLan-=dt;
+        if(S.spawnLan<=0){spawnLantern();S.spawnLan=.8+Math.random()*1.1;}
+
+        for(const o of S.obstacles)o.y+=S.speed*dt;
+        for(const l of S.lanterns)l.y+=S.speed*dt;
+
+        S.obstacles=S.obstacles.filter(o=>o.y<canvas.height+40);
+        S.lanterns=S.lanterns.filter(l=>l.y<canvas.height+30);
+
+        for(const o of S.obstacles){
+          if(o.hit)continue;
+          const topY=o.y,leftW=o.gapX,rightX=o.gapX+o.gapW;
+          const hitLeft=circleRect(player.x,player.y,player.r,0,topY,leftW,o.h);
+          const hitRight=circleRect(player.x,player.y,player.r,rightX,topY,canvas.width-rightX,o.h);
+          if(hitLeft||hitRight){
+            o.hit=true;
+            S.hp--;
+            S.energy=Math.max(0,S.energy-12);
+            comboFlash();
+            tone(180,.11,'sawtooth',.05);
+            msgEl.textContent='그림자 충돌! 경로를 재조정하세요.';
+            if(S.hp<=0){end();return;}
+          }
+        }
+
+        for(let i=S.lanterns.length-1;i>=0;i--){
+          const l=S.lanterns[i];
+          const dx=l.x-player.x,dy=l.y-player.y;
+          if(dx*dx+dy*dy<(player.r+l.r)*(player.r+l.r)){
+            S.lanterns.splice(i,1);
+            S.energy=Math.min(100,S.energy+20);
+            S.score+=90;
+            tone(620,.08,'triangle',.06);
+            msgEl.textContent='랜턴 에너지 회수 성공!';
+          }
+        }
+
+        if(S.boostCd>0)S.boostCd=Math.max(0,S.boostCd-dt);
+        syncHud();
+      }
+
+      let flash=0;
+      function comboFlash(){flash=.2;}
+
+      function draw(){
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+        const g=ctx.createLinearGradient(0,0,0,canvas.height);g.addColorStop(0,'#11112b');g.addColorStop(1,'#060612');ctx.fillStyle=g;ctx.fillRect(0,0,canvas.width,canvas.height);
+
+        for(const s of S.stars){
+          s.y+=S.speed*0.08*(s.s*0.4);
+          if(s.y>canvas.height)s.y=0,s.x=Math.random()*canvas.width;
+          ctx.fillStyle='#88a6ff66';ctx.fillRect(s.x,s.y,s.s,s.s);
+        }
+
+        for(const o of S.obstacles){
+          ctx.fillStyle=o.hit?'#602a5c':'#261f52';
+          ctx.shadowBlur=10;ctx.shadowColor='#7a6bff88';
+          ctx.fillRect(0,o.y,o.gapX,o.h);
+          ctx.fillRect(o.gapX+o.gapW,o.y,canvas.width-(o.gapX+o.gapW),o.h);
+          ctx.shadowBlur=0;
+        }
+
+        for(const l of S.lanterns){
+          ctx.beginPath();ctx.fillStyle='#ffd166';ctx.shadowBlur=18;ctx.shadowColor='#ffd166aa';ctx.arc(l.x,l.y,l.r,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
+        }
+
+        if(flash>0){
+          flash-=0.016;
+          ctx.fillStyle='rgba(255,90,120,.14)';ctx.fillRect(0,0,canvas.width,canvas.height);
+        }
+
+        ctx.beginPath();
+        ctx.fillStyle='#8af7ff';
+        ctx.shadowBlur=S.boostCd>1.5?20:10;
+        ctx.shadowColor='#6af4ffaa';
+        ctx.ellipse(player.x,player.y,player.r+4,player.r,0,0,Math.PI*2);
+        ctx.fill();
+        ctx.shadowBlur=0;
+
+        ctx.fillStyle='#fdf3b9';
+        ctx.beginPath();ctx.arc(player.x+4,player.y-2,4,0,Math.PI*2);ctx.fill();
+      }
+
+      function loop(ts){
+        if(!S.running)return;
+        const dt=Math.min(.05,(ts-S.last)/1000||.016);S.last=ts;
+        update(dt);
+        draw();
+        if(S.running)requestAnimationFrame(loop);
+      }
+
+      const hold=(flag,val)=>()=>S[flag]=val;
+      const leftDown=hold('left',true),leftUp=hold('left',false);
+      const rightDown=hold('right',true),rightUp=hold('right',false);
+
+      const lb=document.getElementById('leftBtn'),rb=document.getElementById('rightBtn'),bb=document.getElementById('boostBtn');
+      ['pointerdown','touchstart'].forEach(ev=>{lb.addEventListener(ev,leftDown);rb.addEventListener(ev,rightDown);});
+      ['pointerup','pointercancel','pointerleave','touchend'].forEach(ev=>{lb.addEventListener(ev,leftUp);rb.addEventListener(ev,rightUp);});
+      bb.addEventListener('click',useBoost);
+      document.getElementById('retryBtn').addEventListener('click',reset);
+
+      window.addEventListener('keydown',e=>{
+        const k=e.key.toLowerCase();
+        if(['arrowleft','arrowright','a','d',' '].includes(k)||['ArrowLeft','ArrowRight'].includes(e.key))e.preventDefault();
+        if(e.key==='ArrowLeft'||k==='a')S.left=true;
+        else if(e.key==='ArrowRight'||k==='d')S.right=true;
+        else if(e.key===' ')useBoost();
+      });
+      window.addEventListener('keyup',e=>{
+        const k=e.key.toLowerCase();
+        if(e.key==='ArrowLeft'||k==='a')S.left=false;
+        else if(e.key==='ArrowRight'||k==='d')S.right=false;
+      });
+
+      syncHud();
+      reset();
+    })();
+  </script>
+</body>
+</html>

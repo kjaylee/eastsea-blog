@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>Ferrofluid Sculptor Lab</title>
+  <meta name="theme-color" content="#0a0a1a" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <style>
+    :root{--bg:#0a0a1a;--panel:#14142f;--ink:#f2f7ff;--neon:#66f3ff;--pink:#ff79e8;--warn:#ffd166;--bad:#ff6b6b}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:radial-gradient(circle at 80% 0,#1e1e49,#0a0a1a 60%,#060610);color:var(--ink);display:flex;justify-content:center;min-height:100vh}
+    .app{width:min(920px,100%);padding:12px;display:flex;flex-direction:column;gap:10px}
+    .hud{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+    .box{background:rgba(20,20,47,.86);border:1px solid #39397e;border-radius:12px;padding:8px;text-align:center}
+    .box b{display:block;color:var(--neon);font-size:1.05rem}
+    .panel{background:rgba(10,10,26,.8);border:1px solid #363676;border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:12px}
+    .boards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+    .board h3{margin:0 0 8px;font-size:.96rem;color:#c4ddff}
+    .grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px}
+    .cell{aspect-ratio:1;border-radius:10px;border:1px solid #3d3d82;background:#11112f;color:#d5e8ff;font-weight:800;font-size:1rem;display:grid;place-items:center;min-height:42px}
+    .target .cell{background:#17173a;border-color:#464693}
+    .play .cell{cursor:pointer;touch-action:manipulation}
+    .play .cell.cursor{outline:2px solid var(--warn)}
+    .controls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+    button{background:#1c1c4d;color:#fff;border:1px solid #4a4aa2;border-radius:11px;min-height:46px;font-weight:800;padding:10px}
+    button:active{transform:translateY(1px)}
+    .hint{font-size:.9rem;line-height:1.45;color:#cde3ff}
+    .overlay{position:fixed;inset:0;background:#040413e8;display:none;justify-content:center;align-items:center;padding:20px}
+    .overlay.show{display:flex}
+    .card{width:min(430px,100%);background:#121231;border:1px solid #4a4aa2;border-radius:14px;padding:18px;text-align:center}
+    .card h2{margin:0 0 10px;color:var(--pink)}
+    .bar{height:12px;border-radius:999px;background:#1d1d44;overflow:hidden;border:1px solid #45458a}
+    .bar i{display:block;height:100%;background:linear-gradient(90deg,#66f3ff,#7ca9ff)}
+    @media (max-width:760px){.hud{grid-template-columns:repeat(2,minmax(0,1fr))}.boards{grid-template-columns:1fr}.controls{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="hud">
+      <div class="box">Stage<b id="stage">1</b></div>
+      <div class="box">Score<b id="score">0</b></div>
+      <div class="box">Moves Left<b id="moves">0</b></div>
+      <div class="box">Match<b id="match">0%</b></div>
+      <div class="box">Best<b id="best">S1 / 0</b></div>
+    </section>
+
+    <section class="panel">
+      <div class="boards">
+        <div class="board target">
+          <h3>Target Ferro Pattern</h3>
+          <div id="targetGrid" class="grid" aria-label="target pattern"></div>
+        </div>
+        <div class="board play">
+          <h3>Your Sculpt Grid</h3>
+          <div id="playGrid" class="grid" aria-label="sculpt grid"></div>
+        </div>
+      </div>
+      <div class="bar"><i id="progress" style="width:0%"></i></div>
+      <div class="controls">
+        <button id="toggleBtn">Space · Toggle Cell</button>
+        <button id="resetBtn">R · Reset Stage</button>
+        <button id="reseedBtn">New Pattern</button>
+        <button id="restartBtn">Restart Run</button>
+      </div>
+      <div class="hint" id="msg">목표 패턴과 같은 자성 강도를 만들면 스테이지 클리어. 키보드: 화살표 이동, Space/Enter 토글.</div>
+    </section>
+  </main>
+
+  <div id="overlay" class="overlay" role="dialog" aria-modal="true">
+    <div class="card">
+      <h2>Lab Stability Lost</h2>
+      <p id="final"></p>
+      <button id="retryBtn">다시 조각하기</button>
+    </div>
+  </div>
+
+  <script>
+    (()=>{
+      const size=5,cells=size*size,key='ferrofluidSculptorLab.v1';
+      const targetGridEl=document.getElementById('targetGrid');
+      const playGridEl=document.getElementById('playGrid');
+      const stageEl=document.getElementById('stage');
+      const scoreEl=document.getElementById('score');
+      const movesEl=document.getElementById('moves');
+      const matchEl=document.getElementById('match');
+      const bestEl=document.getElementById('best');
+      const msgEl=document.getElementById('msg');
+      const progressEl=document.getElementById('progress');
+      const overlay=document.getElementById('overlay');
+      const finalEl=document.getElementById('final');
+
+      const audio={ctx:null};
+      const initAudio=()=>{if(!audio.ctx){const C=window.AudioContext||window.webkitAudioContext;if(C)audio.ctx=new C();}};
+      const tone=(freq=440,dur=.08,type='triangle',gain=.05)=>{
+        if(!audio.ctx) return;
+        const t=audio.ctx.currentTime,o=audio.ctx.createOscillator(),g=audio.ctx.createGain();
+        o.type=type;o.frequency.setValueAtTime(freq,t);g.gain.setValueAtTime(gain,t);g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+        o.connect(g).connect(audio.ctx.destination);o.start(t);o.stop(t+dur);
+      };
+      ['pointerdown','keydown'].forEach(evt=>window.addEventListener(evt,initAudio,{once:true}));
+
+      let best={stage:1,score:0};
+      try{best=Object.assign(best,JSON.parse(localStorage.getItem(key)||'{}'));}catch{}
+
+      const S={stage:1,score:0,movesLeft:0,target:[],play:[],cursor:12,running:true,won:false};
+      const targetCells=[],playCells=[];
+
+      function levelColor(v){
+        return v===0?'#0f0f26':v===1?'#214a71':v===2?'#69307b':'#9b3f85';
+      }
+
+      for(let i=0;i<cells;i++){
+        const t=document.createElement('div');t.className='cell';targetGridEl.appendChild(t);targetCells.push(t);
+        const p=document.createElement('button');p.className='cell';p.addEventListener('click',()=>{if(!S.running)return;S.cursor=i;markCursor();toggleCell();});playGridEl.appendChild(p);playCells.push(p);
+      }
+
+      function stageMoves(){return 12+S.stage*2;}
+
+      function generatePattern(){
+        const density=Math.min(18,6+S.stage*2);
+        const arr=Array(cells).fill(0);
+        for(let i=0;i<density;i++){
+          const idx=(Math.random()*cells)|0;
+          arr[idx]=(arr[idx]+1+((Math.random()*2)|0))%4;
+        }
+        if(!arr.some(v=>v>0)) arr[(Math.random()*cells)|0]=1;
+        return arr;
+      }
+
+      function syncHud(){
+        stageEl.textContent=String(S.stage);
+        scoreEl.textContent=String(S.score);
+        movesEl.textContent=String(S.movesLeft);
+        const match=countMatch();
+        const pct=Math.round(match/cells*100);
+        matchEl.textContent=pct+'%';
+        progressEl.style.width=pct+'%';
+        bestEl.textContent=`S${best.stage} / ${best.score}`;
+      }
+
+      function countMatch(){
+        let m=0;
+        for(let i=0;i<cells;i++) if(S.play[i]===S.target[i]) m++;
+        return m;
+      }
+
+      function paint(){
+        for(let i=0;i<cells;i++){
+          const tv=S.target[i],pv=S.play[i];
+          targetCells[i].textContent=tv;
+          targetCells[i].style.background=levelColor(tv);
+          targetCells[i].style.borderColor=tv? '#65f5ff66':'#31316d';
+          playCells[i].textContent=pv;
+          playCells[i].style.background=levelColor(pv);
+          playCells[i].style.borderColor=pv? '#ff79e866':'#353573';
+          playCells[i].classList.toggle('cursor',i===S.cursor);
+        }
+      }
+
+      function markCursor(){playCells.forEach((c,i)=>c.classList.toggle('cursor',i===S.cursor));}
+
+      function prepareStage(newPattern=true){
+        if(newPattern) S.target=generatePattern();
+        S.play=Array(cells).fill(0);
+        S.movesLeft=stageMoves();
+        S.won=false;
+        msgEl.textContent='셀 강도를 맞춰 목표 패턴을 완성하세요.';
+        paint();
+        syncHud();
+      }
+
+      function stageClear(){
+        const bonus=S.movesLeft*18+S.stage*70;
+        S.score+=bonus;
+        S.stage++;
+        tone(880,.1,'triangle',.06);setTimeout(()=>tone(1120,.11,'sine',.05),110);
+        if(S.stage>best.stage||S.score>best.score){best.stage=Math.max(best.stage,S.stage);best.score=Math.max(best.score,S.score);localStorage.setItem(key,JSON.stringify(best));}
+        msgEl.textContent=`패턴 완성! +${bonus}점, Stage ${S.stage}`;
+        prepareStage(true);
+      }
+
+      function failRound(){
+        S.running=false;
+        tone(160,.18,'sawtooth',.06);setTimeout(()=>tone(120,.24,'triangle',.05),160);
+        if(S.stage>best.stage||S.score>best.score){best.stage=Math.max(best.stage,S.stage);best.score=Math.max(best.score,S.score);localStorage.setItem(key,JSON.stringify(best));}
+        finalEl.textContent=`Stage ${S.stage} · Score ${S.score} · Best S${best.stage}/${best.score}`;
+        overlay.classList.add('show');
+      }
+
+      function toggleCell(){
+        if(!S.running||S.movesLeft<=0)return;
+        const i=S.cursor;
+        S.play[i]=(S.play[i]+1)%4;
+        S.movesLeft--;
+        tone(330+S.play[i]*120,.06,'square',.04);
+        paint();
+        syncHud();
+        if(countMatch()===cells){stageClear();return;}
+        if(S.movesLeft<=0){msgEl.textContent='move budget 소진. 패턴 불일치로 실패했습니다.';failRound();}
+      }
+
+      function moveCursor(dr,dc){
+        const r=Math.floor(S.cursor/size),c=S.cursor%size;
+        const nr=Math.max(0,Math.min(size-1,r+dr));
+        const nc=Math.max(0,Math.min(size-1,c+dc));
+        S.cursor=nr*size+nc;markCursor();tone(260,.03,'triangle',.02);
+      }
+
+      function restartRun(){
+        S.stage=1;S.score=0;S.cursor=12;S.running=true;overlay.classList.remove('show');
+        prepareStage(true);
+      }
+
+      document.getElementById('toggleBtn').addEventListener('click',toggleCell);
+      document.getElementById('resetBtn').addEventListener('click',()=>{if(!S.running)return;prepareStage(false);tone(220,.07,'triangle',.04);});
+      document.getElementById('reseedBtn').addEventListener('click',()=>{if(!S.running)return;prepareStage(true);tone(290,.08,'triangle',.04);});
+      document.getElementById('restartBtn').addEventListener('click',restartRun);
+      document.getElementById('retryBtn').addEventListener('click',restartRun);
+
+      window.addEventListener('keydown',(e)=>{
+        if(!S.running&&e.key!=='Enter') return;
+        const k=e.key.toLowerCase();
+        if(['arrowup','arrowdown','arrowleft','arrowright',' ','enter','r','w','a','s','d'].includes(k)||['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) e.preventDefault();
+        if(e.key==='ArrowUp'||k==='w')moveCursor(-1,0);
+        else if(e.key==='ArrowDown'||k==='s')moveCursor(1,0);
+        else if(e.key==='ArrowLeft'||k==='a')moveCursor(0,-1);
+        else if(e.key==='ArrowRight'||k==='d')moveCursor(0,1);
+        else if(e.key===' '||e.key==='Enter')toggleCell();
+        else if(k==='r'&&S.running)prepareStage(false);
+      });
+
+      prepareStage(true);
+      paint();
+      syncHud();
+    })();
+  </script>
+</body>
+</html>

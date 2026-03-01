@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>Cathedral Bell Conductor</title>
+  <meta name="theme-color" content="#0a0a1a" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <style>
+    :root{--bg:#0a0a1a;--panel:#141430;--ink:#eef5ff;--neon:#67f5ff;--pink:#ff77e9;--warn:#ffd166;--bad:#ff6b6b}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:radial-gradient(circle at 20% 0,#202050,#0a0a1a 56%,#05050f);color:var(--ink);display:flex;justify-content:center;min-height:100vh}
+    .app{width:min(860px,100%);padding:12px;display:flex;flex-direction:column;gap:10px}
+    .hud{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+    .box{background:rgba(20,20,48,.84);border:1px solid #3f3f89;border-radius:11px;padding:8px;text-align:center}
+    .box b{display:block;color:var(--neon);font-size:1.03rem}
+    .panel{background:rgba(10,10,26,.8);border:1px solid #383879;border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px}
+    canvas{width:100%;max-width:520px;aspect-ratio:10/13;margin:0 auto;border:1px solid #3f3f90;border-radius:12px;background:linear-gradient(180deg,#101028,#090918)}
+    .controls{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+    button{background:#1b1b4a;color:#fff;border:1px solid #4c4ca2;border-radius:11px;padding:10px;min-height:46px;font-weight:800}
+    button:active{transform:translateY(1px)}
+    .bell{font-size:.93rem}
+    .hint{font-size:.9rem;line-height:1.45;color:#cde3ff}
+    .overlay{position:fixed;inset:0;background:#030312e8;display:none;justify-content:center;align-items:center;padding:20px}
+    .overlay.show{display:flex}
+    .card{width:min(440px,100%);background:#121230;border:1px solid #4a4a9e;border-radius:14px;padding:18px;text-align:center}
+    .card h2{margin:0 0 10px;color:var(--pink)}
+    @media (max-width:760px){.hud{grid-template-columns:repeat(3,minmax(0,1fr))}.controls{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="hud">
+      <div class="box">Score<b id="score">0</b></div>
+      <div class="box">Combo<b id="combo">0</b></div>
+      <div class="box">Best<b id="best">0</b></div>
+      <div class="box">Best Combo<b id="bestCombo">0</b></div>
+      <div class="box">Miss<b id="miss">0 / 8</b></div>
+      <div class="box">Time<b id="time">75</b></div>
+    </section>
+
+    <section class="panel">
+      <canvas id="game" width="520" height="676" aria-label="bell rhythm playfield"></canvas>
+      <div class="controls">
+        <button class="bell" data-lane="0">A · East Bell</button>
+        <button class="bell" data-lane="1">S · South Bell</button>
+        <button class="bell" data-lane="2">D · West Bell</button>
+        <button class="bell" data-lane="3">F · North Bell</button>
+        <button id="pauseBtn">Space · Pause</button>
+      </div>
+      <div class="hint" id="msg">A/S/D/F 또는 터치로 종을 울리세요. 판정선 근처에서 정확히 맞출수록 콤보 상승.</div>
+    </section>
+  </main>
+
+  <div id="overlay" class="overlay" role="dialog" aria-modal="true">
+    <div class="card">
+      <h2>Performance Ended</h2>
+      <p id="final"></p>
+      <button id="retryBtn">다시 지휘하기</button>
+    </div>
+  </div>
+
+  <script>
+    (()=>{
+      const canvas=document.getElementById('game'),ctx=canvas.getContext('2d');
+      const scoreEl=document.getElementById('score');
+      const comboEl=document.getElementById('combo');
+      const bestEl=document.getElementById('best');
+      const bestComboEl=document.getElementById('bestCombo');
+      const missEl=document.getElementById('miss');
+      const timeEl=document.getElementById('time');
+      const msgEl=document.getElementById('msg');
+      const overlay=document.getElementById('overlay');
+      const finalEl=document.getElementById('final');
+      const pauseBtn=document.getElementById('pauseBtn');
+      const key='cathedralBellConductor.v1';
+
+      const audio={ctx:null};
+      const initAudio=()=>{if(!audio.ctx){const C=window.AudioContext||window.webkitAudioContext;if(C)audio.ctx=new C();}};
+      const tone=(f=440,d=.09,t='triangle',g=.05)=>{
+        if(!audio.ctx)return;
+        const n=audio.ctx.currentTime,o=audio.ctx.createOscillator(),gn=audio.ctx.createGain();
+        o.type=t;o.frequency.setValueAtTime(f,n);gn.gain.setValueAtTime(g,n);gn.gain.exponentialRampToValueAtTime(.0001,n+d);
+        o.connect(gn).connect(audio.ctx.destination);o.start(n);o.stop(n+d);
+      };
+      ['pointerdown','keydown'].forEach(ev=>window.addEventListener(ev,initAudio,{once:true}));
+
+      let best={score:0,combo:0};
+      try{best=Object.assign(best,JSON.parse(localStorage.getItem(key)||'{}'));}catch{}
+
+      const lanes=4,laneW=canvas.width/lanes,strikeY=canvas.height-120;
+      const laneFreq=[392,440,523,659],laneGlow=['#67f5ff','#8f9dff','#ff7ce9','#ffd166'];
+      let notes=[],score=0,combo=0,miss=0,timeLeft=75,last=0,spawnCd=0,speed=240,run=true,paused=false;
+
+      function reset(){
+        notes=[];score=0;combo=0;miss=0;timeLeft=75;spawnCd=.35;speed=240;run=true;paused=false;last=performance.now();
+        overlay.classList.remove('show');
+        msgEl.textContent='연속 판정을 유지해 대성당 공명을 완성하세요.';
+        syncHud();
+        requestAnimationFrame(loop);
+      }
+
+      function syncHud(){
+        scoreEl.textContent=String(score);
+        comboEl.textContent=String(combo);
+        bestEl.textContent=String(best.score);
+        bestComboEl.textContent=String(best.combo);
+        missEl.textContent=`${miss} / 8`;
+        timeEl.textContent=String(Math.max(0,Math.ceil(timeLeft)));
+      }
+
+      function spawnNote(){
+        const lane=(Math.random()*lanes)|0;
+        notes.push({lane,y:-26,hit:false});
+      }
+
+      function judgeLane(lane){
+        if(!run||paused)return;
+        let bestIdx=-1,bestDist=999;
+        for(let i=0;i<notes.length;i++){
+          const n=notes[i];
+          if(n.lane!==lane||n.hit)continue;
+          const d=Math.abs(n.y-strikeY);
+          if(d<bestDist){bestDist=d;bestIdx=i;}
+        }
+        if(bestIdx>=0&&bestDist<34){
+          const perfect=bestDist<14;
+          notes[bestIdx].hit=true;
+          combo++;
+          const gain=(perfect?130:80)+Math.min(12,combo)*8;
+          score+=gain;
+          if(combo>best.combo||score>best.score){best.combo=Math.max(best.combo,combo);best.score=Math.max(best.score,score);localStorage.setItem(key,JSON.stringify(best));}
+          tone(laneFreq[lane]*(perfect?1.1:1),.11,'sine',.06);
+          if(combo%12===0)tone(880,.08,'triangle',.04);
+          msgEl.textContent=perfect?`Perfect! +${gain}`:`Good +${gain}`;
+        }else{
+          miss++;
+          combo=0;
+          tone(170,.1,'sawtooth',.05);
+          msgEl.textContent='Miss! 박자를 다시 맞춰보세요.';
+          if(miss>=8)end('Too many misses');
+        }
+        syncHud();
+      }
+
+      function end(reason){
+        run=false;
+        if(score>best.score||combo>best.combo){best.score=Math.max(best.score,score);best.combo=Math.max(best.combo,combo);localStorage.setItem(key,JSON.stringify(best));}
+        finalEl.textContent=`${reason} · Score ${score} · Combo ${combo} · Best ${best.score}`;
+        overlay.classList.add('show');
+        tone(150,.18,'triangle',.06);setTimeout(()=>tone(110,.25,'square',.04),150);
+      }
+
+      function draw(){
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+        const g=ctx.createLinearGradient(0,0,0,canvas.height);g.addColorStop(0,'#0d0d23');g.addColorStop(1,'#060613');ctx.fillStyle=g;ctx.fillRect(0,0,canvas.width,canvas.height);
+
+        for(let i=0;i<lanes;i++){
+          ctx.fillStyle=i%2?'#131334':'#10102b';
+          ctx.fillRect(i*laneW,0,laneW,canvas.height);
+          ctx.strokeStyle='#323272';ctx.lineWidth=2;ctx.strokeRect(i*laneW+1,1,laneW-2,canvas.height-2);
+        }
+
+        ctx.strokeStyle='#f7d67c';ctx.lineWidth=4;
+        ctx.beginPath();ctx.moveTo(0,strikeY);ctx.lineTo(canvas.width,strikeY);ctx.stroke();
+
+        for(const n of notes){
+          const x=n.lane*laneW+laneW/2;
+          ctx.beginPath();
+          ctx.fillStyle=n.hit?'#ffffff88':laneGlow[n.lane];
+          ctx.shadowBlur=n.hit?0:18;ctx.shadowColor=laneGlow[n.lane];
+          ctx.arc(x,n.y,18,0,Math.PI*2);ctx.fill();
+          ctx.shadowBlur=0;
+        }
+
+        const keys=['A','S','D','F'];
+        for(let i=0;i<lanes;i++){
+          ctx.fillStyle='#e8f3ff';ctx.font='bold 20px system-ui';ctx.textAlign='center';
+          ctx.fillText(keys[i],i*laneW+laneW/2,canvas.height-30);
+        }
+      }
+
+      function loop(ts){
+        if(!run)return;
+        const dt=Math.min(.05,(ts-last)/1000||.016);last=ts;
+        if(!paused){
+          timeLeft-=dt;
+          if(timeLeft<=0){end('Time up');return;}
+
+          speed=240+Math.min(240,(75-timeLeft)*4.5);
+          spawnCd-=dt;
+          if(spawnCd<=0){spawnNote();spawnCd=Math.max(.18,.48-(75-timeLeft)*0.004);}
+
+          for(const n of notes){n.y+=speed*dt;}
+
+          let leaked=0;
+          notes=notes.filter(n=>{
+            if(n.hit&&n.y>strikeY+32)return false;
+            if(!n.hit&&n.y>canvas.height+20){leaked++;return false;}
+            return true;
+          });
+          if(leaked){
+            miss+=leaked;combo=0;tone(170,.1,'sawtooth',.05);msgEl.textContent=`${leaked}개 음표를 놓쳤습니다.`;
+            if(miss>=8){syncHud();end('Too many misses');return;}
+          }
+          syncHud();
+        }
+        draw();
+        requestAnimationFrame(loop);
+      }
+
+      document.querySelectorAll('.bell').forEach(btn=>btn.addEventListener('click',()=>judgeLane(Number(btn.dataset.lane))));
+      pauseBtn.addEventListener('click',()=>{
+        if(!run)return;
+        paused=!paused;
+        pauseBtn.textContent=paused?'Resume':'Space · Pause';
+        msgEl.textContent=paused?'일시정지됨. Space로 재개.':'연주 재개.';
+        tone(paused?260:420,.06,'triangle',.03);
+      });
+      document.getElementById('retryBtn').addEventListener('click',reset);
+
+      window.addEventListener('keydown',e=>{
+        const k=e.key.toLowerCase();
+        if(['a','s','d','f',' '].includes(k))e.preventDefault();
+        if(k==='a')judgeLane(0);
+        else if(k==='s')judgeLane(1);
+        else if(k==='d')judgeLane(2);
+        else if(k==='f')judgeLane(3);
+        else if(k===' '&&run){paused=!paused;pauseBtn.textContent=paused?'Resume':'Space · Pause';msgEl.textContent=paused?'일시정지됨.':'연주 재개.';tone(paused?260:420,.06,'triangle',.03);}
+      });
+
+      syncHud();
+      reset();
+    })();
+  </script>
+</body>
+</html>

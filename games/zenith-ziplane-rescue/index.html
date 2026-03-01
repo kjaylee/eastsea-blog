@@ -1,0 +1,640 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Zenith Ziplane Rescue</title>
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0a0a1a;
+      --panel: #121937;
+      --line: #32589f;
+      --text: #edf4ff;
+      --muted: #97abd8;
+      --cyan: #67f2ff;
+      --pink: #ff78d0;
+      --amber: #ffd36f;
+      --good: #78ffc0;
+      --bad: #ff6f94;
+      font-family: "Pretendard", "Noto Sans KR", system-ui, -apple-system, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      background: radial-gradient(circle at 50% -18%, #1f2f60 0%, var(--bg) 58%);
+      color: var(--text);
+      display: flex;
+      justify-content: center;
+      padding: 12px;
+    }
+    .app {
+      width: min(540px, 100%);
+      display: grid;
+      gap: 10px;
+    }
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+      font-size: 12px;
+    }
+    .card {
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, #17264f, #0f1732);
+      padding: 8px 6px;
+      text-align: center;
+    }
+    canvas {
+      width: 100%;
+      aspect-ratio: 9 / 14;
+      border-radius: 16px;
+      border: 1px solid #325fa7;
+      background: linear-gradient(180deg, #182f63, #0a1630 68%);
+      box-shadow: 0 0 28px #67f2ff2f;
+      touch-action: none;
+    }
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .row2 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+    button {
+      appearance: none;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 11px 8px;
+      background: var(--panel);
+      color: var(--text);
+      font-weight: 800;
+      letter-spacing: .2px;
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    button:active, button.on {
+      transform: translateY(1px) scale(.99);
+      box-shadow: 0 0 0 1px #fff4 inset;
+    }
+    #boostBtn { border-color: #78ffc0; box-shadow: 0 0 0 1px #78ffc077 inset; }
+    #actionBtn { border-color: #ffd36f; box-shadow: 0 0 0 1px #ffd36f66 inset; }
+    .hint {
+      margin: 0;
+      text-align: center;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    @media (max-width: 470px) {
+      .hud { grid-template-columns: repeat(3, minmax(0,1fr)); }
+      .controls { grid-template-columns: repeat(2, minmax(0,1fr)); }
+      #boostBtn, #actionBtn { grid-column: span 2; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="hud">
+      <div class="card">RESCUED<br><strong id="rescued">0</strong></div>
+      <div class="card">BEST<br><strong id="best">0</strong></div>
+      <div class="card">FUEL<br><strong id="fuel">100</strong></div>
+      <div class="card">HULL<br><strong id="hull">100</strong></div>
+      <div class="card">STATUS<br><strong id="status">SEARCH</strong></div>
+    </section>
+
+    <canvas id="game" width="360" height="560" aria-label="Zenith Ziplane Rescue canvas"></canvas>
+
+    <section class="controls" aria-label="flight controls">
+      <button id="upBtn">ASCEND (W)</button>
+      <button id="downBtn">DESCEND (S)</button>
+      <button id="boostBtn">BOOST (Shift)</button>
+      <button id="actionBtn">PICK / DROP (Space)</button>
+    </section>
+
+    <section class="row2">
+      <button id="restartBtn">RESTART (R)</button>
+      <button id="pauseBtn">PAUSE</button>
+      <button id="trimBtn">WIND TRIM</button>
+    </section>
+
+    <p class="hint">W/S 또는 터치로 고도 제어, Shift 부스트, Space로 탑승/하차. 연료가 0 되기 전에 최대 구조를 달성하세요.</p>
+  </main>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = 'best-zenith-ziplane-rescue';
+      const canvas = document.getElementById('game');
+      const ctx = canvas.getContext('2d');
+
+      const rescuedEl = document.getElementById('rescued');
+      const bestEl = document.getElementById('best');
+      const fuelEl = document.getElementById('fuel');
+      const hullEl = document.getElementById('hull');
+      const statusEl = document.getElementById('status');
+
+      const upBtn = document.getElementById('upBtn');
+      const downBtn = document.getElementById('downBtn');
+      const boostBtn = document.getElementById('boostBtn');
+      const actionBtn = document.getElementById('actionBtn');
+      const restartBtn = document.getElementById('restartBtn');
+      const pauseBtn = document.getElementById('pauseBtn');
+      const trimBtn = document.getElementById('trimBtn');
+
+      const state = {
+        x: 92,
+        y: 220,
+        vy: 0,
+        rescued: 0,
+        best: Number(localStorage.getItem(STORAGE_KEY) || 0),
+        fuel: 100,
+        hull: 100,
+        upHold: false,
+        downHold: false,
+        boostHold: false,
+        carrying: false,
+        paused: false,
+        running: true,
+        wind: 0,
+        windShift: 0,
+        worldSpeed: 2.2,
+        time: 0,
+        survivors: [],
+        clouds: [],
+        bases: [],
+        sparkles: [],
+        invuln: 0,
+        actionLock: 0
+      };
+      bestEl.textContent = String(state.best);
+
+      let audioCtx = null;
+      function ensureAudio() {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+      }
+      function beep(freq = 440, duration = 0.08, type = 'sine', gain = 0.05) {
+        if (!audioCtx) return;
+        const t = audioCtx.currentTime;
+        const osc = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, t);
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(gain, t + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+        osc.connect(g).connect(audioCtx.destination);
+        osc.start(t);
+        osc.stop(t + duration + 0.02);
+      }
+
+      function clamp(v, min, max) {
+        return Math.max(min, Math.min(max, v));
+      }
+
+      function pressHold(btn, setter) {
+        const down = (e) => {
+          e.preventDefault();
+          ensureAudio();
+          setter(true);
+          btn.classList.add('on');
+        };
+        const up = (e) => {
+          e.preventDefault();
+          setter(false);
+          btn.classList.remove('on');
+        };
+        btn.addEventListener('pointerdown', down);
+        btn.addEventListener('pointerup', up);
+        btn.addEventListener('pointercancel', up);
+        btn.addEventListener('pointerleave', up);
+      }
+
+      pressHold(upBtn, (v) => state.upHold = v);
+      pressHold(downBtn, (v) => state.downHold = v);
+      pressHold(boostBtn, (v) => state.boostHold = v);
+
+      actionBtn.addEventListener('click', () => {
+        ensureAudio();
+        action();
+      });
+
+      restartBtn.addEventListener('click', () => {
+        ensureAudio();
+        reset();
+        beep(560, 0.07, 'sawtooth', 0.04);
+      });
+
+      pauseBtn.addEventListener('click', () => {
+        state.paused = !state.paused;
+        pauseBtn.textContent = state.paused ? 'RESUME' : 'PAUSE';
+      });
+
+      trimBtn.addEventListener('click', () => {
+        ensureAudio();
+        state.windShift *= 0.4;
+        state.vy *= 0.7;
+        beep(680, 0.06, 'triangle', 0.04);
+      });
+
+      function spawnSurvivor() {
+        state.survivors.push({
+          x: canvas.width + 28,
+          y: 300 + Math.random() * 210,
+          vx: state.worldSpeed + Math.random() * 1.2,
+          wobble: Math.random() * Math.PI * 2
+        });
+      }
+
+      function spawnCloud() {
+        state.clouds.push({
+          x: canvas.width + 40,
+          y: 70 + Math.random() * 320,
+          r: 16 + Math.random() * 18,
+          vx: state.worldSpeed + 1 + Math.random() * 1.2
+        });
+      }
+
+      function spawnBase() {
+        state.bases.push({
+          x: canvas.width + 80,
+          y: 120 + Math.random() * 300,
+          vx: state.worldSpeed + 0.8
+        });
+      }
+
+      function action() {
+        if (!state.running || state.paused || state.actionLock > 0) return;
+        state.actionLock = 0.25;
+
+        if (!state.carrying) {
+          for (let i = 0; i < state.survivors.length; i++) {
+            const s = state.survivors[i];
+            if (Math.abs(s.x - state.x) < 26 && Math.abs(s.y - state.y) < 34) {
+              state.survivors.splice(i, 1);
+              state.carrying = true;
+              statusEl.textContent = 'CARRYING';
+              beep(770, 0.08, 'triangle', 0.05);
+              return;
+            }
+          }
+          beep(230, 0.05, 'square', 0.03);
+        } else {
+          for (let i = 0; i < state.bases.length; i++) {
+            const b = state.bases[i];
+            if (Math.abs(b.x - state.x) < 34 && Math.abs(b.y - state.y) < 36) {
+              state.carrying = false;
+              state.rescued += 1;
+              state.fuel = clamp(state.fuel + 18, 0, 100);
+              state.hull = clamp(state.hull + 8, 0, 100);
+              statusEl.textContent = 'RESCUED';
+              beep(880, 0.08, 'sine', 0.055);
+              beep(1120, 0.09, 'triangle', 0.05);
+              if (state.rescued > state.best) {
+                state.best = state.rescued;
+                localStorage.setItem(STORAGE_KEY, String(state.best));
+                bestEl.textContent = String(state.best);
+              }
+              return;
+            }
+          }
+          beep(200, 0.05, 'square', 0.03);
+        }
+      }
+
+      function hit(dmg = 14) {
+        if (state.invuln > 0) return;
+        state.hull = clamp(state.hull - dmg, 0, 100);
+        state.invuln = 0.45;
+        beep(170, 0.1, 'sawtooth', 0.06);
+        if (state.hull <= 0) endGame();
+      }
+
+      function endGame() {
+        if (!state.running) return;
+        state.running = false;
+        statusEl.textContent = 'DOWN';
+        if (state.rescued > state.best) {
+          state.best = state.rescued;
+          localStorage.setItem(STORAGE_KEY, String(state.best));
+          bestEl.textContent = String(state.best);
+        }
+      }
+
+      function reset() {
+        state.x = 92;
+        state.y = 220;
+        state.vy = 0;
+        state.rescued = 0;
+        state.fuel = 100;
+        state.hull = 100;
+        state.upHold = false;
+        state.downHold = false;
+        state.boostHold = false;
+        state.carrying = false;
+        state.paused = false;
+        state.running = true;
+        state.wind = 0;
+        state.windShift = 0;
+        state.worldSpeed = 2.2;
+        state.time = 0;
+        state.survivors = [];
+        state.clouds = [];
+        state.bases = [];
+        state.sparkles = [];
+        state.invuln = 0;
+        state.actionLock = 0;
+        statusEl.textContent = 'SEARCH';
+        pauseBtn.textContent = 'PAUSE';
+      }
+
+      function updateHud() {
+        rescuedEl.textContent = String(state.rescued);
+        fuelEl.textContent = String(Math.round(state.fuel));
+        hullEl.textContent = String(Math.round(state.hull));
+        if (state.running && !state.carrying) statusEl.textContent = 'SEARCH';
+      }
+
+      function update(dt) {
+        if (!state.running || state.paused) return;
+
+        state.time += dt;
+        state.worldSpeed = 2.2 + Math.min(2.5, state.rescued * 0.16 + state.time * 0.02);
+
+        const gust = Math.sin(state.time * 1.7) * 0.35 + Math.sin(state.time * 0.55 + 1.2) * 0.25;
+        state.windShift += gust * dt * 10;
+        state.windShift *= 0.985;
+
+        let accel = 0;
+        if (state.upHold) accel -= 1.9;
+        if (state.downHold) accel += 1.9;
+        accel += state.windShift * 0.11;
+
+        const boost = state.boostHold ? 1 : 0;
+
+        state.vy += accel * 120 * dt;
+        state.vy *= 0.9;
+        state.y += state.vy * dt;
+        if (boost) {
+          state.y += Math.sin(state.time * 20) * 0.5;
+          state.fuel -= dt * 10;
+        }
+
+        state.y = clamp(state.y, 32, canvas.height - 40);
+        state.fuel -= dt * (4.2 + state.worldSpeed * 0.8);
+        if (state.carrying) state.fuel -= dt * 2.4;
+
+        if (Math.random() < 0.014 + state.worldSpeed * 0.001) spawnSurvivor();
+        if (Math.random() < 0.018 + state.worldSpeed * 0.0016) spawnCloud();
+        if (Math.random() < 0.006 + state.rescued * 0.0008) spawnBase();
+
+        for (let i = state.survivors.length - 1; i >= 0; i--) {
+          const s = state.survivors[i];
+          s.x -= s.vx;
+          s.y += Math.sin(state.time * 2 + s.wobble) * 0.35;
+          if (s.x < -30) state.survivors.splice(i, 1);
+        }
+
+        for (let i = state.bases.length - 1; i >= 0; i--) {
+          const b = state.bases[i];
+          b.x -= b.vx;
+          if (b.x < -70) state.bases.splice(i, 1);
+        }
+
+        for (let i = state.clouds.length - 1; i >= 0; i--) {
+          const c = state.clouds[i];
+          c.x -= c.vx;
+          const dx = c.x - state.x;
+          const dy = c.y - state.y;
+          const rr = c.r + 15;
+          if (dx * dx + dy * dy < rr * rr) {
+            hit(10 + state.worldSpeed * 2.4);
+            state.clouds.splice(i, 1);
+            continue;
+          }
+          if (c.x < -60) state.clouds.splice(i, 1);
+        }
+
+        if (state.y <= 36 || state.y >= canvas.height - 44) {
+          hit(12 * dt * 6);
+        }
+
+        if (Math.random() < 0.25) {
+          state.sparkles.push({
+            x: state.x - 18 + Math.random() * 8,
+            y: state.y + (Math.random() - 0.5) * 18,
+            life: 1,
+            vx: -2 - Math.random() * 2,
+            vy: (Math.random() - 0.5) * 1.2
+          });
+        }
+
+        for (let i = state.sparkles.length - 1; i >= 0; i--) {
+          const p = state.sparkles[i];
+          p.x += p.vx;
+          p.y += p.vy;
+          p.life -= dt * 2.3;
+          if (p.life <= 0) state.sparkles.splice(i, 1);
+        }
+
+        state.invuln = Math.max(0, state.invuln - dt);
+        state.actionLock = Math.max(0, state.actionLock - dt);
+
+        if (state.fuel <= 0) {
+          state.fuel = 0;
+          endGame();
+          beep(130, 0.16, 'square', 0.06);
+        }
+
+        updateHud();
+      }
+
+      function drawSky() {
+        const grd = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        grd.addColorStop(0, '#1a3f7f');
+        grd.addColorStop(0.58, '#0f2550');
+        grd.addColorStop(1, '#08142d');
+        ctx.fillStyle = grd;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        for (let i = 0; i < 20; i++) {
+          const x = (i * 43 + state.time * (14 + i % 3 * 4)) % (canvas.width + 70) - 35;
+          const y = 40 + (i * 29) % 420;
+          ctx.fillStyle = `rgba(103,242,255,${0.05 + (i % 4) * 0.02})`;
+          ctx.fillRect(x, y, 26, 2);
+        }
+
+        ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 5; i++) {
+          const y = 90 + i * 95 + Math.sin(state.time + i) * 8;
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.quadraticCurveTo(canvas.width / 2, y + 15, canvas.width, y - 5);
+          ctx.stroke();
+        }
+      }
+
+      function drawPlane() {
+        ctx.save();
+        ctx.translate(state.x, state.y);
+        ctx.rotate(state.vy * 0.004 + state.windShift * 0.01);
+        ctx.globalAlpha = state.invuln > 0 ? 0.65 + Math.sin(state.time * 30) * 0.2 : 1;
+
+        ctx.fillStyle = '#2e4f90';
+        ctx.beginPath();
+        ctx.moveTo(-26, 0);
+        ctx.lineTo(18, -8);
+        ctx.lineTo(26, 0);
+        ctx.lineTo(18, 8);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = '#67f2ff';
+        ctx.fillRect(-8, -5, 10, 10);
+
+        ctx.fillStyle = '#1e3262';
+        ctx.beginPath();
+        ctx.moveTo(-4, -14);
+        ctx.lineTo(14, -4);
+        ctx.lineTo(-10, -3);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.strokeStyle = '#b8ecff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(-30, 0);
+        ctx.lineTo(-44, 3);
+        ctx.stroke();
+
+        if (state.carrying) {
+          ctx.fillStyle = '#ffd36f';
+          ctx.beginPath();
+          ctx.arc(-10, 12, 5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.restore();
+      }
+
+      function draw() {
+        drawSky();
+
+        for (const b of state.bases) {
+          ctx.fillStyle = '#1c2f5a';
+          ctx.fillRect(b.x - 20, b.y - 12, 40, 24);
+          ctx.strokeStyle = '#78ffc0';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(b.x - 18, b.y - 10, 36, 20);
+          ctx.fillStyle = '#78ffc0';
+          ctx.font = '700 10px system-ui';
+          ctx.textAlign = 'center';
+          ctx.fillText('BASE', b.x, b.y + 3);
+        }
+
+        for (const s of state.survivors) {
+          ctx.fillStyle = '#ffd36f';
+          ctx.beginPath();
+          ctx.arc(s.x, s.y, 6, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#fff3';
+          ctx.beginPath();
+          ctx.moveTo(s.x, s.y + 6);
+          ctx.lineTo(s.x, s.y + 16);
+          ctx.stroke();
+        }
+
+        for (const c of state.clouds) {
+          ctx.fillStyle = '#a4c7ff22';
+          ctx.beginPath();
+          ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#dbe8ff55';
+          ctx.stroke();
+        }
+
+        for (const p of state.sparkles) {
+          ctx.fillStyle = `rgba(179,242,255,${p.life * 0.8})`;
+          ctx.fillRect(p.x, p.y, 2.5, 2.5);
+        }
+
+        drawPlane();
+
+        if (!state.running) {
+          ctx.fillStyle = 'rgba(5,10,23,0.72)';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = '#ffd6a4';
+          ctx.font = '700 24px system-ui';
+          ctx.textAlign = 'center';
+          ctx.fillText('MISSION END', canvas.width / 2, canvas.height / 2 - 14);
+          ctx.fillStyle = '#ecf2ff';
+          ctx.font = '600 14px system-ui';
+          ctx.fillText(`Rescued ${state.rescued} · Best ${state.best}`, canvas.width / 2, canvas.height / 2 + 14);
+          ctx.fillStyle = '#99aed8';
+          ctx.fillText('R 또는 RESTART로 재출격', canvas.width / 2, canvas.height / 2 + 38);
+        }
+      }
+
+      let prev = performance.now();
+      function loop(now) {
+        const dt = Math.min(0.033, (now - prev) / 1000);
+        prev = now;
+        update(dt);
+        draw();
+        requestAnimationFrame(loop);
+      }
+
+      window.addEventListener('keydown', (e) => {
+        const k = e.key.toLowerCase();
+        if (["w", "s", "shift", " ", "r", "p"].includes(k) || e.key === ' ') ensureAudio();
+
+        if (k === 'w' || k === 'arrowup') {
+          state.upHold = true;
+          upBtn.classList.add('on');
+        } else if (k === 's' || k === 'arrowdown') {
+          state.downHold = true;
+          downBtn.classList.add('on');
+        } else if (k === 'shift') {
+          state.boostHold = true;
+          boostBtn.classList.add('on');
+        } else if (k === ' ' || k === 'spacebar') {
+          e.preventDefault();
+          action();
+        } else if (k === 'r') {
+          reset();
+        } else if (k === 'p') {
+          state.paused = !state.paused;
+          pauseBtn.textContent = state.paused ? 'RESUME' : 'PAUSE';
+        }
+      });
+
+      window.addEventListener('keyup', (e) => {
+        const k = e.key.toLowerCase();
+        if (k === 'w' || k === 'arrowup') {
+          state.upHold = false;
+          upBtn.classList.remove('on');
+        } else if (k === 's' || k === 'arrowdown') {
+          state.downHold = false;
+          downBtn.classList.remove('on');
+        } else if (k === 'shift') {
+          state.boostHold = false;
+          boostBtn.classList.remove('on');
+        }
+      });
+
+      canvas.addEventListener('pointerdown', () => ensureAudio());
+
+      reset();
+      requestAnimationFrame(loop);
+    })();
+  </script>
+</body>
+</html>

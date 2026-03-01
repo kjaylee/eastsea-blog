@@ -1,0 +1,505 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Ferro Reef Ballast</title>
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0a0a1a;
+      --panel: #121c38;
+      --line: #31589e;
+      --text: #edf4ff;
+      --muted: #9cb0da;
+      --cyan: #66efff;
+      --pink: #ff7ace;
+      --amber: #ffd06f;
+      --good: #7dffc0;
+      --bad: #ff6f94;
+      font-family: "Pretendard", "Noto Sans KR", system-ui, -apple-system, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      background: radial-gradient(circle at 50% -15%, #20315d 0%, var(--bg) 58%);
+      color: var(--text);
+      display: flex;
+      justify-content: center;
+      padding: 12px;
+    }
+    .app {
+      width: min(540px, 100%);
+      display: grid;
+      gap: 10px;
+    }
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+      font-size: 12px;
+    }
+    .card {
+      text-align: center;
+      padding: 8px 6px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, #17264e, #0f1733);
+    }
+    canvas {
+      width: 100%;
+      aspect-ratio: 9 / 14;
+      border-radius: 16px;
+      border: 1px solid #335ea7;
+      background: linear-gradient(180deg, #10224a, #081428 65%);
+      box-shadow: 0 0 28px #66efff30;
+      touch-action: none;
+    }
+    .controls, .burst {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    button {
+      appearance: none;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px 10px;
+      background: var(--panel);
+      color: var(--text);
+      font-weight: 800;
+      letter-spacing: .2px;
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    button:active, button.on {
+      transform: translateY(1px) scale(.99);
+      box-shadow: 0 0 0 1px #ffffff44 inset;
+    }
+    #burstBtn {
+      border-color: #7dffc0;
+      box-shadow: 0 0 0 1px #7dffc077 inset;
+    }
+    .hint {
+      margin: 0;
+      text-align: center;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    @media (max-width: 470px) {
+      .hud { grid-template-columns: repeat(3, minmax(0,1fr)); }
+      .controls { grid-template-columns: repeat(2, minmax(0,1fr)); }
+      #burstBtn { grid-column: span 2; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="hud">
+      <div class="card">DIST<br><strong id="distance">0m</strong></div>
+      <div class="card">BEST<br><strong id="best">0m</strong></div>
+      <div class="card">HULL<br><strong id="hull">100</strong></div>
+      <div class="card">TILT<br><strong id="tilt">0°</strong></div>
+      <div class="card">PRESSURE<br><strong id="pressure">0%</strong></div>
+    </section>
+
+    <canvas id="game" width="360" height="560" aria-label="Ferro Reef Ballast canvas"></canvas>
+
+    <section class="controls" aria-label="ballast controls">
+      <button id="leftBtn">◀ LEFT BALLAST</button>
+      <button id="rightBtn">RIGHT BALLAST ▶</button>
+      <button id="burstBtn">SURFACE BURST (↑)</button>
+    </section>
+
+    <section class="burst">
+      <button id="restartBtn">RESTART (R)</button>
+      <button id="stabilizeBtn">STABILIZE (Space)</button>
+      <button id="pauseBtn">PAUSE</button>
+    </section>
+
+    <p class="hint">좌/우 밸러스트로 잠수정 균형을 유지하세요. ←/→ 조향, ↑/Space Burst, R 재시작.</p>
+  </main>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = 'best-ferro-reef-ballast';
+      const canvas = document.getElementById('game');
+      const ctx = canvas.getContext('2d');
+
+      const distanceEl = document.getElementById('distance');
+      const bestEl = document.getElementById('best');
+      const hullEl = document.getElementById('hull');
+      const tiltEl = document.getElementById('tilt');
+      const pressureEl = document.getElementById('pressure');
+
+      const leftBtn = document.getElementById('leftBtn');
+      const rightBtn = document.getElementById('rightBtn');
+      const burstBtn = document.getElementById('burstBtn');
+      const stabilizeBtn = document.getElementById('stabilizeBtn');
+      const restartBtn = document.getElementById('restartBtn');
+      const pauseBtn = document.getElementById('pauseBtn');
+
+      const state = {
+        x: canvas.width / 2,
+        y: canvas.height - 122,
+        vx: 0,
+        tilt: 0,
+        hull: 100,
+        pressure: 0,
+        distance: 0,
+        best: Number(localStorage.getItem(STORAGE_KEY) || 0),
+        leftHold: false,
+        rightHold: false,
+        paused: false,
+        running: true,
+        reefs: [],
+        bubbles: [],
+        invuln: 0,
+        burstCd: 0,
+        time: 0
+      };
+      bestEl.textContent = `${Math.floor(state.best)}m`;
+
+      let audioCtx = null;
+      function ensureAudio() {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+      }
+      function beep(freq = 420, duration = 0.08, type = 'sine', gain = 0.05) {
+        if (!audioCtx) return;
+        const t = audioCtx.currentTime;
+        const osc = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, t);
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(gain, t + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+        osc.connect(g).connect(audioCtx.destination);
+        osc.start(t);
+        osc.stop(t + duration + 0.02);
+      }
+
+      function clamp(v, min, max) {
+        return Math.max(min, Math.min(max, v));
+      }
+
+      function pressHold(btn, setter) {
+        const down = (e) => {
+          e.preventDefault();
+          ensureAudio();
+          setter(true);
+          btn.classList.add('on');
+        };
+        const up = (e) => {
+          e.preventDefault();
+          setter(false);
+          btn.classList.remove('on');
+        };
+        btn.addEventListener('pointerdown', down);
+        btn.addEventListener('pointerup', up);
+        btn.addEventListener('pointercancel', up);
+        btn.addEventListener('pointerleave', up);
+      }
+
+      pressHold(leftBtn, (v) => state.leftHold = v);
+      pressHold(rightBtn, (v) => state.rightHold = v);
+
+      function spawnReef() {
+        const w = 26 + Math.random() * 22;
+        state.reefs.push({
+          x: 20 + Math.random() * (canvas.width - 40),
+          y: -40,
+          r: w,
+          vy: 1.5 + Math.random() * 1.3 + Math.min(2.5, state.distance / 550)
+        });
+      }
+
+      function burstStabilize() {
+        if (!state.running || state.paused || state.burstCd > 0) return;
+        state.burstCd = 1.2;
+        state.invuln = 0.35;
+        state.tilt *= 0.35;
+        state.vx *= 0.45;
+        state.x = clamp(state.x + (Math.random() - 0.5) * 12, 32, canvas.width - 32);
+        beep(760, 0.08, 'triangle', 0.05);
+      }
+
+      burstBtn.addEventListener('click', () => {
+        ensureAudio();
+        burstStabilize();
+      });
+      stabilizeBtn.addEventListener('click', () => {
+        ensureAudio();
+        burstStabilize();
+      });
+
+      restartBtn.addEventListener('click', () => {
+        ensureAudio();
+        reset();
+        beep(520, 0.07, 'sawtooth', 0.045);
+      });
+
+      pauseBtn.addEventListener('click', () => {
+        state.paused = !state.paused;
+        pauseBtn.textContent = state.paused ? 'RESUME' : 'PAUSE';
+      });
+
+      function hit(amount) {
+        if (state.invuln > 0) return;
+        state.hull = clamp(state.hull - amount, 0, 100);
+        state.invuln = 0.38;
+        beep(180, 0.1, 'square', 0.06);
+        if (state.hull <= 0) {
+          state.running = false;
+          if (state.distance > state.best) {
+            state.best = state.distance;
+            localStorage.setItem(STORAGE_KEY, String(Math.floor(state.best)));
+            bestEl.textContent = `${Math.floor(state.best)}m`;
+          }
+        }
+      }
+
+      function reset() {
+        state.x = canvas.width / 2;
+        state.y = canvas.height - 122;
+        state.vx = 0;
+        state.tilt = 0;
+        state.hull = 100;
+        state.pressure = 0;
+        state.distance = 0;
+        state.leftHold = false;
+        state.rightHold = false;
+        state.paused = false;
+        state.running = true;
+        state.reefs = [];
+        state.bubbles = [];
+        state.invuln = 0;
+        state.burstCd = 0;
+        state.time = 0;
+        pauseBtn.textContent = 'PAUSE';
+        syncHud();
+      }
+
+      function syncHud() {
+        distanceEl.textContent = `${Math.floor(state.distance)}m`;
+        hullEl.textContent = String(Math.floor(state.hull));
+        tiltEl.textContent = `${Math.round(state.tilt * 48)}°`;
+        pressureEl.textContent = `${Math.round(state.pressure)}%`;
+      }
+
+      function update(dt) {
+        if (!state.running || state.paused) return;
+
+        state.time += dt;
+        state.distance += dt * (24 + Math.min(36, state.distance * 0.02));
+
+        const current = Math.sin(state.time * 0.9) * 0.44 + Math.sin(state.time * 1.73) * 0.22;
+        let control = 0;
+        if (state.leftHold) control -= 1.3;
+        if (state.rightHold) control += 1.3;
+
+        state.tilt += (current * 0.32 + control * 0.48) * dt;
+        state.tilt *= 0.985;
+        state.tilt = clamp(state.tilt, -1.6, 1.6);
+
+        state.vx += state.tilt * 62 * dt;
+        state.vx *= 0.92;
+        state.x = clamp(state.x + state.vx * dt, 28, canvas.width - 28);
+
+        state.pressure = clamp(state.distance / 12 + Math.abs(state.tilt) * 32, 0, 100);
+
+        if (Math.abs(state.tilt) > 1.05) {
+          state.hull = clamp(state.hull - dt * (7 + (Math.abs(state.tilt) - 1.05) * 26), 0, 100);
+          if (Math.random() < 0.2) beep(210, 0.03, 'square', 0.02);
+        }
+        if (state.pressure > 88) {
+          state.hull = clamp(state.hull - dt * 4.5, 0, 100);
+        }
+
+        if (Math.random() < 0.02 + Math.min(0.05, state.distance / 7000)) spawnReef();
+
+        for (let i = state.reefs.length - 1; i >= 0; i--) {
+          const r = state.reefs[i];
+          r.y += r.vy * (1 + Math.min(1.2, state.distance / 2600));
+
+          const dx = r.x - state.x;
+          const dy = r.y - state.y;
+          const rr = r.r + 20;
+          if (dx * dx + dy * dy < rr * rr) {
+            hit(11 + Math.random() * 8);
+            state.reefs.splice(i, 1);
+            continue;
+          }
+
+          if (r.y > canvas.height + 60) {
+            state.reefs.splice(i, 1);
+          }
+        }
+
+        if (Math.random() < 0.23) {
+          state.bubbles.push({
+            x: state.x + (Math.random() - 0.5) * 20,
+            y: state.y + 20,
+            r: 1 + Math.random() * 3,
+            vy: 0.7 + Math.random() * 1.4,
+            life: 1
+          });
+        }
+
+        for (let i = state.bubbles.length - 1; i >= 0; i--) {
+          const b = state.bubbles[i];
+          b.y -= b.vy;
+          b.life -= dt * 0.7;
+          if (b.life <= 0 || b.y < -8) state.bubbles.splice(i, 1);
+        }
+
+        state.invuln = Math.max(0, state.invuln - dt);
+        state.burstCd = Math.max(0, state.burstCd - dt);
+
+        if (state.hull <= 0) {
+          state.running = false;
+          beep(130, 0.18, 'sawtooth', 0.06);
+          if (state.distance > state.best) {
+            state.best = state.distance;
+            localStorage.setItem(STORAGE_KEY, String(Math.floor(state.best)));
+            bestEl.textContent = `${Math.floor(state.best)}m`;
+          }
+        }
+
+        syncHud();
+      }
+
+      function drawSubmarine() {
+        ctx.save();
+        ctx.translate(state.x, state.y);
+        ctx.rotate(state.tilt * 0.55);
+        ctx.globalAlpha = state.invuln > 0 ? 0.66 + Math.sin(state.time * 38) * 0.25 : 1;
+
+        ctx.fillStyle = '#2f4f8e';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 38, 16, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#66efff';
+        ctx.beginPath();
+        ctx.arc(6, -2, 7, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#1c315f';
+        ctx.fillRect(-22, -22, 24, 7);
+        ctx.fillRect(-28, 10, 20, 5);
+
+        ctx.strokeStyle = '#9fdfff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(26, -4);
+        ctx.lineTo(44, 0);
+        ctx.lineTo(26, 4);
+        ctx.stroke();
+
+        ctx.restore();
+      }
+
+      function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        const grd = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        grd.addColorStop(0, '#12306a');
+        grd.addColorStop(0.5, '#0b1c3e');
+        grd.addColorStop(1, '#071125');
+        ctx.fillStyle = grd;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        for (let i = 0; i < 12; i++) {
+          const y = (state.time * 20 + i * 48) % (canvas.height + 60) - 30;
+          const alpha = 0.07 + (i % 3) * 0.03;
+          ctx.strokeStyle = `rgba(102,239,255,${alpha})`;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(0, y + Math.sin((state.time + i) * 1.3) * 8);
+          ctx.quadraticCurveTo(canvas.width * 0.5, y + Math.cos((state.time + i) * 0.9) * 12, canvas.width, y + Math.sin((state.time + i) * 1.6) * 8);
+          ctx.stroke();
+        }
+
+        for (const reef of state.reefs) {
+          ctx.fillStyle = '#264d84';
+          ctx.beginPath();
+          ctx.arc(reef.x, reef.y, reef.r, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.strokeStyle = '#7fb3ff55';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(reef.x, reef.y, reef.r * 0.6, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        for (const bubble of state.bubbles) {
+          ctx.fillStyle = `rgba(173,236,255,${bubble.life * 0.6})`;
+          ctx.beginPath();
+          ctx.arc(bubble.x, bubble.y, bubble.r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        drawSubmarine();
+
+        if (!state.running) {
+          ctx.fillStyle = 'rgba(5,9,23,0.72)';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = '#ff9ab8';
+          ctx.font = '700 24px system-ui';
+          ctx.textAlign = 'center';
+          ctx.fillText('HULL BREACH', canvas.width / 2, canvas.height / 2 - 12);
+          ctx.fillStyle = '#ecf2ff';
+          ctx.font = '600 14px system-ui';
+          ctx.fillText(`Distance ${Math.floor(state.distance)}m · Best ${Math.floor(state.best)}m`, canvas.width / 2, canvas.height / 2 + 16);
+          ctx.fillStyle = '#99aed8';
+          ctx.fillText('R 또는 RESTART로 재출항', canvas.width / 2, canvas.height / 2 + 40);
+        }
+      }
+
+      let prev = performance.now();
+      function loop(now) {
+        const dt = Math.min(0.033, (now - prev) / 1000);
+        prev = now;
+        update(dt);
+        draw();
+        requestAnimationFrame(loop);
+      }
+
+      window.addEventListener('keydown', (e) => {
+        const k = e.key.toLowerCase();
+        if (["arrowleft", "arrowright", "arrowup", " ", "r", "p"].includes(k) || e.key === ' ') ensureAudio();
+
+        if (k === 'arrowleft') { state.leftHold = true; leftBtn.classList.add('on'); }
+        else if (k === 'arrowright') { state.rightHold = true; rightBtn.classList.add('on'); }
+        else if (k === 'arrowup' || k === ' ') {
+          e.preventDefault();
+          burstStabilize();
+        }
+        else if (k === 'r') reset();
+        else if (k === 'p') {
+          state.paused = !state.paused;
+          pauseBtn.textContent = state.paused ? 'RESUME' : 'PAUSE';
+        }
+      });
+
+      window.addEventListener('keyup', (e) => {
+        const k = e.key.toLowerCase();
+        if (k === 'arrowleft') { state.leftHold = false; leftBtn.classList.remove('on'); }
+        if (k === 'arrowright') { state.rightHold = false; rightBtn.classList.remove('on'); }
+      });
+
+      canvas.addEventListener('pointerdown', () => ensureAudio());
+
+      reset();
+      requestAnimationFrame(loop);
+    })();
+  </script>
+</body>
+</html>

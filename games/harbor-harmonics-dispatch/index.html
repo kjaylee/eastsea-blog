@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Harbor Harmonics Dispatch</title>
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <style>
+    :root {
+      --bg: #0a0a1a;
+      --panel: #111935;
+      --line: #30427a;
+      --text: #edf2ff;
+      --muted: #9cb0d8;
+      --good: #43f6c5;
+      --warn: #ffc65f;
+      --bad: #ff6889;
+      color-scheme: dark;
+      font-family: "Pretendard", "Noto Sans KR", system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      background: radial-gradient(circle at top, #1a1c3d, var(--bg) 60%);
+      color: var(--text);
+      display: flex;
+      justify-content: center;
+      padding: 12px;
+    }
+    .app { width: min(560px, 100%); display: grid; gap: 10px; }
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      font-size: 13px;
+    }
+    .card {
+      background: linear-gradient(180deg, #17234a, #111734);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      text-align: center;
+      padding: 8px;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+    }
+    .meter {
+      display: grid;
+      gap: 6px;
+    }
+    .meter label {
+      display: flex;
+      justify-content: space-between;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .bar {
+      background: #0b1025;
+      border: 1px solid #29386a;
+      border-radius: 999px;
+      height: 16px;
+      overflow: hidden;
+    }
+    .fill {
+      height: 100%;
+      width: 50%;
+      border-radius: 999px;
+      transition: width 0.2s;
+      background: linear-gradient(90deg, #4ce7ff, #52ffa8);
+      box-shadow: 0 0 10px #43e8ff75;
+    }
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    button {
+      border: 1px solid #31447d;
+      border-radius: 10px;
+      background: #131c3b;
+      color: var(--text);
+      padding: 11px 8px;
+      font-weight: 700;
+      cursor: pointer;
+      line-height: 1.25;
+    }
+    button small { display: block; color: var(--muted); font-size: 11px; font-weight: 500; }
+    .log {
+      min-height: 52px;
+      border-radius: 10px;
+      background: #0c1128;
+      border: 1px solid #283966;
+      padding: 8px;
+      color: #cae6ff;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .hint { color: var(--muted); text-align: center; font-size: 12px; line-height: 1.45; }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="hud">
+      <div class="card">TIME<br><strong id="time">90s</strong></div>
+      <div class="card">SCORE<br><strong id="score">0</strong></div>
+      <div class="card">BEST<br><strong id="best">0</strong></div>
+      <div class="card">STATUS<br><strong id="status">READY</strong></div>
+    </section>
+
+    <section class="panel">
+      <div class="meter">
+        <label>화물 처리율 <span id="cargoV">60</span></label>
+        <div class="bar"><div id="cargoF" class="fill"></div></div>
+      </div>
+      <div class="meter">
+        <label>전력 안정도 <span id="powerV">60</span></label>
+        <div class="bar"><div id="powerF" class="fill"></div></div>
+      </div>
+      <div class="meter">
+        <label>시민 신뢰도 <span id="trustV">60</span></label>
+        <div class="bar"><div id="trustF" class="fill"></div></div>
+      </div>
+      <div class="meter">
+        <label>폭풍 압력 <span id="stormV">0</span></label>
+        <div class="bar"><div id="stormF" class="fill"></div></div>
+      </div>
+    </section>
+
+    <section class="controls">
+      <button id="cargoBtn">1 / Cargo Dispatch<small>화물 +18, 전력/신뢰 소폭 감소</small></button>
+      <button id="powerBtn">2 / Grid Pulse<small>전력 +18, 화물/신뢰 소폭 감소</small></button>
+      <button id="trustBtn">3 / Public Brief<small>신뢰 +18, 화물/전력 소폭 감소</small></button>
+    </section>
+    <button id="restartBtn">RESTART SHIFT</button>
+    <div class="log" id="log">Shift 준비 완료. Enter 또는 액션 버튼으로 시작하세요.</div>
+    <p class="hint">키보드 1/2/3 또는 버튼 터치. 90초 동안 3개 채널을 0 이하로 떨어뜨리지 않으면 승리.</p>
+  </main>
+
+  <script>
+    (() => {
+      const KEY = 'best-harbor-harmonics-dispatch';
+      const els = {
+        time: document.getElementById('time'),
+        score: document.getElementById('score'),
+        best: document.getElementById('best'),
+        status: document.getElementById('status'),
+        cargoV: document.getElementById('cargoV'), cargoF: document.getElementById('cargoF'),
+        powerV: document.getElementById('powerV'), powerF: document.getElementById('powerF'),
+        trustV: document.getElementById('trustV'), trustF: document.getElementById('trustF'),
+        stormV: document.getElementById('stormV'), stormF: document.getElementById('stormF'),
+        log: document.getElementById('log')
+      };
+
+      const cargoBtn = document.getElementById('cargoBtn');
+      const powerBtn = document.getElementById('powerBtn');
+      const trustBtn = document.getElementById('trustBtn');
+      const restartBtn = document.getElementById('restartBtn');
+
+      let audio;
+      function tone(freq = 440, dur = 0.08, type = 'sine', gain = 0.03) {
+        if (!audio) {
+          const Ctx = window.AudioContext || window.webkitAudioContext;
+          if (!Ctx) return;
+          audio = new Ctx();
+        }
+        if (audio.state === 'suspended') audio.resume();
+        const o = audio.createOscillator();
+        const g = audio.createGain();
+        o.type = type;
+        o.frequency.value = freq;
+        g.gain.value = gain;
+        o.connect(g).connect(audio.destination);
+        o.start();
+        o.stop(audio.currentTime + dur);
+      }
+
+      let stats, storm, timeLeft, score, best, running, ended, timer;
+      best = Number(localStorage.getItem(KEY) || 0);
+      els.best.textContent = best;
+
+      function clamp(n) { return Math.max(0, Math.min(100, n)); }
+
+      function reset() {
+        stats = { cargo: 60, power: 60, trust: 60 };
+        storm = 0;
+        timeLeft = 90;
+        score = 0;
+        running = false;
+        ended = false;
+        clearInterval(timer);
+        timer = null;
+        els.status.textContent = 'READY';
+        els.log.textContent = 'Shift 준비 완료. Enter 또는 액션 버튼으로 시작하세요.';
+        render();
+      }
+
+      function paint(fillEl, value) {
+        fillEl.style.width = `${value}%`;
+        let color = '#44f4c1';
+        if (value < 35 || value > 85) color = '#ffc65f';
+        if (value < 18 || value > 95) color = '#ff6a8d';
+        fillEl.style.background = `linear-gradient(90deg, ${color}, #56f0ff)`;
+      }
+
+      function render() {
+        els.time.textContent = `${timeLeft}s`;
+        els.score.textContent = Math.floor(score);
+        els.cargoV.textContent = Math.round(stats.cargo);
+        els.powerV.textContent = Math.round(stats.power);
+        els.trustV.textContent = Math.round(stats.trust);
+        els.stormV.textContent = Math.round(storm);
+        paint(els.cargoF, stats.cargo);
+        paint(els.powerF, stats.power);
+        paint(els.trustF, stats.trust);
+        els.stormF.style.width = `${storm}%`;
+        els.stormF.style.background = 'linear-gradient(90deg,#ffb25a,#ff5f8b)';
+      }
+
+      function startIfNeeded() {
+        if (running || ended) return;
+        running = true;
+        els.status.textContent = 'LIVE';
+        timer = setInterval(tick, 1000);
+      }
+
+      function dispatch(type) {
+        if (ended) return;
+        startIfNeeded();
+
+        if (type === 'cargo') {
+          stats.cargo += 18; stats.power -= 6; stats.trust -= 5; score += 8;
+          els.log.textContent = 'Cargo Dispatch 실행: 물류 처리율 상승, 부하 분산 필요.';
+          tone(480, 0.07, 'triangle', 0.025);
+        }
+        if (type === 'power') {
+          stats.power += 18; stats.cargo -= 5; stats.trust -= 4; score += 8;
+          els.log.textContent = 'Grid Pulse 실행: 전력 회복, 타 채널 압박 발생.';
+          tone(620, 0.07, 'triangle', 0.025);
+        }
+        if (type === 'trust') {
+          stats.trust += 18; stats.cargo -= 4; stats.power -= 6; score += 8;
+          els.log.textContent = 'Public Brief 실행: 신뢰도 상승, 운영 자원 일시 감소.';
+          tone(740, 0.07, 'triangle', 0.025);
+        }
+        storm = clamp(storm + 5);
+        normalize();
+      }
+
+      function normalize() {
+        stats.cargo = clamp(stats.cargo);
+        stats.power = clamp(stats.power);
+        stats.trust = clamp(stats.trust);
+        render();
+        const critical = [stats.cargo, stats.power, stats.trust].some(v => v <= 15);
+        if (critical && !ended) {
+          tone(160, 0.18, 'square', 0.05);
+          els.log.textContent = '임계 경고! 채널 붕괴 직전입니다.';
+        }
+      }
+
+      function tick() {
+        if (ended) return;
+
+        timeLeft--;
+        storm = clamp(storm + 2.5 + Math.random() * 3.5);
+
+        const drift = () => (Math.random() * 8 - 4) - storm * 0.06;
+        stats.cargo += drift();
+        stats.power += drift();
+        stats.trust += drift();
+
+        if (stats.cargo > 40 && stats.power > 40 && stats.trust > 40) score += 6;
+        else score += 2;
+
+        normalize();
+
+        if (timeLeft <= 0) {
+          finish(true, '교대 근무 성공! Harbor Harmonics 안정화 완료.');
+          return;
+        }
+
+        if ([stats.cargo, stats.power, stats.trust].some(v => v <= 0)) {
+          finish(false, '채널 붕괴 발생. Dispatch 전략 재조정이 필요합니다.');
+        }
+      }
+
+      function finish(win, msg) {
+        ended = true;
+        running = false;
+        clearInterval(timer);
+        timer = null;
+        els.status.textContent = win ? 'CLEAR' : 'FAILED';
+        els.log.textContent = msg;
+        best = Math.max(best, Math.floor(score));
+        localStorage.setItem(KEY, String(best));
+        els.best.textContent = best;
+        tone(win ? 820 : 150, win ? 0.14 : 0.2, win ? 'sawtooth' : 'square', 0.04);
+      }
+
+      cargoBtn.addEventListener('click', () => dispatch('cargo'));
+      powerBtn.addEventListener('click', () => dispatch('power'));
+      trustBtn.addEventListener('click', () => dispatch('trust'));
+      restartBtn.addEventListener('click', reset);
+
+      window.addEventListener('keydown', (e) => {
+        if (e.key === '1') dispatch('cargo');
+        if (e.key === '2') dispatch('power');
+        if (e.key === '3') dispatch('trust');
+        if (e.key === 'Enter' && !running && !ended) startIfNeeded();
+        if (e.key.toLowerCase() === 'r') reset();
+      });
+
+      reset();
+    })();
+  </script>
+</body>
+</html>

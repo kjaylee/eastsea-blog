@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Emberline Skyhook Run</title>
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0a0a1a;
+      --panel: #10142b;
+      --neon: #58f3ff;
+      --accent: #ff8a3d;
+      --text: #e9f2ff;
+      --muted: #9db1d8;
+      font-family: "Pretendard", "Noto Sans KR", system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      background: radial-gradient(circle at 50% 0%, #1b1b3e, var(--bg) 58%);
+      color: var(--text);
+      display: flex;
+      justify-content: center;
+      padding: 12px;
+    }
+    .app { width: min(480px, 100%); display: grid; gap: 10px; }
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      font-size: 13px;
+    }
+    .card {
+      background: linear-gradient(180deg, #172041, #121833);
+      border: 1px solid #2d3c75;
+      border-radius: 12px;
+      padding: 8px;
+      text-align: center;
+    }
+    canvas {
+      width: 100%;
+      aspect-ratio: 9 / 16;
+      border-radius: 16px;
+      border: 1px solid #31427c;
+      background: linear-gradient(180deg, #12152e, #090916);
+      box-shadow: 0 0 24px #00c9ff2e;
+      touch-action: none;
+    }
+    .controls { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }
+    button {
+      border: 1px solid #2f3e74;
+      background: var(--panel);
+      color: var(--text);
+      border-radius: 10px;
+      padding: 12px 8px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button:active { transform: translateY(1px) scale(0.99); }
+    .hint { color: var(--muted); font-size: 12px; line-height: 1.4; text-align: center; }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="hud">
+      <div class="card">SCORE<br><strong id="score">0</strong></div>
+      <div class="card">BEST<br><strong id="best">0</strong></div>
+      <div class="card">HULL<br><strong id="hp">3</strong></div>
+      <div class="card">HEAT<br><strong id="heat">0%</strong></div>
+    </section>
+    <canvas id="game" width="360" height="640" aria-label="Emberline Skyhook Run"></canvas>
+    <section class="controls">
+      <button id="leftBtn">◀ LEFT</button>
+      <button id="boostBtn">⚡ BOOST</button>
+      <button id="rightBtn">RIGHT ▶</button>
+    </section>
+    <button id="restartBtn">RESTART</button>
+    <p class="hint">조작: ←/→ 또는 버튼으로 레인 이동 · Space/터치 BOOST. 링 수집(+12), 드론 충돌(-1 HP).</p>
+  </main>
+
+  <script>
+    (() => {
+      const KEY = 'best-emberline-skyhook-run';
+      const canvas = document.getElementById('game');
+      const ctx = canvas.getContext('2d');
+      const scoreEl = document.getElementById('score');
+      const bestEl = document.getElementById('best');
+      const hpEl = document.getElementById('hp');
+      const heatEl = document.getElementById('heat');
+      const leftBtn = document.getElementById('leftBtn');
+      const rightBtn = document.getElementById('rightBtn');
+      const boostBtn = document.getElementById('boostBtn');
+      const restartBtn = document.getElementById('restartBtn');
+
+      let audio;
+      function sfx(freq = 440, dur = 0.07, type = 'sine', gain = 0.02) {
+        if (!audio) {
+          const Ctx = window.AudioContext || window.webkitAudioContext;
+          if (!Ctx) return;
+          audio = new Ctx();
+        }
+        if (audio.state === 'suspended') audio.resume();
+        const osc = audio.createOscillator();
+        const g = audio.createGain();
+        osc.type = type;
+        osc.frequency.value = freq;
+        g.gain.value = gain;
+        osc.connect(g).connect(audio.destination);
+        osc.start();
+        osc.stop(audio.currentTime + dur);
+      }
+
+      const laneX = [90, 180, 270];
+      let player, items, score, best, hp, speed, heat, boostTimer, gameOver;
+
+      function reset() {
+        player = { lane: 1, y: 545, r: 16 };
+        items = [];
+        score = 0;
+        hp = 3;
+        speed = 2.6;
+        heat = 0;
+        boostTimer = 0;
+        gameOver = false;
+      }
+
+      function spawn() {
+        const ring = Math.random() < 0.62;
+        items.push({
+          lane: Math.floor(Math.random() * 3),
+          y: -20,
+          type: ring ? 'ring' : 'drone',
+          r: ring ? 10 : 14
+        });
+      }
+
+      function moveLane(delta) {
+        if (gameOver) return;
+        player.lane = Math.max(0, Math.min(2, player.lane + delta));
+        sfx(260 + player.lane * 45, 0.04, 'square', 0.015);
+      }
+
+      function boost() {
+        if (gameOver || heat >= 100 || boostTimer > 0) return;
+        boostTimer = 36;
+        heat = Math.min(100, heat + 42);
+        sfx(800, 0.08, 'sawtooth', 0.03);
+      }
+
+      function collide(a, b) {
+        return Math.hypot(a.x - b.x, a.y - b.y) < a.r + b.r;
+      }
+
+      function update() {
+        if (Math.random() < 0.045 + score / 120000) spawn();
+        speed = Math.min(8, speed + 0.0009);
+        const extra = boostTimer > 0 ? 2.9 : 0;
+        if (boostTimer > 0) boostTimer--;
+        heat = Math.max(0, heat - 0.22);
+
+        const px = laneX[player.lane];
+        const py = player.y;
+
+        for (const it of items) it.y += speed + extra;
+
+        items = items.filter((it) => {
+          const entity = { x: laneX[it.lane], y: it.y, r: it.r };
+          if (collide({ x: px, y: py, r: player.r }, entity)) {
+            if (it.type === 'ring') {
+              score += 12;
+              sfx(620, 0.05, 'triangle', 0.02);
+            } else if (boostTimer === 0) {
+              hp--;
+              sfx(140, 0.12, 'square', 0.04);
+              if (hp <= 0) {
+                gameOver = true;
+                best = Math.max(best, Math.floor(score));
+                localStorage.setItem(KEY, String(best));
+              }
+            } else {
+              score += 6;
+              sfx(520, 0.04, 'triangle', 0.018);
+            }
+            return false;
+          }
+          return it.y < canvas.height + 24;
+        });
+
+        if (!gameOver) score += 0.22 + speed * 0.035;
+      }
+
+      function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // lanes
+        for (let i = 0; i < 3; i++) {
+          const x = laneX[i];
+          ctx.strokeStyle = i === player.lane ? '#3bd9ff' : '#2a3560';
+          ctx.lineWidth = i === player.lane ? 3 : 2;
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, canvas.height);
+          ctx.stroke();
+        }
+
+        // player
+        const px = laneX[player.lane];
+        const py = player.y;
+        ctx.beginPath();
+        ctx.fillStyle = boostTimer > 0 ? '#ffb347' : '#6ff3ff';
+        ctx.arc(px, py, player.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#ffffffaa';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // items
+        for (const it of items) {
+          const x = laneX[it.lane];
+          if (it.type === 'ring') {
+            ctx.strokeStyle = '#7bffe0';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.arc(x, it.y, it.r, 0, Math.PI * 2);
+            ctx.stroke();
+          } else {
+            ctx.fillStyle = '#ff5e7d';
+            ctx.beginPath();
+            ctx.moveTo(x, it.y - it.r);
+            ctx.lineTo(x + it.r, it.y + it.r);
+            ctx.lineTo(x - it.r, it.y + it.r);
+            ctx.closePath();
+            ctx.fill();
+          }
+        }
+
+        if (gameOver) {
+          ctx.fillStyle = '#090b19d9';
+          ctx.fillRect(28, 245, 304, 140);
+          ctx.strokeStyle = '#ff5f80';
+          ctx.strokeRect(28, 245, 304, 140);
+          ctx.fillStyle = '#f2f5ff';
+          ctx.font = '700 28px system-ui';
+          ctx.textAlign = 'center';
+          ctx.fillText('GAME OVER', 180, 300);
+          ctx.font = '600 16px system-ui';
+          ctx.fillText('RESTART 버튼 또는 Enter', 180, 336);
+        }
+      }
+
+      function tick() {
+        if (!gameOver) update();
+        draw();
+        scoreEl.textContent = Math.floor(score);
+        bestEl.textContent = best;
+        hpEl.textContent = hp;
+        heatEl.textContent = `${Math.round(heat)}%`;
+        requestAnimationFrame(tick);
+      }
+
+      best = Number(localStorage.getItem(KEY) || 0);
+      bestEl.textContent = best;
+      reset();
+      tick();
+
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowLeft') moveLane(-1);
+        if (e.key === 'ArrowRight') moveLane(1);
+        if (e.key === ' ' || e.key === 'Spacebar') { e.preventDefault(); boost(); }
+        if (e.key === 'Enter' && gameOver) reset();
+      });
+
+      const tap = (fn) => (ev) => { ev.preventDefault(); fn(); };
+      leftBtn.addEventListener('pointerdown', tap(() => moveLane(-1)));
+      rightBtn.addEventListener('pointerdown', tap(() => moveLane(1)));
+      boostBtn.addEventListener('pointerdown', tap(boost));
+      restartBtn.addEventListener('click', () => reset());
+
+      canvas.addEventListener('pointerdown', (e) => {
+        const x = e.offsetX / canvas.clientWidth;
+        if (x < 0.33) moveLane(-1);
+        else if (x > 0.66) moveLane(1);
+        else boost();
+      });
+    })();
+  </script>
+</body>
+</html>

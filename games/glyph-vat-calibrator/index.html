@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Glyph Vat Calibrator</title>
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <style>
+    :root {
+      --bg: #0a0a1a;
+      --panel: #101631;
+      --line: #2d3c73;
+      --on: #4cf8ff;
+      --off: #161b35;
+      --text: #edf3ff;
+      --muted: #9cb0d7;
+      font-family: "Pretendard", "Noto Sans KR", system-ui, sans-serif;
+      color-scheme: dark;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      background: radial-gradient(circle at top, #1a1a38, var(--bg) 58%);
+      color: var(--text);
+      display: flex;
+      justify-content: center;
+      padding: 12px;
+    }
+    .app { width: min(520px, 100%); display: grid; gap: 10px; }
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      font-size: 13px;
+    }
+    .card {
+      background: linear-gradient(180deg, #17234b, #111835);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      text-align: center;
+      padding: 8px;
+    }
+    .boards {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 8px;
+    }
+    .panel h3 {
+      margin: 4px 0 8px;
+      font-size: 13px;
+      color: var(--muted);
+      text-align: center;
+      font-weight: 600;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 5px;
+    }
+    .cell {
+      width: 100%;
+      aspect-ratio: 1;
+      border-radius: 8px;
+      border: 1px solid #2f3f74;
+      background: var(--off);
+      box-shadow: inset 0 0 0 1px #0a0d1f;
+    }
+    .cell.on {
+      background: radial-gradient(circle at 30% 30%, #8effff, var(--on));
+      box-shadow: 0 0 12px #5df6ff78;
+    }
+    .cell.cursor { outline: 2px solid #ff9d4a; outline-offset: 1px; }
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    button {
+      border: 1px solid #33457d;
+      background: #121a37;
+      color: var(--text);
+      border-radius: 10px;
+      padding: 11px 8px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .wide { grid-column: span 3; }
+    .hint { color: var(--muted); font-size: 12px; text-align: center; line-height: 1.45; }
+    @media (max-width: 520px) {
+      .boards { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="hud">
+      <div class="card">STAGE<br><strong id="stage">1</strong></div>
+      <div class="card">MOVES<br><strong id="moves">0</strong></div>
+      <div class="card">BEST<br><strong id="best">1</strong></div>
+      <div class="card">STATE<br><strong id="state">PLAY</strong></div>
+    </section>
+
+    <section class="boards">
+      <div class="panel">
+        <h3>TARGET MATRIX</h3>
+        <div class="grid" id="targetGrid"></div>
+      </div>
+      <div class="panel">
+        <h3>CALIBRATION MATRIX</h3>
+        <div class="grid" id="playGrid"></div>
+      </div>
+    </section>
+
+    <section class="controls">
+      <button id="upBtn">↑</button>
+      <button id="toggleBtn">TOGGLE</button>
+      <button id="resetBtn">RESET</button>
+      <button id="leftBtn">←</button>
+      <button id="downBtn">↓</button>
+      <button id="rightBtn">→</button>
+      <button id="restartBtn" class="wide">NEW RUN</button>
+    </section>
+
+    <p class="hint">방향키/버튼으로 커서 이동, Space/Enter/TOGGLE로 반응기 토글(선택칸+상하좌우). 제한 이동 안에 목표 패턴을 맞추세요.</p>
+  </main>
+
+  <script>
+    (() => {
+      const SIZE = 5;
+      const KEY = 'best-glyph-vat-calibrator';
+      const targetGrid = document.getElementById('targetGrid');
+      const playGrid = document.getElementById('playGrid');
+      const stageEl = document.getElementById('stage');
+      const movesEl = document.getElementById('moves');
+      const bestEl = document.getElementById('best');
+      const stateEl = document.getElementById('state');
+
+      const upBtn = document.getElementById('upBtn');
+      const downBtn = document.getElementById('downBtn');
+      const leftBtn = document.getElementById('leftBtn');
+      const rightBtn = document.getElementById('rightBtn');
+      const toggleBtn = document.getElementById('toggleBtn');
+      const resetBtn = document.getElementById('resetBtn');
+      const restartBtn = document.getElementById('restartBtn');
+
+      let audio;
+      function beep(freq = 380, dur = 0.06, type = 'sine', gain = 0.03) {
+        if (!audio) {
+          const Ctx = window.AudioContext || window.webkitAudioContext;
+          if (!Ctx) return;
+          audio = new Ctx();
+        }
+        if (audio.state === 'suspended') audio.resume();
+        const o = audio.createOscillator();
+        const g = audio.createGain();
+        o.frequency.value = freq;
+        o.type = type;
+        g.gain.value = gain;
+        o.connect(g).connect(audio.destination);
+        o.start();
+        o.stop(audio.currentTime + dur);
+      }
+
+      const dirs = [[0,0],[1,0],[-1,0],[0,1],[0,-1]];
+      let stage = 1;
+      let movesLeft = 10;
+      let cursor = { x: 2, y: 2 };
+      let target = [];
+      let board = [];
+      let best = Number(localStorage.getItem(KEY) || 1);
+      let locked = false;
+      bestEl.textContent = best;
+
+      function makeCell(parent, cls = 'cell') {
+        const el = document.createElement('button');
+        el.className = cls;
+        parent.appendChild(el);
+        return el;
+      }
+
+      const targetEls = [];
+      const boardEls = [];
+      for (let i = 0; i < SIZE * SIZE; i++) {
+        targetEls.push(makeCell(targetGrid, 'cell'));
+        const b = makeCell(playGrid, 'cell');
+        b.addEventListener('click', () => {
+          if (locked) return;
+          cursor.x = i % SIZE;
+          cursor.y = Math.floor(i / SIZE);
+          applyToggle();
+        });
+        boardEls.push(b);
+      }
+
+      function randBool(p = 0.5) { return Math.random() < p ? 1 : 0; }
+
+      function buildStage() {
+        target = Array.from({ length: SIZE }, () => Array.from({ length: SIZE }, () => randBool(0.45)));
+        board = Array.from({ length: SIZE }, () => Array.from({ length: SIZE }, () => 0));
+        const seedMoves = 3 + Math.min(7, stage);
+        for (let i = 0; i < seedMoves; i++) {
+          const x = Math.floor(Math.random() * SIZE);
+          const y = Math.floor(Math.random() * SIZE);
+          rawToggle(board, x, y);
+        }
+        movesLeft = 8 + Math.min(12, stage * 2);
+        cursor = { x: 2, y: 2 };
+        locked = false;
+        stateEl.textContent = 'PLAY';
+      }
+
+      function rawToggle(map, x, y) {
+        for (const [dx, dy] of dirs) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx >= 0 && nx < SIZE && ny >= 0 && ny < SIZE) map[ny][nx] ^= 1;
+        }
+      }
+
+      function equals(a, b) {
+        for (let y = 0; y < SIZE; y++) {
+          for (let x = 0; x < SIZE; x++) if (a[y][x] !== b[y][x]) return false;
+        }
+        return true;
+      }
+
+      function render() {
+        stageEl.textContent = stage;
+        movesEl.textContent = movesLeft;
+        for (let y = 0; y < SIZE; y++) {
+          for (let x = 0; x < SIZE; x++) {
+            const idx = y * SIZE + x;
+            targetEls[idx].classList.toggle('on', !!target[y][x]);
+            boardEls[idx].classList.toggle('on', !!board[y][x]);
+            boardEls[idx].classList.toggle('cursor', cursor.x === x && cursor.y === y);
+          }
+        }
+      }
+
+      function applyToggle() {
+        if (locked || movesLeft <= 0) return;
+        rawToggle(board, cursor.x, cursor.y);
+        movesLeft--;
+        beep(420 + stage * 10, 0.05, 'triangle', 0.02);
+
+        if (equals(board, target)) {
+          locked = true;
+          stage++;
+          best = Math.max(best, stage);
+          localStorage.setItem(KEY, String(best));
+          bestEl.textContent = best;
+          stateEl.textContent = 'CLEAR';
+          beep(760, 0.12, 'sawtooth', 0.03);
+          setTimeout(() => {
+            buildStage();
+            render();
+          }, 500);
+        } else if (movesLeft <= 0) {
+          locked = true;
+          stateEl.textContent = 'FAILED';
+          beep(170, 0.16, 'square', 0.04);
+        }
+        render();
+      }
+
+      function restartRun() {
+        stage = 1;
+        buildStage();
+        render();
+      }
+
+      function move(dx, dy) {
+        if (locked) return;
+        cursor.x = Math.max(0, Math.min(SIZE - 1, cursor.x + dx));
+        cursor.y = Math.max(0, Math.min(SIZE - 1, cursor.y + dy));
+        beep(280 + cursor.x * 40 + cursor.y * 20, 0.03, 'square', 0.015);
+        render();
+      }
+
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowUp') move(0, -1);
+        if (e.key === 'ArrowDown') move(0, 1);
+        if (e.key === 'ArrowLeft') move(-1, 0);
+        if (e.key === 'ArrowRight') move(1, 0);
+        if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); applyToggle(); }
+        if (e.key.toLowerCase() === 'r') {
+          board = board.map((row) => row.map(() => 0));
+          movesLeft = 8 + Math.min(12, stage * 2);
+          locked = false;
+          stateEl.textContent = 'PLAY';
+          render();
+        }
+      });
+
+      upBtn.addEventListener('click', () => move(0, -1));
+      downBtn.addEventListener('click', () => move(0, 1));
+      leftBtn.addEventListener('click', () => move(-1, 0));
+      rightBtn.addEventListener('click', () => move(1, 0));
+      toggleBtn.addEventListener('click', applyToggle);
+      resetBtn.addEventListener('click', () => {
+        board = board.map((row) => row.map(() => 0));
+        movesLeft = 8 + Math.min(12, stage * 2);
+        locked = false;
+        stateEl.textContent = 'PLAY';
+        beep(240, 0.05, 'sine', 0.02);
+        render();
+      });
+      restartBtn.addEventListener('click', restartRun);
+
+      buildStage();
+      render();
+    })();
+  </script>
+</body>
+</html>

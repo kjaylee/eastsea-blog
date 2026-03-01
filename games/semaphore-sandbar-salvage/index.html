@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <meta name="theme-color" content="#0a0a1a" />
+  <title>Semaphore Sandbar Salvage</title>
+  <style>
+    :root {
+      --bg: #0a0a1a;
+      --panel: #11142b;
+      --line: #2fe5ff;
+      --warn: #ff7aa8;
+      --ok: #67ffb5;
+      --text: #e8edff;
+      --muted: #9da7c8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Pretendard", "Noto Sans KR", system-ui, sans-serif;
+      background: radial-gradient(circle at 20% 0%, #1e1e4a 0%, var(--bg) 48%, #050510 100%);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 14px;
+      display: flex;
+      justify-content: center;
+    }
+    .app {
+      width: min(100%, 880px);
+      background: rgba(12, 16, 34, 0.94);
+      border: 1px solid rgba(47, 229, 255, 0.32);
+      border-radius: 18px;
+      box-shadow: 0 0 28px rgba(47,229,255,0.2);
+      padding: 14px;
+      display: grid;
+      gap: 12px;
+    }
+    h1 { margin: 0; font-size: clamp(1.08rem, 2.8vw, 1.65rem); }
+    .sub { margin: 2px 0 0; color: var(--muted); font-size: 0.9rem; }
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .pill {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px;
+      padding: 8px;
+      text-align: center;
+      font-size: 0.85rem;
+    }
+    .pill b { color: var(--line); font-size: 1rem; }
+    canvas {
+      width: 100%;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: linear-gradient(180deg, #0f2740 0%, #0a142d 52%, #091126 100%);
+      aspect-ratio: 9/12;
+      max-height: 70vh;
+      touch-action: none;
+    }
+    .buttons {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+    }
+    button {
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 8px;
+      font-weight: 700;
+      color: #011018;
+      background: linear-gradient(120deg, #65f0ff, #9f88ff);
+      cursor: pointer;
+    }
+    button:active { transform: scale(0.98); }
+    #msg { color: var(--muted); font-size: 0.88rem; }
+    .danger { color: var(--warn); font-weight: 700; }
+    .ok { color: var(--ok); font-weight: 700; }
+
+    @media (max-width: 760px) {
+      .hud { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .buttons { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header>
+      <h1>🚩 Semaphore Sandbar Salvage</h1>
+      <p class="sub">좌우 조향 + 대시로 모래톱 사이를 돌파하고 구조 부표를 회수하세요.</p>
+    </header>
+
+    <section class="hud">
+      <div class="pill">Score<br><b id="score">0</b></div>
+      <div class="pill">Best<br><b id="best">0</b></div>
+      <div class="pill">Hull<br><b id="hull">3</b></div>
+      <div class="pill">Speed<br><b id="speed">1.0x</b></div>
+      <div class="pill">Buoys<br><b id="buoys">0</b></div>
+    </section>
+
+    <canvas id="game" width="480" height="640" aria-label="Semaphore Sandbar Salvage Game"></canvas>
+
+    <section class="buttons">
+      <button id="startBtn">Start / Restart</button>
+      <button id="leftBtn">◀ Left</button>
+      <button id="dashBtn">⚡ Dash</button>
+      <button id="rightBtn">Right ▶</button>
+      <button id="muteBtn">Sound: ON</button>
+    </section>
+
+    <div id="msg">Ready. 키보드(← →, A/D, Space) 또는 터치 버튼으로 플레이하세요.</div>
+  </main>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = 'semaphore-sandbar-salvage-best';
+      const canvas = document.getElementById('game');
+      const ctx = canvas.getContext('2d');
+      const laneX = [120, 240, 360];
+      const scoreEl = document.getElementById('score');
+      const bestEl = document.getElementById('best');
+      const hullEl = document.getElementById('hull');
+      const speedEl = document.getElementById('speed');
+      const buoysEl = document.getElementById('buoys');
+      const msgEl = document.getElementById('msg');
+      const muteBtn = document.getElementById('muteBtn');
+
+      let running = false;
+      let lastTime = 0;
+      let spawnTimer = 0;
+      let lane = 1;
+      let dash = 0;
+      let score = 0;
+      let hull = 3;
+      let speed = 1;
+      let buoyCount = 0;
+      let muted = false;
+      let audioCtx = null;
+      const hazards = [];
+      const best = Number(localStorage.getItem(STORAGE_KEY) || 0);
+      bestEl.textContent = String(best);
+
+      function initAudio() {
+        if (!audioCtx) {
+          const Ctx = window.AudioContext || window.webkitAudioContext;
+          if (Ctx) audioCtx = new Ctx();
+        }
+      }
+      function beep(freq = 440, dur = 0.08, type = 'sine', gain = 0.05) {
+        if (muted) return;
+        initAudio();
+        if (!audioCtx) return;
+        const osc = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.value = freq;
+        g.gain.value = gain;
+        osc.connect(g);
+        g.connect(audioCtx.destination);
+        osc.start();
+        g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
+        osc.stop(audioCtx.currentTime + dur);
+      }
+
+      function reset() {
+        running = true;
+        lastTime = performance.now();
+        spawnTimer = 0;
+        lane = 1;
+        dash = 0;
+        score = 0;
+        hull = 3;
+        speed = 1;
+        buoyCount = 0;
+        hazards.length = 0;
+        updateHud();
+        msgEl.textContent = 'Rescue run started. 부표를 모아 구조 점수를 올리세요.';
+      }
+
+      function updateHud() {
+        scoreEl.textContent = String(Math.floor(score));
+        hullEl.textContent = String(hull);
+        speedEl.textContent = `${speed.toFixed(1)}x`;
+        buoysEl.textContent = String(buoyCount);
+      }
+
+      function move(dir) {
+        if (!running) return;
+        lane = Math.max(0, Math.min(2, lane + dir));
+        beep(320 + lane * 70, 0.05, 'triangle', 0.04);
+      }
+
+      function activateDash() {
+        if (!running) return;
+        if (dash > 0) return;
+        dash = 0.28;
+        beep(920, 0.08, 'sawtooth', 0.06);
+      }
+
+      function spawn() {
+        const type = Math.random() < 0.35 ? 'buoy' : 'wreck';
+        const item = {
+          lane: Math.floor(Math.random() * 3),
+          y: -30,
+          speed: 170 + Math.random() * 120,
+          type,
+          wobble: Math.random() * Math.PI * 2
+        };
+        hazards.push(item);
+      }
+
+      function drawBackground(t) {
+        const g = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        g.addColorStop(0, '#123356');
+        g.addColorStop(0.55, '#0d2340');
+        g.addColorStop(1, '#091327');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        for (let i = 0; i < 3; i += 1) {
+          const x = laneX[i];
+          ctx.strokeStyle = 'rgba(120,220,255,0.26)';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, canvas.height);
+          ctx.stroke();
+        }
+
+        ctx.fillStyle = 'rgba(255, 214, 120, 0.12)';
+        for (let i = 0; i < 6; i += 1) {
+          const y = ((t * 0.08 + i * 110) % (canvas.height + 90)) - 45;
+          ctx.fillRect(40 + (i % 2) * 260, y, 180, 34);
+        }
+      }
+
+      function drawBoat() {
+        const x = laneX[lane];
+        const y = canvas.height - 84;
+        ctx.save();
+        if (dash > 0) {
+          ctx.shadowColor = '#6bffdb';
+          ctx.shadowBlur = 18;
+          ctx.fillStyle = '#6bffdb';
+          ctx.fillRect(x - 8, y + 12, 16, 36);
+        }
+        ctx.translate(x, y);
+        ctx.fillStyle = '#e8f2ff';
+        ctx.beginPath();
+        ctx.moveTo(0, -28);
+        ctx.lineTo(26, 24);
+        ctx.lineTo(-26, 24);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = '#ff3fa9';
+        ctx.fillRect(-5, -18, 10, 28);
+        ctx.fillStyle = '#5de6ff';
+        ctx.fillRect(5, -16, 14, 8);
+        ctx.restore();
+      }
+
+      function drawItem(item) {
+        const x = laneX[item.lane] + Math.sin(item.wobble) * 12;
+        const y = item.y;
+        if (item.type === 'wreck') {
+          ctx.fillStyle = '#ff758f';
+          ctx.beginPath();
+          ctx.moveTo(x, y - 18);
+          ctx.lineTo(x + 24, y + 16);
+          ctx.lineTo(x - 24, y + 16);
+          ctx.closePath();
+          ctx.fill();
+        } else {
+          ctx.fillStyle = '#6effbe';
+          ctx.beginPath();
+          ctx.arc(x, y, 14, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#ccfff0';
+          ctx.fillRect(x - 4, y - 28, 8, 16);
+        }
+      }
+
+      function collide(item) {
+        const boatX = laneX[lane];
+        const boatY = canvas.height - 84;
+        const ix = laneX[item.lane] + Math.sin(item.wobble) * 12;
+        const iy = item.y;
+        return Math.abs(boatX - ix) < 34 && Math.abs(boatY - iy) < 36;
+      }
+
+      function finish() {
+        running = false;
+        msgEl.innerHTML = '<span class="danger">Hull collapsed.</span> Restart로 재출항하세요.';
+        beep(140, 0.24, 'sawtooth', 0.09);
+        const prev = Number(localStorage.getItem(STORAGE_KEY) || 0);
+        const now = Math.floor(score);
+        if (now > prev) {
+          localStorage.setItem(STORAGE_KEY, String(now));
+          bestEl.textContent = String(now);
+          msgEl.innerHTML = `<span class="ok">New best ${now}!</span> Restart로 기록 갱신 가능.`;
+        }
+      }
+
+      function loop(ts) {
+        const dt = Math.min(0.033, (ts - lastTime) / 1000);
+        lastTime = ts;
+        if (!running) {
+          drawBackground(ts * 0.01);
+          drawBoat();
+          requestAnimationFrame(loop);
+          return;
+        }
+
+        spawnTimer += dt;
+        speed += dt * 0.02;
+        if (spawnTimer > Math.max(0.2, 0.75 - Math.min(0.4, speed * 0.08))) {
+          spawnTimer = 0;
+          spawn();
+        }
+
+        dash = Math.max(0, dash - dt);
+        score += dt * 30 * speed;
+
+        for (let i = hazards.length - 1; i >= 0; i -= 1) {
+          const it = hazards[i];
+          it.y += it.speed * dt * speed;
+          it.wobble += dt * 6;
+          if (collide(it)) {
+            if (it.type === 'wreck') {
+              if (dash <= 0) {
+                hull -= 1;
+                beep(210, 0.12, 'square', 0.07);
+              } else {
+                score += 35;
+                beep(840, 0.07, 'triangle', 0.05);
+              }
+            } else {
+              buoyCount += 1;
+              score += 70;
+              beep(990, 0.09, 'sine', 0.06);
+            }
+            hazards.splice(i, 1);
+            continue;
+          }
+          if (it.y > canvas.height + 40) hazards.splice(i, 1);
+        }
+
+        drawBackground(ts * 0.01);
+        hazards.forEach(drawItem);
+        drawBoat();
+        updateHud();
+
+        if (hull <= 0) finish();
+        requestAnimationFrame(loop);
+      }
+
+      document.getElementById('startBtn').addEventListener('click', () => {
+        reset();
+        beep(480, 0.08, 'triangle', 0.05);
+      });
+      document.getElementById('leftBtn').addEventListener('click', () => move(-1));
+      document.getElementById('rightBtn').addEventListener('click', () => move(1));
+      document.getElementById('dashBtn').addEventListener('click', activateDash);
+      muteBtn.addEventListener('click', () => {
+        muted = !muted;
+        muteBtn.textContent = `Sound: ${muted ? 'OFF' : 'ON'}`;
+      });
+
+      window.addEventListener('keydown', (e) => {
+        const key = e.key.toLowerCase();
+        if (['arrowleft', 'a'].includes(key)) { e.preventDefault(); move(-1); }
+        else if (['arrowright', 'd'].includes(key)) { e.preventDefault(); move(1); }
+        else if ([' ', 'enter', 'w'].includes(key)) { e.preventDefault(); activateDash(); }
+        else if (key === 'r') { reset(); }
+      }, { passive: false });
+
+      canvas.addEventListener('pointerdown', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        if (x < rect.width * 0.34) move(-1);
+        else if (x > rect.width * 0.66) move(1);
+        else activateDash();
+      });
+
+      requestAnimationFrame((ts) => {
+        lastTime = ts;
+        requestAnimationFrame(loop);
+      });
+    })();
+  </script>
+</body>
+</html>

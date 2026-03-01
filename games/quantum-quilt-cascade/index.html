@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <meta name="theme-color" content="#0a0a1a" />
+  <title>Quantum Quilt Cascade</title>
+  <style>
+    :root {
+      --bg: #0a0a1a;
+      --panel: #12122a;
+      --ink: #e9ecff;
+      --muted: #9aa3c7;
+      --neon: #6ef3ff;
+      --pink: #ff4fd8;
+      --ok: #6aff9b;
+      --warn: #ffd86a;
+      --danger: #ff6a8a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Pretendard", "Noto Sans KR", system-ui, -apple-system, sans-serif;
+      background: radial-gradient(circle at 20% 10%, #1b1b44 0%, var(--bg) 45%, #060611 100%);
+      color: var(--ink);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      padding: 14px;
+    }
+    .app {
+      width: min(100%, 880px);
+      background: linear-gradient(160deg, rgba(18,18,42,0.94), rgba(10,10,26,0.94));
+      border: 1px solid rgba(110, 243, 255, 0.3);
+      border-radius: 18px;
+      box-shadow: 0 0 26px rgba(110,243,255,0.2);
+      padding: 16px;
+      display: grid;
+      gap: 14px;
+    }
+    h1 { margin: 0; font-size: clamp(1.1rem, 2.8vw, 1.7rem); }
+    p { margin: 4px 0 0; color: var(--muted); font-size: 0.92rem; }
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .pill {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 12px;
+      padding: 8px;
+      text-align: center;
+      font-size: 0.88rem;
+    }
+    .pill b { color: var(--neon); font-size: 1rem; }
+    .boards {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .card {
+      background: rgba(0,0,0,0.26);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 14px;
+      padding: 10px;
+    }
+    .card h2 { margin: 0 0 8px; font-size: 0.95rem; color: var(--muted); }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 6px;
+      aspect-ratio: 1/1;
+    }
+    .cell {
+      border: 1px solid rgba(255,255,255,0.13);
+      border-radius: 8px;
+      background: #151533;
+      box-shadow: inset 0 0 8px rgba(0,0,0,0.35);
+      position: relative;
+      transition: transform .08s ease, box-shadow .14s ease;
+    }
+    .cell.on {
+      background: linear-gradient(145deg, #2de1ff, #5e89ff);
+      box-shadow: 0 0 12px rgba(58, 219, 255, 0.7), inset 0 0 10px rgba(255,255,255,0.35);
+    }
+    .cell.cursor::after {
+      content: "";
+      position: absolute;
+      inset: -2px;
+      border-radius: 9px;
+      border: 2px solid var(--pink);
+      pointer-events: none;
+      box-shadow: 0 0 10px rgba(255, 79, 216, 0.8);
+    }
+    .actions {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+    button {
+      border: 0;
+      border-radius: 11px;
+      padding: 10px 12px;
+      font-weight: 700;
+      color: #031018;
+      background: linear-gradient(120deg, #67f1ff, #9f7bff);
+      cursor: pointer;
+    }
+    button:active { transform: scale(0.98); }
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .controls button:nth-child(2) { background: linear-gradient(120deg, #ff8ee9, #bf93ff); }
+    .legend { font-size: 0.86rem; color: var(--muted); line-height: 1.4; }
+    .ok { color: var(--ok); font-weight: 700; }
+    .warn { color: var(--warn); font-weight: 700; }
+    .danger { color: var(--danger); font-weight: 700; }
+
+    @media (max-width: 760px) {
+      .boards { grid-template-columns: 1fr; }
+      .hud { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header>
+      <h1>🧵 Quantum Quilt Cascade</h1>
+      <p>셀을 터치/선택해 <b>파장 반전</b>으로 목표 퀼트를 맞추세요. (키보드: 방향키 + Enter/Space)</p>
+    </header>
+
+    <section class="hud">
+      <div class="pill">Round<br><b id="round">1</b></div>
+      <div class="pill">Moves Left<br><b id="moves">18</b></div>
+      <div class="pill">Match<br><b id="match">0%</b></div>
+      <div class="pill">Best Round<br><b id="best">1</b></div>
+    </section>
+
+    <section class="boards">
+      <article class="card">
+        <h2>Target Quilt</h2>
+        <div id="targetGrid" class="grid"></div>
+      </article>
+      <article class="card">
+        <h2>Your Quilt</h2>
+        <div id="playGrid" class="grid"></div>
+      </article>
+    </section>
+
+    <section class="actions">
+      <button id="startBtn">Start / Restart</button>
+      <button id="hintBtn">Pulse Hint</button>
+      <button id="shuffleBtn">Shuffle Board</button>
+    </section>
+
+    <section class="controls">
+      <button data-dir="left">◀ Left</button>
+      <button data-dir="up">▲ Up</button>
+      <button data-dir="right">Right ▶</button>
+      <button data-dir="down">▼ Down</button>
+      <button id="tapBtn">Tap Cell</button>
+      <button id="muteBtn">Sound: ON</button>
+    </section>
+
+    <div class="legend" id="message">Ready. 패턴을 맞추면 다음 라운드로 진행됩니다.</div>
+  </main>
+
+  <script>
+    (() => {
+      const SIZE = 6;
+      const TOTAL = SIZE * SIZE;
+      const STORAGE_KEY = 'quantum-quilt-cascade-best-round';
+      const targetGrid = document.getElementById('targetGrid');
+      const playGrid = document.getElementById('playGrid');
+      const roundEl = document.getElementById('round');
+      const movesEl = document.getElementById('moves');
+      const matchEl = document.getElementById('match');
+      const bestEl = document.getElementById('best');
+      const msgEl = document.getElementById('message');
+      const muteBtn = document.getElementById('muteBtn');
+
+      let target = new Array(TOTAL).fill(0);
+      let board = new Array(TOTAL).fill(0);
+      let round = 1;
+      let moves = 18;
+      let cursor = { x: 0, y: 0 };
+      let running = false;
+      let audioCtx = null;
+      let muted = false;
+      const bestRound = Number(localStorage.getItem(STORAGE_KEY) || 1);
+      bestEl.textContent = String(bestRound);
+
+      function initAudio() {
+        if (!audioCtx) {
+          const Ctx = window.AudioContext || window.webkitAudioContext;
+          if (Ctx) audioCtx = new Ctx();
+        }
+      }
+      function beep(freq = 440, dur = 0.07, type = 'sine', gain = 0.05) {
+        if (muted) return;
+        initAudio();
+        if (!audioCtx) return;
+        const osc = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.value = freq;
+        g.gain.value = gain;
+        osc.connect(g);
+        g.connect(audioCtx.destination);
+        osc.start();
+        g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
+        osc.stop(audioCtx.currentTime + dur);
+      }
+
+      function idx(x, y) { return y * SIZE + x; }
+      function inRange(x, y) { return x >= 0 && x < SIZE && y >= 0 && y < SIZE; }
+      function randBit() { return Math.random() > 0.5 ? 1 : 0; }
+
+      function randomBoard(density = 0.5) {
+        return Array.from({ length: TOTAL }, () => Math.random() < density ? 1 : 0);
+      }
+
+      function buildGrid(el, clickHandler) {
+        el.innerHTML = '';
+        for (let i = 0; i < TOTAL; i += 1) {
+          const b = document.createElement('button');
+          b.className = 'cell';
+          b.type = 'button';
+          b.dataset.i = String(i);
+          b.addEventListener('click', () => clickHandler(i));
+          b.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            clickHandler(i);
+          }, { passive: false });
+          el.appendChild(b);
+        }
+      }
+
+      function render() {
+        const tCells = [...targetGrid.children];
+        const bCells = [...playGrid.children];
+        let matched = 0;
+        for (let i = 0; i < TOTAL; i += 1) {
+          tCells[i].classList.toggle('on', !!target[i]);
+          bCells[i].classList.toggle('on', !!board[i]);
+          if (target[i] === board[i]) matched += 1;
+        }
+        bCells.forEach((c) => c.classList.remove('cursor'));
+        bCells[idx(cursor.x, cursor.y)].classList.add('cursor');
+
+        const pct = Math.round((matched / TOTAL) * 100);
+        roundEl.textContent = String(round);
+        movesEl.textContent = String(moves);
+        matchEl.textContent = `${pct}%`;
+        msgEl.className = 'legend';
+
+        if (!running) {
+          msgEl.textContent = 'Start를 누르면 라운드가 시작됩니다.';
+        } else if (matched === TOTAL) {
+          msgEl.innerHTML = '<span class="ok">Perfect Sync!</span> 다음 라운드로 상승합니다.';
+        } else if (moves <= 3) {
+          msgEl.innerHTML = '<span class="warn">Moves low:</span> 힌트/파동 예측으로 마무리하세요.';
+        } else {
+          msgEl.textContent = '목표와 동일한 패턴이 되도록 인접 파장을 계산하세요.';
+        }
+      }
+
+      function toggleCross(i) {
+        const x = i % SIZE;
+        const y = Math.floor(i / SIZE);
+        const p = [[0,0],[1,0],[-1,0],[0,1],[0,-1]];
+        p.forEach(([dx, dy]) => {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (!inRange(nx, ny)) return;
+          const id = idx(nx, ny);
+          board[id] = board[id] ? 0 : 1;
+        });
+      }
+
+      function moveCursor(dir) {
+        if (dir === 'left') cursor.x = (cursor.x + SIZE - 1) % SIZE;
+        if (dir === 'right') cursor.x = (cursor.x + 1) % SIZE;
+        if (dir === 'up') cursor.y = (cursor.y + SIZE - 1) % SIZE;
+        if (dir === 'down') cursor.y = (cursor.y + 1) % SIZE;
+        beep(330, 0.04, 'triangle', 0.03);
+        render();
+      }
+
+      function applyTap(i = idx(cursor.x, cursor.y)) {
+        if (!running) return;
+        toggleCross(i);
+        moves -= 1;
+        beep(560, 0.06, 'square', 0.04);
+        evaluate();
+      }
+
+      function generateRound() {
+        const density = Math.min(0.68, 0.35 + round * 0.03);
+        target = randomBoard(density);
+        board = randomBoard(0.45);
+        moves = Math.max(10, 20 - round);
+        cursor = { x: 0, y: 0 };
+      }
+
+      function evaluate() {
+        const matched = board.every((v, i) => v === target[i]);
+        if (matched) {
+          beep(880, 0.14, 'sine', 0.08);
+          setTimeout(() => beep(1240, 0.16, 'triangle', 0.06), 60);
+          round += 1;
+          const prevBest = Number(localStorage.getItem(STORAGE_KEY) || 1);
+          if (round > prevBest) {
+            localStorage.setItem(STORAGE_KEY, String(round));
+            bestEl.textContent = String(round);
+          }
+          generateRound();
+        } else if (moves <= 0) {
+          running = false;
+          beep(160, 0.22, 'sawtooth', 0.08);
+          msgEl.innerHTML = '<span class="danger">Out of moves.</span> Restart로 다시 도전하세요.';
+        }
+        render();
+      }
+
+      function startGame() {
+        running = true;
+        round = 1;
+        generateRound();
+        beep(440, 0.08, 'triangle', 0.05);
+        render();
+      }
+
+      document.getElementById('startBtn').addEventListener('click', startGame);
+      document.getElementById('shuffleBtn').addEventListener('click', () => {
+        if (!running) return;
+        board = randomBoard(0.5);
+        moves = Math.max(1, moves - 2);
+        beep(300, 0.1, 'sawtooth', 0.05);
+        render();
+      });
+      document.getElementById('hintBtn').addEventListener('click', () => {
+        if (!running) return;
+        const mismatch = [];
+        board.forEach((v, i) => { if (v !== target[i]) mismatch.push(i); });
+        if (!mismatch.length) return;
+        const pick = mismatch[Math.floor(Math.random() * mismatch.length)];
+        cursor = { x: pick % SIZE, y: Math.floor(pick / SIZE) };
+        moves = Math.max(1, moves - 1);
+        beep(730, 0.08, 'sine', 0.04);
+        render();
+      });
+      muteBtn.addEventListener('click', () => {
+        muted = !muted;
+        muteBtn.textContent = `Sound: ${muted ? 'OFF' : 'ON'}`;
+      });
+
+      document.getElementById('tapBtn').addEventListener('click', () => applyTap());
+      document.querySelectorAll('[data-dir]').forEach((btn) => {
+        btn.addEventListener('click', () => moveCursor(btn.dataset.dir));
+      });
+
+      window.addEventListener('keydown', (e) => {
+        const key = e.key.toLowerCase();
+        if (['arrowleft', 'a', 'j'].includes(key)) { e.preventDefault(); moveCursor('left'); }
+        else if (['arrowright', 'd', 'l'].includes(key)) { e.preventDefault(); moveCursor('right'); }
+        else if (['arrowup', 'w', 'i'].includes(key)) { e.preventDefault(); moveCursor('up'); }
+        else if (['arrowdown', 's', 'k'].includes(key)) { e.preventDefault(); moveCursor('down'); }
+        else if (['enter', ' '].includes(key)) { e.preventDefault(); applyTap(); }
+        else if (key === 'r') { startGame(); }
+      }, { passive: false });
+
+      buildGrid(targetGrid, () => {});
+      buildGrid(playGrid, (i) => {
+        cursor = { x: i % SIZE, y: Math.floor(i / SIZE) };
+        applyTap(i);
+      });
+
+      target = Array.from({ length: TOTAL }, (_, i) => (i % 2 === 0 ? 1 : 0));
+      board = Array.from({ length: TOTAL }, () => randBit());
+      render();
+    })();
+  </script>
+</body>
+</html>

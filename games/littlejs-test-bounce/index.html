@@ -1,0 +1,131 @@
+<!DOCTYPE html><head>
+<title>Neon Bounce Test — 네온 바운스 테스트</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<style>body{margin:0;background:#0a0a1a;overflow:hidden}</style>
+</head><body>
+<script src="https://cdn.jsdelivr.net/npm/littlejsengine/dist/littlejs.min.js"></script>
+<script>'use strict';
+
+// Engine settings
+showSplashScreen=false;
+debugWatermark=false;
+showEngineVersion=false;
+canvasClearColor=hsl(0,0,.04);
+touchGamepadEnable=true;
+gravity=vec2(0,-.02);
+
+let score=0, highScore=0, gameOver=false, ball, platforms=[];
+const hitSound=new Sound([1,.1,400,0,0,.1,0,1,0,0,0,0,0,0,0,0,0,1]);
+const dieSound=new Sound([1,.2,200,0,0,.3,0,2,-2,0,0,0,0,0,0,0,0,1]);
+
+class Ball extends EngineObject {
+  constructor(pos) {
+    super(pos, vec2(.6));
+    this.color=hsl(.5,1,.6);
+    this.setCollision(true,false);
+    this.restitution=.8;
+    this.damping=.99;
+  }
+  update() {
+    super.update();
+    if(keyIsDown('ArrowLeft')||keyIsDown('KeyA'))
+      this.applyForce(vec2(-.005,0));
+    if(keyIsDown('ArrowRight')||keyIsDown('KeyD'))
+      this.applyForce(vec2(.005,0));
+    if(this.pos.y<-20) { gameOver=true; dieSound.play(); }
+    // wrap x
+    if(this.pos.x<-15) this.pos.x=15;
+    if(this.pos.x>15) this.pos.x=-15;
+  }
+  render() {
+    drawCircle(this.pos, this.size.x, this.color);
+    // glow
+    drawCircle(this.pos, this.size.x*1.5, this.color.scale(.3,1));
+  }
+}
+
+class Platform extends EngineObject {
+  constructor(pos, w) {
+    super(pos, vec2(w,.3));
+    this.color=hsl(rand(),1,.5);
+    this.mass=0; // static
+    this.setCollision(true,true);
+  }
+  render() {
+    drawRect(this.pos, this.size, this.color);
+  }
+  collideWithObject(o) {
+    if(o===ball && o.velocity.y<0) {
+      score++;
+      hitSound.play(this.pos);
+      this.color=hsl(rand(),1,.5);
+      return true;
+    }
+    return false;
+  }
+}
+
+function spawnPlatforms() {
+  for(let i=0;i<30;i++) {
+    const p=new Platform(vec2(rand(-12,12), i*2.5-10), rand(2,5));
+    platforms.push(p);
+  }
+}
+
+async function gameInit() {
+  highScore=localStorage.getItem('littlejs-bounce-hi')|0;
+  ball=new Ball(vec2(0,5));
+  ball.velocity=vec2(0,.1);
+  spawnPlatforms();
+}
+
+function gameUpdate() {
+  if(gameOver) {
+    if(keyWasPressed('Space')||keyWasPressed('Enter')||mouseWasPressed(0)) {
+      // restart
+      engineObjectsDestroy();
+      platforms=[];
+      score=0;
+      gameOver=false;
+      ball=new Ball(vec2(0,5));
+      ball.velocity=vec2(0,.1);
+      spawnPlatforms();
+    }
+    return;
+  }
+  // camera follows ball
+  if(ball.pos.y>cameraPos.y)
+    score=max(score, (ball.pos.y|0));
+}
+
+function gameUpdatePost() {
+  cameraPos=cameraPos.lerp(vec2(0,ball.pos.y+3),.05);
+}
+
+function gameRender() {
+  // starfield bg
+  const s=new RandomGenerator(1337);
+  for(let i=0;i<80;i++) {
+    const p=vec2(s.float(-20,20), s.float(-50,100));
+    drawCircle(p, .08, hsl(0,0,s.float(.3,.8)));
+  }
+}
+
+function gameRenderPost() {
+  // HUD
+  drawTextScreen(`SCORE: ${score}`, vec2(mainCanvasSize.x/2, 40), 50, hsl(.5,1,.7), 3, hsl(0,0,0));
+  drawTextScreen(`HI: ${highScore}`, vec2(mainCanvasSize.x/2, 80), 30, hsl(.1,1,.6), 2, hsl(0,0,0));
+
+  if(gameOver) {
+    if(score>highScore) {
+      highScore=score;
+      localStorage.setItem('littlejs-bounce-hi', highScore);
+    }
+    drawTextScreen('GAME OVER', vec2(mainCanvasSize.x/2, mainCanvasSize.y/2-30), 70, hsl(0,1,.6), 4, hsl(0,0,0));
+    drawTextScreen('TAP TO RESTART', vec2(mainCanvasSize.x/2, mainCanvasSize.y/2+40), 35, hsl(0,0,.7), 2, hsl(0,0,0));
+  }
+}
+
+engineInit(gameInit, gameUpdate, gameUpdatePost, gameRender, gameRenderPost);
+</script></body></html>

@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Biome Shield Director — 바이옴 실드 디렉터</title>
+  <meta name="description" content="3개 바이옴 돔의 온도·수분·방사선을 안정화하는 실시간 운영 시뮬레이션" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <style>
+    :root {
+      --bg: #0a0a1a;
+      --panel: #13132a;
+      --line: #30305d;
+      --text: #ecf0ff;
+      --cyan: #46ebff;
+      --pink: #ff58d1;
+      --lime: #b2ff7c;
+      --amber: #ffca63;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 12px;
+      background: radial-gradient(circle at top, #191943 0%, var(--bg) 55%);
+      color: var(--text);
+      font-family: "Pretendard", "Noto Sans KR", system-ui, -apple-system, sans-serif;
+    }
+    .app {
+      width: min(100%, 520px);
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: rgba(11, 11, 30, .94);
+      box-shadow: 0 0 24px rgba(70, 235, 255, .12);
+      padding: 14px;
+    }
+    h1 { margin: 0 0 6px; color: var(--cyan); font-size: clamp(1.08rem, 2.8vw, 1.45rem); }
+    .desc { margin: 0 0 10px; opacity: .9; font-size: .9rem; line-height: 1.45; }
+    .hud { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; margin-bottom: 10px; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; text-align: center; padding: 7px 4px; font-size: .8rem; }
+    .card b { display: block; margin-top: 3px; font-size: 1rem; color: var(--cyan); }
+    .domes { display: grid; gap: 8px; margin-bottom: 10px; }
+    .dome {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #0f0f25;
+      padding: 8px;
+      cursor: pointer;
+    }
+    .dome.active { border-color: var(--cyan); box-shadow: inset 0 0 12px rgba(70,235,255,.2); }
+    .row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+    .name { font-size: .9rem; font-weight: 700; }
+    .integrity { font-size: .8rem; color: #b8c0ff; }
+    .meters { display: grid; gap: 4px; }
+    .meter { display: grid; grid-template-columns: 74px 1fr 38px; gap: 6px; align-items: center; font-size: .75rem; }
+    .bar { height: 8px; border-radius: 999px; overflow: hidden; background: #1d1d3d; border: 1px solid #313165; }
+    .fill { height: 100%; width: 50%; background: var(--lime); }
+    .fill.warn { background: var(--amber); }
+    .fill.danger { background: var(--pink); }
+
+    .actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    button {
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: #1a1a3b;
+      color: var(--text);
+      padding: 9px 10px;
+      min-height: 44px;
+      font-size: .92rem;
+      touch-action: manipulation;
+    }
+    button.primary { grid-column: span 2; background: linear-gradient(135deg, #22426d, #2c3976); border-color: #4abbe0; }
+    .tip { margin-top: 8px; font-size: .8rem; opacity: .78; }
+    @media (max-width: 430px) {
+      .hud { gap: 6px; }
+      .meter { grid-template-columns: 64px 1fr 34px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>🛡️ Biome Shield Director</h1>
+    <p class="desc">돔 A/B/C 중 선택 후 액션으로 붕괴를 막으세요. 각 지표를 20~80 구간에 유지하면 안정 점수 획득.</p>
+
+    <section class="hud">
+      <div class="card">Score<b id="score">0</b></div>
+      <div class="card">Best<b id="best">0</b></div>
+      <div class="card">Time<b id="time">0s</b></div>
+      <div class="card">Alert<b id="alert">LOW</b></div>
+    </section>
+
+    <section id="domes" class="domes"></section>
+
+    <section class="actions">
+      <button data-act="cool">Q Cool Vent</button>
+      <button data-act="mist">W Mist Pulse</button>
+      <button data-act="shield">E Shield Tune</button>
+      <button data-act="balance">Space Global Balance</button>
+      <button id="startBtn" class="primary">Start / Restart</button>
+    </section>
+    <p class="tip">1/2/3 돔 선택 · Q/W/E 액션 · Space 글로벌 밸런스</p>
+  </main>
+
+  <script>
+    (() => {
+      const domesEl = document.getElementById('domes');
+      const scoreEl = document.getElementById('score');
+      const bestEl = document.getElementById('best');
+      const timeEl = document.getElementById('time');
+      const alertEl = document.getElementById('alert');
+      const startBtn = document.getElementById('startBtn');
+      const actionBtns = [...document.querySelectorAll('[data-act]')];
+
+      const keyBest = 'biome_shield_director_best';
+      let best = Number(localStorage.getItem(keyBest) || 0);
+      bestEl.textContent = String(best);
+
+      let audioCtx;
+      const initAudio = () => {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+      };
+      const beep = (freq, dur = 0.06, type = 'triangle', gain = 0.03) => {
+        if (!audioCtx) return;
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.type = type; o.frequency.value = freq; g.gain.value = gain;
+        o.connect(g).connect(audioCtx.destination);
+        o.start(); o.stop(audioCtx.currentTime + dur);
+      };
+
+      const domeNames = ['AURORA', 'DELTA', 'MOSS'];
+      let domes = [];
+      let selected = 0;
+      let score = 0;
+      let elapsed = 0;
+      let running = false;
+      let globalCd = 0;
+      let timer = 0;
+
+      const mkDomes = () => domeNames.map(name => ({
+        name,
+        temp: 44 + Math.random() * 12,
+        moisture: 42 + Math.random() * 12,
+        rad: 41 + Math.random() * 12,
+        integrity: 100
+      }));
+
+      const metricClass = (v) => {
+        if (v < 15 || v > 85) return 'fill danger';
+        if (v < 25 || v > 75) return 'fill warn';
+        return 'fill';
+      };
+
+      const calcPressure = (v) => Math.abs(v - 50);
+
+      const updateHud = () => {
+        scoreEl.textContent = String(score);
+        bestEl.textContent = String(best);
+        timeEl.textContent = `${elapsed}s`;
+        const maxPressure = Math.max(...domes.map(d => (calcPressure(d.temp) + calcPressure(d.moisture) + calcPressure(d.rad)) / 3));
+        alertEl.textContent = maxPressure < 18 ? 'LOW' : maxPressure < 30 ? 'MID' : 'HIGH';
+        alertEl.style.color = maxPressure < 18 ? '#abff7a' : maxPressure < 30 ? '#ffca63' : '#ff58d1';
+      };
+
+      const render = () => {
+        domesEl.innerHTML = '';
+        domes.forEach((d, i) => {
+          const card = document.createElement('article');
+          card.className = 'dome' + (selected === i ? ' active' : '');
+          card.innerHTML = `
+            <div class="row">
+              <span class="name">Dome ${d.name}</span>
+              <span class="integrity">Integrity ${Math.max(0, Math.round(d.integrity))}%</span>
+            </div>
+            <div class="meters">
+              <div class="meter"><span>Temp</span><div class="bar"><div class="${metricClass(d.temp)}" style="width:${Math.max(0, Math.min(100, d.temp))}%"></div></div><span>${Math.round(d.temp)}</span></div>
+              <div class="meter"><span>Moist</span><div class="bar"><div class="${metricClass(d.moisture)}" style="width:${Math.max(0, Math.min(100, d.moisture))}%"></div></div><span>${Math.round(d.moisture)}</span></div>
+              <div class="meter"><span>Rad</span><div class="bar"><div class="${metricClass(d.rad)}" style="width:${Math.max(0, Math.min(100, d.rad))}%"></div></div><span>${Math.round(d.rad)}</span></div>
+            </div>`;
+          card.addEventListener('pointerdown', (ev) => {
+            ev.preventDefault();
+            selected = i;
+            beep(460, 0.03, 'sine', 0.02);
+            render();
+          });
+          domesEl.appendChild(card);
+        });
+        updateHud();
+      };
+
+      const clamp = (v) => Math.max(0, Math.min(100, v));
+
+      const applyAction = (act) => {
+        if (!running) return;
+        const d = domes[selected];
+        if (!d) return;
+
+        if (act === 'balance') {
+          if (globalCd > 0) {
+            beep(220, 0.08, 'square', 0.04);
+            return;
+          }
+          domes.forEach(dm => {
+            dm.temp += (50 - dm.temp) * 0.25;
+            dm.moisture += (50 - dm.moisture) * 0.25;
+            dm.rad += (50 - dm.rad) * 0.25;
+          });
+          globalCd = 12;
+          beep(840, 0.09, 'triangle', 0.05);
+        } else if (act === 'cool') {
+          d.temp -= 16;
+          d.moisture -= 5;
+          d.rad += 2;
+          beep(650, 0.06, 'triangle', 0.03);
+        } else if (act === 'mist') {
+          d.moisture += 17;
+          d.temp -= 3;
+          d.rad += 2;
+          beep(560, 0.06, 'sine', 0.03);
+        } else if (act === 'shield') {
+          d.rad -= 18;
+          d.temp += 4;
+          d.moisture -= 2;
+          beep(760, 0.06, 'triangle', 0.03);
+        }
+        d.temp = clamp(d.temp); d.moisture = clamp(d.moisture); d.rad = clamp(d.rad);
+        render();
+      };
+
+      const tick = () => {
+        if (!running) return;
+        elapsed += 1;
+        if (globalCd > 0) globalCd -= 1;
+
+        domes.forEach((d) => {
+          d.temp = clamp(d.temp + (Math.random() - 0.48) * 6 + 0.7);
+          d.moisture = clamp(d.moisture + (Math.random() - 0.52) * 6 - 0.2);
+          d.rad = clamp(d.rad + (Math.random() - 0.5) * 6 + 0.5);
+
+          const pressure = (Math.abs(d.temp - 50) + Math.abs(d.moisture - 50) + Math.abs(d.rad - 50)) / 3;
+          d.integrity -= Math.max(0, pressure - 12) * 0.22;
+
+          if (pressure < 18) score += 10;
+          else if (pressure < 28) score += 4;
+          else score += 1;
+        });
+
+        if (domes.some(d => d.integrity <= 0)) {
+          running = false;
+          if (score > best) {
+            best = score;
+            localStorage.setItem(keyBest, String(best));
+          }
+          beep(190, 0.2, 'sawtooth', 0.06);
+          startBtn.textContent = `Collapse at ${elapsed}s — Restart`;
+        }
+
+        render();
+      };
+
+      const start = () => {
+        initAudio();
+        domes = mkDomes();
+        selected = 0;
+        score = 0;
+        elapsed = 0;
+        globalCd = 0;
+        running = true;
+        startBtn.textContent = 'Start / Restart';
+        beep(520, 0.08, 'triangle', 0.04);
+        render();
+      };
+
+      actionBtns.forEach(btn => {
+        const act = btn.dataset.act;
+        btn.addEventListener('pointerdown', (ev) => {
+          ev.preventDefault();
+          initAudio();
+          applyAction(act);
+        });
+      });
+
+      window.addEventListener('keydown', (e) => {
+        const k = e.key.toLowerCase();
+        if (k === '1') { selected = 0; render(); }
+        if (k === '2') { selected = 1; render(); }
+        if (k === '3') { selected = 2; render(); }
+        if (k === 'q') applyAction('cool');
+        if (k === 'w') applyAction('mist');
+        if (k === 'e') applyAction('shield');
+        if (k === ' ' || k === 'spacebar') { e.preventDefault(); applyAction('balance'); }
+        if (k === 'enter') start();
+      });
+
+      startBtn.addEventListener('click', start);
+
+      start();
+      timer = setInterval(tick, 1000);
+
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+      }
+    })();
+  </script>
+</body>
+</html>

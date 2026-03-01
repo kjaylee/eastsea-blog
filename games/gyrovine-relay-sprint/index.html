@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Gyrovine Relay Sprint — 자이로바인 릴레이 스프린트</title>
+  <meta name="description" content="원형 궤도에서 릴레이를 회수하고 파편을 회피하는 네온 액션 러너" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <style>
+    :root {
+      --bg: #0a0a1a;
+      --panel: #121228;
+      --line: #2b2b50;
+      --text: #e9eeff;
+      --cyan: #46edff;
+      --pink: #ff58d1;
+      --lime: #acff78;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Pretendard", "Noto Sans KR", system-ui, -apple-system, sans-serif;
+      background: radial-gradient(circle at 20% 0%, #1e1e43 0%, var(--bg) 56%);
+      color: var(--text);
+      display: grid;
+      place-items: center;
+      padding: 12px;
+    }
+    .app {
+      width: min(100%, 460px);
+      background: rgba(12, 12, 30, 0.93);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: 0 0 24px rgba(70, 237, 255, 0.12);
+      padding: 14px;
+    }
+    h1 { margin: 0 0 6px; font-size: clamp(1.08rem, 2.7vw, 1.45rem); color: var(--cyan); }
+    .desc { margin: 0 0 10px; font-size: .9rem; opacity: .9; line-height: 1.45; }
+    .hud { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; margin-bottom: 10px; }
+    .card {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 10px;
+      padding: 7px 4px;
+      text-align: center;
+      font-size: .8rem;
+    }
+    .card b { display: block; margin-top: 3px; font-size: 1rem; color: var(--cyan); }
+    canvas {
+      width: 100%;
+      aspect-ratio: 4 / 5;
+      background: radial-gradient(circle at center, #1a1a3f 0%, #0a0a1a 70%);
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      display: block;
+      touch-action: none;
+    }
+    .row { display: flex; gap: 8px; margin-top: 10px; }
+    button {
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: #18183a;
+      color: var(--text);
+      padding: 10px 12px;
+      font-size: .95rem;
+    }
+    button.primary {
+      flex: 1;
+      background: linear-gradient(135deg, #20406a, #263679);
+      border-color: #42b8dd;
+      box-shadow: inset 0 0 14px rgba(70, 237, 255, .18);
+    }
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .controls button { min-height: 48px; font-size: 1.05rem; font-weight: 700; touch-action: manipulation; }
+    .tip { margin-top: 8px; font-size: .8rem; opacity: .78; }
+    @media (max-width: 420px) { .app { padding: 12px; border-radius: 12px; } .hud { gap: 6px; } }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>🌀 Gyrovine Relay Sprint</h1>
+    <p class="desc">원형 궤도를 회전하며 릴레이(청록) 회수, 파편(자홍) 회피. Space/터치 Pulse로 위기 탈출.</p>
+    <section class="hud">
+      <div class="card">Score<b id="score">0</b></div>
+      <div class="card">Best<b id="best">0</b></div>
+      <div class="card">Hull<b id="life">3</b></div>
+      <div class="card">Pulse<b id="pulse">2</b></div>
+    </section>
+    <canvas id="game" width="360" height="450" aria-label="gyrovine relay sprint"></canvas>
+    <div class="row"><button id="startBtn" class="primary">Start / Restart</button></div>
+    <div class="controls">
+      <button data-act="left">⟲ LEFT</button>
+      <button data-act="pulse">PULSE</button>
+      <button data-act="right">RIGHT ⟳</button>
+    </div>
+    <p class="tip">←/→ 이동 · Space Pulse · Enter 시작</p>
+  </main>
+
+  <script>
+    (() => {
+      const canvas = document.getElementById('game');
+      const ctx = canvas.getContext('2d');
+      const scoreEl = document.getElementById('score');
+      const bestEl = document.getElementById('best');
+      const lifeEl = document.getElementById('life');
+      const pulseEl = document.getElementById('pulse');
+      const startBtn = document.getElementById('startBtn');
+      const controlButtons = [...document.querySelectorAll('.controls button')];
+
+      const keyBest = 'gyrovine_relay_sprint_best';
+      let best = Number(localStorage.getItem(keyBest) || 0);
+      bestEl.textContent = String(best);
+
+      let audioCtx;
+      const initAudio = () => {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+      };
+      const beep = (freq, dur = 0.06, type = 'sine', gain = 0.04) => {
+        if (!audioCtx) return;
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.type = type; o.frequency.value = freq; g.gain.value = gain;
+        o.connect(g).connect(audioCtx.destination);
+        o.start(); o.stop(audioCtx.currentTime + dur);
+      };
+
+      const input = { left: false, right: false };
+      let running = false;
+      let playerAngle = -Math.PI / 2;
+      let angularVel = 0;
+      let life = 3, score = 0, pulses = 2;
+      let objects = [];
+      let spawnTick = 0;
+      let raf = 0;
+
+      const center = { x: canvas.width / 2, y: canvas.height / 2 };
+      const playerR = 112;
+
+      const angDiff = (a, b) => {
+        let d = a - b;
+        while (d > Math.PI) d -= Math.PI * 2;
+        while (d < -Math.PI) d += Math.PI * 2;
+        return Math.abs(d);
+      };
+
+      const updateHud = () => {
+        scoreEl.textContent = String(score);
+        bestEl.textContent = String(best);
+        lifeEl.textContent = String(life);
+        pulseEl.textContent = String(pulses);
+      };
+
+      const reset = () => {
+        running = true;
+        playerAngle = -Math.PI / 2;
+        angularVel = 0;
+        life = 3;
+        score = 0;
+        pulses = 2;
+        objects = [];
+        spawnTick = 0;
+        updateHud();
+      };
+
+      const spawnObject = () => {
+        const hazard = Math.random() < 0.35;
+        objects.push({
+          a: Math.random() * Math.PI * 2,
+          r: 172,
+          vr: -(1.45 + Math.random() * 0.8 + score * 0.00035),
+          type: hazard ? 'hazard' : 'relay'
+        });
+      };
+
+      const drawRing = () => {
+        ctx.strokeStyle = 'rgba(70,237,255,.25)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(center.x, center.y, playerR, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.fillStyle = '#46edff';
+        ctx.shadowColor = '#46edff';
+        ctx.shadowBlur = 16;
+        ctx.beginPath();
+        ctx.arc(center.x, center.y, 18, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      };
+
+      const drawPlayer = () => {
+        const x = center.x + Math.cos(playerAngle) * playerR;
+        const y = center.y + Math.sin(playerAngle) * playerR;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(playerAngle + Math.PI / 2);
+        ctx.fillStyle = '#acff78';
+        ctx.shadowColor = '#acff78';
+        ctx.shadowBlur = 14;
+        ctx.beginPath();
+        ctx.moveTo(0, -13);
+        ctx.lineTo(10, 11);
+        ctx.lineTo(-10, 11);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+        ctx.shadowBlur = 0;
+      };
+
+      const drawObjects = () => {
+        for (const o of objects) {
+          const x = center.x + Math.cos(o.a) * o.r;
+          const y = center.y + Math.sin(o.a) * o.r;
+          ctx.beginPath();
+          if (o.type === 'hazard') {
+            ctx.fillStyle = '#ff58d1';
+            ctx.shadowColor = '#ff58d1';
+            ctx.shadowBlur = 12;
+          } else {
+            ctx.fillStyle = '#46edff';
+            ctx.shadowColor = '#46edff';
+            ctx.shadowBlur = 12;
+          }
+          ctx.arc(x, y, o.type === 'hazard' ? 8 : 7, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.shadowBlur = 0;
+      };
+
+      const drawOverlay = (text) => {
+        ctx.fillStyle = 'rgba(8,8,20,.68)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#e9eeff';
+        ctx.textAlign = 'center';
+        ctx.font = '700 28px system-ui';
+        const lines = text.split('\n');
+        lines.forEach((l, i) => ctx.fillText(l, center.x, center.y - 8 + i * 34));
+        ctx.font = '500 15px system-ui';
+        ctx.fillText('Enter 또는 Start로 재시작', center.x, center.y + 58);
+      };
+
+      const usePulse = () => {
+        if (!running || pulses <= 0) return;
+        pulses -= 1;
+        for (let i = objects.length - 1; i >= 0; i--) {
+          if (objects[i].type === 'hazard' && objects[i].r < 140) objects.splice(i, 1);
+        }
+        beep(860, 0.1, 'triangle', 0.05);
+        updateHud();
+      };
+
+      const endGame = () => {
+        running = false;
+        if (score > best) {
+          best = score;
+          localStorage.setItem(keyBest, String(best));
+        }
+        beep(180, 0.2, 'sawtooth', 0.06);
+        updateHud();
+      };
+
+      const tick = () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#0a0a1a';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        for (let i = 0; i < 40; i++) {
+          const a = i * 2.3;
+          const x = (i * 53 + performance.now() * 0.02 * ((i % 4) + 1)) % canvas.width;
+          const y = (i * 97 + Math.sin(a) * 12) % canvas.height;
+          ctx.fillStyle = `rgba(70,237,255,${0.05 + (i % 3) * 0.03})`;
+          ctx.fillRect(x, y, 1.5, 1.5);
+        }
+
+        if (running) {
+          if (input.left) angularVel -= 0.0075;
+          if (input.right) angularVel += 0.0075;
+          angularVel *= 0.92;
+          angularVel = Math.max(-0.105, Math.min(0.105, angularVel));
+          playerAngle += angularVel;
+
+          spawnTick += 1;
+          const interval = Math.max(14, 36 - Math.floor(score / 180));
+          if (spawnTick >= interval) {
+            spawnTick = 0;
+            spawnObject();
+          }
+
+          for (let i = objects.length - 1; i >= 0; i--) {
+            const o = objects[i];
+            o.r += o.vr;
+            if (o.r < playerR + 8 && o.r > playerR - 10 && angDiff(o.a, playerAngle) < 0.18) {
+              if (o.type === 'relay') {
+                score += 14;
+                beep(720, 0.05, 'sine', 0.03);
+              } else {
+                life -= 1;
+                beep(230, 0.1, 'square', 0.05);
+                if (life <= 0) endGame();
+              }
+              objects.splice(i, 1);
+            } else if (o.r < 28) {
+              if (o.type === 'relay') score = Math.max(0, score - 8);
+              objects.splice(i, 1);
+            }
+          }
+
+          score += 1;
+          if (score > 0 && score % 850 === 0) pulses = Math.min(4, pulses + 1);
+          updateHud();
+        }
+
+        drawRing();
+        drawObjects();
+        drawPlayer();
+
+        if (!running) drawOverlay(score > 0 ? `GAME OVER\nScore ${score}` : 'Press Start');
+
+        raf = requestAnimationFrame(tick);
+      };
+
+      const start = () => {
+        initAudio();
+        beep(520, 0.08, 'triangle', 0.04);
+        reset();
+      };
+
+      startBtn.addEventListener('click', start);
+
+      window.addEventListener('keydown', (e) => {
+        const k = e.key.toLowerCase();
+        if (k === 'arrowleft' || k === 'a') input.left = true;
+        if (k === 'arrowright' || k === 'd') input.right = true;
+        if (k === ' ' || k === 'spacebar') { e.preventDefault(); usePulse(); }
+        if (k === 'enter') start();
+      });
+      window.addEventListener('keyup', (e) => {
+        const k = e.key.toLowerCase();
+        if (k === 'arrowleft' || k === 'a') input.left = false;
+        if (k === 'arrowright' || k === 'd') input.right = false;
+      });
+
+      const setHold = (act, on) => {
+        if (act === 'left') input.left = on;
+        if (act === 'right') input.right = on;
+        if (act === 'pulse' && on) usePulse();
+      };
+      for (const btn of controlButtons) {
+        const act = btn.dataset.act;
+        const down = (ev) => { ev.preventDefault(); initAudio(); setHold(act, true); };
+        const up = (ev) => { ev.preventDefault(); setHold(act, false); };
+        btn.addEventListener('pointerdown', down);
+        btn.addEventListener('pointerup', up);
+        btn.addEventListener('pointercancel', up);
+        btn.addEventListener('pointerleave', up);
+      }
+
+      tick();
+
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+      }
+    })();
+  </script>
+</body>
+</html>

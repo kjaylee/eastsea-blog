@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Lumen Weave Atelier</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <style>
+    :root{--bg:#0a0a1a;--panel:#12122e;--line:#2de2e6;--accent:#ff4ecd;--ok:#44ff99;--warn:#ffc857;--bad:#ff5d73}
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100svh;background:radial-gradient(circle at 20% 0%,#1a1a44,#0a0a1a 58%);color:#eef7ff;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;padding:calc(12px + env(safe-area-inset-top)) 12px calc(14px + env(safe-area-inset-bottom));display:flex;justify-content:center}
+    .app{width:min(820px,100%);display:grid;gap:10px}
+    .card{background:linear-gradient(180deg,#141432,#101028);border:1px solid #2f4f90;border-radius:14px;padding:10px;box-shadow:0 0 20px #0008,inset 0 0 20px #203a7628}
+    h1{margin:0;color:var(--line);font-size:clamp(1.15rem,2.8vw,1.7rem)}
+    .hint{opacity:.84;font-size:.84rem}
+    .hud{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+    .stat{background:#0b1332;border:1px solid #2f4a8a;border-radius:10px;padding:8px;text-align:center}
+    .label{font-size:.72rem;opacity:.75}.value{font-weight:800}
+    .boards{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .board{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+    .cell{aspect-ratio:1/1;border-radius:10px;border:2px solid #2c4b89;background:#121932;display:grid;place-items:center;cursor:pointer;position:relative}
+    .cell.active{outline:2px solid var(--accent);box-shadow:0 0 0 2px #ff4ecd55 inset,0 0 12px #ff4ecd66}
+    .cell::after{content:'';width:70%;height:70%;border-radius:8px;background:var(--c,#24345d);box-shadow:0 0 10px color-mix(in srgb,var(--c,#24345d),transparent 35%)}
+    .controls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+    button{border:1px solid #3b5ea4;background:#13264e;color:#f4f9ff;border-radius:10px;padding:10px 8px;font-weight:700}
+    .ok{background:#123a2a;border-color:#3ad38d}.accent{background:linear-gradient(180deg,#541f5b,#2f1239);border-color:#cb73e8}.danger{background:#3a141f;border-color:#d44f61}
+    .overlay{position:fixed;inset:0;background:#060814de;display:grid;place-items:center;padding:16px;z-index:50}
+    .overlay.hidden{display:none}
+    .panel{width:min(560px,100%);background:#0f1128;border:1px solid #335493;border-radius:14px;padding:16px;display:grid;gap:10px}
+    .panel h2{margin:0;color:var(--line)}.panel p{margin:0;line-height:1.45}
+    @media (max-width:760px){.hud{grid-template-columns:repeat(3,minmax(0,1fr))}.boards{grid-template-columns:1fr}.controls{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="card">
+      <h1>🧵 Lumen Weave Atelier</h1>
+      <div class="hint">3x3 직조판을 목표 패턴과 일치시키세요. 실패 3회면 종료됩니다.</div>
+    </div>
+
+    <div class="card hud">
+      <div class="stat"><div class="label">Stage</div><div id="stage" class="value">1</div></div>
+      <div class="stat"><div class="label">Score</div><div id="score" class="value">0</div></div>
+      <div class="stat"><div class="label">Best</div><div id="best" class="value">0</div></div>
+      <div class="stat"><div class="label">Fails</div><div id="fails" class="value">0 / 3</div></div>
+      <div class="stat"><div class="label">Time</div><div id="time" class="value">30</div></div>
+    </div>
+
+    <div class="card boards">
+      <div>
+        <strong>Target Pattern</strong>
+        <div id="target" class="board" aria-label="target board"></div>
+      </div>
+      <div>
+        <strong>Your Weave</strong>
+        <div id="player" class="board" aria-label="player board"></div>
+      </div>
+    </div>
+
+    <div class="card controls">
+      <button id="cycleBtn" class="ok">Cycle Cell (Enter/Space)</button>
+      <button id="nextBtn" class="accent">Next Cell (Tab)</button>
+      <button id="pauseBtn">Pause (P)</button>
+      <button id="resetBtn" class="danger">Reset</button>
+    </div>
+
+    <div class="card hint">키보드: 화살표 커서 이동 · Enter/Space 색상 변경 · Tab 다음 셀 · P 일시정지 · 터치/클릭 지원</div>
+  </div>
+
+  <div id="overlay" class="overlay">
+    <div class="panel">
+      <h2 id="ovTitle">Lumen Weave Atelier</h2>
+      <p id="ovText">패턴을 빠르게 맞출수록 보너스가 커집니다.</p>
+      <button id="ovBtn">Start Weaving</button>
+    </div>
+  </div>
+
+<script>
+(()=>{
+'use strict';
+const LS_KEY='lumen-weave-atelier-v1';
+const COLORS=['#26355d','#2de2e6','#ff4ecd','#ffc857','#44ff99'];
+const st={stage:1,score:0,best:0,fails:0,time:30,running:false,paused:false,target:Array(9).fill(0),player:Array(9).fill(0),active:0,last:performance.now(),audio:null};
+const el={stage:$('#stage'),score:$('#score'),best:$('#best'),fails:$('#fails'),time:$('#time'),target:$('#target'),player:$('#player'),overlay:$('#overlay'),ovTitle:$('#ovTitle'),ovText:$('#ovText'),ovBtn:$('#ovBtn')};
+function $(q){return document.querySelector(q);} 
+
+function load(){try{const v=JSON.parse(localStorage.getItem(LS_KEY)||'{}');st.best=Number(v.best||0);}catch(_){st.best=0;}}
+function save(){localStorage.setItem(LS_KEY,JSON.stringify({best:st.best}));}
+function ensureAudio(){if(st.audio)return;st.audio=new (window.AudioContext||window.webkitAudioContext)();}
+function beep(f=740,d=0.06,t='sine',g=0.05){if(!st.audio)return;const n=st.audio.currentTime,o=st.audio.createOscillator(),a=st.audio.createGain();o.type=t;o.frequency.value=f;a.gain.setValueAtTime(g,n);a.gain.exponentialRampToValueAtTime(0.0001,n+d);o.connect(a).connect(st.audio.destination);o.start(n);o.stop(n+d);} 
+function sfx(k){if(k==='ok'){beep(980,0.07,'triangle',0.05);setTimeout(()=>beep(1280,0.08,'triangle',0.05),70);}else if(k==='bad'){beep(230,0.2,'sawtooth',0.06);}else{beep(640,0.04,'square',0.04);}}
+
+function rand(max){return Math.floor(Math.random()*max);} 
+function genPattern(){for(let i=0;i<9;i++)st.target[i]=1+rand(COLORS.length-1);} 
+function resetPlayer(){for(let i=0;i<9;i++)st.player[i]=rand(COLORS.length);} 
+
+function cellHTML(val,active){
+  const cls='cell'+(active?' active':'');
+  return `<div class="${cls}" style="--c:${COLORS[val]}" data-i="${active?st.active:''}"></div>`;
+}
+
+function renderBoards(){
+  el.target.innerHTML=st.target.map(v=>`<div class="cell" style="--c:${COLORS[v]}"></div>`).join('');
+  el.player.innerHTML=st.player.map((v,i)=>`<div class="cell${i===st.active?' active':''}" style="--c:${COLORS[v]}" data-i="${i}"></div>`).join('');
+  el.player.querySelectorAll('.cell').forEach((c,i)=>c.addEventListener('pointerdown',()=>{st.active=i;cycle();}));
+}
+
+function render(){
+  el.stage.textContent=String(st.stage);
+  el.score.textContent=String(Math.floor(st.score));
+  el.best.textContent=String(Math.floor(st.best));
+  el.fails.textContent=`${st.fails} / 3`;
+  el.time.textContent=String(Math.ceil(st.time));
+  renderBoards();
+}
+
+function matched(){for(let i=0;i<9;i++) if(st.player[i]!==st.target[i]) return false;return true;}
+function nextStage(){
+  st.score+=Math.max(10,Math.floor(st.time*4));
+  st.stage++;
+  st.time=Math.max(10,30-(st.stage-1)*1.5);
+  st.active=0;
+  genPattern();
+  resetPlayer();
+  if(st.score>st.best){st.best=st.score;save();}
+  sfx('ok');
+  render();
+}
+
+function failStage(){
+  st.fails++;
+  if(st.fails>=3) return gameOver();
+  st.time=Math.max(12,28-(st.stage-1));
+  st.active=0;
+  resetPlayer();
+  sfx('bad');
+  render();
+}
+
+function cycle(){
+  if(!st.running||st.paused) return;
+  ensureAudio();if(st.audio.state==='suspended')st.audio.resume();
+  st.player[st.active]=(st.player[st.active]+1)%COLORS.length;
+  sfx('tap');
+  if(matched()) nextStage();
+  else render();
+}
+
+function move(dx,dy){
+  const x=st.active%3,y=Math.floor(st.active/3);
+  const nx=(x+dx+3)%3,ny=(y+dy+3)%3;
+  st.active=ny*3+nx;
+  render();
+}
+
+function tick(now){
+  const dt=Math.min(0.05,(now-st.last)/1000);st.last=now;
+  if(st.running&&!st.paused){
+    st.time-=dt;
+    if(st.time<=0){st.time=0;failStage();}
+    else el.time.textContent=String(Math.ceil(st.time));
+  }
+  requestAnimationFrame(tick);
+}
+
+function start(){ensureAudio();if(st.audio.state==='suspended')st.audio.resume();st.stage=1;st.score=0;st.fails=0;st.time=30;st.active=0;st.running=true;st.paused=false;genPattern();resetPlayer();render();el.overlay.classList.add('hidden');}
+function reset(){st.running=false;st.paused=false;st.stage=1;st.score=0;st.fails=0;st.time=30;st.active=0;genPattern();resetPlayer();render();show('Lumen Weave Atelier','목표 패턴과 플레이 패턴을 동일하게 맞추세요.','Start Weaving',start);} 
+function gameOver(){st.running=false;show('Atelier Closed',`Score ${Math.floor(st.score)} · Best ${Math.floor(st.best)}`,'Retry',start);} 
+function show(t,tx,b,fn){el.ovTitle.textContent=t;el.ovText.textContent=tx;el.ovBtn.textContent=b;el.ovBtn.onclick=()=>{el.overlay.classList.add('hidden');fn&&fn();};el.overlay.classList.remove('hidden');}
+
+function onKey(e){
+  const k=e.key.toLowerCase();
+  if(['arrowup','arrowdown','arrowleft','arrowright','tab','enter',' ','p'].includes(k)||e.key==='Tab'||e.key===' ') e.preventDefault();
+  if(k==='arrowup') move(0,-1);
+  if(k==='arrowdown') move(0,1);
+  if(k==='arrowleft') move(-1,0);
+  if(k==='arrowright') move(1,0);
+  if(k==='tab'){st.active=(st.active+1)%9;render();}
+  if(k==='enter'||k===' ') cycle();
+  if(k==='p') st.paused=!st.paused;
+}
+
+$('#cycleBtn').addEventListener('pointerdown',cycle);
+$('#nextBtn').addEventListener('pointerdown',()=>{st.active=(st.active+1)%9;render();});
+$('#pauseBtn').addEventListener('pointerdown',()=>{st.paused=!st.paused;});
+$('#resetBtn').addEventListener('pointerdown',reset);
+document.addEventListener('keydown',onKey,{passive:false});
+
+load();genPattern();resetPlayer();render();requestAnimationFrame(tick);
+show('Lumen Weave Atelier','3x3 직조판의 색상을 목표 패턴과 맞추세요. 실패 3회 시 종료됩니다.','Start Weaving',start);
+})();
+</script>
+</body>
+</html>

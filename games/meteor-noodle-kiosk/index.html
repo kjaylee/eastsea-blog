@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Meteor Noodle Kiosk</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <style>
+    :root{--bg:#0a0a1a;--panel:#12122e;--line:#2de2e6;--accent:#ff4ecd;--ok:#44ff99;--warn:#ffc857;--bad:#ff5d73}
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100svh;background:radial-gradient(circle at 20% 0%,#1a1a44,#0a0a1a 58%);color:#eef7ff;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;padding:calc(12px + env(safe-area-inset-top)) 12px calc(14px + env(safe-area-inset-bottom));display:flex;justify-content:center}
+    .app{width:min(920px,100%);display:grid;gap:10px}
+    .card{background:linear-gradient(180deg,#141432,#101028);border:1px solid #2f4f90;border-radius:14px;padding:10px;box-shadow:0 0 20px #0008,inset 0 0 20px #203a7628}
+    h1{margin:0;color:var(--line);font-size:clamp(1.15rem,2.8vw,1.7rem)}
+    .hint{opacity:.84;font-size:.84rem}
+    .hud{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+    .stat{background:#0b1332;border:1px solid #2f4a8a;border-radius:10px;padding:8px;text-align:center}
+    .label{font-size:.72rem;opacity:.75}.value{font-weight:800}
+    .orders{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+    .order{border:1px solid #35589d;background:linear-gradient(180deg,#0f1c3e,#0b1630);border-radius:12px;padding:10px;display:grid;gap:6px;cursor:pointer}
+    .order.sel{border-color:var(--accent);box-shadow:0 0 0 1px #ff4ecd88,inset 0 0 14px #ff4ecd2c}
+    .bar{height:8px;border:1px solid #2f4a8a;background:#09112a;border-radius:999px;overflow:hidden}
+    .bar>span{display:block;height:100%;background:linear-gradient(90deg,#44ff99,#ffc857,#ff5d73)}
+    .station{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+    .plate{border:1px solid #35589d;border-radius:12px;background:#0f1632;padding:10px;display:grid;gap:6px}
+    .controls{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+    button{border:1px solid #3b5ea4;background:#13264e;color:#f4f9ff;border-radius:10px;padding:10px 8px;font-weight:700}
+    .ok{background:#123a2a;border-color:#3ad38d}.accent{background:linear-gradient(180deg,#541f5b,#2f1239);border-color:#cb73e8}.danger{background:#3a141f;border-color:#d44f61}
+    .overlay{position:fixed;inset:0;background:#060814de;display:grid;place-items:center;padding:16px;z-index:50}
+    .overlay.hidden{display:none}
+    .panel{width:min(560px,100%);background:#0f1128;border:1px solid #335493;border-radius:14px;padding:16px;display:grid;gap:10px}
+    .panel h2{margin:0;color:var(--line)}.panel p{margin:0;line-height:1.45}
+    @media (max-width:760px){.hud{grid-template-columns:repeat(3,minmax(0,1fr))}.orders{grid-template-columns:1fr}.station{grid-template-columns:1fr}.controls{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="card">
+      <h1>🍜 Meteor Noodle Kiosk</h1>
+      <div class="hint">주문을 선택하고 Broth/Topping을 맞춘 뒤 Serve 하세요. 만료 5회면 종료됩니다.</div>
+    </div>
+
+    <div class="card hud">
+      <div class="stat"><div class="label">Revenue</div><div id="score" class="value">0</div></div>
+      <div class="stat"><div class="label">Best</div><div id="best" class="value">0</div></div>
+      <div class="stat"><div class="label">Streak</div><div id="streak" class="value">0</div></div>
+      <div class="stat"><div class="label">Miss</div><div id="miss" class="value">0 / 5</div></div>
+      <div class="stat"><div class="label">Wave</div><div id="wave" class="value">1</div></div>
+      <div class="stat"><div class="label">Queue</div><div id="queue" class="value">0</div></div>
+    </div>
+
+    <div id="orders" class="card orders"></div>
+
+    <div class="card station">
+      <div class="plate">
+        <strong>Selected Order</strong>
+        <div id="targetText">선택된 주문 없음</div>
+      </div>
+      <div class="plate">
+        <strong>Your Bowl</strong>
+        <div id="cookText">Broth: Solar · Topping: Egg</div>
+      </div>
+    </div>
+
+    <div class="card controls">
+      <button id="brothBtn" class="accent">Broth (B)</button>
+      <button id="topBtn" class="accent">Topping (T)</button>
+      <button id="serveBtn" class="ok">Serve (Enter/Space)</button>
+      <button id="pauseBtn">Pause (P)</button>
+      <button id="resetBtn" class="danger">Reset</button>
+    </div>
+
+    <div class="card hint">키보드: 1~3 주문 선택 · B 육수 변경 · T 토핑 변경 · Enter/Space 서빙 · P 일시정지 · 터치 지원</div>
+  </div>
+
+  <div id="overlay" class="overlay">
+    <div class="panel">
+      <h2 id="ovTitle">Meteor Noodle Kiosk</h2>
+      <p id="ovText">정확한 조리 조합으로 손님 스트릭을 유지하세요.</p>
+      <button id="ovBtn">Open Kiosk</button>
+    </div>
+  </div>
+
+<script>
+(()=>{
+'use strict';
+const LS_KEY='meteor-noodle-kiosk-v1';
+const BROTH=['Solar','Nebula','Comet'];
+const TOPPING=['Egg','Herb','Chili'];
+
+const st={score:0,best:0,streak:0,miss:0,wave:1,running:false,paused:false,orders:[],selected:0,cook:{broth:0,top:0},spawnAt:0,audio:null};
+const el={score:$('#score'),best:$('#best'),streak:$('#streak'),miss:$('#miss'),wave:$('#wave'),queue:$('#queue'),orders:$('#orders'),target:$('#targetText'),cook:$('#cookText'),overlay:$('#overlay'),ovTitle:$('#ovTitle'),ovText:$('#ovText'),ovBtn:$('#ovBtn')};
+function $(q){return document.querySelector(q);} 
+
+function load(){try{const v=JSON.parse(localStorage.getItem(LS_KEY)||'{}');st.best=Number(v.best||0);}catch(_){st.best=0;}}
+function save(){localStorage.setItem(LS_KEY,JSON.stringify({best:st.best}));}
+function ensureAudio(){if(st.audio)return;st.audio=new (window.AudioContext||window.webkitAudioContext)();}
+function beep(f=740,d=0.06,t='sine',g=0.05){if(!st.audio)return;const n=st.audio.currentTime,o=st.audio.createOscillator(),a=st.audio.createGain();o.type=t;o.frequency.value=f;a.gain.setValueAtTime(g,n);a.gain.exponentialRampToValueAtTime(0.0001,n+d);o.connect(a).connect(st.audio.destination);o.start(n);o.stop(n+d);} 
+function sfx(k){if(k==='ok'){beep(980,0.07,'triangle',0.05);setTimeout(()=>beep(1320,0.08,'triangle',0.05),70);}else if(k==='bad'){beep(220,0.2,'sawtooth',0.06);}else{beep(630,0.04,'square',0.04);}}
+
+function rand(n){return Math.floor(Math.random()*n);} 
+function makeOrder(){
+  return {
+    id:Math.random().toString(36).slice(2,8),
+    broth:rand(BROTH.length),
+    top:rand(TOPPING.length),
+    time:9-Math.min(4,Math.floor(st.wave/3)),
+    max:9-Math.min(4,Math.floor(st.wave/3))
+  };
+}
+
+function updateTexts(){
+  const o=st.orders[st.selected];
+  el.target.textContent=o?`Need: ${BROTH[o.broth]} + ${TOPPING[o.top]} (left ${o.time.toFixed(1)}s)`:'선택된 주문 없음';
+  el.cook.textContent=`Broth: ${BROTH[st.cook.broth]} · Topping: ${TOPPING[st.cook.top]}`;
+}
+
+function renderOrders(){
+  el.orders.innerHTML='';
+  st.orders.slice(0,3).forEach((o,i)=>{
+    const d=document.createElement('div');
+    d.className='order'+(i===st.selected?' sel':'');
+    const pct=Math.max(0,(o.time/o.max)*100);
+    d.innerHTML=`<strong>${i+1}. Meteor Ticket</strong><span>Req: ${BROTH[o.broth]} + ${TOPPING[o.top]}</span><div class="bar"><span style="width:${pct}%"></span></div>`;
+    d.addEventListener('pointerdown',()=>{st.selected=i;updateTexts();render();sfx('tap');});
+    el.orders.appendChild(d);
+  });
+  for(let i=st.orders.length;i<3;i++){
+    const e=document.createElement('div');
+    e.className='order';
+    e.style.opacity='.45';
+    e.innerHTML='<strong>빈 슬롯</strong><span class="hint">다음 주문 대기</span>';
+    el.orders.appendChild(e);
+  }
+}
+
+function render(){
+  el.score.textContent=String(Math.floor(st.score));
+  el.best.textContent=String(Math.floor(st.best));
+  el.streak.textContent=String(st.streak);
+  el.miss.textContent=`${st.miss} / 5`;
+  el.wave.textContent=String(st.wave);
+  el.queue.textContent=String(st.orders.length);
+  renderOrders();
+  updateTexts();
+}
+
+function serve(){
+  if(!st.running||st.paused||!st.orders.length) return;
+  ensureAudio();if(st.audio.state==='suspended')st.audio.resume();
+  const o=st.orders[st.selected];
+  const ok=o && o.broth===st.cook.broth && o.top===st.cook.top;
+  if(ok){
+    st.streak++;
+    st.score+=12+st.streak*3+Math.floor(o.time*2);
+    st.orders.splice(st.selected,1);
+    st.selected=Math.max(0,Math.min(st.selected,st.orders.length-1));
+    if(st.score>st.best){st.best=st.score;save();}
+    if(st.streak%5===0) st.wave++;
+    sfx('ok');
+  }else{
+    st.miss++;
+    st.streak=0;
+    sfx('bad');
+  }
+  if(st.miss>=5) return gameOver();
+  render();
+}
+
+function cycleBroth(){if(!st.running) return;st.cook.broth=(st.cook.broth+1)%BROTH.length;updateTexts();sfx('tap');}
+function cycleTop(){if(!st.running) return;st.cook.top=(st.cook.top+1)%TOPPING.length;updateTexts();sfx('tap');}
+
+function tick(dt){
+  if(!st.running||st.paused) return;
+  for(const o of st.orders) o.time-=dt;
+  const before=st.orders.length;
+  st.orders=st.orders.filter(o=>o.time>0);
+  const expired=before-st.orders.length;
+  if(expired>0){st.miss+=expired;st.streak=0;sfx('bad');}
+  if(st.miss>=5) return gameOver();
+  if(st.selected>=st.orders.length) st.selected=Math.max(0,st.orders.length-1);
+
+  st.spawnAt-=dt;
+  if(st.spawnAt<=0 && st.orders.length<3){
+    st.orders.push(makeOrder());
+    st.spawnAt=Math.max(1.2,3.4-Math.min(1.8,st.wave*0.18));
+  }
+  render();
+}
+
+let last=performance.now();
+function loop(now){const dt=Math.min(0.05,(now-last)/1000);last=now;tick(dt);requestAnimationFrame(loop);} 
+
+function start(){ensureAudio();if(st.audio.state==='suspended')st.audio.resume();st.score=0;st.streak=0;st.miss=0;st.wave=1;st.orders=[];st.selected=0;st.cook={broth:0,top:0};st.running=true;st.paused=false;st.spawnAt=0.2;render();el.overlay.classList.add('hidden');}
+function reset(){st.running=false;st.paused=false;st.orders=[];st.selected=0;st.score=0;st.streak=0;st.miss=0;st.wave=1;st.cook={broth:0,top:0};render();show('Meteor Noodle Kiosk','주문 조합을 맞춰 빠르게 서빙하세요. 만료 5회면 종료됩니다.','Open Kiosk',start);} 
+function gameOver(){st.running=false;show('Kiosk Closed',`Revenue ${Math.floor(st.score)} · Best ${Math.floor(st.best)}`,'Retry',start);} 
+function show(t,tx,b,fn){el.ovTitle.textContent=t;el.ovText.textContent=tx;el.ovBtn.textContent=b;el.ovBtn.onclick=()=>{el.overlay.classList.add('hidden');fn&&fn();};el.overlay.classList.remove('hidden');}
+
+function onKey(e){
+  const k=e.key.toLowerCase();
+  if(['1','2','3','b','t','enter',' ','p'].includes(k)||e.key===' ') e.preventDefault();
+  if(k>='1'&&k<='3'){const i=Number(k)-1;if(i<st.orders.length){st.selected=i;render();sfx('tap');}}
+  if(k==='b') cycleBroth();
+  if(k==='t') cycleTop();
+  if(k==='enter'||k===' ') serve();
+  if(k==='p') st.paused=!st.paused;
+}
+
+$('#brothBtn').addEventListener('pointerdown',cycleBroth);
+$('#topBtn').addEventListener('pointerdown',cycleTop);
+$('#serveBtn').addEventListener('pointerdown',serve);
+$('#pauseBtn').addEventListener('pointerdown',()=>{st.paused=!st.paused;});
+$('#resetBtn').addEventListener('pointerdown',reset);
+document.addEventListener('keydown',onKey,{passive:false});
+
+load();render();requestAnimationFrame(loop);
+show('Meteor Noodle Kiosk','주문을 선택하고 육수/토핑을 맞춰 서빙하세요.','Open Kiosk',start);
+})();
+</script>
+</body>
+</html>

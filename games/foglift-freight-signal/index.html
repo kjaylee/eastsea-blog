@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Foglift Freight Signal</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <style>
+    :root{--bg:#0a0a1a;--panel:#12122e;--line:#2de2e6;--accent:#ff4ecd;--ok:#43ff98;--warn:#ffc857;--bad:#ff5d73}
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100svh;background:radial-gradient(circle at 20% 0%,#1a1a44,#0a0a1a 58%);color:#eef7ff;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;padding:calc(12px + env(safe-area-inset-top)) 12px calc(14px + env(safe-area-inset-bottom));display:flex;justify-content:center}
+    .app{width:min(860px,100%);display:grid;gap:10px}
+    .card{background:linear-gradient(180deg,#141432,#101028);border:1px solid #2f4f90;border-radius:14px;padding:10px;box-shadow:0 0 20px #0008,inset 0 0 20px #203a7628}
+    h1{margin:0;color:var(--line);font-size:clamp(1.15rem,2.8vw,1.7rem);text-shadow:0 0 14px #2de2e680}
+    .hint{opacity:.84;font-size:.84rem}
+    .hud{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+    .stat{background:#0b1332;border:1px solid #2f4a8a;border-radius:10px;padding:8px;text-align:center}
+    .label{font-size:.72rem;opacity:.75}.value{font-weight:800}
+    .cargo{display:grid;gap:8px}
+    .cargo-main{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}
+    .badge{padding:6px 10px;border-radius:999px;font-weight:700;border:1px solid #3d65b7;background:#0f1c40}
+    .cold{border-color:#69d7ff;color:#8be8ff}.fragile{border-color:#f5b7ff;color:#ffd7ff}.heavy{border-color:#ffc857;color:#ffe1a1}.bio{border-color:#74ffb2;color:#adffd0}
+    .timer{height:10px;border:1px solid #304e8e;background:#070f22;border-radius:999px;overflow:hidden}
+    .timer>span{display:block;height:100%;background:linear-gradient(90deg,#43ff98,#2de2e6)}
+    .lanes{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+    .lane{border:1px solid #35589d;background:linear-gradient(180deg,#0f1c3e,#0b1630);border-radius:12px;padding:10px;display:grid;gap:6px;cursor:pointer}
+    .lane.selected{border-color:var(--accent);box-shadow:0 0 0 1px #ff4ecd88,inset 0 0 14px #ff4ecd2c}
+    button{border:1px solid #3b5ea4;background:#13264e;color:#f4f9ff;border-radius:10px;padding:10px 8px;font-weight:700}
+    button:active{transform:translateY(1px)}
+    .controls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+    .primary{background:linear-gradient(180deg,#1d3b79,#13264e);border-color:#5f90f3}
+    .accent{background:linear-gradient(180deg,#541f5b,#2f1239);border-color:#cb73e8}
+    .ok{background:#123a2a;border-color:#3ad38d}
+    .danger{background:#3a141f;border-color:#d44f61}
+    .overlay{position:fixed;inset:0;background:#060814de;display:grid;place-items:center;padding:16px;z-index:50}
+    .overlay.hidden{display:none}
+    .panel{width:min(560px,100%);background:#0f1128;border:1px solid #335493;border-radius:14px;padding:16px;display:grid;gap:10px}
+    .panel h2{margin:0;color:var(--line)}.panel p{margin:0;line-height:1.45}
+    @media (max-width:760px){.hud{grid-template-columns:repeat(3,minmax(0,1fr))}.lanes{grid-template-columns:repeat(2,minmax(0,1fr))}.controls{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="card">
+      <h1>🌫️ Foglift Freight Signal</h1>
+      <div class="hint">도착 화물을 적정 레인으로 분류하세요. 모드 전환으로 보상을 극대화하세요.</div>
+    </div>
+
+    <div class="card hud">
+      <div class="stat"><div class="label">Score</div><div id="score" class="value">0</div></div>
+      <div class="stat"><div class="label">Best</div><div id="best" class="value">0</div></div>
+      <div class="stat"><div class="label">Combo</div><div id="combo" class="value">0</div></div>
+      <div class="stat"><div class="label">Life</div><div id="life" class="value">5</div></div>
+      <div class="stat"><div class="label">Mode</div><div id="mode" class="value">ECO</div></div>
+      <div class="stat"><div class="label">Round</div><div id="round" class="value">1</div></div>
+    </div>
+
+    <div class="card cargo">
+      <div class="cargo-main">
+        <div>Incoming: <span id="cargoBadge" class="badge cold">COLD / Glacier Ampoules</span></div>
+        <div>Target Hint: <span id="hint" class="hint">Lane 1</span></div>
+      </div>
+      <div class="timer"><span id="timerBar" style="width:100%"></span></div>
+      <div class="hint">레인 규칙: 1=COLD · 2=FRAGILE · 3=HEAVY · 4=BIO</div>
+    </div>
+
+    <div id="lanes" class="card lanes"></div>
+
+    <div class="card controls">
+      <button id="dispatchBtn" class="ok">Dispatch (Enter/Space)</button>
+      <button id="modeBtn" class="accent">Toggle Mode (M)</button>
+      <button id="pauseBtn">Pause (P)</button>
+      <button id="resetBtn" class="danger">Reset</button>
+    </div>
+
+    <div class="card hint">키보드: 1~4 레인 선택 · Enter/Space 출고 · M 모드 전환 · P 일시정지 · 터치 입력 지원</div>
+  </div>
+
+  <div id="overlay" class="overlay">
+    <div class="panel">
+      <h2 id="ovTitle">Foglift Freight Signal</h2>
+      <p id="ovText">분류 컨트롤타워를 열고 화물 신호를 안정적으로 관리하세요.</p>
+      <button id="ovBtn" class="primary">Start Shift</button>
+    </div>
+  </div>
+
+<script>
+(()=>{
+'use strict';
+const LS_KEY='foglift-freight-signal-v1';
+const CARGO=[
+  {type:'cold',label:'COLD / Glacier Ampoules',lane:0,color:'#69d7ff'},
+  {type:'fragile',label:'FRAGILE / Prism Glass',lane:1,color:'#f5b7ff'},
+  {type:'heavy',label:'HEAVY / Core Ingots',lane:2,color:'#ffc857'},
+  {type:'bio',label:'BIO / Spore Crates',lane:3,color:'#74ffb2'}
+];
+const MODE={ECO:{name:'ECO',time:5.2,mul:1},EXPRESS:{name:'EXP',time:3.6,mul:1.5}};
+const LANE_NAMES=['North Dock','East Relay','South Crane','West Biobay'];
+
+const st={score:0,best:0,combo:0,life:5,round:1,selected:0,mode:'ECO',running:false,paused:false,audio:null,current:null,deadline:0,ticker:0};
+const el={score:$('#score'),best:$('#best'),combo:$('#combo'),life:$('#life'),round:$('#round'),mode:$('#mode'),badge:$('#cargoBadge'),hint:$('#hint'),timer:$('#timerBar'),overlay:$('#overlay'),ovTitle:$('#ovTitle'),ovText:$('#ovText'),ovBtn:$('#ovBtn'),lanes:$('#lanes')};
+function $(q){return document.querySelector(q);} 
+
+function load(){try{const v=JSON.parse(localStorage.getItem(LS_KEY)||'{}');st.best=Number(v.best||0);}catch(_){st.best=0;}}
+function save(){localStorage.setItem(LS_KEY,JSON.stringify({best:st.best}));}
+function ensureAudio(){if(st.audio)return;st.audio=new (window.AudioContext||window.webkitAudioContext)();}
+function beep(f=700,d=0.06,t='sine',g=0.05){if(!st.audio)return;const n=st.audio.currentTime,o=st.audio.createOscillator(),a=st.audio.createGain();o.type=t;o.frequency.value=f;a.gain.setValueAtTime(g,n);a.gain.exponentialRampToValueAtTime(0.0001,n+d);o.connect(a).connect(st.audio.destination);o.start(n);o.stop(n+d);} 
+function sfx(k){if(k==='ok'){beep(900,0.07,'triangle',0.06);setTimeout(()=>beep(1240,0.08,'triangle',0.05),65);}else if(k==='bad'){beep(210,0.2,'sawtooth',0.07);}else{beep(620,0.04,'square',0.04);}}
+
+function pickCargo(){
+  st.current=CARGO[Math.floor(Math.random()*CARGO.length)];
+  st.deadline=performance.now()+MODE[st.mode].time*1000;
+  el.badge.className='badge '+st.current.type;
+  el.badge.textContent=st.current.label;
+  el.hint.textContent='Lane '+(st.current.lane+1);
+}
+
+function renderLanes(){
+  el.lanes.innerHTML='';
+  LANE_NAMES.forEach((name,i)=>{
+    const d=document.createElement('div');
+    d.className='lane'+(i===st.selected?' selected':'');
+    d.innerHTML=`<strong>${i+1}. ${name}</strong><span class="hint">Accept: ${CARGO[i].type.toUpperCase()}</span>`;
+    d.addEventListener('pointerdown',()=>{st.selected=i;render();sfx('tap');});
+    el.lanes.appendChild(d);
+  });
+}
+
+function render(){
+  el.score.textContent=String(Math.floor(st.score));
+  el.best.textContent=String(Math.floor(st.best));
+  el.combo.textContent=String(st.combo);
+  el.life.textContent=String(st.life);
+  el.round.textContent=String(st.round);
+  el.mode.textContent=MODE[st.mode].name;
+  renderLanes();
+}
+
+function award(ok){
+  if(ok){
+    st.combo++;
+    const gain=(8+st.combo*2)*MODE[st.mode].mul;
+    st.score+=gain;
+    if(st.combo%4===0) st.round++;
+    sfx('ok');
+  }else{
+    st.life--;
+    st.combo=0;
+    sfx('bad');
+  }
+  if(st.score>st.best){st.best=st.score;save();}
+  if(st.life<=0) return gameOver();
+  pickCargo();
+  render();
+}
+
+function dispatch(){if(!st.running||st.paused) return;ensureAudio();if(st.audio.state==='suspended')st.audio.resume();award(st.selected===st.current.lane);} 
+function toggleMode(){if(!st.running) return;st.mode=st.mode==='ECO'?'EXPRESS':'ECO';pickCargo();render();sfx('tap');}
+
+function loop(){
+  if(!st.running){st.ticker=requestAnimationFrame(loop);return;}
+  if(!st.paused){
+    const now=performance.now();
+    const rem=Math.max(0,st.deadline-now);
+    const pct=(rem/(MODE[st.mode].time*1000))*100;
+    el.timer.style.width=Math.max(0,pct)+'%';
+    if(rem<=0) award(false);
+  }
+  st.ticker=requestAnimationFrame(loop);
+}
+
+function start(){ensureAudio();if(st.audio.state==='suspended')st.audio.resume();st.score=0;st.combo=0;st.life=5;st.round=1;st.selected=0;st.mode='ECO';st.running=true;st.paused=false;pickCargo();render();el.overlay.classList.add('hidden');}
+function reset(){st.running=false;st.paused=false;st.score=0;st.combo=0;st.life=5;st.round=1;st.selected=0;st.mode='ECO';pickCargo();render();show('Foglift Freight Signal','분류 신호를 안정적으로 맞추면 콤보와 점수가 상승합니다.','Start Shift',start);} 
+function gameOver(){st.running=false;show('Shift Failed',`Score ${Math.floor(st.score)} · Best ${Math.floor(st.best)}`,'Retry',start);} 
+function show(t,tx,b,fn){el.ovTitle.textContent=t;el.ovText.textContent=tx;el.ovBtn.textContent=b;el.ovBtn.onclick=()=>{el.overlay.classList.add('hidden');fn&&fn();};el.overlay.classList.remove('hidden');}
+
+function onKey(e){
+  const k=e.key.toLowerCase();
+  if(['1','2','3','4','m','p','enter',' '].includes(k)||e.key===' ') e.preventDefault();
+  if(k>='1'&&k<='4'){st.selected=Number(k)-1;render();sfx('tap');}
+  if(k==='m') toggleMode();
+  if(k==='p') st.paused=!st.paused;
+  if(k==='enter'||k===' ') dispatch();
+}
+
+$('#dispatchBtn').addEventListener('pointerdown',dispatch);
+$('#modeBtn').addEventListener('pointerdown',toggleMode);
+$('#pauseBtn').addEventListener('pointerdown',()=>{st.paused=!st.paused;});
+$('#resetBtn').addEventListener('pointerdown',reset);
+document.addEventListener('keydown',onKey,{passive:false});
+
+load();pickCargo();render();loop();
+show('Foglift Freight Signal','도착 화물을 정확 레인으로 출고하세요. 5회 실수 시 교대 종료.','Start Shift',start);
+})();
+</script>
+</body>
+</html>

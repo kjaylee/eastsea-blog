@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <meta name="theme-color" content="#0a0a1a" />
+  <title>Prism Port Authority</title>
+  <style>
+    :root{
+      --bg:#0a0a1a;--panel:#14142f;--ink:#edf2ff;--muted:#9ea6ca;
+      --neon:#6af4ff;--pink:#ff5bd8;--gold:#ffd46f;--ok:#7bffaf;--bad:#ff6d90;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;padding:14px;min-height:100vh;display:flex;justify-content:center;color:var(--ink);
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;
+      background:radial-gradient(circle at 20% 10%,#19193f,var(--bg) 46%,#060612 100%);
+    }
+    .app{
+      width:min(100%,920px);display:grid;gap:12px;padding:14px;border-radius:18px;
+      border:1px solid rgba(106,244,255,.3);background:linear-gradient(160deg,rgba(20,20,47,.95),rgba(10,10,26,.95));
+      box-shadow:0 0 24px rgba(106,244,255,.2);
+    }
+    h1{margin:0;font-size:clamp(1.1rem,2.8vw,1.75rem)}
+    p{margin:6px 0 0;color:var(--muted);font-size:.92rem;line-height:1.35}
+    .hud{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+    .pill{padding:8px;border-radius:12px;text-align:center;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);font-size:.84rem}
+    .pill b{display:block;color:var(--neon);font-size:1rem}
+    .panel{
+      display:grid;grid-template-columns:1.3fr .9fr;gap:10px
+    }
+    .card{
+      background:rgba(0,0,0,.23);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:12px
+    }
+    .card h2{margin:0 0 8px;font-size:1rem}
+    .cargo-box{
+      border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:12px;display:grid;gap:8px;background:#0f1025
+    }
+    .badge{display:inline-flex;align-items:center;gap:6px;padding:6px 9px;border-radius:999px;font-size:.82rem;font-weight:700;width:fit-content}
+    .cyan{background:rgba(80,245,255,.15);border:1px solid rgba(80,245,255,.5);color:#7df3ff}
+    .magenta{background:rgba(255,95,216,.14);border:1px solid rgba(255,95,216,.5);color:#ff9de8}
+    .amber{background:rgba(255,204,94,.14);border:1px solid rgba(255,204,94,.5);color:#ffd98a}
+    .dock-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+    button{
+      border:0;border-radius:11px;padding:11px 10px;font-weight:800;cursor:pointer;color:#071018;
+      background:linear-gradient(120deg,#73f6ff,#9a88ff)
+    }
+    button.alt{background:linear-gradient(120deg,#ff96ea,#cd95ff)}
+    .rule{font-size:.87rem;color:var(--muted);line-height:1.4}
+    .timerWrap{height:10px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden}
+    .timer{height:100%;width:100%;background:linear-gradient(90deg,#7bffaf,#ffd46f,#ff6d90)}
+    .result{font-weight:700;min-height:1.2em}
+    .ok{color:var(--ok)} .bad{color:var(--bad)}
+    @media (max-width:760px){
+      .hud{grid-template-columns:repeat(2,minmax(0,1fr))}
+      .panel{grid-template-columns:1fr}
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header>
+      <h1>🚢 Prism Port Authority</h1>
+      <p>입항 화물을 규칙에 맞는 도크(1~3)로 즉시 라우팅하세요. (키보드: 1/2/3, 터치: 도크 버튼)</p>
+    </header>
+
+    <section class="hud">
+      <div class="pill">Score<b id="score">0</b></div>
+      <div class="pill">Best<b id="best">0</b></div>
+      <div class="pill">Stability<b id="stability">5</b></div>
+      <div class="pill">Round<b id="round">1</b></div>
+      <div class="pill">Time<b id="time">6.0</b></div>
+    </section>
+
+    <section class="panel">
+      <article class="card">
+        <h2>Incoming Cargo</h2>
+        <div class="cargo-box">
+          <div id="colorBadge" class="badge cyan">COLOR: CYAN</div>
+          <div id="tempBadge" class="badge amber">TEMP: COLD</div>
+          <div id="priorityBadge" class="badge magenta">PRIORITY: LOW</div>
+          <div class="timerWrap"><div id="timerBar" class="timer"></div></div>
+          <div id="result" class="result">Press Start to begin.</div>
+        </div>
+      </article>
+
+      <article class="card">
+        <h2>Dock Rules</h2>
+        <p class="rule">
+          <b>Dock 계산식:</b><br />
+          <code>(Color + Temp + Priority) mod 3 + 1</code><br />
+          Color: CYAN=0, MAGENTA=1, AMBER=2<br />
+          Temp: COLD=0, HOT=1<br />
+          Priority: LOW=0, MID=1, HIGH=2
+        </p>
+        <div class="dock-grid">
+          <button data-dock="1">Dock 1</button>
+          <button data-dock="2">Dock 2</button>
+          <button data-dock="3">Dock 3</button>
+        </div>
+        <div style="margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <button id="startBtn" class="alt">Start / Restart</button>
+          <button id="muteBtn">Sound: ON</button>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const colorBadge = document.getElementById('colorBadge');
+      const tempBadge = document.getElementById('tempBadge');
+      const priorityBadge = document.getElementById('priorityBadge');
+      const scoreEl = document.getElementById('score');
+      const bestEl = document.getElementById('best');
+      const stabilityEl = document.getElementById('stability');
+      const roundEl = document.getElementById('round');
+      const timeEl = document.getElementById('time');
+      const timerBar = document.getElementById('timerBar');
+      const resultEl = document.getElementById('result');
+      const startBtn = document.getElementById('startBtn');
+      const muteBtn = document.getElementById('muteBtn');
+      const dockButtons = [...document.querySelectorAll('[data-dock]')];
+
+      const STORAGE_KEY = 'prism-port-authority-best';
+      let bestScore = Number(localStorage.getItem(STORAGE_KEY) || 0);
+      bestEl.textContent = String(bestScore);
+
+      let muted = false;
+      let audioCtx = null;
+      function tone(freq = 440, type = 'sine', duration = 0.08, gain = 0.05) {
+        if (muted) return;
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const now = audioCtx.currentTime;
+        const osc = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, now);
+        g.gain.setValueAtTime(gain, now);
+        g.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+        osc.connect(g).connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + duration);
+      }
+
+      const COLORS = [
+        { key: 'CYAN', value: 0, cls: 'cyan' },
+        { key: 'MAGENTA', value: 1, cls: 'magenta' },
+        { key: 'AMBER', value: 2, cls: 'amber' }
+      ];
+      const TEMPS = [
+        { key: 'COLD', value: 0, cls: 'amber' },
+        { key: 'HOT', value: 1, cls: 'magenta' }
+      ];
+      const PRIORITIES = [
+        { key: 'LOW', value: 0, cls: 'cyan' },
+        { key: 'MID', value: 1, cls: 'amber' },
+        { key: 'HIGH', value: 2, cls: 'magenta' }
+      ];
+
+      const state = {
+        running: false,
+        score: 0,
+        stability: 5,
+        round: 1,
+        maxTime: 6,
+        timeLeft: 6,
+        cargo: null,
+        tickId: null
+      };
+
+      function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+      function spawnCargo() {
+        const color = pick(COLORS);
+        const temp = pick(TEMPS);
+        const priority = pick(PRIORITIES);
+        const expectedDock = ((color.value + temp.value + priority.value) % 3) + 1;
+        state.cargo = { color, temp, priority, expectedDock };
+        state.maxTime = Math.max(2.7, 6 - (state.round - 1) * 0.17);
+        state.timeLeft = state.maxTime;
+        renderCargo();
+      }
+
+      function renderCargo() {
+        if (!state.cargo) return;
+        colorBadge.className = `badge ${state.cargo.color.cls}`;
+        tempBadge.className = `badge ${state.cargo.temp.cls}`;
+        priorityBadge.className = `badge ${state.cargo.priority.cls}`;
+        colorBadge.textContent = `COLOR: ${state.cargo.color.key}`;
+        tempBadge.textContent = `TEMP: ${state.cargo.temp.key}`;
+        priorityBadge.textContent = `PRIORITY: ${state.cargo.priority.key}`;
+      }
+
+      function syncHUD() {
+        scoreEl.textContent = String(state.score);
+        stabilityEl.textContent = String(state.stability);
+        roundEl.textContent = String(state.round);
+        timeEl.textContent = state.timeLeft.toFixed(1);
+        const ratio = Math.max(0, state.timeLeft / state.maxTime);
+        timerBar.style.width = (ratio * 100).toFixed(1) + '%';
+      }
+
+      function setResult(text, ok) {
+        resultEl.textContent = text;
+        resultEl.className = 'result ' + (ok ? 'ok' : 'bad');
+      }
+
+      function routeTo(dock) {
+        if (!state.running || !state.cargo) return;
+        if (dock === state.cargo.expectedDock) {
+          const bonus = Math.max(2, Math.floor(state.timeLeft));
+          state.score += 8 + bonus;
+          state.round += 1;
+          setResult(`정확 라우팅! Dock ${dock} (+${8 + bonus})`, true);
+          tone(760, 'triangle', 0.09, 0.06);
+        } else {
+          state.stability -= 1;
+          setResult(`오분류! 정답 Dock ${state.cargo.expectedDock}`, false);
+          tone(140, 'sawtooth', 0.14, 0.08);
+        }
+        if (state.stability <= 0) {
+          gameOver();
+          return;
+        }
+        spawnCargo();
+        syncHUD();
+      }
+
+      function gameOver() {
+        state.running = false;
+        setResult(`운영 종료. 최종 점수 ${state.score}`, false);
+        tone(92, 'square', 0.24, 0.1);
+        if (state.score > bestScore) {
+          bestScore = state.score;
+          localStorage.setItem(STORAGE_KEY, String(bestScore));
+          bestEl.textContent = String(bestScore);
+          tone(960, 'triangle', 0.12, 0.06);
+        }
+      }
+
+      function start() {
+        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+        state.running = true;
+        state.score = 0;
+        state.stability = 5;
+        state.round = 1;
+        setResult('항만 관제를 시작했습니다.', true);
+        spawnCargo();
+        syncHUD();
+      }
+
+      function tick() {
+        if (state.running) {
+          state.timeLeft -= 0.1;
+          if (state.timeLeft <= 0) {
+            state.stability -= 1;
+            tone(120, 'square', 0.12, 0.07);
+            setResult('시간 초과! Stability -1', false);
+            if (state.stability <= 0) {
+              gameOver();
+            } else {
+              spawnCargo();
+            }
+          }
+          syncHUD();
+        }
+      }
+
+      startBtn.addEventListener('click', start);
+      muteBtn.addEventListener('click', () => {
+        muted = !muted;
+        muteBtn.textContent = `Sound: ${muted ? 'OFF' : 'ON'}`;
+      });
+
+      dockButtons.forEach(btn => {
+        btn.addEventListener('click', () => routeTo(Number(btn.dataset.dock)));
+      });
+
+      document.addEventListener('keydown', (e) => {
+        if (['1', '2', '3'].includes(e.key)) {
+          e.preventDefault();
+          routeTo(Number(e.key));
+        }
+      });
+
+      state.tickId = setInterval(tick, 100);
+      syncHUD();
+    })();
+  </script>
+</body>
+</html>

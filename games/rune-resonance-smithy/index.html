@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <meta name="theme-color" content="#0a0a1a" />
+  <title>Rune Resonance Smithy</title>
+  <style>
+    :root{
+      --bg:#0a0a1a;--panel:#151530;--ink:#edf1ff;--muted:#9ea8ca;
+      --neon:#6cf5ff;--pink:#ff66e0;--ok:#78ffaf;--warn:#ffd872;
+      --on:#69efff;--off:#1a1a3e;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;min-height:100vh;padding:14px;display:flex;justify-content:center;color:var(--ink);
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;
+      background:radial-gradient(circle at 20% 10%,#1b1b44,var(--bg) 46%,#050511 100%);
+    }
+    .app{
+      width:min(100%,940px);display:grid;gap:12px;padding:14px;border-radius:18px;
+      border:1px solid rgba(108,245,255,.3);background:linear-gradient(160deg,rgba(21,21,48,.95),rgba(10,10,26,.95));
+      box-shadow:0 0 24px rgba(108,245,255,.2)
+    }
+    h1{margin:0;font-size:clamp(1.12rem,2.8vw,1.7rem)}
+    p{margin:6px 0 0;color:var(--muted);font-size:.92rem}
+    .hud{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+    .pill{padding:8px;border-radius:12px;text-align:center;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);font-size:.84rem}
+    .pill b{display:block;color:var(--neon);font-size:1rem}
+    .boards{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .card{background:rgba(0,0,0,.22);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:12px}
+    .card h2{margin:0 0 8px;font-size:1rem;color:var(--muted)}
+    .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;aspect-ratio:1/1}
+    .cell{
+      border:1px solid rgba(255,255,255,.14);border-radius:9px;background:var(--off);
+      box-shadow:inset 0 0 10px rgba(0,0,0,.35)
+    }
+    .cell.on{
+      background:radial-gradient(circle at 30% 30%,#b0ffff,#4bb9ff 62%,#2f53d6);
+      box-shadow:0 0 13px rgba(108,245,255,.7),inset 0 0 10px rgba(255,255,255,.4)
+    }
+    .controls{display:grid;gap:8px;grid-template-columns:repeat(4,minmax(0,1fr))}
+    button{border:0;border-radius:11px;padding:10px;font-weight:800;cursor:pointer;color:#071018;background:linear-gradient(120deg,#75f7ff,#9d87ff)}
+    button.alt{background:linear-gradient(120deg,#ff98eb,#c99fff)}
+    .result{font-weight:700;min-height:1.2em}.ok{color:var(--ok)}.warn{color:var(--warn)}
+    .small{font-size:.84rem;color:var(--muted);line-height:1.4}
+    @media (max-width:760px){
+      .boards{grid-template-columns:1fr}
+      .hud{grid-template-columns:repeat(2,minmax(0,1fr))}
+      .controls{grid-template-columns:repeat(2,minmax(0,1fr))}
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header>
+      <h1>🔮 Rune Resonance Smithy</h1>
+      <p>행/열 회전으로 목표 공명 패턴을 완성하세요. (키보드: 1~4=행 회전, QWER=열 회전)</p>
+    </header>
+
+    <section class="hud">
+      <div class="pill">Stage<b id="stage">1</b></div>
+      <div class="pill">Moves Left<b id="moves">18</b></div>
+      <div class="pill">Best Stage<b id="best">1</b></div>
+      <div class="pill">Match<b id="match">0%</b></div>
+    </section>
+
+    <section class="boards">
+      <article class="card">
+        <h2>Target Resonance</h2>
+        <div id="targetGrid" class="grid"></div>
+      </article>
+      <article class="card">
+        <h2>Current Matrix</h2>
+        <div id="currentGrid" class="grid"></div>
+      </article>
+    </section>
+
+    <section class="card">
+      <div class="controls" style="margin-bottom:8px">
+        <button data-row="0">Row 1 ↻</button>
+        <button data-row="1">Row 2 ↻</button>
+        <button data-row="2">Row 3 ↻</button>
+        <button data-row="3">Row 4 ↻</button>
+        <button data-col="0" class="alt">Col 1 ↧</button>
+        <button data-col="1" class="alt">Col 2 ↧</button>
+        <button data-col="2" class="alt">Col 3 ↧</button>
+        <button data-col="3" class="alt">Col 4 ↧</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <button id="startBtn">Start / Restart</button>
+        <button id="muteBtn">Sound: ON</button>
+      </div>
+      <div id="result" class="result">Start 버튼을 눌러 제련을 시작하세요.</div>
+      <p class="small">각 Stage는 목표 보드에서 섞어 만든 패턴이라 반드시 풀 수 있습니다. localStorage에 최고 스테이지 저장.</p>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const targetGrid = document.getElementById('targetGrid');
+      const currentGrid = document.getElementById('currentGrid');
+      const stageEl = document.getElementById('stage');
+      const movesEl = document.getElementById('moves');
+      const bestEl = document.getElementById('best');
+      const matchEl = document.getElementById('match');
+      const resultEl = document.getElementById('result');
+      const startBtn = document.getElementById('startBtn');
+      const muteBtn = document.getElementById('muteBtn');
+      const rowBtns = [...document.querySelectorAll('[data-row]')];
+      const colBtns = [...document.querySelectorAll('[data-col]')];
+
+      const STORAGE_KEY = 'rune-resonance-smithy-best';
+      let bestStage = Number(localStorage.getItem(STORAGE_KEY) || 1);
+      bestEl.textContent = String(bestStage);
+
+      let muted = false;
+      let audioCtx = null;
+      function beep(freq = 440, type = 'sine', dur = 0.08, gain = 0.05) {
+        if (muted) return;
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const now = audioCtx.currentTime;
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.type = type;
+        o.frequency.setValueAtTime(freq, now);
+        g.gain.setValueAtTime(gain, now);
+        g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+        o.connect(g).connect(audioCtx.destination);
+        o.start(now); o.stop(now + dur);
+      }
+
+      const state = {
+        running: false,
+        stage: 1,
+        movesLeft: 18,
+        target: makeMatrix(),
+        current: makeMatrix()
+      };
+
+      function makeMatrix(fillRandom = true) {
+        return Array.from({ length: 4 }, () =>
+          Array.from({ length: 4 }, () => (fillRandom ? (Math.random() < 0.5 ? 0 : 1) : 0))
+        );
+      }
+
+      function clone(mat) { return mat.map(row => row.slice()); }
+
+      function rotateRow(mat, rowIndex) {
+        const row = mat[rowIndex];
+        row.unshift(row.pop());
+      }
+
+      function rotateCol(mat, colIndex) {
+        const last = mat[3][colIndex];
+        for (let r = 3; r > 0; r--) mat[r][colIndex] = mat[r - 1][colIndex];
+        mat[0][colIndex] = last;
+      }
+
+      function scrambleFromTarget(stage) {
+        state.target = makeMatrix(true);
+        state.current = clone(state.target);
+        const ops = 8 + stage * 2;
+        for (let i = 0; i < ops; i++) {
+          if (Math.random() < 0.5) rotateRow(state.current, Math.floor(Math.random() * 4));
+          else rotateCol(state.current, Math.floor(Math.random() * 4));
+        }
+      }
+
+      function renderGrid(container, mat) {
+        container.innerHTML = '';
+        for (let y = 0; y < 4; y++) {
+          for (let x = 0; x < 4; x++) {
+            const d = document.createElement('div');
+            d.className = 'cell' + (mat[y][x] ? ' on' : '');
+            container.appendChild(d);
+          }
+        }
+      }
+
+      function matchRatio() {
+        let same = 0;
+        for (let y = 0; y < 4; y++) {
+          for (let x = 0; x < 4; x++) {
+            if (state.target[y][x] === state.current[y][x]) same += 1;
+          }
+        }
+        return same / 16;
+      }
+
+      function isSolved() { return matchRatio() === 1; }
+
+      function syncHUD() {
+        stageEl.textContent = String(state.stage);
+        movesEl.textContent = String(state.movesLeft);
+        matchEl.textContent = Math.round(matchRatio() * 100) + '%';
+      }
+
+      function renderAll() {
+        renderGrid(targetGrid, state.target);
+        renderGrid(currentGrid, state.current);
+        syncHUD();
+      }
+
+      function setResult(text, kind = 'ok') {
+        resultEl.textContent = text;
+        resultEl.className = 'result ' + kind;
+      }
+
+      function useMove(fn, idx) {
+        if (!state.running || state.movesLeft <= 0) return;
+        fn(state.current, idx);
+        state.movesLeft -= 1;
+        beep(340 + idx * 60, 'triangle', 0.07, 0.05);
+        renderAll();
+
+        if (isSolved()) {
+          state.stage += 1;
+          if (state.stage > bestStage) {
+            bestStage = state.stage;
+            localStorage.setItem(STORAGE_KEY, String(bestStage));
+            bestEl.textContent = String(bestStage);
+          }
+          setResult('공명 정렬 성공! 다음 Stage로 이동합니다.', 'ok');
+          beep(880, 'triangle', 0.11, 0.06);
+          state.movesLeft = 16 + state.stage * 2;
+          scrambleFromTarget(state.stage);
+          renderAll();
+          return;
+        }
+
+        if (state.movesLeft <= 0) {
+          state.running = false;
+          setResult('이동 수 소진! Start / Restart로 재도전하세요.', 'warn');
+          beep(120, 'square', 0.2, 0.09);
+        }
+      }
+
+      function start() {
+        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+        state.running = true;
+        state.stage = 1;
+        state.movesLeft = 18;
+        scrambleFromTarget(state.stage);
+        renderAll();
+        setResult('룬 제련 시작. 회전으로 패턴을 맞추세요.', 'ok');
+      }
+
+      rowBtns.forEach(btn => btn.addEventListener('click', () => useMove(rotateRow, Number(btn.dataset.row))));
+      colBtns.forEach(btn => btn.addEventListener('click', () => useMove(rotateCol, Number(btn.dataset.col))));
+
+      document.addEventListener('keydown', (e) => {
+        const k = e.key.toLowerCase();
+        if (['1', '2', '3', '4'].includes(k)) {
+          useMove(rotateRow, Number(k) - 1);
+        }
+        if (['q', 'w', 'e', 'r'].includes(k)) {
+          useMove(rotateCol, ['q', 'w', 'e', 'r'].indexOf(k));
+        }
+      });
+
+      startBtn.addEventListener('click', start);
+      muteBtn.addEventListener('click', () => {
+        muted = !muted;
+        muteBtn.textContent = `Sound: ${muted ? 'OFF' : 'ON'}`;
+      });
+
+      renderAll();
+    })();
+  </script>
+</body>
+</html>

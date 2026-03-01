@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Holo Thread Untangler</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <style>
+    :root{--bg:#0a0a1a;--panel:#141432;--line:#2de2e6;--accent:#ff4ecd;--ok:#44ff99;--warn:#ffc857;--bad:#ff5d73}
+    *{box-sizing:border-box}
+    body{margin:0;background:radial-gradient(circle at 50% 0%,#181846,#0a0a1a 58%);color:#ecf7ff;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;min-height:100svh;padding:calc(12px + env(safe-area-inset-top)) 12px calc(14px + env(safe-area-inset-bottom));display:flex;justify-content:center}
+    .app{width:min(780px,100%);display:grid;gap:10px}
+    .card{background:linear-gradient(180deg,#141432,#101028);border:1px solid #304f90;border-radius:14px;padding:10px;box-shadow:0 0 24px #0008,inset 0 0 24px #2140862c}
+    h1{margin:0;font-size:clamp(1.15rem,2.8vw,1.7rem);color:var(--line);text-shadow:0 0 14px #2de2e688}
+    .hud{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+    .stat{background:#0b1332;border:1px solid #2f4a8a;border-radius:10px;padding:8px;text-align:center}
+    .label{font-size:.72rem;opacity:.75}.value{font-weight:800}
+    .cross-ok{color:var(--ok)} .cross-bad{color:var(--bad)}
+    canvas{width:100%;height:auto;border:1px solid #36589b;border-radius:12px;background:linear-gradient(180deg,#070d1f,#070712);display:block;touch-action:none}
+    .controls{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+    button{border:1px solid #3b5ea4;background:#13264e;color:#f4f9ff;border-radius:10px;padding:10px 8px;font-weight:700}
+    button:active{transform:translateY(1px)}
+    .primary{background:linear-gradient(180deg,#1d3b79,#13264e);border-color:#5f90f3}
+    .accent{background:linear-gradient(180deg,#541f5b,#2f1239);border-color:#cb73e8}
+    .ok{background:#123a2a;border-color:#3ad38d}.danger{background:#3a141f;border-color:#d44f61}
+    .hint{font-size:.82rem;opacity:.78;text-align:center}
+    .overlay{position:fixed;inset:0;background:#060814dd;display:grid;place-items:center;padding:16px;z-index:40}
+    .overlay.hidden{display:none}
+    .panel{width:min(560px,100%);background:#0f1128;border:1px solid #335493;border-radius:14px;padding:16px;display:grid;gap:10px}
+    .panel h2{margin:0;color:var(--line)} .panel p{margin:0;line-height:1.45}
+    @media (max-width:680px){.hud{grid-template-columns:repeat(3,minmax(0,1fr))}.controls{grid-template-columns:repeat(3,minmax(0,1fr))}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="card">
+      <h1>🧵 Holo Thread Untangler</h1>
+      <div class="hint">노드를 이동해 모든 선 교차를 제거하세요. 교차 수가 0이면 레벨 클리어.</div>
+    </div>
+
+    <div class="card hud">
+      <div class="stat"><div class="label">Level</div><div id="level" class="value">1 / 6</div></div>
+      <div class="stat"><div class="label">Crossings</div><div id="cross" class="value cross-bad">0</div></div>
+      <div class="stat"><div class="label">Moves</div><div id="moves" class="value">0</div></div>
+      <div class="stat"><div class="label">Timer</div><div id="timer" class="value">0.0s</div></div>
+      <div class="stat"><div class="label">Best Lv</div><div id="bestLevel" class="value">1</div></div>
+    </div>
+
+    <div class="card"><canvas id="game" width="760" height="980" aria-label="holo thread untangler canvas"></canvas></div>
+
+    <div class="card controls">
+      <button id="prevBtn">[ Prev Node</button>
+      <button id="nextBtn">Next Node ]</button>
+      <button id="leftBtn" class="primary">←</button>
+      <button id="upBtn" class="primary">↑</button>
+      <button id="rightBtn" class="primary">→</button>
+      <button id="downBtn" class="primary">↓</button>
+      <button id="shuffleBtn" class="accent">Shuffle</button>
+      <button id="startBtn" class="ok">Start</button>
+      <button id="restartBtn" class="danger">Restart Level</button>
+      <button id="resetBtn">Reset Run</button>
+    </div>
+
+    <div class="card hint">키보드: [ ] 선택 · 화살표 이동 · R 재시작 · N 시작/다음 · 터치/마우스 드래그 지원</div>
+  </div>
+
+  <div id="overlay" class="overlay">
+    <div class="panel">
+      <h2 id="ovTitle">Holo Thread Untangler</h2>
+      <p id="ovText">선이 겹치지 않도록 노드 위치를 조정하세요. 6레벨 완주가 목표입니다.</p>
+      <button id="ovBtn" class="primary">Start Puzzle</button>
+    </div>
+  </div>
+
+<script>
+(()=>{
+'use strict';
+const W=760,H=980,LS_KEY='holo-thread-untangler-v1';
+const canvas=document.getElementById('game');
+const ctx=canvas.getContext('2d');
+const LEVELS=[
+  {nodes:5,edges:[[0,2],[1,3],[0,4],[1,4],[2,4]]},
+  {nodes:6,edges:[[0,3],[1,4],[2,5],[0,4],[1,5],[2,3]]},
+  {nodes:6,edges:[[0,2],[2,4],[4,0],[1,3],[3,5],[5,1],[0,3],[2,5]]},
+  {nodes:7,edges:[[0,3],[1,4],[2,5],[3,6],[0,5],[1,6],[2,4],[0,6]]},
+  {nodes:8,edges:[[0,4],[1,5],[2,6],[3,7],[0,5],[1,6],[2,7],[3,4],[0,6]]},
+  {nodes:8,edges:[[0,3],[1,4],[2,5],[3,6],[4,7],[0,5],[1,6],[2,7],[0,7],[2,4]]}
+];
+
+const st={level:0,nodes:[],edges:[],selected:0,moves:0,time:0,cross:0,drag:null,running:false,audio:null,bestLevel:1,last:0};
+const el={level:document.getElementById('level'),cross:document.getElementById('cross'),moves:document.getElementById('moves'),timer:document.getElementById('timer'),bestLevel:document.getElementById('bestLevel'),overlay:document.getElementById('overlay'),ovTitle:document.getElementById('ovTitle'),ovText:document.getElementById('ovText'),ovBtn:document.getElementById('ovBtn')};
+
+function load(){
+  try{const v=JSON.parse(localStorage.getItem(LS_KEY)||'{}');st.bestLevel=Math.max(1,Number(v.bestLevel||1));}catch(_){st.bestLevel=1;}
+  renderHud();
+}
+function save(){localStorage.setItem(LS_KEY,JSON.stringify({bestLevel:st.bestLevel}));}
+
+function ensureAudio(){if(st.audio)return;st.audio=new (window.AudioContext||window.webkitAudioContext)();}
+function beep(freq=680,dur=0.06,type='sine',gain=0.05){if(!st.audio)return;const t=st.audio.currentTime,o=st.audio.createOscillator(),g=st.audio.createGain();o.type=type;o.frequency.value=freq;g.gain.setValueAtTime(gain,t);g.gain.exponentialRampToValueAtTime(0.0001,t+dur);o.connect(g).connect(st.audio.destination);o.start(t);o.stop(t+dur);} 
+function sfx(k){if(k==='move'){beep(620,0.04,'square',0.04);}else if(k==='ok'){beep(920,0.08,'triangle',0.05);setTimeout(()=>beep(1240,0.1,'triangle',0.05),70);}else if(k==='bad'){beep(240,0.18,'sawtooth',0.06);} }
+
+function rand(min,max){return min+Math.random()*(max-min);} 
+function clamp(v,min,max){return Math.max(min,Math.min(max,v));}
+
+function initLevel(index){
+  const def=LEVELS[index];
+  st.level=index;
+  st.edges=def.edges.map(e=>e.slice());
+  st.nodes=[];
+  const cx=W/2,cy=H/2+24,r=Math.min(W,H)*0.33;
+  const perm=[...Array(def.nodes).keys()].sort(()=>Math.random()-0.5);
+  for(let i=0;i<def.nodes;i++){
+    const a=(Math.PI*2*(perm[i]/def.nodes))-(Math.PI/2);
+    const jitter=rand(-32,32);
+    st.nodes.push({x:clamp(cx+Math.cos(a)*(r+jitter),70,W-70),y:clamp(cy+Math.sin(a)*(r+jitter),100,H-90),r:24});
+  }
+  st.selected=0;
+  st.moves=0;
+  st.time=0;
+  st.running=true;
+  st.drag=null;
+  recalcCross();
+  renderHud();
+}
+
+function orient(a,b,c){return (b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x);} 
+function overlap(a,b,c,d){return Math.max(Math.min(a,b),Math.min(c,d))<=Math.min(Math.max(a,b),Math.max(c,d));}
+function intersects(p1,p2,p3,p4){
+  const o1=orient(p1,p2,p3),o2=orient(p1,p2,p4),o3=orient(p3,p4,p1),o4=orient(p3,p4,p2);
+  if(o1===0&&o2===0&&o3===0&&o4===0){return overlap(p1.x,p2.x,p3.x,p4.x)&&overlap(p1.y,p2.y,p3.y,p4.y);} 
+  return (o1===0?true:(o1>0)!==(o2>0)) && (o3===0?true:(o3>0)!==(o4>0));
+}
+function shareNode(a,b){return a[0]===b[0]||a[0]===b[1]||a[1]===b[0]||a[1]===b[1];}
+function recalcCross(){
+  let c=0;
+  for(let i=0;i<st.edges.length;i++){
+    for(let j=i+1;j<st.edges.length;j++){
+      const e1=st.edges[i],e2=st.edges[j];
+      if(shareNode(e1,e2)) continue;
+      if(intersects(st.nodes[e1[0]],st.nodes[e1[1]],st.nodes[e2[0]],st.nodes[e2[1]])) c++;
+    }
+  }
+  st.cross=c;
+}
+
+function renderHud(){
+  el.level.textContent=`${st.level+1} / ${LEVELS.length}`;
+  el.cross.textContent=String(st.cross);
+  el.cross.className='value ' + (st.cross===0?'cross-ok':'cross-bad');
+  el.moves.textContent=String(st.moves);
+  el.timer.textContent=st.time.toFixed(1)+'s';
+  el.bestLevel.textContent=String(st.bestLevel);
+}
+
+function nudge(dx,dy){
+  if(!st.running) return;
+  const n=st.nodes[st.selected];
+  n.x=clamp(n.x+dx,36,W-36);
+  n.y=clamp(n.y+dy,76,H-44);
+  st.moves++;
+  recalcCross();
+  sfx('move');
+  renderHud();
+}
+
+function shuffleLevel(){
+  if(!st.running) return;
+  for(const n of st.nodes){n.x=rand(72,W-72);n.y=rand(110,H-88);} 
+  st.moves+=3;
+  recalcCross();
+  sfx('bad');
+  renderHud();
+}
+
+function advanceLevel(){
+  const next=st.level+1;
+  if(next>=LEVELS.length){
+    st.running=false;
+    showOverlay('All Networks Untangled ✨',`완주 성공! 총 ${st.time.toFixed(1)}초 / 이동 ${st.moves}회`, 'Play Again', ()=>initLevel(0));
+    return;
+  }
+  initLevel(next);
+  showOverlay(`Level ${st.level} Clear`,`교차선 0 달성. 다음 레벨로 이동합니다.`, 'Continue', ()=>{el.overlay.classList.add('hidden');});
+  st.bestLevel=Math.max(st.bestLevel,next+1);
+  save();
+}
+
+function update(dt){
+  if(!st.running) return;
+  st.time+=dt;
+  if(st.cross===0){
+    sfx('ok');
+    st.bestLevel=Math.max(st.bestLevel,st.level+1);
+    save();
+    advanceLevel();
+  }
+  renderHud();
+}
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#070d1f';ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='rgba(45,226,230,.16)';ctx.lineWidth=1;
+  for(let x=0;x<=W;x+=38){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(let y=0;y<=H;y+=38){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+
+  for(const [i,e] of st.edges.entries()){
+    const a=st.nodes[e[0]],b=st.nodes[e[1]];
+    ctx.strokeStyle='rgba(45,226,230,.7)';
+    if(st.drag && (e[0]===st.drag||e[1]===st.drag)) ctx.strokeStyle='rgba(255,78,205,.85)';
+    ctx.lineWidth=4;
+    ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
+
+    const mx=(a.x+b.x)/2,my=(a.y+b.y)/2;
+    ctx.fillStyle='rgba(10,10,26,.8)';ctx.fillRect(mx-12,my-10,24,20);
+    ctx.fillStyle='#9cc9ff';ctx.font='600 12px Inter';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(String(i+1),mx,my);
+  }
+
+  st.nodes.forEach((n,idx)=>{
+    ctx.beginPath();ctx.arc(n.x,n.y,n.r,0,Math.PI*2);
+    ctx.fillStyle=idx===st.selected?'rgba(255,78,205,.34)':'rgba(68,255,153,.2)';ctx.fill();
+    ctx.lineWidth=3;ctx.strokeStyle=idx===st.selected?'#ff4ecd':'#44ff99';ctx.stroke();
+    ctx.fillStyle='#f2fbff';ctx.font='700 18px Inter';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(String(idx+1),n.x,n.y+1);
+  });
+
+  ctx.fillStyle='rgba(9,12,30,.86)';ctx.fillRect(0,0,W,68);
+  ctx.fillStyle='#2de2e6';ctx.font='600 25px Inter';ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(`Crossings: ${st.cross}`,16,35);
+  ctx.fillStyle='#ffc857';ctx.fillText(`Selected: ${st.selected+1}`,W-210,35);
+
+  if(!st.running){
+    ctx.fillStyle='rgba(2,6,15,.55)';ctx.fillRect(0,0,W,H);
+    ctx.fillStyle='#eaf7ff';ctx.font='800 46px Inter';ctx.textAlign='center';ctx.fillText('PUZZLE READY',W/2,H/2-22);
+    ctx.fillStyle='#9ec7ff';ctx.font='500 24px Inter';ctx.fillText('Start 버튼을 눌러 시작',W/2,H/2+28);
+  }
+}
+
+function toCanvasPos(e){
+  const r=canvas.getBoundingClientRect();
+  return {x:(e.clientX-r.left)*(canvas.width/r.width),y:(e.clientY-r.top)*(canvas.height/r.height)};
+}
+function pickNode(pos){
+  for(let i=st.nodes.length-1;i>=0;i--){
+    const n=st.nodes[i];
+    const d=Math.hypot(pos.x-n.x,pos.y-n.y);
+    if(d<=n.r+12) return i;
+  }
+  return -1;
+}
+
+canvas.addEventListener('pointerdown',e=>{
+  if(!st.running) return;
+  ensureAudio();if(st.audio.state==='suspended') st.audio.resume();
+  const p=toCanvasPos(e);
+  const idx=pickNode(p);
+  if(idx>=0){st.selected=idx;st.drag=idx;canvas.setPointerCapture(e.pointerId);renderHud();}
+});
+canvas.addEventListener('pointermove',e=>{
+  if(st.drag===null||!st.running) return;
+  const p=toCanvasPos(e);
+  const n=st.nodes[st.drag];
+  n.x=clamp(p.x,36,W-36);n.y=clamp(p.y,76,H-44);
+  recalcCross();
+  renderHud();
+});
+canvas.addEventListener('pointerup',()=>{
+  if(st.drag!==null){st.moves++;sfx('move');st.drag=null;renderHud();}
+});
+canvas.addEventListener('pointercancel',()=>{st.drag=null;});
+
+function onKey(e){
+  const k=e.key;
+  if(['[',']','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','r','R','n','N'].includes(k)) e.preventDefault();
+  if(k==='[') {st.selected=(st.selected-1+st.nodes.length)%st.nodes.length;renderHud();}
+  if(k===']') {st.selected=(st.selected+1)%st.nodes.length;renderHud();}
+  if(k==='ArrowLeft') nudge(-14,0);
+  if(k==='ArrowRight') nudge(14,0);
+  if(k==='ArrowUp') nudge(0,-14);
+  if(k==='ArrowDown') nudge(0,14);
+  if(k==='r'||k==='R') initLevel(st.level);
+  if(k==='n'||k==='N'){ if(!st.running) initLevel(st.level); else advanceLevel(); }
+}
+document.addEventListener('keydown',onKey,{passive:false});
+
+function bind(id,fn){document.getElementById(id).addEventListener('pointerdown',fn);} 
+bind('prevBtn',()=>{st.selected=(st.selected-1+st.nodes.length)%st.nodes.length;renderHud();});
+bind('nextBtn',()=>{st.selected=(st.selected+1)%st.nodes.length;renderHud();});
+bind('leftBtn',()=>nudge(-14,0));
+bind('rightBtn',()=>nudge(14,0));
+bind('upBtn',()=>nudge(0,-14));
+bind('downBtn',()=>nudge(0,14));
+bind('shuffleBtn',shuffleLevel);
+bind('startBtn',()=>initLevel(st.level));
+bind('restartBtn',()=>initLevel(st.level));
+bind('resetBtn',()=>{st.level=0;initLevel(0);});
+
+function showOverlay(title,text,btn,fn){
+  el.ovTitle.textContent=title;el.ovText.textContent=text;el.ovBtn.textContent=btn;
+  el.ovBtn.onclick=()=>{el.overlay.classList.add('hidden');fn&&fn();};
+  el.overlay.classList.remove('hidden');
+}
+
+load();
+initLevel(0);
+st.running=false;
+showOverlay('Holo Thread Untangler','노드를 움직여 교차선을 0으로 만드세요. 터치 드래그와 키보드 모두 지원합니다.','Start Puzzle',()=>initLevel(0));
+
+function frame(ts){
+  if(!st.last) st.last=ts;
+  const dt=Math.min(.05,(ts-st.last)/1000);st.last=ts;
+  update(dt);draw();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

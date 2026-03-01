@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover" />
+  <title>Quantum Bounce</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <style>
+    :root{--bg:#0a0a1a;--panel:#121633;--ink:#eaf6ff;--cyan:#47e8ff;--pink:#ff4ac6;--lime:#8dff9f;--violet:#9e7bff}
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
+    body{margin:0;min-height:100vh;background:radial-gradient(circle at 20% 0,#1a1e49,var(--bg) 42%);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;display:flex;justify-content:center;padding:12px}
+    .app{width:min(920px,100%);display:grid;gap:10px}
+    .hud{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+    .card{background:rgba(18,22,51,.92);border:1px solid #2a3d7d;border-radius:12px;padding:8px;text-align:center;box-shadow:0 0 14px #00e8ff33}
+    .v{font-size:1.02rem;font-weight:800;color:var(--cyan)}
+    .panel{background:var(--panel);border:1px solid #2a3f80;border-radius:14px;padding:10px;box-shadow:0 0 18px #009dff33}
+    canvas{display:block;width:100%;height:auto;aspect-ratio:16/10;background:#040512;border-radius:10px;touch-action:none}
+    .controls{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+    button{border:1px solid #3551a5;border-radius:12px;background:linear-gradient(180deg,#1f2c66,#17204f);color:#eaf6ff;padding:11px 8px;font-weight:800;letter-spacing:.2px;box-shadow:0 0 12px #2be9ff55;touch-action:manipulation}
+    button.observe{border-color:#5f4bd4;box-shadow:0 0 14px #b48cff66}
+    button.observe.active{background:linear-gradient(180deg,#40349d,#2d267d);box-shadow:0 0 18px #d39fff99}
+    button:active{transform:translateY(1px);filter:brightness(1.14)}
+    .hint{margin:0;text-align:center;font-size:12px;opacity:.86}
+    @media (max-width:760px){
+      .hud{grid-template-columns:repeat(2,minmax(0,1fr))}
+      .controls{grid-template-columns:repeat(2,minmax(0,1fr))}
+    }
+  </style>
+</head>
+<body>
+<main class="app">
+  <section class="hud">
+    <div class="card">Level<div id="level" class="v">1/8</div></div>
+    <div class="card">Best<div id="best" class="v">1</div></div>
+    <div class="card">Angle<div id="angle" class="v">0°</div></div>
+    <div class="card">Time<div id="time" class="v">24.0s</div></div>
+    <div class="card">State<div id="state" class="v">Aim</div></div>
+  </section>
+
+  <section class="panel">
+    <canvas id="game" width="900" height="560" aria-label="Quantum Bounce game canvas"></canvas>
+  </section>
+
+  <section class="controls">
+    <button data-act="left">◀ Angle</button>
+    <button data-act="right">Angle ▶</button>
+    <button data-act="launch">⚛️ Launch</button>
+    <button id="observeBtn" class="observe" data-act="observe">👁 Hold Observe</button>
+    <button data-act="reset">↺ Retry</button>
+  </section>
+  <p class="hint">키보드: ←/→ 각도 · Enter 발사 · Space 관측 홀드 · R 재시도</p>
+</main>
+
+<script>
+(() => {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const observeBtn = document.getElementById('observeBtn');
+  const keyBest = 'quantumBounceBestLevel';
+
+  const ui = {
+    level: document.getElementById('level'),
+    best: document.getElementById('best'),
+    angle: document.getElementById('angle'),
+    time: document.getElementById('time'),
+    state: document.getElementById('state')
+  };
+
+  const room = { x:40, y:40, w:820, h:480 };
+  const levels = [
+    { source:{x:95,y:280}, target:{x:780,y:280,r:18}, time:24, obstacles:[] },
+    { source:{x:95,y:280}, target:{x:760,y:120,r:18}, time:25, obstacles:[{x:370,y:190,w:36,h:170}] },
+    { source:{x:95,y:280}, target:{x:760,y:430,r:18}, time:25, obstacles:[{x:360,y:90,w:32,h:140},{x:560,y:290,w:32,h:150}] },
+    { source:{x:95,y:280}, target:{x:690,y:100,r:17}, time:26, obstacles:[{x:250,y:250,w:44,h:210},{x:520,y:120,w:34,h:150}] },
+    { source:{x:95,y:280}, target:{x:670,y:460,r:17}, time:27, obstacles:[{x:260,y:80,w:36,h:140},{x:430,y:230,w:34,h:180},{x:620,y:100,w:30,h:120}] },
+    { source:{x:95,y:280}, target:{x:790,y:260,r:17}, time:27, obstacles:[{x:240,y:180,w:32,h:180},{x:390,y:80,w:32,h:140},{x:540,y:270,w:32,h:180},{x:680,y:130,w:28,h:120}] },
+    { source:{x:95,y:280}, target:{x:760,y:90,r:16}, time:29, obstacles:[{x:220,y:80,w:30,h:160},{x:350,y:250,w:30,h:180},{x:500,y:80,w:30,h:160},{x:640,y:250,w:30,h:180}] },
+    { source:{x:95,y:280}, target:{x:780,y:450,r:16}, time:30, obstacles:[{x:210,y:320,w:30,h:140},{x:320,y:120,w:30,h:170},{x:470,y:310,w:30,h:150},{x:600,y:130,w:30,h:180},{x:730,y:290,w:24,h:120}] }
+  ];
+
+  const state = {
+    level: 0,
+    best: Math.max(1, Number(localStorage.getItem(keyBest) || 1)),
+    angle: -10,
+    launched: false,
+    observed: false,
+    solved: false,
+    failed: false,
+    dragAim: false,
+    timeLeft: 24,
+    ball: { x:0, y:0, px:0, py:0, vx:0, vy:0, r:8 }
+  };
+
+  let ac, lastTs = 0;
+
+  const clamp = (n,a,b) => Math.max(a, Math.min(b,n));
+  const dist = (ax,ay,bx,by) => Math.hypot(ax-bx, ay-by);
+
+  function beep(freq=440, dur=0.06, type='sine', vol=0.03){
+    try{
+      ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+      const o = ac.createOscillator();
+      const g = ac.createGain();
+      o.type = type;
+      o.frequency.value = freq;
+      g.gain.value = vol;
+      o.connect(g).connect(ac.destination);
+      o.start();
+      o.stop(ac.currentTime + dur);
+    }catch(_){ }
+  }
+
+  function setObserved(v){
+    state.observed = !!v;
+    observeBtn.classList.toggle('active', state.observed);
+  }
+
+  function currentLevel(){ return levels[state.level]; }
+
+  function setLevel(idx){
+    state.level = clamp(idx, 0, levels.length - 1);
+    resetLevel(false);
+  }
+
+  function resetLevel(keepAngle=true){
+    const lv = currentLevel();
+    if(!keepAngle) state.angle = -10;
+    state.launched = false;
+    state.solved = false;
+    state.failed = false;
+    state.timeLeft = lv.time;
+    setObserved(false);
+    const b = state.ball;
+    b.x = b.px = lv.source.x;
+    b.y = b.py = lv.source.y;
+    b.vx = b.vy = 0;
+    ui.state.textContent = 'Aim';
+  }
+
+  function launch(){
+    if(state.launched || state.solved || state.failed) return;
+    const speed = 275;
+    const rad = state.angle * Math.PI / 180;
+    state.ball.vx = Math.cos(rad) * speed;
+    state.ball.vy = Math.sin(rad) * speed;
+    state.launched = true;
+    ui.state.textContent = 'Phase Flight';
+    beep(330,0.07,'sawtooth',0.035);
+  }
+
+  function unlock(){
+    state.best = Math.max(state.best, state.level + 2);
+    localStorage.setItem(keyBest, String(Math.min(levels.length, state.best)));
+  }
+
+  function winLevel(){
+    if(state.solved) return;
+    state.solved = true;
+    state.launched = false;
+    ui.state.textContent = 'Target Observed!';
+    unlock();
+    beep(920,0.08,'triangle',0.05);
+    setTimeout(()=>beep(1260,0.09,'triangle',0.04), 90);
+    setTimeout(()=>{
+      if(state.level < levels.length - 1) setLevel(state.level + 1);
+      else {
+        alert('Quantum Bounce complete. 8 levels cleared!');
+        setLevel(0);
+      }
+    }, 700);
+  }
+
+  function failLevel(msg='Decohered'){ 
+    if(state.solved || state.failed) return;
+    state.failed = true;
+    state.launched = false;
+    ui.state.textContent = msg;
+    beep(160,0.14,'square',0.035);
+  }
+
+  function toCanvas(clientX, clientY){
+    const r = canvas.getBoundingClientRect();
+    return {
+      x: (clientX - r.left) * canvas.width / r.width,
+      y: (clientY - r.top) * canvas.height / r.height
+    };
+  }
+
+  function setAimFromPointer(clientX, clientY){
+    if(state.launched) return;
+    const p = toCanvas(clientX, clientY);
+    const lv = currentLevel();
+    const dx = p.x - lv.source.x;
+    const dy = p.y - lv.source.y;
+    if(Math.hypot(dx,dy) < 10) return;
+    state.angle = clamp(Math.atan2(dy,dx) * 180/Math.PI, -170, 170);
+  }
+
+  function nudgeAngle(d){
+    if(state.launched) return;
+    state.angle = clamp(state.angle + d, -170, 170);
+    beep(300 + state.angle * 1.2, 0.02, 'triangle', 0.013);
+  }
+
+  function collideRoom(){
+    const b = state.ball;
+    let bounced = false;
+    if(b.x - b.r < room.x){ b.x = room.x + b.r; b.vx = Math.abs(b.vx); bounced = true; }
+    else if(b.x + b.r > room.x + room.w){ b.x = room.x + room.w - b.r; b.vx = -Math.abs(b.vx); bounced = true; }
+    if(b.y - b.r < room.y){ b.y = room.y + b.r; b.vy = Math.abs(b.vy); bounced = true; }
+    else if(b.y + b.r > room.y + room.h){ b.y = room.y + room.h - b.r; b.vy = -Math.abs(b.vy); bounced = true; }
+    if(bounced) beep(500,0.02,'square',0.014);
+  }
+
+  function collideRect(rect){
+    const b = state.ball;
+    const rr = b.r;
+    const left = rect.x - rr, right = rect.x + rect.w + rr;
+    const top = rect.y - rr, bottom = rect.y + rect.h + rr;
+    if(b.x < left || b.x > right || b.y < top || b.y > bottom) return;
+
+    let hit = null;
+    if(b.px <= left && b.x > left) hit = 'left';
+    else if(b.px >= right && b.x < right) hit = 'right';
+    else if(b.py <= top && b.y > top) hit = 'top';
+    else if(b.py >= bottom && b.y < bottom) hit = 'bottom';
+
+    if(!hit){
+      const dl = Math.abs(b.x - left), dr = Math.abs(right - b.x), dt = Math.abs(b.y - top), db = Math.abs(bottom - b.y);
+      const m = Math.min(dl,dr,dt,db);
+      if(m === dl) hit = 'left';
+      else if(m === dr) hit = 'right';
+      else if(m === dt) hit = 'top';
+      else hit = 'bottom';
+    }
+
+    if(hit === 'left'){ b.x = left; b.vx = -Math.abs(b.vx); }
+    else if(hit === 'right'){ b.x = right; b.vx = Math.abs(b.vx); }
+    else if(hit === 'top'){ b.y = top; b.vy = -Math.abs(b.vy); }
+    else { b.y = bottom; b.vy = Math.abs(b.vy); }
+
+    beep(640,0.02,'triangle',0.015);
+  }
+
+  function phaseWrap(){
+    const b = state.ball;
+    const margin = 12;
+    if(b.x < room.x - margin) b.x = room.x + room.w + margin;
+    else if(b.x > room.x + room.w + margin) b.x = room.x - margin;
+    if(b.y < room.y - margin) b.y = room.y + room.h + margin;
+    else if(b.y > room.y + room.h + margin) b.y = room.y - margin;
+  }
+
+  function update(dt){
+    const lv = currentLevel();
+    if(state.launched && !state.solved && !state.failed){
+      state.timeLeft -= dt;
+      if(state.timeLeft <= 0){
+        state.timeLeft = 0;
+        failLevel('Time Collapse');
+      }
+
+      const b = state.ball;
+      b.px = b.x; b.py = b.y;
+      b.x += b.vx * dt;
+      b.y += b.vy * dt;
+
+      if(state.observed){
+        collideRoom();
+        for(const o of lv.obstacles) collideRect(o);
+        ui.state.textContent = 'Observed';
+      } else {
+        phaseWrap();
+        ui.state.textContent = state.launched ? 'Phase Flight' : 'Aim';
+      }
+
+      if(state.observed && dist(b.x,b.y,lv.target.x,lv.target.y) <= lv.target.r){
+        winLevel();
+      }
+    }
+
+    ui.level.textContent = `${state.level+1}/${levels.length}`;
+    ui.best.textContent = String(state.best);
+    ui.angle.textContent = `${Math.round(state.angle)}°`;
+    ui.time.textContent = `${state.timeLeft.toFixed(1)}s`;
+  }
+
+  function drawGrid(){
+    ctx.strokeStyle = '#162347';
+    ctx.lineWidth = 1;
+    for(let x=room.x; x<=room.x+room.w; x+=40){
+      ctx.beginPath(); ctx.moveTo(x,room.y); ctx.lineTo(x,room.y+room.h); ctx.stroke();
+    }
+    for(let y=room.y; y<=room.y+room.h; y+=40){
+      ctx.beginPath(); ctx.moveTo(room.x,y); ctx.lineTo(room.x+room.w,y); ctx.stroke();
+    }
+  }
+
+  function draw(){
+    const lv = currentLevel();
+    const b = state.ball;
+
+    ctx.fillStyle = '#050616';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    drawGrid();
+
+    ctx.strokeStyle = '#2f5fd6';
+    ctx.lineWidth = 3;
+    ctx.shadowBlur = 16;
+    ctx.shadowColor = '#2e83ff';
+    ctx.strokeRect(room.x,room.y,room.w,room.h);
+    ctx.shadowBlur = 0;
+
+    for(const o of lv.obstacles){
+      ctx.fillStyle = 'rgba(158,123,255,.16)';
+      ctx.strokeStyle = '#a88dff';
+      ctx.lineWidth = 2;
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = '#a88dff';
+      ctx.fillRect(o.x,o.y,o.w,o.h);
+      ctx.strokeRect(o.x,o.y,o.w,o.h);
+      ctx.shadowBlur = 0;
+    }
+
+    ctx.beginPath();
+    ctx.arc(lv.source.x, lv.source.y, 11, 0, Math.PI*2);
+    ctx.fillStyle = '#47e8ff';
+    ctx.shadowBlur = 16;
+    ctx.shadowColor = '#47e8ff';
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    ctx.beginPath();
+    ctx.arc(lv.target.x, lv.target.y, lv.target.r, 0, Math.PI*2);
+    ctx.strokeStyle = '#ff4ac6';
+    ctx.lineWidth = 3;
+    ctx.shadowBlur = 14;
+    ctx.shadowColor = '#ff4ac6';
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#ff4ac6';
+    ctx.font = '700 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('CORE', lv.target.x, lv.target.y + 4);
+
+    if(!state.launched){
+      const rad = state.angle * Math.PI/180;
+      const tx = lv.source.x + Math.cos(rad)*72;
+      const ty = lv.source.y + Math.sin(rad)*72;
+      ctx.strokeStyle = '#47e8ff';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(lv.source.x, lv.source.y);
+      ctx.lineTo(tx, ty);
+      ctx.stroke();
+    }
+
+    if(state.launched || state.failed || state.solved){
+      if(state.observed){
+        ctx.beginPath();
+        ctx.arc(b.x,b.y,b.r,0,Math.PI*2);
+        ctx.fillStyle = '#8dff9f';
+        ctx.shadowBlur = 18;
+        ctx.shadowColor = '#8dff9f';
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      } else {
+        for(let i=0;i<4;i++){
+          const r = b.r + i*2;
+          ctx.beginPath();
+          ctx.arc(b.x + Math.sin((performance.now()*0.01+i))*2, b.y + Math.cos((performance.now()*0.012+i))*2, r, 0, Math.PI*2);
+          ctx.strokeStyle = `rgba(71,232,255,${0.23-i*0.05})`;
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
+      }
+    }
+
+    ctx.fillStyle = '#dce9ff';
+    ctx.textAlign = 'left';
+    ctx.font = '600 13px system-ui';
+    ctx.fillText(state.observed ? 'OBSERVE: ON (solid collisions)' : 'OBSERVE: OFF (phase through obstacles)', 52, 28);
+  }
+
+  function frame(ts){
+    const dt = Math.min(0.033, (ts - (lastTs || ts))/1000);
+    lastTs = ts;
+    update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+
+  document.querySelectorAll('button[data-act]').forEach(btn => {
+    const act = btn.dataset.act;
+    if(act === 'observe') return;
+    btn.addEventListener('click', () => {
+      if(act === 'left') nudgeAngle(-3);
+      else if(act === 'right') nudgeAngle(3);
+      else if(act === 'launch') launch();
+      else if(act === 'reset') resetLevel(true);
+    });
+    btn.addEventListener('pointerdown', ()=>beep(300,0.02,'sine',0.012));
+    btn.addEventListener('touchstart', ()=>{}, {passive:true});
+  });
+
+  function observeOn(e){ e.preventDefault(); setObserved(true); beep(510,0.03,'triangle',0.02); }
+  function observeOff(e){ if(e) e.preventDefault(); setObserved(false); }
+  observeBtn.addEventListener('pointerdown', observeOn);
+  observeBtn.addEventListener('pointerup', observeOff);
+  observeBtn.addEventListener('pointerleave', observeOff);
+  observeBtn.addEventListener('pointercancel', observeOff);
+
+  canvas.addEventListener('pointerdown', (e) => { state.dragAim = true; setAimFromPointer(e.clientX, e.clientY); });
+  canvas.addEventListener('pointermove', (e) => { if(state.dragAim) setAimFromPointer(e.clientX, e.clientY); });
+  window.addEventListener('pointerup', () => { state.dragAim = false; });
+
+  document.addEventListener('keydown', (e) => {
+    if(e.key === 'ArrowLeft'){ e.preventDefault(); nudgeAngle(-3); }
+    else if(e.key === 'ArrowRight'){ e.preventDefault(); nudgeAngle(3); }
+    else if(e.key === 'Enter'){ e.preventDefault(); launch(); }
+    else if(e.key === ' '){ e.preventDefault(); setObserved(true); }
+    else if(e.key.toLowerCase() === 'r'){ e.preventDefault(); resetLevel(true); }
+  }, {passive:false});
+
+  document.addEventListener('keyup', (e) => {
+    if(e.key === ' ') setObserved(false);
+  });
+
+  setLevel(0);
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

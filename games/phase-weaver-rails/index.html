@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover" />
+  <title>Phase Weaver Rails</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <style>
+    :root{--bg:#0a0a1a;--panel:#121733;--ink:#eef6ff;--cyan:#49e8ff;--pink:#ff58e7;--lime:#88ffb1;--amber:#ffd479}
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    body{margin:0;min-height:100vh;background:radial-gradient(circle at 25% 0,#18214a,var(--bg) 46%);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;display:flex;justify-content:center;padding:12px}
+    .app{width:min(980px,100%);display:grid;gap:10px}
+    .hud{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+    .card{background:rgba(18,23,51,.92);border:1px solid #2b3f88;border-radius:12px;padding:8px;text-align:center;box-shadow:0 0 12px #1ce8ff30}
+    .k{font-size:.72rem;opacity:.82}.v{font-size:1.04rem;font-weight:800;color:var(--cyan)}
+    .panel{background:var(--panel);border:1px solid #2b3f88;border-radius:14px;padding:10px;box-shadow:0 0 16px #00a5ff3d}
+    canvas{display:block;width:100%;height:auto;aspect-ratio:16/9;background:#040612;border-radius:10px;touch-action:none}
+    .controls{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+    button{border:1px solid #3a56ae;border-radius:11px;background:linear-gradient(180deg,#22316f,#171f50);color:#eaf6ff;padding:11px 8px;font-weight:800;box-shadow:0 0 12px #2be9ff55}
+    button:active{transform:translateY(1px);filter:brightness(1.1)}
+    .pulse{border-color:#7746d8;box-shadow:0 0 14px #d09dff6a}
+    .hint{margin:0;text-align:center;font-size:12px;opacity:.86}
+    @media (max-width:760px){.hud{grid-template-columns:repeat(3,minmax(0,1fr))}.controls{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  </style>
+</head>
+<body>
+<main class="app">
+  <section class="hud">
+    <div class="card"><div class="k">Score</div><div id="score" class="v">0</div></div>
+    <div class="card"><div class="k">Best</div><div id="best" class="v">0</div></div>
+    <div class="card"><div class="k">Lives</div><div id="lives" class="v">3</div></div>
+    <div class="card"><div class="k">Tier</div><div id="tier" class="v">1</div></div>
+    <div class="card"><div class="k">Phase</div><div id="phase" class="v">0</div></div>
+    <div class="card"><div class="k">Status</div><div id="status" class="v">Ready</div></div>
+  </section>
+
+  <section class="panel">
+    <canvas id="game" width="960" height="540" aria-label="Phase Weaver Rails game canvas"></canvas>
+  </section>
+
+  <section class="controls">
+    <button data-act="left">◀ Left</button>
+    <button class="pulse" data-act="phase">⬡ Phase</button>
+    <button data-act="right">Right ▶</button>
+    <button data-act="pause">⏯ Pause</button>
+    <button data-act="restart">↺ Restart</button>
+  </section>
+  <p class="hint">키보드: ←/→ 또는 A/D 이동 · Space 위상 전환 · P 일시정지 · Enter 재시작 · 터치: 좌/우/중앙 탭</p>
+</main>
+
+<script>
+(() => {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const keyBest = 'phaseWeaverRailsBest';
+
+  const ui = {
+    score: document.getElementById('score'),
+    best: document.getElementById('best'),
+    lives: document.getElementById('lives'),
+    tier: document.getElementById('tier'),
+    phase: document.getElementById('phase'),
+    status: document.getElementById('status')
+  };
+
+  const world = { w: canvas.width, h: canvas.height };
+  const lanes = 3;
+  const laneW = world.w / lanes;
+  const player = { y: world.h - 86, w: laneW * 0.66, h: 34 };
+
+  const state = {
+    lane: 1,
+    phase: 0,
+    score: 0,
+    best: loadBest(),
+    lives: 3,
+    tier: 1,
+    combo: 0,
+    running: true,
+    ended: false,
+    gates: [],
+    spawnT: 0.9,
+    flash: 0,
+    keys: Object.create(null)
+  };
+
+  let ac;
+  let last = 0;
+
+  function loadBest() {
+    try { return Number(localStorage.getItem(keyBest) || 0); } catch (_) { return 0; }
+  }
+
+  function saveBest() {
+    if (state.score <= state.best) return;
+    state.best = state.score;
+    try { localStorage.setItem(keyBest, String(state.best)); } catch (_) {}
+  }
+
+  function beep(freq = 420, dur = 0.05, type = 'sine', vol = 0.04) {
+    try {
+      ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+      const o = ac.createOscillator();
+      const g = ac.createGain();
+      o.type = type;
+      o.frequency.value = freq;
+      g.gain.value = vol;
+      o.connect(g).connect(ac.destination);
+      o.start();
+      o.stop(ac.currentTime + dur);
+    } catch (_) {}
+  }
+
+  function laneX(i) {
+    return i * laneW + (laneW - player.w) / 2;
+  }
+
+  function spawnGate() {
+    state.gates.push({
+      lane: (Math.random() * lanes) | 0,
+      phase: Math.random() < 0.5 ? 0 : 1,
+      y: -70,
+      h: 44,
+      checked: false
+    });
+  }
+
+  function moveLane(dir) {
+    const prev = state.lane;
+    state.lane = Math.max(0, Math.min(lanes - 1, state.lane + dir));
+    if (prev !== state.lane) beep(300 + state.lane * 70, 0.04, 'triangle', 0.035);
+  }
+
+  function flipPhase() {
+    state.phase = 1 - state.phase;
+    beep(state.phase ? 680 : 520, 0.05, 'square', 0.035);
+  }
+
+  function updateHUD() {
+    ui.score.textContent = state.score;
+    ui.best.textContent = state.best;
+    ui.lives.textContent = state.lives;
+    ui.tier.textContent = state.tier;
+    ui.phase.textContent = state.phase;
+    ui.status.textContent = state.ended ? 'Game Over' : (state.running ? 'Running' : 'Paused');
+  }
+
+  function endGame() {
+    state.running = false;
+    state.ended = true;
+    saveBest();
+    beep(170, 0.14, 'sawtooth', 0.05);
+    updateHUD();
+  }
+
+  function restart() {
+    state.lane = 1;
+    state.phase = 0;
+    state.score = 0;
+    state.lives = 3;
+    state.combo = 0;
+    state.tier = 1;
+    state.running = true;
+    state.ended = false;
+    state.gates.length = 0;
+    state.spawnT = 0.8;
+    state.flash = 0;
+    updateHUD();
+    beep(500, 0.05, 'triangle', 0.04);
+  }
+
+  function togglePause() {
+    if (state.ended) return;
+    state.running = !state.running;
+    updateHUD();
+    beep(state.running ? 620 : 260, 0.04, 'square', 0.03);
+  }
+
+  function gradeGate(g) {
+    g.checked = true;
+    const pass = g.lane === state.lane && g.phase === state.phase;
+    if (pass) {
+      state.combo += 1;
+      state.score += 8 + Math.min(24, state.combo * 2);
+      beep(500 + Math.min(240, state.combo * 12), 0.04, 'triangle', 0.035);
+      if (state.score > state.best) saveBest();
+    } else {
+      state.combo = 0;
+      state.lives -= 1;
+      state.flash = 0.25;
+      beep(170, 0.09, 'sawtooth', 0.05);
+      if (state.lives <= 0) {
+        endGame();
+      }
+    }
+  }
+
+  function step(dt) {
+    if (!state.running || state.ended) return;
+
+    state.tier = 1 + Math.floor(state.score / 120);
+    const speed = 200 + state.tier * 34;
+    const spawnEvery = Math.max(0.42, 1.2 - state.tier * 0.055);
+
+    state.spawnT -= dt;
+    if (state.spawnT <= 0) {
+      spawnGate();
+      state.spawnT = spawnEvery;
+    }
+
+    for (const g of state.gates) {
+      g.y += speed * dt;
+      if (!g.checked && g.y + g.h >= player.y && g.y <= player.y + player.h) {
+        gradeGate(g);
+      }
+    }
+
+    state.gates = state.gates.filter(g => g.y < world.h + 80);
+    state.flash = Math.max(0, state.flash - dt);
+    updateHUD();
+  }
+
+  function drawLaneGlow() {
+    for (let i = 0; i < lanes; i++) {
+      const x = i * laneW;
+      ctx.fillStyle = i === state.lane ? 'rgba(73,232,255,0.09)' : 'rgba(255,255,255,0.02)';
+      ctx.fillRect(x + 4, 0, laneW - 8, world.h);
+      ctx.strokeStyle = 'rgba(120,170,255,0.22)';
+      ctx.strokeRect(x + 4, 6, laneW - 8, world.h - 12);
+    }
+  }
+
+  function drawPlayer() {
+    const x = laneX(state.lane);
+    ctx.fillStyle = state.phase ? '#ff58e7' : '#49e8ff';
+    ctx.shadowColor = state.phase ? '#ff58e7' : '#49e8ff';
+    ctx.shadowBlur = 16;
+    ctx.fillRect(x, player.y, player.w, player.h);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#dfeeff';
+    ctx.font = 'bold 14px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('P' + state.phase, x + player.w / 2, player.y + 22);
+  }
+
+  function drawGates() {
+    for (const g of state.gates) {
+      const x = g.lane * laneW + laneW * 0.16;
+      const w = laneW * 0.68;
+      const c = g.phase ? '#ff58e7' : '#49e8ff';
+      ctx.fillStyle = c;
+      ctx.shadowColor = c;
+      ctx.shadowBlur = 14;
+      ctx.fillRect(x, g.y, w, g.h);
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#090b17';
+      ctx.font = 'bold 16px system-ui';
+      ctx.textAlign = 'center';
+      ctx.fillText(g.phase ? 'Φ1' : 'Φ0', x + w / 2, g.y + 27);
+    }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, world.w, world.h);
+    const grad = ctx.createLinearGradient(0, 0, 0, world.h);
+    grad.addColorStop(0, '#0f1532');
+    grad.addColorStop(1, '#060913');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, world.w, world.h);
+
+    drawLaneGlow();
+    drawGates();
+    drawPlayer();
+
+    if (state.flash > 0) {
+      ctx.fillStyle = `rgba(255,90,120,${state.flash * 0.45})`;
+      ctx.fillRect(0, 0, world.w, world.h);
+    }
+
+    ctx.fillStyle = '#e6f0ff';
+    ctx.font = 'bold 18px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText(`Combo x${Math.max(1, state.combo)}`, 18, 30);
+
+    if (!state.running && !state.ended) {
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 34px system-ui';
+      ctx.fillStyle = '#ffd479';
+      ctx.fillText('Paused', world.w / 2, world.h / 2);
+    }
+
+    if (state.ended) {
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 36px system-ui';
+      ctx.fillStyle = '#ff7db6';
+      ctx.fillText('Phase Collapse', world.w / 2, world.h / 2 - 10);
+      ctx.font = 'bold 18px system-ui';
+      ctx.fillStyle = '#e8f3ff';
+      ctx.fillText('Enter 또는 Restart 버튼으로 재시작', world.w / 2, world.h / 2 + 28);
+    }
+  }
+
+  function loop(ts) {
+    const dt = Math.min(0.033, (ts - last) / 1000 || 0.016);
+    last = ts;
+    step(dt);
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.repeat) return;
+    if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') moveLane(-1);
+    else if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') moveLane(1);
+    else if (e.key === ' ') { e.preventDefault(); flipPhase(); }
+    else if (e.key.toLowerCase() === 'p') togglePause();
+    else if (e.key === 'Enter') restart();
+  });
+
+  canvas.addEventListener('pointerdown', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width;
+    if (x < 0.33) moveLane(-1);
+    else if (x > 0.66) moveLane(1);
+    else flipPhase();
+  });
+
+  document.querySelectorAll('button[data-act]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const act = btn.dataset.act;
+      if (act === 'left') moveLane(-1);
+      else if (act === 'right') moveLane(1);
+      else if (act === 'phase') flipPhase();
+      else if (act === 'pause') togglePause();
+      else if (act === 'restart') restart();
+    });
+  });
+
+  updateHUD();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

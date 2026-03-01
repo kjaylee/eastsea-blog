@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover" />
+  <title>Plasma Pong</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <style>
+    :root{--bg:#0a0a1a;--panel:#121733;--ink:#eef6ff;--cyan:#4be8ff;--pink:#ff4fd8;--lime:#95ffb5;--warn:#ffd86b}
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    body{margin:0;min-height:100vh;background:radial-gradient(circle at 20% 0,#19204a,var(--bg) 42%);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;display:flex;justify-content:center;padding:12px}
+    .app{width:min(980px,100%);display:grid;gap:10px}
+    .hud{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+    .card{background:rgba(18,23,51,.92);border:1px solid #2b3f88;border-radius:12px;padding:8px;text-align:center;box-shadow:0 0 12px #1ce8ff33}
+    .k{font-size:.72rem;opacity:.82}
+    .v{font-size:1.04rem;font-weight:800;color:var(--cyan)}
+    .panel{background:var(--panel);border:1px solid #2b3f88;border-radius:14px;padding:10px;box-shadow:0 0 18px #00a5ff38}
+    canvas{display:block;width:100%;height:auto;aspect-ratio:16/9;background:#040612;border-radius:10px;touch-action:none}
+    .controls{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+    button{border:1px solid #3a56ae;border-radius:11px;background:linear-gradient(180deg,#23306f,#171f50);color:#eaf6ff;padding:11px 8px;font-weight:800;letter-spacing:.2px;box-shadow:0 0 12px #2be9ff55}
+    button:active{transform:translateY(1px);filter:brightness(1.12)}
+    button.pulse{border-color:#7f4ad5;box-shadow:0 0 14px #d09dff66}
+    .hint{margin:0;text-align:center;font-size:12px;opacity:.86}
+    .fx{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;font-size:12px;opacity:.9}
+    .pill{padding:4px 8px;border:1px solid #2f4aa6;border-radius:999px;background:#141f4b}
+    @media (max-width:760px){
+      .hud{grid-template-columns:repeat(3,minmax(0,1fr))}
+      .controls{grid-template-columns:repeat(2,minmax(0,1fr))}
+    }
+  </style>
+</head>
+<body>
+<main class="app">
+  <section class="hud">
+    <div class="card"><div class="k">Score</div><div id="score" class="v">0</div></div>
+    <div class="card"><div class="k">Best</div><div id="best" class="v">0</div></div>
+    <div class="card"><div class="k">Lives</div><div id="lives" class="v">3</div></div>
+    <div class="card"><div class="k">Tier</div><div id="tier" class="v">1</div></div>
+    <div class="card"><div class="k">Rally</div><div id="rally" class="v">0</div></div>
+    <div class="card"><div class="k">Status</div><div id="status" class="v">Ready</div></div>
+  </section>
+
+  <section class="panel">
+    <canvas id="game" width="960" height="540" aria-label="Plasma Pong game canvas"></canvas>
+  </section>
+
+  <section class="fx" id="fxBar">
+    <span class="pill">∞ Infinite Duel</span>
+    <span class="pill">Powerups: Expand / Slow / x2</span>
+  </section>
+
+  <section class="controls">
+    <button data-act="up">▲ Up</button>
+    <button data-act="down">▼ Down</button>
+    <button class="pulse" data-act="pulse">⚡ Pulse</button>
+    <button data-act="toggle">⏯ Pause</button>
+    <button data-act="restart">↺ Restart</button>
+  </section>
+  <p class="hint">키보드: W/S 또는 ↑/↓ 이동 · Space 펄스 · P 일시정지 · Enter 재시작</p>
+</main>
+
+<script>
+(() => {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const keyBest = 'plasmaPongBestScore';
+  const ui = {
+    score: document.getElementById('score'),
+    best: document.getElementById('best'),
+    lives: document.getElementById('lives'),
+    tier: document.getElementById('tier'),
+    rally: document.getElementById('rally'),
+    status: document.getElementById('status'),
+    fx: document.getElementById('fxBar')
+  };
+
+  const state = {
+    running: true,
+    ended: false,
+    score: 0,
+    lives: 3,
+    tier: 1,
+    rally: 0,
+    best: Number(localStorage.getItem(keyBest) || 0),
+    mul: 1,
+    pulseCd: 0,
+    pulseT: 0,
+    slowT: 0,
+    widenT: 0,
+    keys: Object.create(null),
+    powerups: [],
+    powerupSpawn: 3,
+    aiErr: 20,
+    aiSpeed: 260
+  };
+
+  const world = { w: canvas.width, h: canvas.height };
+  const paddleBaseH = 118;
+  const player = { x: 28, y: world.h / 2 - paddleBaseH / 2, w: 14, h: paddleBaseH, speed: 420 };
+  const ai = { x: world.w - 42, y: world.h / 2 - paddleBaseH / 2, w: 14, h: paddleBaseH };
+  const ball = { x: world.w / 2, y: world.h / 2, r: 9, vx: 330, vy: 130, speedMul: 1 };
+
+  let ac;
+  let last = 0;
+
+  function beep(freq = 440, dur = 0.06, type = 'sine', vol = 0.04) {
+    try {
+      ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+      const o = ac.createOscillator();
+      const g = ac.createGain();
+      o.type = type;
+      o.frequency.value = freq;
+      g.gain.value = vol;
+      o.connect(g).connect(ac.destination);
+      o.start();
+      o.stop(ac.currentTime + dur);
+    } catch (_) {}
+  }
+
+  function safeSaveBest() {
+    try { localStorage.setItem(keyBest, String(state.best)); } catch (_) {}
+  }
+
+  function resetBall(dir = Math.random() > 0.5 ? 1 : -1) {
+    ball.x = world.w / 2;
+    ball.y = world.h / 2 + (Math.random() * 120 - 60);
+    const base = 300 + state.tier * 22;
+    ball.vx = base * dir;
+    ball.vy = (Math.random() * 220 - 110);
+  }
+
+  function restart() {
+    state.running = true;
+    state.ended = false;
+    state.score = 0;
+    state.lives = 3;
+    state.tier = 1;
+    state.rally = 0;
+    state.mul = 1;
+    state.pulseCd = 0;
+    state.pulseT = 0;
+    state.slowT = 0;
+    state.widenT = 0;
+    state.powerups.length = 0;
+    state.powerupSpawn = 3;
+    player.h = paddleBaseH;
+    ai.h = paddleBaseH;
+    player.y = world.h / 2 - player.h / 2;
+    ai.y = world.h / 2 - ai.h / 2;
+    applyTier();
+    resetBall(Math.random() > 0.5 ? 1 : -1);
+    ui.status.textContent = 'Ready';
+    beep(380, 0.05, 'triangle', 0.03);
+  }
+
+  function applyTier() {
+    state.tier = 1 + Math.floor(state.score / 6);
+    state.aiSpeed = 250 + state.tier * 26;
+    state.aiErr = Math.max(6, 24 - state.tier * 1.6);
+  }
+
+  function spawnPowerup() {
+    const types = ['widen', 'slow', 'double'];
+    const t = types[Math.floor(Math.random() * types.length)];
+    state.powerups.push({
+      x: 300 + Math.random() * 360,
+      y: 80 + Math.random() * (world.h - 160),
+      r: 11,
+      vy: (Math.random() > 0.5 ? 1 : -1) * (30 + Math.random() * 60),
+      type: t
+    });
+  }
+
+  function activatePowerup(type) {
+    if (type === 'widen') {
+      state.widenT = 8;
+      player.h = paddleBaseH + 68;
+      beep(520, 0.08, 'sawtooth', 0.035);
+    } else if (type === 'slow') {
+      state.slowT = 6;
+      ball.speedMul = 0.74;
+      beep(270, 0.1, 'triangle', 0.04);
+    } else {
+      state.mul = 2;
+      setTimeout(() => { state.mul = 1; }, 8000);
+      beep(680, 0.08, 'square', 0.032);
+    }
+  }
+
+  function clampPaddles() {
+    player.y = Math.max(8, Math.min(world.h - player.h - 8, player.y));
+    ai.y = Math.max(8, Math.min(world.h - ai.h - 8, ai.y));
+  }
+
+  function collidePaddle(p) {
+    return ball.x + ball.r > p.x && ball.x - ball.r < p.x + p.w && ball.y + ball.r > p.y && ball.y - ball.r < p.y + p.h;
+  }
+
+  function loseLife() {
+    state.lives -= 1;
+    state.rally = 0;
+    beep(140, 0.18, 'square', 0.05);
+    if (state.lives <= 0) {
+      state.running = false;
+      state.ended = true;
+      ui.status.textContent = 'Game Over';
+      if (state.score > state.best) {
+        state.best = state.score;
+        safeSaveBest();
+      }
+    } else {
+      resetBall(1);
+      ui.status.textContent = 'Lost Life';
+    }
+  }
+
+  function scorePoint() {
+    state.score += 1 * state.mul;
+    state.rally += 1;
+    if (state.score > state.best) {
+      state.best = state.score;
+      safeSaveBest();
+    }
+    applyTier();
+    resetBall(-1);
+    beep(880, 0.09, 'triangle', 0.04);
+    ui.status.textContent = state.mul > 1 ? 'Score x2!' : 'Point';
+  }
+
+  function update(dt) {
+    state.pulseCd = Math.max(0, state.pulseCd - dt);
+    if (state.pulseT > 0) {
+      state.pulseT = Math.max(0, state.pulseT - dt);
+      if (state.pulseT === 0 && state.widenT <= 0) player.h = paddleBaseH;
+    }
+    if (state.widenT > 0) {
+      state.widenT = Math.max(0, state.widenT - dt);
+      if (state.widenT === 0 && state.pulseT <= 0) player.h = paddleBaseH;
+    }
+    if (state.slowT > 0) {
+      state.slowT = Math.max(0, state.slowT - dt);
+      if (state.slowT === 0) ball.speedMul = 1;
+    }
+
+    const move = (state.keys.KeyW || state.keys.ArrowUp ? -1 : 0) + (state.keys.KeyS || state.keys.ArrowDown ? 1 : 0);
+    player.y += move * player.speed * dt;
+
+    const targetY = ball.y - ai.h / 2 + (Math.random() * state.aiErr - state.aiErr / 2);
+    if (targetY > ai.y) ai.y += state.aiSpeed * dt;
+    else ai.y -= state.aiSpeed * dt;
+
+    clampPaddles();
+
+    ball.x += ball.vx * ball.speedMul * dt;
+    ball.y += ball.vy * ball.speedMul * dt;
+
+    if (ball.y - ball.r < 0) {
+      ball.y = ball.r;
+      ball.vy = Math.abs(ball.vy);
+      beep(420, 0.03, 'sine', 0.02);
+    } else if (ball.y + ball.r > world.h) {
+      ball.y = world.h - ball.r;
+      ball.vy = -Math.abs(ball.vy);
+      beep(420, 0.03, 'sine', 0.02);
+    }
+
+    if (collidePaddle(player) && ball.vx < 0) {
+      const hit = ((ball.y - (player.y + player.h / 2)) / (player.h / 2));
+      ball.x = player.x + player.w + ball.r;
+      ball.vx = Math.abs(ball.vx) * 1.04;
+      ball.vy += hit * 170;
+      state.rally += 1;
+      beep(520, 0.04, 'square', 0.03);
+    }
+
+    if (collidePaddle(ai) && ball.vx > 0) {
+      const hit = ((ball.y - (ai.y + ai.h / 2)) / (ai.h / 2));
+      ball.x = ai.x - ball.r;
+      ball.vx = -Math.abs(ball.vx) * 1.03;
+      ball.vy += hit * 150;
+      beep(500, 0.04, 'square', 0.025);
+    }
+
+    if (ball.x + ball.r < 0) loseLife();
+    if (ball.x - ball.r > world.w) scorePoint();
+
+    state.powerupSpawn -= dt;
+    if (state.powerupSpawn <= 0) {
+      spawnPowerup();
+      state.powerupSpawn = Math.max(2.6, 6 - state.tier * 0.35);
+    }
+
+    for (let i = state.powerups.length - 1; i >= 0; i--) {
+      const p = state.powerups[i];
+      p.y += p.vy * dt;
+      if (p.y < 24 || p.y > world.h - 24) p.vy *= -1;
+      const dx = ball.x - p.x;
+      const dy = ball.y - p.y;
+      if (dx * dx + dy * dy < (ball.r + p.r) * (ball.r + p.r)) {
+        activatePowerup(p.type);
+        state.powerups.splice(i, 1);
+      }
+    }
+
+    ui.score.textContent = String(state.score);
+    ui.best.textContent = String(state.best);
+    ui.lives.textContent = String(state.lives);
+    ui.tier.textContent = String(state.tier);
+    ui.rally.textContent = String(state.rally);
+    renderFx();
+  }
+
+  function renderFx() {
+    const list = ['∞ Infinite Duel'];
+    if (state.pulseT > 0) list.push(`Pulse ${state.pulseT.toFixed(1)}s`);
+    if (state.widenT > 0) list.push(`Expand ${state.widenT.toFixed(1)}s`);
+    if (state.slowT > 0) list.push(`Slow ${state.slowT.toFixed(1)}s`);
+    if (state.mul > 1) list.push('Score x2');
+    ui.fx.innerHTML = list.map(v => `<span class="pill">${v}</span>`).join('');
+  }
+
+  function drawGlowRect(x, y, w, h, color) {
+    ctx.save();
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 16;
+    ctx.fillStyle = color;
+    ctx.fillRect(x, y, w, h);
+    ctx.restore();
+  }
+
+  function drawPowerup(p) {
+    const colors = { widen: '#95ffb5', slow: '#ffd86b', double: '#ff7de8' };
+    const glyph = { widen: 'W', slow: 'S', double: 'x2' };
+    const c = colors[p.type];
+    ctx.save();
+    ctx.shadowColor = c;
+    ctx.shadowBlur = 18;
+    ctx.fillStyle = c;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#061126';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(glyph[p.type], p.x, p.y + 0.2);
+    ctx.restore();
+  }
+
+  function draw() {
+    const g = ctx.createLinearGradient(0, 0, world.w, world.h);
+    g.addColorStop(0, '#050816');
+    g.addColorStop(1, '#0d1232');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, world.w, world.h);
+
+    ctx.strokeStyle = '#3250ad';
+    ctx.setLineDash([8, 10]);
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(world.w / 2, 0);
+    ctx.lineTo(world.w / 2, world.h);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    drawGlowRect(player.x, player.y, player.w, player.h, state.pulseT > 0 ? '#ff6ce9' : '#4be8ff');
+    drawGlowRect(ai.x, ai.y, ai.w, ai.h, '#ff4fd8');
+
+    for (const p of state.powerups) drawPowerup(p);
+
+    ctx.save();
+    ctx.shadowColor = '#8fffe4';
+    ctx.shadowBlur = 20;
+    ctx.fillStyle = '#9bfdf0';
+    ctx.beginPath();
+    ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    if (!state.running) {
+      ctx.fillStyle = 'rgba(4,8,28,.72)';
+      ctx.fillRect(0, 0, world.w, world.h);
+      ctx.fillStyle = '#f3fbff';
+      ctx.textAlign = 'center';
+      ctx.font = '700 48px system-ui';
+      ctx.fillText(state.ended ? 'GAME OVER' : 'PAUSED', world.w / 2, world.h / 2 - 12);
+      ctx.font = '600 20px system-ui';
+      ctx.fillText('Enter 또는 Restart 버튼으로 재시작', world.w / 2, world.h / 2 + 32);
+    }
+  }
+
+  function step(ts) {
+    const dt = Math.min(0.033, (ts - last) / 1000 || 0.016);
+    last = ts;
+    if (state.running) update(dt);
+    draw();
+    requestAnimationFrame(step);
+  }
+
+  function activatePulse() {
+    if (state.pulseCd > 0 || state.ended) return;
+    state.pulseCd = 5;
+    state.pulseT = 1.2;
+    player.h = paddleBaseH + 96;
+    beep(720, 0.08, 'triangle', 0.035);
+  }
+
+  function pointerMove(clientY) {
+    const rect = canvas.getBoundingClientRect();
+    const y = (clientY - rect.top) * (canvas.height / rect.height);
+    player.y = y - player.h / 2;
+    clampPaddles();
+  }
+
+  canvas.addEventListener('pointerdown', (e) => {
+    pointerMove(e.clientY);
+    canvas.setPointerCapture(e.pointerId);
+  });
+  canvas.addEventListener('pointermove', (e) => { if (e.pressure > 0) pointerMove(e.clientY); });
+
+  document.querySelectorAll('button[data-act]').forEach(btn => {
+    const act = btn.dataset.act;
+    const holdStart = () => {
+      if (act === 'up') state.keys.__touchUp = true;
+      if (act === 'down') state.keys.__touchDown = true;
+      if (act === 'pulse') activatePulse();
+      if (act === 'toggle') {
+        state.running = !state.running;
+        ui.status.textContent = state.running ? 'Running' : 'Paused';
+      }
+      if (act === 'restart') restart();
+    };
+    const holdEnd = () => {
+      if (act === 'up') state.keys.__touchUp = false;
+      if (act === 'down') state.keys.__touchDown = false;
+    };
+    btn.addEventListener('pointerdown', holdStart);
+    btn.addEventListener('pointerup', holdEnd);
+    btn.addEventListener('pointerleave', holdEnd);
+    btn.addEventListener('touchstart', (e) => { e.preventDefault(); holdStart(); }, { passive: false });
+    btn.addEventListener('touchend', holdEnd);
+  });
+
+  window.addEventListener('keydown', (e) => {
+    if (['ArrowUp', 'ArrowDown', 'Space', 'KeyW', 'KeyS', 'KeyP', 'Enter'].includes(e.code)) e.preventDefault();
+    state.keys[e.code] = true;
+    if (e.code === 'Space') activatePulse();
+    if (e.code === 'KeyP') {
+      state.running = !state.running;
+      ui.status.textContent = state.running ? 'Running' : 'Paused';
+    }
+    if (e.code === 'Enter') restart();
+  });
+  window.addEventListener('keyup', (e) => { state.keys[e.code] = false; });
+
+  setInterval(() => {
+    if (state.keys.__touchUp) player.y -= player.speed * 0.03;
+    if (state.keys.__touchDown) player.y += player.speed * 0.03;
+  }, 30);
+
+  ui.best.textContent = String(state.best);
+  applyTier();
+  resetBall(Math.random() > 0.5 ? 1 : -1);
+  requestAnimationFrame(step);
+})();
+</script>
+</body>
+</html>

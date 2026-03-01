@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover" />
+  <title>Ink Flow</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <style>
+    :root{--bg:#0a0a1a;--panel:#121633;--ink:#eaf6ff;--cyan:#47e8ff;--pink:#ff4ac6;--lime:#8dff9f;--violet:#9e7bff}
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
+    body{margin:0;min-height:100vh;background:radial-gradient(circle at 18% 0,#1a1e49,var(--bg) 42%);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;display:flex;justify-content:center;padding:12px}
+    .app{width:min(920px,100%);display:grid;gap:10px}
+    .hud{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+    .card{background:rgba(18,22,51,.92);border:1px solid #2a3d7d;border-radius:12px;padding:8px;text-align:center;box-shadow:0 0 14px #00e8ff33}
+    .v{font-size:1.02rem;font-weight:800;color:var(--cyan)}
+    .panel{background:var(--panel);border:1px solid #2a3f80;border-radius:14px;padding:10px;box-shadow:0 0 18px #009dff33}
+    canvas{display:block;width:100%;height:auto;aspect-ratio:16/10;background:#040512;border-radius:10px;touch-action:none}
+    .controls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+    button{border:1px solid #3551a5;border-radius:12px;background:linear-gradient(180deg,#1f2c66,#17204f);color:#eaf6ff;padding:11px 8px;font-weight:800;letter-spacing:.2px;box-shadow:0 0 12px #2be9ff55;touch-action:manipulation}
+    button:active{transform:translateY(1px);filter:brightness(1.14)}
+    .hint{margin:0;text-align:center;font-size:12px;opacity:.86}
+    @media (max-width:760px){
+      .hud{grid-template-columns:repeat(2,minmax(0,1fr))}
+      .controls{grid-template-columns:repeat(2,minmax(0,1fr))}
+    }
+  </style>
+</head>
+<body>
+<main class="app">
+  <section class="hud">
+    <div class="card">Level<div id="level" class="v">1/6</div></div>
+    <div class="card">Best<div id="best" class="v">1</div></div>
+    <div class="card">Path<div id="pathLen" class="v">1</div></div>
+    <div class="card">Gates<div id="gates" class="v">0/0</div></div>
+    <div class="card">Status<div id="status" class="v">Draw</div></div>
+  </section>
+
+  <section class="panel">
+    <canvas id="game" width="900" height="560" aria-label="Ink Flow game canvas"></canvas>
+  </section>
+
+  <section class="controls">
+    <button data-act="run">▶ Flow</button>
+    <button data-act="undo">↩ Undo</button>
+    <button data-act="reset">↺ Reset</button>
+    <button data-act="next">⏭ Next</button>
+  </section>
+  <p class="hint">키보드: 화살표 경로 확장 · Backspace Undo · Enter 흐름 실행 · R 리셋</p>
+</main>
+
+<script>
+(() => {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const keyBest = 'inkFlowBestLevel';
+
+  const ui = {
+    level: document.getElementById('level'),
+    best: document.getElementById('best'),
+    pathLen: document.getElementById('pathLen'),
+    gates: document.getElementById('gates'),
+    status: document.getElementById('status')
+  };
+
+  const board = { x:50, y:60, w:800, h:440, cols:12, rows:8 };
+  const levels = [
+    { source:[1,3], goal:[10,3], gates:[[4,2],[7,4]], blocks:[[5,3],[6,3]] },
+    { source:[1,6], goal:[10,1], gates:[[3,5],[6,2],[8,4]], blocks:[[4,6],[4,5],[5,5],[6,5],[7,5],[7,4],[7,3]] },
+    { source:[1,1], goal:[10,6], gates:[[3,2],[5,4],[8,5]], blocks:[[2,4],[3,4],[4,4],[5,2],[6,2],[6,3],[6,4],[7,4]] },
+    { source:[1,4], goal:[10,4], gates:[[3,1],[6,6],[8,2]], blocks:[[3,4],[4,4],[5,4],[6,4],[7,4],[8,4],[5,3],[5,5]] },
+    { source:[1,2], goal:[10,6], gates:[[2,5],[5,1],[8,3],[9,6]], blocks:[[3,2],[3,3],[3,4],[4,4],[5,4],[6,4],[7,4],[7,5],[8,5]] },
+    { source:[1,6], goal:[10,1], gates:[[2,2],[4,6],[6,1],[8,4],[9,2]], blocks:[[2,5],[3,5],[4,5],[5,5],[6,5],[7,5],[8,5],[9,5],[5,2],[5,3],[5,4]] }
+  ];
+
+  const state = {
+    level: 0,
+    best: Math.max(1, Number(localStorage.getItem(keyBest) || 1)),
+    path: [],
+    drawing: false,
+    running: false,
+    solved: false,
+    progress: 0,
+    tick: 0
+  };
+
+  let ac, lastTs = 0;
+
+  const clamp = (n,a,b) => Math.max(a, Math.min(b,n));
+  const key = (x,y) => `${x},${y}`;
+
+  function beep(freq=480, dur=0.05, type='sine', vol=0.03){
+    try{
+      ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+      const o = ac.createOscillator();
+      const g = ac.createGain();
+      o.type = type;
+      o.frequency.value = freq;
+      g.gain.value = vol;
+      o.connect(g).connect(ac.destination);
+      o.start();
+      o.stop(ac.currentTime + dur);
+    }catch(_){ }
+  }
+
+  function lv(){ return levels[state.level]; }
+
+  function initPath(){
+    const [sx, sy] = lv().source;
+    state.path = [{x:sx,y:sy}];
+    state.running = false;
+    state.solved = false;
+    state.progress = 0;
+    state.tick = 0;
+    ui.status.textContent = 'Draw';
+  }
+
+  function setLevel(idx){
+    state.level = clamp(idx, 0, levels.length - 1);
+    initPath();
+  }
+
+  function unlock(){
+    state.best = Math.max(state.best, state.level + 2);
+    localStorage.setItem(keyBest, String(Math.min(levels.length, state.best)));
+  }
+
+  function blockedSet(){
+    return new Set(lv().blocks.map(([x,y]) => key(x,y)));
+  }
+
+  function inBounds(x,y){
+    return x>=0 && x<board.cols && y>=0 && y<board.rows;
+  }
+
+  function includesPath(x,y){
+    return state.path.some(p => p.x===x && p.y===y);
+  }
+
+  function gatePassedCount(){
+    const pset = new Set(state.path.map(p => key(p.x,p.y)));
+    return lv().gates.reduce((n,[x,y]) => n + (pset.has(key(x,y)) ? 1 : 0), 0);
+  }
+
+  function tryStepTo(x,y){
+    if(state.running || state.solved) return false;
+    if(!inBounds(x,y)) return false;
+    const last = state.path[state.path.length - 1];
+    const man = Math.abs(last.x - x) + Math.abs(last.y - y);
+    if(man !== 1) return false;
+
+    const bset = blockedSet();
+    if(bset.has(key(x,y))) return false;
+
+    if(state.path.length > 1){
+      const prev = state.path[state.path.length - 2];
+      if(prev.x === x && prev.y === y){
+        state.path.pop();
+        beep(260,0.03,'triangle',0.018);
+        return true;
+      }
+    }
+
+    if(includesPath(x,y)) return false;
+    state.path.push({x,y});
+    beep(420 + state.path.length * 3,0.03,'triangle',0.015);
+    return true;
+  }
+
+  function runFlow(){
+    if(state.running || state.path.length < 2 || state.solved) return;
+    state.running = true;
+    state.progress = 0;
+    state.tick = 0;
+    ui.status.textContent = 'Flowing…';
+    beep(330,0.07,'sawtooth',0.03);
+  }
+
+  function checkResult(){
+    const last = state.path[state.path.length - 1];
+    const [gx, gy] = lv().goal;
+    const passed = gatePassedCount();
+    const total = lv().gates.length;
+    if(last.x === gx && last.y === gy && passed === total){
+      state.solved = true;
+      ui.status.textContent = 'Sumi Complete!';
+      unlock();
+      beep(920,0.08,'triangle',0.05);
+      setTimeout(()=>{
+        if(state.level < levels.length - 1) setLevel(state.level + 1);
+        else {
+          alert('Ink Flow complete. 6 levels cleared!');
+          setLevel(0);
+        }
+      }, 700);
+    } else {
+      ui.status.textContent = 'Incomplete Route';
+      beep(180,0.12,'square',0.034);
+    }
+  }
+
+  function cellFromPointer(clientX, clientY){
+    const r = canvas.getBoundingClientRect();
+    const px = (clientX - r.left) * canvas.width / r.width;
+    const py = (clientY - r.top) * canvas.height / r.height;
+    const cw = board.w / board.cols;
+    const ch = board.h / board.rows;
+    const x = Math.floor((px - board.x) / cw);
+    const y = Math.floor((py - board.y) / ch);
+    if(!inBounds(x,y)) return null;
+    return {x,y};
+  }
+
+  function update(dt){
+    if(state.running){
+      state.tick += dt;
+      if(state.tick >= 0.09){
+        state.tick = 0;
+        state.progress += 1;
+        beep(350 + state.progress*6,0.02,'sine',0.012);
+        if(state.progress >= state.path.length - 1){
+          state.running = false;
+          checkResult();
+        }
+      }
+    }
+
+    ui.level.textContent = `${state.level+1}/${levels.length}`;
+    ui.best.textContent = String(state.best);
+    ui.pathLen.textContent = String(state.path.length);
+    ui.gates.textContent = `${gatePassedCount()}/${lv().gates.length}`;
+  }
+
+  function drawCell(x,y,fill,stroke='#263f7a'){
+    const cw = board.w / board.cols;
+    const ch = board.h / board.rows;
+    const px = board.x + x*cw;
+    const py = board.y + y*ch;
+    ctx.fillStyle = fill;
+    ctx.fillRect(px+2,py+2,cw-4,ch-4);
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(px+2,py+2,cw-4,ch-4);
+  }
+
+  function draw(){
+    const level = lv();
+    const cw = board.w / board.cols;
+    const ch = board.h / board.rows;
+
+    ctx.fillStyle = '#050616';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    ctx.strokeStyle = '#2f5fd6';
+    ctx.lineWidth = 3;
+    ctx.shadowBlur = 16;
+    ctx.shadowColor = '#2e83ff';
+    ctx.strokeRect(board.x,board.y,board.w,board.h);
+    ctx.shadowBlur = 0;
+
+    for(let x=0;x<board.cols;x++){
+      for(let y=0;y<board.rows;y++) drawCell(x,y,'#081127','#1a2e63');
+    }
+
+    for(const [x,y] of level.blocks) drawCell(x,y,'#25173f','#7d56c9');
+
+    for(const [x,y] of level.gates){
+      const cx = board.x + x*cw + cw/2;
+      const cy = board.y + y*ch + ch/2;
+      ctx.beginPath();
+      ctx.arc(cx,cy,Math.min(cw,ch)*0.19,0,Math.PI*2);
+      ctx.fillStyle = '#8dff9f';
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = '#8dff9f';
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+
+    const [sx,sy] = level.source;
+    const [gx,gy] = level.goal;
+    drawCell(sx,sy,'#103e52','#47e8ff');
+    drawCell(gx,gy,'#51183f','#ff4ac6');
+
+    if(state.path.length){
+      ctx.strokeStyle = '#47e8ff';
+      ctx.lineWidth = 6;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.shadowBlur = 12;
+      ctx.shadowColor = '#47e8ff';
+      ctx.beginPath();
+      const p0 = state.path[0];
+      ctx.moveTo(board.x + p0.x*cw + cw/2, board.y + p0.y*ch + ch/2);
+      for(let i=1;i<state.path.length;i++){
+        const p = state.path[i];
+        ctx.lineTo(board.x + p.x*cw + cw/2, board.y + p.y*ch + ch/2);
+      }
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+
+    const reached = state.running ? Math.min(state.path.length - 1, state.progress) : (state.solved ? state.path.length - 1 : -1);
+    if(reached >= 0){
+      for(let i=0;i<=reached;i++){
+        const p = state.path[i];
+        drawCell(p.x,p.y,'rgba(141,255,159,0.35)','rgba(141,255,159,0.8)');
+      }
+      const p = state.path[reached];
+      const cx = board.x + p.x*cw + cw/2;
+      const cy = board.y + p.y*ch + ch/2;
+      ctx.beginPath();
+      ctx.arc(cx,cy,Math.min(cw,ch)*0.24,0,Math.PI*2);
+      ctx.fillStyle = '#8dff9f';
+      ctx.shadowBlur = 16;
+      ctx.shadowColor = '#8dff9f';
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+
+    ctx.fillStyle = '#dce9ff';
+    ctx.font = '600 13px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Draw from SOURCE to GOAL and pass every gate.', 52, 36);
+  }
+
+  function frame(ts){
+    const dt = Math.min(0.033, (ts - (lastTs || ts))/1000);
+    lastTs = ts;
+    update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+
+  document.querySelectorAll('button[data-act]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const a = btn.dataset.act;
+      if(a === 'run') runFlow();
+      else if(a === 'undo' && !state.running && state.path.length > 1){ state.path.pop(); beep(260,0.03,'triangle',0.016); }
+      else if(a === 'reset') initPath();
+      else if(a === 'next' && state.solved && state.level < levels.length - 1) setLevel(state.level + 1);
+    });
+    btn.addEventListener('pointerdown', ()=>beep(300,0.02,'sine',0.012));
+    btn.addEventListener('touchstart', ()=>{}, {passive:true});
+  });
+
+  canvas.addEventListener('pointerdown', (e) => {
+    const c = cellFromPointer(e.clientX,e.clientY);
+    if(!c || state.running || state.solved) return;
+    const last = state.path[state.path.length - 1];
+    if((c.x===last.x && c.y===last.y) || (c.x===lv().source[0] && c.y===lv().source[1])) state.drawing = true;
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if(!state.drawing) return;
+    const c = cellFromPointer(e.clientX,e.clientY);
+    if(c) tryStepTo(c.x,c.y);
+  });
+  window.addEventListener('pointerup', () => { state.drawing = false; });
+
+  document.addEventListener('keydown', (e) => {
+    if(state.running) return;
+    const last = state.path[state.path.length - 1];
+    let nx = last.x, ny = last.y;
+    if(e.key === 'ArrowLeft'){ e.preventDefault(); nx -= 1; }
+    else if(e.key === 'ArrowRight'){ e.preventDefault(); nx += 1; }
+    else if(e.key === 'ArrowUp'){ e.preventDefault(); ny -= 1; }
+    else if(e.key === 'ArrowDown'){ e.preventDefault(); ny += 1; }
+    else if(e.key === 'Backspace'){ e.preventDefault(); if(state.path.length>1){ state.path.pop(); beep(260,0.03,'triangle',0.016);} return; }
+    else if(e.key === 'Enter'){ e.preventDefault(); runFlow(); return; }
+    else if(e.key.toLowerCase() === 'r'){ e.preventDefault(); initPath(); return; }
+    else return;
+    tryStepTo(nx,ny);
+  }, {passive:false});
+
+  setLevel(0);
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

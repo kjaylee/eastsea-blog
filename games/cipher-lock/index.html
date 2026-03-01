@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover" />
+  <title>Cipher Lock</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <style>
+    :root{--bg:#0a0a1a;--panel:#121733;--ink:#eaf3ff;--cyan:#46e8ff;--pink:#ff58d8;--amber:#ffd46d;--lime:#86ffae}
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    body{margin:0;min-height:100vh;background:radial-gradient(circle at 15% 0,#1b2350,var(--bg) 44%);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;display:flex;justify-content:center;padding:12px}
+    .app{width:min(900px,100%);display:grid;gap:10px}
+    .hud{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+    .card{background:rgba(18,23,51,.92);border:1px solid #2c3e86;border-radius:12px;padding:8px;text-align:center;box-shadow:0 0 12px #2be9ff33}
+    .k{font-size:.72rem;opacity:.8}.v{font-size:1.03rem;font-weight:800;color:var(--cyan)}
+    .panel{background:rgba(16,22,50,.94);border:1px solid #2b3d84;border-radius:14px;padding:12px;box-shadow:0 0 18px #0ea9ff30}
+    .code{display:flex;gap:8px;justify-content:center;margin:8px 0 2px;flex-wrap:wrap}
+    .slot{width:44px;height:54px;border:1px solid #3e58b9;border-radius:10px;display:grid;place-items:center;font-size:1.4rem;font-weight:800;background:#09112d;box-shadow:0 0 10px #244fc255}
+    .slot.filled{border-color:#57f0ff;box-shadow:0 0 12px #57f0ff77}
+    .meta{text-align:center;font-size:13px;opacity:.85;margin-top:6px}
+    .keypad{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px}
+    button{border:1px solid #3b56b0;border-radius:10px;background:linear-gradient(180deg,#233272,#171f50);color:#eaf6ff;padding:12px 8px;font-size:1rem;font-weight:800;box-shadow:0 0 10px #2be9ff52}
+    button.action{border-color:#7048d7;box-shadow:0 0 12px #ba98ff66}
+    button:active{transform:translateY(1px);filter:brightness(1.1)}
+    .log{max-height:260px;overflow:auto;display:grid;gap:6px;margin-top:12px;padding-right:2px}
+    .row{display:grid;grid-template-columns:1.1fr 1fr;gap:8px;background:#0b1539;border:1px solid #264396;border-radius:10px;padding:7px 8px;font-size:13px}
+    .exact{color:var(--lime);font-weight:700}
+    .near{color:var(--amber);font-weight:700}
+    .miss{color:#ff809e;font-weight:700}
+    .banner{padding:9px 10px;border:1px solid #2f4aa7;border-radius:10px;background:#111f4c;font-size:13px}
+    .hint{margin:0;text-align:center;font-size:12px;opacity:.86}
+    @media (max-width:760px){
+      .hud{grid-template-columns:repeat(2,minmax(0,1fr))}
+      .slot{width:38px;height:48px;font-size:1.2rem}
+      .row{grid-template-columns:1fr}
+    }
+  </style>
+</head>
+<body>
+<main class="app">
+  <section class="hud">
+    <div class="card"><div class="k">Level</div><div id="level" class="v">1/10</div></div>
+    <div class="card"><div class="k">Time</div><div id="time" class="v">45.0</div></div>
+    <div class="card"><div class="k">Score</div><div id="score" class="v">0</div></div>
+    <div class="card"><div class="k">Best</div><div id="best" class="v">0</div></div>
+    <div class="card"><div class="k">Status</div><div id="status" class="v">Decode</div></div>
+  </section>
+
+  <section class="panel">
+    <div class="banner" id="cipherHint">Cipher Feed 준비 중...</div>
+    <div class="code" id="codeSlots"></div>
+    <div class="meta">정확 자리(<span class="exact">Exact</span>) / 다른 자리(<span class="near">Near</span>) / 불일치(<span class="miss">Miss</span>)</div>
+
+    <div class="keypad" id="keypad"></div>
+    <div class="log" id="log"></div>
+  </section>
+
+  <p class="hint">키보드: 숫자 입력 · Backspace 삭제 · Enter 제출 · R 레벨 재시작</p>
+</main>
+
+<script>
+(() => {
+  const keyBest = 'cipherLockBestScore';
+  const ui = {
+    level: document.getElementById('level'),
+    time: document.getElementById('time'),
+    score: document.getElementById('score'),
+    best: document.getElementById('best'),
+    status: document.getElementById('status'),
+    hint: document.getElementById('cipherHint'),
+    slots: document.getElementById('codeSlots'),
+    keypad: document.getElementById('keypad'),
+    log: document.getElementById('log')
+  };
+
+  const levels = [
+    { len: 3, t: 45, dup: false },
+    { len: 3, t: 42, dup: false },
+    { len: 4, t: 40, dup: false },
+    { len: 4, t: 37, dup: false },
+    { len: 4, t: 34, dup: true },
+    { len: 5, t: 32, dup: true },
+    { len: 5, t: 30, dup: true },
+    { len: 5, t: 28, dup: true },
+    { len: 6, t: 26, dup: true },
+    { len: 6, t: 24, dup: true }
+  ];
+
+  const state = {
+    idx: 0,
+    score: 0,
+    best: Number(localStorage.getItem(keyBest) || 0),
+    timeLeft: levels[0].t,
+    input: '',
+    secret: '',
+    attempts: 0,
+    solved: false,
+    failed: false,
+    active: true
+  };
+
+  let ac;
+  let timer;
+
+  function beep(freq = 450, dur = 0.05, type = 'sine', vol = 0.03) {
+    try {
+      ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+      const o = ac.createOscillator();
+      const g = ac.createGain();
+      o.type = type;
+      o.frequency.value = freq;
+      g.gain.value = vol;
+      o.connect(g).connect(ac.destination);
+      o.start();
+      o.stop(ac.currentTime + dur);
+    } catch (_) {}
+  }
+
+  function saveBest() {
+    try { localStorage.setItem(keyBest, String(state.best)); } catch (_) {}
+  }
+
+  function seedRand(seed) {
+    let x = (seed * 9301 + 49297) % 233280;
+    return () => {
+      x = (x * 9301 + 49297) % 233280;
+      return x / 233280;
+    };
+  }
+
+  function makeSecret(levelIdx) {
+    const cfg = levels[levelIdx];
+    const rand = seedRand((levelIdx + 1) * 101 + 77);
+    const digits = [];
+    while (digits.length < cfg.len) {
+      const d = String(Math.floor(rand() * 10));
+      if (!cfg.dup && digits.includes(d)) continue;
+      digits.push(d);
+    }
+    return digits.join('');
+  }
+
+  function scoreGuess(guess, secret) {
+    let exact = 0;
+    const gRest = [];
+    const sRest = [];
+    for (let i = 0; i < secret.length; i++) {
+      if (guess[i] === secret[i]) exact++;
+      else {
+        gRest.push(guess[i]);
+        sRest.push(secret[i]);
+      }
+    }
+    let near = 0;
+    for (const ch of gRest) {
+      const idx = sRest.indexOf(ch);
+      if (idx >= 0) {
+        near++;
+        sRest.splice(idx, 1);
+      }
+    }
+    return { exact, near, miss: secret.length - exact - near };
+  }
+
+  function renderSlots() {
+    const len = levels[state.idx].len;
+    ui.slots.innerHTML = '';
+    for (let i = 0; i < len; i++) {
+      const v = state.input[i] || '•';
+      const el = document.createElement('div');
+      el.className = 'slot' + (state.input[i] ? ' filled' : '');
+      el.textContent = v;
+      ui.slots.appendChild(el);
+    }
+  }
+
+  function renderTop() {
+    ui.level.textContent = `${state.idx + 1}/10`;
+    ui.time.textContent = state.timeLeft.toFixed(1);
+    ui.score.textContent = String(state.score);
+    ui.best.textContent = String(state.best);
+  }
+
+  function pushLog(text, meta = '') {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML = `<div>${text}</div><div>${meta}</div>`;
+    ui.log.prepend(row);
+  }
+
+  function setHint() {
+    const cfg = levels[state.idx];
+    const shift = (state.idx % 9) + 1;
+    const encryptedLen = Array.from({ length: cfg.len }, (_, i) => (i * shift + 3) % 10).join('');
+    ui.hint.textContent = `Level ${state.idx + 1}: 길이 ${cfg.len}, 제한 ${cfg.t}s · Cipher Noise ${encryptedLen}`;
+  }
+
+  function startLevel(i) {
+    state.idx = i;
+    state.timeLeft = levels[i].t;
+    state.input = '';
+    state.attempts = 0;
+    state.solved = false;
+    state.failed = false;
+    state.active = true;
+    state.secret = makeSecret(i);
+    ui.log.innerHTML = '';
+    setHint();
+    renderSlots();
+    renderTop();
+    ui.status.textContent = 'Decode';
+  }
+
+  function handleTimeout() {
+    state.active = false;
+    state.failed = true;
+    ui.status.textContent = 'Timeout';
+    pushLog('⏱ TIMEOUT', `정답: <b>${state.secret}</b>`);
+    beep(140, 0.2, 'square', 0.05);
+  }
+
+  function levelClear() {
+    state.solved = true;
+    state.active = false;
+    const bonus = Math.max(40, Math.round(state.timeLeft * 12) + Math.max(0, 140 - state.attempts * 14));
+    state.score += bonus;
+    if (state.score > state.best) {
+      state.best = state.score;
+      saveBest();
+    }
+    ui.status.textContent = 'Clear';
+    pushLog('✅ LEVEL CLEAR', `+${bonus} pts`);
+    beep(880, 0.1, 'triangle', 0.04);
+
+    if (state.idx === levels.length - 1) {
+      ui.status.textContent = 'All Clear';
+      pushLog('🏁 ALL 10 LEVELS CLEARED', `총점 ${state.score}`);
+      return;
+    }
+
+    setTimeout(() => startLevel(state.idx + 1), 900);
+  }
+
+  function submitGuess() {
+    if (!state.active) return;
+    const len = levels[state.idx].len;
+    if (state.input.length !== len) {
+      ui.status.textContent = 'Need digits';
+      beep(220, 0.05, 'square', 0.02);
+      return;
+    }
+    state.attempts += 1;
+    const guess = state.input;
+    const r = scoreGuess(guess, state.secret);
+    pushLog(`Try ${state.attempts}: <b>${guess}</b>`, `<span class="exact">E ${r.exact}</span> · <span class="near">N ${r.near}</span> · <span class="miss">M ${r.miss}</span>`);
+    state.input = '';
+    renderSlots();
+    if (r.exact === len) {
+      levelClear();
+    } else {
+      ui.status.textContent = 'Decrypting';
+      beep(360, 0.05, 'sawtooth', 0.03);
+    }
+  }
+
+  function addDigit(d) {
+    if (!state.active) return;
+    const len = levels[state.idx].len;
+    if (state.input.length >= len) return;
+    state.input += d;
+    renderSlots();
+    beep(500 + Number(d) * 18, 0.03, 'sine', 0.02);
+  }
+
+  function backspace() {
+    if (!state.active) return;
+    if (!state.input.length) return;
+    state.input = state.input.slice(0, -1);
+    renderSlots();
+    beep(220, 0.03, 'triangle', 0.02);
+  }
+
+  function restartLevel() {
+    const penalty = Math.min(80, state.score);
+    state.score -= penalty;
+    startLevel(state.idx);
+    ui.status.textContent = 'Restarted';
+    beep(300, 0.07, 'triangle', 0.03);
+  }
+
+  function buildKeypad() {
+    const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '⌫', '0', '⏎'];
+    ui.keypad.innerHTML = '';
+    for (const k of keys) {
+      const b = document.createElement('button');
+      b.textContent = k;
+      if (k === '⌫' || k === '⏎') b.classList.add('action');
+      b.addEventListener('pointerdown', () => {
+        if (k === '⌫') backspace();
+        else if (k === '⏎') submitGuess();
+        else addDigit(k);
+      });
+      b.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        if (k === '⌫') backspace();
+        else if (k === '⏎') submitGuess();
+        else addDigit(k);
+      }, { passive: false });
+      ui.keypad.appendChild(b);
+    }
+  }
+
+  window.addEventListener('keydown', (e) => {
+    if (/Digit\d/.test(e.code) || /Numpad\d/.test(e.code) || ['Backspace', 'Enter', 'KeyR'].includes(e.code)) e.preventDefault();
+    if (/Digit\d/.test(e.code)) addDigit(e.code.slice(-1));
+    if (/Numpad\d/.test(e.code)) addDigit(e.code.slice(-1));
+    if (e.code === 'Backspace') backspace();
+    if (e.code === 'Enter') submitGuess();
+    if (e.code === 'KeyR') restartLevel();
+  });
+
+  timer = setInterval(() => {
+    if (!state.active) return;
+    state.timeLeft = Math.max(0, state.timeLeft - 0.1);
+    if (state.timeLeft <= 5 && Math.floor(state.timeLeft * 10) % 10 === 0) beep(180, 0.025, 'square', 0.015);
+    if (state.timeLeft <= 0) handleTimeout();
+    renderTop();
+  }, 100);
+
+  buildKeypad();
+  startLevel(0);
+  renderTop();
+  ui.best.textContent = String(state.best);
+})();
+</script>
+</body>
+</html>

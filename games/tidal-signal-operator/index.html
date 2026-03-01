@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Tidal Signal Operator</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <style>
+    :root{--bg:#0a0a1a;--panel:#12122a;--line:#45e8ff;--accent:#ff4ecd;--ok:#56ffa4;--warn:#ffc857;--bad:#ff5f79}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;background:radial-gradient(circle at top,#17173a,#0a0a1a 60%);color:#eaf8ff;min-height:100svh;padding:calc(12px + env(safe-area-inset-top)) 12px calc(16px + env(safe-area-inset-bottom));display:flex;justify-content:center}
+    .app{width:min(760px,100%);display:grid;gap:10px}
+    .card{background:linear-gradient(180deg,#151535,#101028);border:1px solid #2b4478;border-radius:14px;padding:12px;box-shadow:0 0 24px #0008,inset 0 0 20px #26417b33}
+    h1{margin:0;color:var(--line);font-size:clamp(1.2rem,3vw,1.7rem);text-shadow:0 0 12px #45e8ff88}
+    .sub{margin-top:4px;opacity:.78;font-size:.88rem}
+    .hud{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+    .stat{background:#091436;border:1px solid #2e5092;border-radius:10px;padding:8px;text-align:center}
+    .label{opacity:.72;font-size:.74rem}
+    .value{font-weight:800}
+    .meters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+    .meterBox{background:#0a1330;border:1px solid #2f4f8f;border-radius:10px;padding:8px}
+    .meterBox h3{margin:0 0 8px;font-size:.88rem}
+    .bar{height:10px;background:#050a1a;border:1px solid #223a6e;border-radius:999px;overflow:hidden}
+    .bar>span{display:block;height:100%;background:linear-gradient(90deg,var(--line),var(--accent));width:50%}
+    .v{margin-top:6px;font-weight:700;font-size:.86rem}
+    .equip{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+    button{border:1px solid #385da2;border-radius:10px;padding:10px 8px;background:#12244d;color:#eff8ff;font-weight:700}
+    button:active{transform:translateY(1px)}
+    .on{border-color:#57ffa4;background:linear-gradient(180deg,#1b5a39,#123726);color:#dcffe9}
+    .danger{border-color:#d95d72;background:linear-gradient(180deg,#5e1d2c,#39111c)}
+    .log{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#081024;border:1px solid #243f74;border-radius:10px;padding:10px;font-size:.82rem;line-height:1.45;min-height:110px}
+    .overlay{position:fixed;inset:0;background:#060914df;display:grid;place-items:center;padding:16px;z-index:50}
+    .overlay.hidden{display:none}
+    .panel{max-width:560px;width:100%;background:#11122b;border:1px solid #35599b;border-radius:14px;padding:16px;display:grid;gap:10px}
+    .panel h2{margin:0;color:var(--line)}
+    .panel p{margin:0;line-height:1.45}
+    @media (max-width:640px){
+      .hud{grid-template-columns:repeat(3,minmax(0,1fr))}
+      .meters{grid-template-columns:repeat(2,minmax(0,1fr))}
+      .equip{grid-template-columns:1fr}
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="card">
+      <h1>🌊 Tidal Signal Operator</h1>
+      <div class="sub">항만 관제실에서 환경 리스크를 관리해 선박을 안전 통과시키세요. 키보드: 1(Beacon), 2(Warning), 3(Siren)</div>
+    </div>
+
+    <div class="card hud">
+      <div class="stat"><div class="label">Shift</div><div id="shift" class="value">1</div></div>
+      <div class="stat"><div class="label">Score</div><div id="score" class="value">0</div></div>
+      <div class="stat"><div class="label">Ships Safe</div><div id="ships" class="value">0</div></div>
+      <div class="stat"><div class="label">Losses</div><div id="loss" class="value">0 / 3</div></div>
+      <div class="stat"><div class="label">Risk</div><div id="risk" class="value">0</div></div>
+      <div class="stat"><div class="label">Best</div><div id="best" class="value">0</div></div>
+    </div>
+
+    <div class="card meters">
+      <div class="meterBox"><h3>Wave</h3><div class="bar"><span id="waveBar"></span></div><div id="waveV" class="v">0</div></div>
+      <div class="meterBox"><h3>Fog</h3><div class="bar"><span id="fogBar"></span></div><div id="fogV" class="v">0</div></div>
+      <div class="meterBox"><h3>Current</h3><div class="bar"><span id="curBar"></span></div><div id="curV" class="v">0</div></div>
+      <div class="meterBox"><h3>Traffic</h3><div class="bar"><span id="trafBar"></span></div><div id="trafV" class="v">0</div></div>
+    </div>
+
+    <div class="card equip">
+      <button id="eq1">1 · Beacon OFF</button>
+      <button id="eq2">2 · Warning Light OFF</button>
+      <button id="eq3">3 · Siren OFF</button>
+    </div>
+
+    <div class="card">
+      <button id="restart" class="danger">↺ Restart Shift</button>
+      <div class="log" id="log">[SYS] 관제 대기 중...</div>
+    </div>
+  </div>
+
+  <div id="overlay" class="overlay">
+    <div class="panel">
+      <h2 id="ovTitle">Tidal Signal Operator</h2>
+      <p id="ovText">파고·안개·조류를 관리해 위험지수를 100 이하로 유지하세요. 3회 손실 시 근무 종료됩니다.</p>
+      <button id="startBtn">Begin Shift</button>
+    </div>
+  </div>
+
+<script>
+(()=>{
+'use strict';
+const SAVE_KEY='tidal-signal-operator-v1';
+const $=s=>document.querySelector(s);
+const el={
+  shift:$('#shift'),score:$('#score'),ships:$('#ships'),loss:$('#loss'),risk:$('#risk'),best:$('#best'),
+  waveBar:$('#waveBar'),fogBar:$('#fogBar'),curBar:$('#curBar'),trafBar:$('#trafBar'),
+  waveV:$('#waveV'),fogV:$('#fogV'),curV:$('#curV'),trafV:$('#trafV'),log:$('#log'),
+  eq1:$('#eq1'),eq2:$('#eq2'),eq3:$('#eq3'),overlay:$('#overlay')
+};
+let loop=0;
+let st={
+  tick:0,shift:1,score:0,shipsSafe:0,losses:0,best:0,
+  wave:35,fog:20,current:30,traffic:25,risk:0,
+  beacon:false,warning:false,siren:false,
+  audio:null
+};
+
+function load(){
+  try{
+    const s=JSON.parse(localStorage.getItem(SAVE_KEY)||'{}');
+    st.best=s.best||0;
+  }catch(_){st.best=0;}
+}
+function save(){
+  localStorage.setItem(SAVE_KEY,JSON.stringify({best:st.best}));
+}
+function ensureAudio(){
+  if(!st.audio) st.audio=new (window.AudioContext||window.webkitAudioContext)();
+  if(st.audio.state==='suspended') st.audio.resume();
+}
+function beep(freq=620,dur=0.08,type='sine',gain=0.045){
+  if(!st.audio) return;
+  const t=st.audio.currentTime;
+  const o=st.audio.createOscillator();
+  const g=st.audio.createGain();
+  o.type=type;o.frequency.value=freq;
+  g.gain.setValueAtTime(gain,t);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  o.connect(g).connect(st.audio.destination);
+  o.start(t);o.stop(t+dur);
+}
+function sfx(kind){
+  if(kind==='toggle'){beep(510,0.07,'square',0.03);setTimeout(()=>beep(830,0.07,'triangle',0.03),70);}
+  else if(kind==='safe'){beep(860,0.08,'triangle',0.05);setTimeout(()=>beep(1130,0.11,'triangle',0.05),90);}
+  else if(kind==='alert'){beep(240,0.2,'sawtooth',0.06);}
+  else if(kind==='shift'){beep(720,0.08,'triangle',0.05);setTimeout(()=>beep(980,0.08,'triangle',0.05),90);setTimeout(()=>beep(1280,0.1,'triangle',0.05),180);}
+}
+
+function logLine(text){
+  const lines=el.log.textContent.split('\n').slice(-7);
+  lines.push(text);
+  el.log.textContent=lines.join('\n');
+}
+
+function toggleEquip(id){
+  ensureAudio();
+  if(id===1) st.beacon=!st.beacon;
+  if(id===2) st.warning=!st.warning;
+  if(id===3) st.siren=!st.siren;
+  sfx('toggle');
+  render();
+}
+
+function envTick(){
+  const drift=st.shift*1.6;
+  st.wave=clamp(st.wave + rand(-9,9) + drift*0.35,0,100);
+  st.fog=clamp(st.fog + rand(-8,8) + drift*0.3,0,100);
+  st.current=clamp(st.current + rand(-7,7) + drift*0.4,0,100);
+  st.traffic=clamp(st.traffic + rand(-6,9) + drift*0.25,0,100);
+
+  const base=0.32*st.wave + 0.28*st.fog + 0.24*st.current + 0.16*st.traffic;
+  const mitigation=(st.beacon?16:0)+(st.warning?13:0)+(st.siren?11:0);
+  st.risk=Math.round(clamp(base-mitigation+rand(-4,4),0,140));
+
+  if(st.risk<70){
+    st.score += 18 + st.shift*3;
+    st.shipsSafe += 1;
+    if(st.tick%5===0){
+      sfx('safe');
+      logLine(`[SAFE] 통과 성공 +${18 + st.shift*3}`);
+    }
+  }else if(st.risk>=100){
+    st.losses += 1;
+    st.score = Math.max(0, st.score - 70);
+    sfx('alert');
+    logLine(`[ALERT] 위험 ${st.risk}로 선박 손실 발생`);
+    if(st.losses>=3){
+      return gameOver();
+    }
+  }else{
+    st.score += 6;
+    if(st.tick%4===0) logLine(`[WARN] 위험 ${st.risk} - 장비 조정 필요`);
+  }
+
+  st.tick++;
+  if(st.tick%20===0){
+    st.shift++;
+    sfx('shift');
+    logLine(`[SHIFT] 교대 ${st.shift} 시작, 해상 조건 악화`);
+  }
+  if(st.score>st.best){
+    st.best=st.score;
+    save();
+  }
+  render();
+}
+
+function render(){
+  el.shift.textContent=st.shift;
+  el.score.textContent=st.score;
+  el.ships.textContent=st.shipsSafe;
+  el.loss.textContent=`${st.losses} / 3`;
+  el.risk.textContent=st.risk;
+  el.best.textContent=st.best;
+
+  setMeter(el.waveBar,el.waveV,st.wave);
+  setMeter(el.fogBar,el.fogV,st.fog);
+  setMeter(el.curBar,el.curV,st.current);
+  setMeter(el.trafBar,el.trafV,st.traffic);
+
+  setEquip(el.eq1,st.beacon,'Beacon');
+  setEquip(el.eq2,st.warning,'Warning Light');
+  setEquip(el.eq3,st.siren,'Siren');
+}
+
+function setMeter(bar,val,v){
+  bar.style.width=`${v}%`;
+  val.textContent=Math.round(v);
+}
+function setEquip(btn,on,name){
+  btn.classList.toggle('on',on);
+  btn.textContent=`${btn.id==='eq1'?'1':btn.id==='eq2'?'2':'3'} · ${name} ${on?'ON':'OFF'}`;
+}
+
+function clamp(v,min,max){ return Math.max(min,Math.min(max,v)); }
+function rand(min,max){ return Math.floor(Math.random()*(max-min+1))+min; }
+
+function start(){
+  clearInterval(loop);
+  ensureAudio();
+  st.tick=0;st.shift=1;st.score=0;st.shipsSafe=0;st.losses=0;
+  st.wave=35;st.fog=20;st.current=30;st.traffic=25;st.risk=0;
+  st.beacon=false;st.warning=false;st.siren=false;
+  el.log.textContent='[SYS] 관제 시작';
+  render();
+  loop=setInterval(envTick,1000);
+}
+
+function gameOver(){
+  clearInterval(loop);
+  showOverlay('Shift Ended',`최종 점수 ${st.score}, 안전 통과 ${st.shipsSafe}척`,`Restart Shift`,start);
+}
+
+function showOverlay(title,text,btnText,onClick){
+  $('#ovTitle').textContent=title;
+  $('#ovText').textContent=text;
+  const btn=$('#startBtn');
+  btn.textContent=btnText;
+  btn.onclick=()=>{el.overlay.classList.add('hidden');onClick&&onClick();};
+  el.overlay.classList.remove('hidden');
+}
+
+function bind(){
+  $('#startBtn').addEventListener('click',()=>{el.overlay.classList.add('hidden');start();});
+
+  const bindEquip=(btn,id)=>{
+    let touchedAt=0;
+    btn.addEventListener('pointerdown',e=>{e.preventDefault();touchedAt=Date.now();toggleEquip(id);});
+    btn.addEventListener('click',()=>{if(Date.now()-touchedAt<260) return;toggleEquip(id);});
+  };
+  bindEquip(el.eq1,1);
+  bindEquip(el.eq2,2);
+  bindEquip(el.eq3,3);
+
+  $('#restart').addEventListener('click',start);
+  window.addEventListener('keydown',e=>{
+    const k=e.key.toLowerCase();
+    if(!el.overlay.classList.contains('hidden') && k!=='enter') return;
+    if(k==='1') toggleEquip(1);
+    else if(k==='2') toggleEquip(2);
+    else if(k==='3') toggleEquip(3);
+    else if(k==='r') start();
+    else if(k==='enter' && !el.overlay.classList.contains('hidden')) $('#startBtn').click();
+  });
+}
+
+load();
+bind();
+render();
+})();
+</script>
+</body>
+</html>

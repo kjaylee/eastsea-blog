@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover" />
+  <title>Gear Train</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <style>
+    :root{--bg:#0a0a1a;--panel:#121633;--ink:#eaf6ff;--cyan:#47e8ff;--pink:#ff4ac6;--lime:#8dff9f;--violet:#9e7bff}
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
+    body{margin:0;min-height:100vh;background:radial-gradient(circle at 18% 0,#1a1e49,var(--bg) 42%);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;display:flex;justify-content:center;padding:12px}
+    .app{width:min(920px,100%);display:grid;gap:10px}
+    .hud{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+    .card{background:rgba(18,22,51,.92);border:1px solid #2a3d7d;border-radius:12px;padding:8px;text-align:center;box-shadow:0 0 14px #00e8ff33}
+    .v{font-size:1.02rem;font-weight:800;color:var(--cyan)}
+    .panel{background:var(--panel);border:1px solid #2a3f80;border-radius:14px;padding:10px;box-shadow:0 0 18px #009dff33}
+    canvas{display:block;width:100%;height:auto;aspect-ratio:16/10;background:#040512;border-radius:10px;touch-action:none}
+    .controls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+    button{border:1px solid #3551a5;border-radius:12px;background:linear-gradient(180deg,#1f2c66,#17204f);color:#eaf6ff;padding:11px 8px;font-weight:800;letter-spacing:.2px;box-shadow:0 0 12px #2be9ff55;touch-action:manipulation}
+    button:active{transform:translateY(1px);filter:brightness(1.14)}
+    .hint{margin:0;text-align:center;font-size:12px;opacity:.86}
+    @media (max-width:760px){
+      .hud{grid-template-columns:repeat(2,minmax(0,1fr))}
+      .controls{grid-template-columns:repeat(2,minmax(0,1fr))}
+    }
+  </style>
+</head>
+<body>
+<main class="app">
+  <section class="hud">
+    <div class="card">Level<div id="level" class="v">1/6</div></div>
+    <div class="card">Best<div id="best" class="v">1</div></div>
+    <div class="card">Target<div id="target" class="v">CW 60</div></div>
+    <div class="card">Output<div id="output" class="v">-</div></div>
+    <div class="card">Status<div id="status" class="v">Build Train</div></div>
+  </section>
+
+  <section class="panel">
+    <canvas id="game" width="900" height="560" aria-label="Gear Train game canvas"></canvas>
+  </section>
+
+  <section class="controls">
+    <button data-act="cycle">⚙️ Cycle Cursor</button>
+    <button data-act="clear">🧹 Clear</button>
+    <button data-act="next">⏭ Next</button>
+    <button data-act="hint">ℹ️ Hint</button>
+  </section>
+  <p class="hint">키보드: 화살표 커서 이동 · Space/Enter 배치 · C 초기화 · H 힌트</p>
+</main>
+
+<script>
+(() => {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const keyBest = 'gearTrainBestLevel';
+
+  const ui = {
+    level: document.getElementById('level'),
+    best: document.getElementById('best'),
+    target: document.getElementById('target'),
+    output: document.getElementById('output'),
+    status: document.getElementById('status')
+  };
+
+  const board = { x:64, y:80, w:772, h:386, cols:9, rows:5 };
+  const input = { x:1, y:2, teeth:12, speed:60 };
+
+  const levels = [
+    { output:[7,2], outTeeth:12, targetDir:'CW', targetRPM:60, blocks:[[4,1],[4,3]], hint:'직선 6칸 링크로 기본 위상을 맞추세요.' },
+    { output:[7,1], outTeeth:12, targetDir:'CCW', targetRPM:60, blocks:[[3,2],[4,2],[5,2]], hint:'출력 좌표 parity가 달라 CCW 달성이 가능합니다.' },
+    { output:[7,2], outTeeth:8,  targetDir:'CW', targetRPM:90, blocks:[[2,1],[2,3],[6,1],[6,3]], hint:'입력 12T → 출력 8T 비율로 90 RPM을 만들 수 있어요.' },
+    { output:[7,1], outTeeth:16, targetDir:'CCW', targetRPM:45, blocks:[[2,2],[3,1],[4,1],[5,1],[6,2]], hint:'출력 16T는 감속(45 RPM) 목표입니다.' },
+    { output:[7,3], outTeeth:8,  targetDir:'CCW', targetRPM:90, blocks:[[3,3],[4,3],[5,3],[6,3],[5,2]], hint:'아래쪽 경로로 연결하면 CCW 조건을 만족하기 쉽습니다.' },
+    { output:[7,2], outTeeth:16, targetDir:'CW', targetRPM:45, blocks:[[2,2],[3,2],[4,2],[5,2],[6,2],[4,1],[4,3]], hint:'중앙 막힘을 우회해 CW + 45 RPM을 동시에 맞추세요.' }
+  ];
+
+  const state = {
+    level: 0,
+    best: Math.max(1, Number(localStorage.getItem(keyBest) || 1)),
+    placed: new Map(),
+    cursor: {x:3,y:2},
+    solved: false,
+    speedMap: new Map(),
+    messageUntil: 0
+  };
+
+  let ac, lastTs = 0, elapsed = 0;
+  const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+
+  const clamp = (n,a,b) => Math.max(a, Math.min(b,n));
+  const key = (x,y) => `${x},${y}`;
+
+  function beep(freq=440, dur=0.05, type='sine', vol=0.03){
+    try{
+      ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+      const o = ac.createOscillator();
+      const g = ac.createGain();
+      o.type = type;
+      o.frequency.value = freq;
+      g.gain.value = vol;
+      o.connect(g).connect(ac.destination);
+      o.start();
+      o.stop(ac.currentTime + dur);
+    }catch(_){ }
+  }
+
+  function lv(){ return levels[state.level]; }
+
+  function blockedSet(){
+    return new Set(lv().blocks.map(([x,y]) => key(x,y)));
+  }
+
+  function setLevel(i){
+    state.level = clamp(i,0,levels.length-1);
+    state.placed = new Map();
+    state.solved = false;
+    state.cursor = {x:3,y:2};
+    recompute();
+    ui.status.textContent = 'Build Train';
+  }
+
+  function unlock(){
+    state.best = Math.max(state.best, state.level + 2);
+    localStorage.setItem(keyBest, String(Math.min(levels.length, state.best)));
+  }
+
+  function getFixedGear(x,y){
+    if(x===input.x && y===input.y) return { teeth: input.teeth, fixed:'input' };
+    const [ox,oy] = lv().output;
+    if(x===ox && y===oy) return { teeth: lv().outTeeth, fixed:'output' };
+    return null;
+  }
+
+  function getGear(x,y){
+    const fixed = getFixedGear(x,y);
+    if(fixed) return fixed;
+    const t = state.placed.get(key(x,y));
+    return t ? { teeth:t, fixed:null } : null;
+  }
+
+  function inBounds(x,y){ return x>=0 && x<board.cols && y>=0 && y<board.rows; }
+
+  function canPlace(x,y){
+    if(!inBounds(x,y)) return false;
+    if(getFixedGear(x,y)) return false;
+    if(blockedSet().has(key(x,y))) return false;
+    return true;
+  }
+
+  function cycleGearAt(x,y){
+    if(!canPlace(x,y)) return;
+    const k = key(x,y);
+    const t = state.placed.get(k) || 0;
+    const next = t===0 ? 8 : t===8 ? 12 : t===12 ? 16 : 0;
+    if(next===0) state.placed.delete(k);
+    else state.placed.set(k,next);
+    beep(280 + (next||6)*12,0.03,'triangle',0.017);
+    recompute();
+  }
+
+  function allGears(){
+    const map = new Map();
+    for(let x=0;x<board.cols;x++){
+      for(let y=0;y<board.rows;y++){
+        const g = getGear(x,y);
+        if(g) map.set(key(x,y), {x,y,teeth:g.teeth,fixed:g.fixed});
+      }
+    }
+    return map;
+  }
+
+  function recompute(){
+    const gmap = allGears();
+    const speeds = new Map();
+    const q = [{x:input.x,y:input.y}];
+    speeds.set(key(input.x,input.y), input.speed);
+
+    while(q.length){
+      const cur = q.shift();
+      const ckey = key(cur.x,cur.y);
+      const cs = speeds.get(ckey);
+      const cg = gmap.get(ckey);
+      if(!cg) continue;
+      for(const [dx,dy] of dirs){
+        const nx = cur.x + dx, ny = cur.y + dy;
+        const nkey = key(nx,ny);
+        const ng = gmap.get(nkey);
+        if(!ng) continue;
+        if(!speeds.has(nkey)){
+          const ns = -cs * (cg.teeth / ng.teeth);
+          speeds.set(nkey, ns);
+          q.push({x:nx,y:ny});
+        }
+      }
+    }
+
+    state.speedMap = speeds;
+    evaluate();
+  }
+
+  function evaluate(){
+    const [ox,oy] = lv().output;
+    const okey = key(ox,oy);
+    const target = lv();
+    const os = state.speedMap.get(okey);
+
+    ui.target.textContent = `${target.targetDir} ${target.targetRPM}`;
+
+    if(os == null){
+      ui.output.textContent = 'Disconnected';
+      if(!state.solved) ui.status.textContent = 'Connect Input → Output';
+      return;
+    }
+
+    const dir = os >= 0 ? 'CW' : 'CCW';
+    const rpm = Math.abs(os);
+    ui.output.textContent = `${dir} ${rpm.toFixed(1)}`;
+
+    if(!state.solved && dir === target.targetDir && Math.abs(rpm - target.targetRPM) <= 0.6){
+      state.solved = true;
+      ui.status.textContent = 'Transmission Locked!';
+      unlock();
+      beep(930,0.08,'triangle',0.05);
+      setTimeout(()=>beep(1260,0.09,'triangle',0.04),90);
+      setTimeout(()=>{
+        if(state.level < levels.length - 1) setLevel(state.level + 1);
+        else {
+          alert('Gear Train complete. 6 levels cleared!');
+          setLevel(0);
+        }
+      }, 700);
+    } else if(!state.solved) {
+      ui.status.textContent = 'Tune ratio / parity';
+    }
+  }
+
+  function cellFromPointer(clientX, clientY){
+    const r = canvas.getBoundingClientRect();
+    const px = (clientX - r.left) * canvas.width / r.width;
+    const py = (clientY - r.top) * canvas.height / r.height;
+    const cw = board.w / board.cols;
+    const ch = board.h / board.rows;
+    const x = Math.floor((px - board.x) / cw);
+    const y = Math.floor((py - board.y) / ch);
+    if(!inBounds(x,y)) return null;
+    return {x,y};
+  }
+
+  function showHint(){
+    ui.status.textContent = lv().hint;
+    state.messageUntil = elapsed + 2.3;
+    beep(540,0.05,'sine',0.02);
+  }
+
+  function drawGear(cx,cy,r,teeth,color,angle){
+    const toothCount = Math.max(8, Math.round(teeth));
+    ctx.beginPath();
+    for(let i=0;i<toothCount*2;i++){
+      const a = angle + (Math.PI*2 * i)/(toothCount*2);
+      const rr = i%2===0 ? r*1.03 : r*0.86;
+      const x = cx + Math.cos(a)*rr;
+      const y = cy + Math.sin(a)*rr;
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = color;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    ctx.beginPath();
+    ctx.arc(cx,cy,r*0.46,0,Math.PI*2);
+    ctx.fillStyle = '#0c1534';
+    ctx.fill();
+
+    ctx.strokeStyle = '#cce9ff';
+    ctx.lineWidth = 1.4;
+    for(let i=0;i<4;i++){
+      const a = angle + i*Math.PI/2;
+      ctx.beginPath();
+      ctx.moveTo(cx,cy);
+      ctx.lineTo(cx + Math.cos(a)*r*0.66, cy + Math.sin(a)*r*0.66);
+      ctx.stroke();
+    }
+  }
+
+  function draw(){
+    const cw = board.w / board.cols;
+    const ch = board.h / board.rows;
+    const bset = blockedSet();
+
+    ctx.fillStyle = '#050616';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    ctx.strokeStyle = '#2f5fd6';
+    ctx.lineWidth = 3;
+    ctx.shadowBlur = 16;
+    ctx.shadowColor = '#2e83ff';
+    ctx.strokeRect(board.x,board.y,board.w,board.h);
+    ctx.shadowBlur = 0;
+
+    for(let x=0;x<board.cols;x++){
+      for(let y=0;y<board.rows;y++){
+        const px = board.x + x*cw;
+        const py = board.y + y*ch;
+        ctx.fillStyle = bset.has(key(x,y)) ? '#24183b' : '#081127';
+        ctx.fillRect(px+2,py+2,cw-4,ch-4);
+        ctx.strokeStyle = bset.has(key(x,y)) ? '#7f5cc7' : '#1a2e63';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(px+2,py+2,cw-4,ch-4);
+      }
+    }
+
+    const gears = allGears();
+    for(const g of gears.values()){
+      for(const [dx,dy] of [[1,0],[0,1]]){
+        const nx = g.x + dx, ny = g.y + dy;
+        const ng = gears.get(key(nx,ny));
+        if(!ng) continue;
+        const x1 = board.x + g.x*cw + cw/2;
+        const y1 = board.y + g.y*ch + ch/2;
+        const x2 = board.x + nx*cw + cw/2;
+        const y2 = board.y + ny*ch + ch/2;
+        ctx.strokeStyle = '#4a6fd4';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(x1,y1);
+        ctx.lineTo(x2,y2);
+        ctx.stroke();
+      }
+    }
+
+    for(const g of gears.values()){
+      const cx = board.x + g.x*cw + cw/2;
+      const cy = board.y + g.y*ch + ch/2;
+      const s = state.speedMap.get(key(g.x,g.y)) || 0;
+      const angle = elapsed * s * 0.02;
+      const radius = Math.min(cw,ch) * 0.33;
+      const color = g.fixed==='input' ? '#47e8ff' : g.fixed==='output' ? '#ff4ac6' : '#9e7bff';
+      drawGear(cx,cy,radius,g.teeth,color,angle);
+      ctx.fillStyle = '#eaf6ff';
+      ctx.font = '700 11px system-ui';
+      ctx.textAlign = 'center';
+      ctx.fillText(String(g.teeth), cx, cy + 4);
+    }
+
+    const [ox,oy] = lv().output;
+    ctx.fillStyle = '#8cb7ff';
+    ctx.font = '600 12px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('IN', board.x + input.x*cw + 6, board.y + input.y*ch + 14);
+    ctx.fillStyle = '#ff9be0';
+    ctx.fillText('OUT', board.x + ox*cw + 4, board.y + oy*ch + 14);
+
+    const cpx = board.x + state.cursor.x*cw;
+    const cpy = board.y + state.cursor.y*ch;
+    ctx.strokeStyle = '#8dff9f';
+    ctx.lineWidth = 2;
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = '#8dff9f';
+    ctx.strokeRect(cpx+3,cpy+3,cw-6,ch-6);
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#dce9ff';
+    ctx.textAlign = 'left';
+    ctx.font = '600 13px system-ui';
+    ctx.fillText('Place gears (8/12/16 teeth) to satisfy output direction + RPM target.', 66, 58);
+  }
+
+  function update(dt){
+    elapsed += dt;
+    if(state.messageUntil && elapsed > state.messageUntil && !state.solved){
+      state.messageUntil = 0;
+      evaluate();
+    }
+    ui.level.textContent = `${state.level+1}/${levels.length}`;
+    ui.best.textContent = String(state.best);
+  }
+
+  function frame(ts){
+    const dt = Math.min(0.033, (ts - (lastTs || ts))/1000);
+    lastTs = ts;
+    update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+
+  document.querySelectorAll('button[data-act]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const a = btn.dataset.act;
+      if(a === 'cycle') cycleGearAt(state.cursor.x, state.cursor.y);
+      else if(a === 'clear'){ state.placed.clear(); state.solved = false; recompute(); beep(220,0.06,'sawtooth',0.02); }
+      else if(a === 'next' && state.solved && state.level < levels.length-1) setLevel(state.level + 1);
+      else if(a === 'hint') showHint();
+    });
+    btn.addEventListener('pointerdown', ()=>beep(300,0.02,'sine',0.012));
+    btn.addEventListener('touchstart', ()=>{}, {passive:true});
+  });
+
+  canvas.addEventListener('pointerdown', (e) => {
+    const c = cellFromPointer(e.clientX,e.clientY);
+    if(!c) return;
+    state.cursor = c;
+    cycleGearAt(c.x,c.y);
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if(e.key === 'ArrowLeft'){ e.preventDefault(); state.cursor.x = clamp(state.cursor.x - 1, 0, board.cols-1); }
+    else if(e.key === 'ArrowRight'){ e.preventDefault(); state.cursor.x = clamp(state.cursor.x + 1, 0, board.cols-1); }
+    else if(e.key === 'ArrowUp'){ e.preventDefault(); state.cursor.y = clamp(state.cursor.y - 1, 0, board.rows-1); }
+    else if(e.key === 'ArrowDown'){ e.preventDefault(); state.cursor.y = clamp(state.cursor.y + 1, 0, board.rows-1); }
+    else if(e.key === ' ' || e.key === 'Enter'){ e.preventDefault(); cycleGearAt(state.cursor.x, state.cursor.y); }
+    else if(e.key.toLowerCase() === 'c'){ e.preventDefault(); state.placed.clear(); state.solved = false; recompute(); }
+    else if(e.key.toLowerCase() === 'h'){ e.preventDefault(); showHint(); }
+  }, {passive:false});
+
+  setLevel(0);
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

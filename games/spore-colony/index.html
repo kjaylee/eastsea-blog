@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover" />
+  <title>Spore Colony</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <style>
+    :root{--bg:#0a0a1a;--panel:#121733;--ink:#eaf4ff;--cyan:#49e8ff;--pink:#ff55d8;--lime:#94ffb5;--amber:#ffd66e}
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    body{margin:0;min-height:100vh;background:radial-gradient(circle at 20% 0,#1c2655,var(--bg) 45%);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;display:flex;justify-content:center;padding:12px}
+    .app{width:min(980px,100%);display:grid;gap:10px}
+    .hud{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}
+    .card{background:rgba(18,23,51,.92);border:1px solid #2b3f88;border-radius:12px;padding:8px;text-align:center;box-shadow:0 0 12px #2be9ff33}
+    .k{font-size:.72rem;opacity:.82}.v{font-size:1.01rem;font-weight:800;color:var(--cyan)}
+    .panel{background:var(--panel);border:1px solid #2b3f88;border-radius:14px;padding:10px;box-shadow:0 0 18px #00a5ff38}
+    canvas{display:block;width:100%;height:auto;aspect-ratio:16/9;background:#040612;border-radius:10px;touch-action:none}
+    .controls{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+    button{border:1px solid #3a56ae;border-radius:11px;background:linear-gradient(180deg,#23306f,#171f50);color:#eaf6ff;padding:11px 8px;font-weight:800;letter-spacing:.2px;box-shadow:0 0 12px #2be9ff55}
+    button:active{transform:translateY(1px);filter:brightness(1.12)}
+    .hint{margin:0;text-align:center;font-size:12px;opacity:.86}
+    @media (max-width:780px){
+      .hud{grid-template-columns:repeat(3,minmax(0,1fr))}
+      .controls{grid-template-columns:repeat(2,minmax(0,1fr))}
+    }
+  </style>
+</head>
+<body>
+<main class="app">
+  <section class="hud">
+    <div class="card"><div class="k">Population</div><div id="pop" class="v">3</div></div>
+    <div class="card"><div class="k">Energy</div><div id="energy" class="v">120</div></div>
+    <div class="card"><div class="k">Nutrients</div><div id="nutrients" class="v">90</div></div>
+    <div class="card"><div class="k">Biomass</div><div id="biomass" class="v">45</div></div>
+    <div class="card"><div class="k">Toxin</div><div id="toxin" class="v">0%</div></div>
+    <div class="card"><div class="k">Cycle</div><div id="cycle" class="v">1</div></div>
+    <div class="card"><div class="k">Best</div><div id="best" class="v">0</div></div>
+  </section>
+
+  <section class="panel">
+    <canvas id="game" width="960" height="540" aria-label="Spore Colony game canvas"></canvas>
+  </section>
+
+  <section class="controls">
+    <button data-act="split">➕ Split</button>
+    <button data-act="harvest">🌿 Harvest</button>
+    <button data-act="upgrade">⬆ Upgrade</button>
+    <button data-act="purge">🧪 Purge</button>
+    <button data-act="restart">↺ Restart</button>
+  </section>
+
+  <p class="hint">키보드: 화살표 이동 · Space 분열 · H 채집 · U 업그레이드 · P 정화 · Enter 재시작</p>
+</main>
+
+<script>
+(() => {
+  const keyBest = 'sporeColonyBestScore';
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+
+  const ui = {
+    pop: document.getElementById('pop'),
+    energy: document.getElementById('energy'),
+    nutrients: document.getElementById('nutrients'),
+    biomass: document.getElementById('biomass'),
+    toxin: document.getElementById('toxin'),
+    cycle: document.getElementById('cycle'),
+    best: document.getElementById('best')
+  };
+
+  const world = { w: canvas.width, h: canvas.height };
+  const state = {
+    running: true,
+    ended: false,
+    time: 0,
+    score: 0,
+    best: Number(localStorage.getItem(keyBest) || 0),
+    energy: 120,
+    nutrients: 90,
+    biomass: 45,
+    toxin: 0,
+    efficiency: 1,
+    cycle: 1,
+    center: { x: world.w / 2, y: world.h / 2 },
+    spores: [],
+    nutrientsOrb: [],
+    keys: Object.create(null),
+    drag: false,
+    autoHarvestCd: 0
+  };
+
+  let ac;
+  let last = 0;
+
+  function beep(freq = 430, dur = 0.05, type = 'sine', vol = 0.03) {
+    try {
+      ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+      const o = ac.createOscillator();
+      const g = ac.createGain();
+      o.type = type;
+      o.frequency.value = freq;
+      g.gain.value = vol;
+      o.connect(g).connect(ac.destination);
+      o.start();
+      o.stop(ac.currentTime + dur);
+    } catch (_) {}
+  }
+
+  function saveBest() {
+    try { localStorage.setItem(keyBest, String(state.best)); } catch (_) {}
+  }
+
+  function makeSpore(angle) {
+    return {
+      angle,
+      dist: 20 + Math.random() * 34,
+      speed: 0.8 + Math.random() * 1.2,
+      r: 6 + Math.random() * 4,
+      phase: Math.random() * Math.PI * 2
+    };
+  }
+
+  function spawnOrb() {
+    state.nutrientsOrb.push({
+      x: 30 + Math.random() * (world.w - 60),
+      y: 30 + Math.random() * (world.h - 60),
+      v: 10 + Math.random() * 20,
+      life: 18 + Math.random() * 20
+    });
+  }
+
+  function restart() {
+    state.running = true;
+    state.ended = false;
+    state.time = 0;
+    state.score = 0;
+    state.energy = 120;
+    state.nutrients = 90;
+    state.biomass = 45;
+    state.toxin = 0;
+    state.efficiency = 1;
+    state.cycle = 1;
+    state.center.x = world.w / 2;
+    state.center.y = world.h / 2;
+    state.autoHarvestCd = 0;
+    state.spores = [makeSpore(0), makeSpore(2), makeSpore(4)];
+    state.nutrientsOrb = [];
+    for (let i = 0; i < 16; i++) spawnOrb();
+    beep(340, 0.06, 'triangle', 0.03);
+  }
+
+  function addScore(v) {
+    state.score += v;
+    if (state.score > state.best) {
+      state.best = Math.floor(state.score);
+      saveBest();
+    }
+  }
+
+  function splitSpore() {
+    const pop = state.spores.length;
+    const costE = 18 + pop * 2.5;
+    const costN = 10 + pop * 1.2;
+    if (state.energy < costE || state.nutrients < costN || state.spores.length >= 42 || !state.running) {
+      beep(170, 0.07, 'square', 0.04);
+      return;
+    }
+    state.energy -= costE;
+    state.nutrients -= costN;
+    state.spores.push(makeSpore(Math.random() * Math.PI * 2));
+    addScore(14 + state.cycle * 2);
+    beep(560, 0.07, 'sawtooth', 0.03);
+  }
+
+  function harvest() {
+    if (!state.running) return;
+    let gain = 0;
+    for (let i = state.nutrientsOrb.length - 1; i >= 0; i--) {
+      const orb = state.nutrientsOrb[i];
+      const dx = orb.x - state.center.x;
+      const dy = orb.y - state.center.y;
+      if (dx * dx + dy * dy < 120 * 120) {
+        gain += orb.v;
+        state.nutrientsOrb.splice(i, 1);
+      }
+    }
+    if (gain > 0) {
+      state.nutrients += gain * (0.6 + state.efficiency * 0.22);
+      addScore(gain * 0.6);
+      beep(660, 0.06, 'triangle', 0.03);
+    } else {
+      beep(240, 0.03, 'sine', 0.015);
+    }
+  }
+
+  function upgrade() {
+    const cost = 62 + state.efficiency * 44;
+    if (state.biomass < cost || !state.running) {
+      beep(150, 0.08, 'square', 0.04);
+      return;
+    }
+    state.biomass -= cost;
+    state.efficiency += 0.24;
+    state.energy += 14;
+    addScore(45);
+    beep(780, 0.08, 'triangle', 0.035);
+  }
+
+  function purge() {
+    const cost = 34;
+    if (state.energy < cost || !state.running) {
+      beep(160, 0.07, 'square', 0.04);
+      return;
+    }
+    state.energy -= cost;
+    state.toxin = Math.max(0, state.toxin - (18 + state.efficiency * 5));
+    beep(510, 0.07, 'sawtooth', 0.03);
+  }
+
+  function updateCenter(dt) {
+    const speed = 180;
+    let vx = 0;
+    let vy = 0;
+    if (state.keys.ArrowLeft || state.keys.KeyA) vx -= 1;
+    if (state.keys.ArrowRight || state.keys.KeyD) vx += 1;
+    if (state.keys.ArrowUp || state.keys.KeyW) vy -= 1;
+    if (state.keys.ArrowDown || state.keys.KeyS) vy += 1;
+    state.center.x += vx * speed * dt;
+    state.center.y += vy * speed * dt;
+    state.center.x = Math.max(30, Math.min(world.w - 30, state.center.x));
+    state.center.y = Math.max(30, Math.min(world.h - 30, state.center.y));
+  }
+
+  function update(dt) {
+    if (!state.running) return;
+
+    state.time += dt;
+    state.cycle = 1 + Math.floor(state.time / 25);
+
+    updateCenter(dt);
+
+    for (const s of state.spores) {
+      s.angle += s.speed * dt;
+      s.phase += dt * (1.5 + s.speed * 0.4);
+    }
+
+    for (let i = state.nutrientsOrb.length - 1; i >= 0; i--) {
+      const orb = state.nutrientsOrb[i];
+      orb.life -= dt;
+      if (orb.life <= 0) state.nutrientsOrb.splice(i, 1);
+    }
+
+    const pop = state.spores.length;
+    const maintenance = pop * (0.8 + state.cycle * 0.08);
+    const production = pop * 0.54 * state.efficiency;
+    const nutrientDecay = pop * 0.18;
+
+    state.energy += (production - maintenance - state.toxin * 0.15) * dt;
+    state.nutrients += (0.9 * state.efficiency - nutrientDecay) * dt;
+    state.biomass += (pop * 0.36 * state.efficiency - state.toxin * 0.06) * dt;
+    state.toxin += (0.28 + pop * 0.06 + state.cycle * 0.05) * dt;
+
+    state.autoHarvestCd -= dt;
+    if (state.autoHarvestCd <= 0) {
+      harvest();
+      state.autoHarvestCd = Math.max(2.8, 5.6 - state.efficiency * 0.4);
+    }
+
+    if (Math.random() < 0.04 + state.cycle * 0.003) spawnOrb();
+    if (state.nutrientsOrb.length < 8) spawnOrb();
+
+    state.energy = Math.min(220, state.energy);
+    state.nutrients = Math.max(0, Math.min(260, state.nutrients));
+    state.biomass = Math.max(0, Math.min(360, state.biomass));
+    state.toxin = Math.max(0, Math.min(100, state.toxin));
+
+    addScore((pop * 0.25 + state.cycle * 0.18) * dt);
+
+    if (state.energy <= 0 || state.toxin >= 100) {
+      state.running = false;
+      state.ended = true;
+      beep(130, 0.2, 'square', 0.05);
+    }
+
+    ui.pop.textContent = String(pop);
+    ui.energy.textContent = Math.round(state.energy);
+    ui.nutrients.textContent = Math.round(state.nutrients);
+    ui.biomass.textContent = Math.round(state.biomass);
+    ui.toxin.textContent = `${Math.round(state.toxin)}%`;
+    ui.cycle.textContent = String(state.cycle);
+    ui.best.textContent = String(state.best);
+  }
+
+  function draw() {
+    const grad = ctx.createLinearGradient(0, 0, world.w, world.h);
+    grad.addColorStop(0, '#050817');
+    grad.addColorStop(1, '#0d1433');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, world.w, world.h);
+
+    const toxinAlpha = Math.min(0.45, state.toxin / 180);
+    ctx.fillStyle = `rgba(255, 69, 145, ${toxinAlpha})`;
+    ctx.fillRect(0, 0, world.w, world.h);
+
+    for (const orb of state.nutrientsOrb) {
+      ctx.save();
+      ctx.shadowColor = '#8fffb8';
+      ctx.shadowBlur = 14;
+      ctx.fillStyle = '#8af6b2';
+      ctx.beginPath();
+      ctx.arc(orb.x, orb.y, 4 + orb.v * 0.03, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    ctx.save();
+    ctx.shadowColor = '#59e9ff';
+    ctx.shadowBlur = 22;
+    ctx.fillStyle = '#53dfff';
+    ctx.beginPath();
+    ctx.arc(state.center.x, state.center.y, 16, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    for (const s of state.spores) {
+      const x = state.center.x + Math.cos(s.angle) * (s.dist + Math.sin(s.phase) * 3);
+      const y = state.center.y + Math.sin(s.angle) * (s.dist + Math.cos(s.phase) * 3);
+      ctx.save();
+      ctx.shadowColor = '#ff63da';
+      ctx.shadowBlur = 13;
+      ctx.fillStyle = '#ff79e1';
+      ctx.beginPath();
+      ctx.arc(x, y, s.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    ctx.strokeStyle = '#3a56b0';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 8]);
+    ctx.beginPath();
+    ctx.arc(state.center.x, state.center.y, 120, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#d6ebff';
+    ctx.font = '700 18px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText(`Score ${Math.floor(state.score)}  |  Efficiency x${state.efficiency.toFixed(2)}`, 14, 26);
+
+    if (!state.running) {
+      ctx.fillStyle = 'rgba(3,7,28,.72)';
+      ctx.fillRect(0, 0, world.w, world.h);
+      ctx.fillStyle = '#f3fbff';
+      ctx.textAlign = 'center';
+      ctx.font = '700 46px system-ui';
+      ctx.fillText('COLONY COLLAPSED', world.w / 2, world.h / 2 - 14);
+      ctx.font = '600 21px system-ui';
+      ctx.fillText(`Final Score ${Math.floor(state.score)} · Enter/Restart로 재시작`, world.w / 2, world.h / 2 + 26);
+    }
+  }
+
+  function step(ts) {
+    const dt = Math.min(0.033, (ts - last) / 1000 || 0.016);
+    last = ts;
+    update(dt);
+    draw();
+    requestAnimationFrame(step);
+  }
+
+  function moveByPointer(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    const x = (clientX - rect.left) * (canvas.width / rect.width);
+    const y = (clientY - rect.top) * (canvas.height / rect.height);
+    state.center.x = Math.max(30, Math.min(world.w - 30, x));
+    state.center.y = Math.max(30, Math.min(world.h - 30, y));
+  }
+
+  canvas.addEventListener('pointerdown', (e) => {
+    state.drag = true;
+    moveByPointer(e.clientX, e.clientY);
+    canvas.setPointerCapture(e.pointerId);
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if (!state.drag) return;
+    moveByPointer(e.clientX, e.clientY);
+  });
+  canvas.addEventListener('pointerup', () => { state.drag = false; });
+  canvas.addEventListener('pointercancel', () => { state.drag = false; });
+
+  document.querySelectorAll('button[data-act]').forEach(btn => {
+    const act = btn.dataset.act;
+    const run = () => {
+      if (act === 'split') splitSpore();
+      if (act === 'harvest') harvest();
+      if (act === 'upgrade') upgrade();
+      if (act === 'purge') purge();
+      if (act === 'restart') restart();
+    };
+    btn.addEventListener('pointerdown', run);
+    btn.addEventListener('touchstart', (e) => { e.preventDefault(); run(); }, { passive: false });
+  });
+
+  window.addEventListener('keydown', (e) => {
+    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space', 'KeyH', 'KeyU', 'KeyP', 'Enter'].includes(e.code)) e.preventDefault();
+    state.keys[e.code] = true;
+    if (e.code === 'Space') splitSpore();
+    if (e.code === 'KeyH') harvest();
+    if (e.code === 'KeyU') upgrade();
+    if (e.code === 'KeyP') purge();
+    if (e.code === 'Enter') restart();
+  });
+  window.addEventListener('keyup', (e) => { state.keys[e.code] = false; });
+
+  ui.best.textContent = String(state.best);
+  restart();
+  requestAnimationFrame(step);
+})();
+</script>
+</body>
+</html>

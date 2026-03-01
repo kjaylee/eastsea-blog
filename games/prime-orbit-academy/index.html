@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Prime Orbit Academy</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <style>
+    :root{
+      --bg:#0a0a1a;--panel:#141432;--line:#2de2e6;--accent:#ff4ecd;--ok:#44ff99;--warn:#ffc857;--bad:#ff5d73;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:radial-gradient(circle at 20% 0%,#1a1a42,#0a0a1a 58%);color:#eef7ff;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;min-height:100svh;padding:calc(12px + env(safe-area-inset-top)) 12px calc(14px + env(safe-area-inset-bottom));display:flex;justify-content:center}
+    .app{width:min(760px,100%);display:grid;gap:10px}
+    .card{background:linear-gradient(180deg,#141432,#101028);border:1px solid #2f4a8a;border-radius:14px;padding:10px;box-shadow:0 0 24px #0008,inset 0 0 28px #25408726}
+    h1{margin:0;font-size:clamp(1.15rem,2.8vw,1.7rem);color:var(--line);text-shadow:0 0 14px #2de2e680}
+    .hint{opacity:.82;font-size:.84rem}
+    .hud{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+    .stat{background:#0b1332;border:1px solid #2f4a8a;border-radius:10px;padding:8px;text-align:center}
+    .label{font-size:.72rem;opacity:.72}.value{font-weight:800}
+    .mode-prime{color:var(--ok)} .mode-composite{color:var(--warn)}
+    canvas{width:100%;height:auto;display:block;background:linear-gradient(180deg,#080d21,#070712);border:1px solid #325392;border-radius:12px;touch-action:none}
+    .controls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+    button{border:1px solid #3c5fa6;background:#13264e;color:#f3f8ff;border-radius:10px;padding:10px 8px;font-weight:700}
+    button:active{transform:translateY(1px)}
+    .primary{background:linear-gradient(180deg,#1e3b7a,#13264e);border-color:#5c8df0}
+    .accent{background:linear-gradient(180deg,#511d58,#2b1237);border-color:#c26be3}
+    .ok{background:#123929;border-color:#3ad38d}.danger{background:#3b1420;border-color:#d75063}
+    .keys{text-align:center;font-size:.8rem;opacity:.76}
+    .overlay{position:fixed;inset:0;display:grid;place-items:center;background:#060814d9;padding:16px;z-index:50}
+    .overlay.hidden{display:none}
+    .panel{width:min(560px,100%);background:#0f1128;border:1px solid #335493;border-radius:14px;padding:16px;display:grid;gap:10px}
+    .panel h2{margin:0;color:var(--line)} .panel p{margin:0;line-height:1.45}
+    @media (max-width:620px){.hud{grid-template-columns:repeat(3,minmax(0,1fr))}.controls{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="card">
+      <h1>🧮 Prime Orbit Academy</h1>
+      <div class="hint">숫자 포드를 분류하세요. 현재 모드와 맞는 숫자만 캐치하면 점수 획득!</div>
+    </div>
+
+    <div class="card hud">
+      <div class="stat"><div class="label">Mode</div><div id="modeText" class="value mode-prime">PRIME</div></div>
+      <div class="stat"><div class="label">Score</div><div id="score" class="value">0</div></div>
+      <div class="stat"><div class="label">Best</div><div id="best" class="value">0</div></div>
+      <div class="stat"><div class="label">Lives</div><div id="lives" class="value">4</div></div>
+      <div class="stat"><div class="label">Speed</div><div id="speed" class="value">1.0x</div></div>
+    </div>
+
+    <div class="card"><canvas id="game" width="720" height="980" aria-label="prime orbit academy"></canvas></div>
+
+    <div class="card controls">
+      <button id="leftBtn" class="primary">⬅ Left (A/←)</button>
+      <button id="rightBtn" class="primary">Right (D/→) ➡</button>
+      <button id="modeBtn" class="accent">Toggle Mode (Tab/M)</button>
+      <button id="pauseBtn">Pause (P)</button>
+      <button id="startBtn" class="ok">Start</button>
+      <button id="resetBtn" class="danger">Reset</button>
+      <button id="primeBtn">Set PRIME</button>
+      <button id="compBtn">Set COMPOSITE</button>
+    </div>
+
+    <div class="card keys">터치 입력 지원: 좌/우 버튼 또는 캔버스 좌/우 탭 이동 · 모드 버튼 탭 전환</div>
+  </div>
+
+  <div id="overlay" class="overlay">
+    <div class="panel">
+      <h2 id="ovTitle">Prime Orbit Academy</h2>
+      <p id="ovText">PRIME 또는 COMPOSITE 모드에 맞는 숫자만 받으세요. 잘못 받거나 정답 숫자를 놓치면 생명이 감소합니다.</p>
+      <button id="ovBtn" class="primary">Start Mission</button>
+    </div>
+  </div>
+
+<script>
+(()=>{
+'use strict';
+const W=720,H=980,LANES=4,LS_KEY='prime-orbit-academy-v1';
+const canvas=document.getElementById('game');
+const ctx=canvas.getContext('2d');
+const el={mode:document.getElementById('modeText'),score:document.getElementById('score'),best:document.getElementById('best'),lives:document.getElementById('lives'),speed:document.getElementById('speed'),overlay:document.getElementById('overlay'),ovTitle:document.getElementById('ovTitle'),ovText:document.getElementById('ovText'),ovBtn:document.getElementById('ovBtn')};
+
+const st={lane:1,mode:'prime',score:0,best:0,lives:4,pods:[],spawnCd:0,speed:1,time:0,running:false,paused:false,audio:null,last:0};
+
+function load(){
+  try{const saved=JSON.parse(localStorage.getItem(LS_KEY)||'{}');st.best=Number(saved.best||0);}catch(_){st.best=0;}
+  renderHud();
+}
+function save(){localStorage.setItem(LS_KEY,JSON.stringify({best:st.best}));}
+
+function ensureAudio(){if(st.audio) return;st.audio=new (window.AudioContext||window.webkitAudioContext)();}
+function beep(freq=680,dur=0.07,type='sine',gain=0.05){if(!st.audio) return;const t=st.audio.currentTime,o=st.audio.createOscillator(),g=st.audio.createGain();o.type=type;o.frequency.value=freq;g.gain.setValueAtTime(gain,t);g.gain.exponentialRampToValueAtTime(0.0001,t+dur);o.connect(g).connect(st.audio.destination);o.start(t);o.stop(t+dur);} 
+function sfx(k){if(k==='ok'){beep(980,0.08,'triangle',0.06);setTimeout(()=>beep(1320,0.1,'triangle',0.04),60);}else if(k==='bad'){beep(240,0.2,'sawtooth',0.06);}else if(k==='move'){beep(620,0.04,'square',0.04);}else if(k==='mode'){beep(780,0.06,'sine',0.05);}}
+
+function isPrime(n){if(n<2) return false;if(n===2) return true;if(n%2===0) return false;for(let i=3;i*i<=n;i+=2){if(n%i===0) return false;}return true;}
+function laneX(i){return (i+0.5)*(W/LANES);} 
+function spawnPod(){
+  const lane=Math.floor(Math.random()*LANES);
+  let val=2+Math.floor(Math.random()*58);
+  if(Math.random()<0.18) val=[4,6,8,9,10,12,14,15,16,18,20][Math.floor(Math.random()*11)];
+  st.pods.push({lane,y:-36,val,r:36,vy:180+st.speed*70,hit:false});
+}
+
+function setMode(next){
+  st.mode=next;
+  sfx('mode');
+  renderHud();
+}
+function toggleMode(){setMode(st.mode==='prime'?'composite':'prime');}
+
+function move(dx){st.lane=Math.max(0,Math.min(LANES-1,st.lane+dx));sfx('move');}
+
+function catchZoneY(){return H-95;}
+
+function update(dt){
+  if(!st.running || st.paused) return;
+  st.time+=dt;
+  st.spawnCd-=dt;
+  st.speed=Math.min(3,1+st.time/48);
+  if(st.spawnCd<=0){spawnPod();st.spawnCd=Math.max(0.28,0.95-0.11*st.speed);} 
+
+  for(const p of st.pods){p.y+=p.vy*dt;}
+
+  const py=catchZoneY();
+  const next=[];
+  for(const p of st.pods){
+    const inCatch=Math.abs(p.y-py)<30 && p.lane===st.lane;
+    if(inCatch && !p.hit){
+      p.hit=true;
+      const prime=isPrime(p.val);
+      const target=(st.mode==='prime')?prime:(!prime && p.val>1);
+      if(target){st.score+=Math.round(32+st.speed*8);sfx('ok');}
+      else{st.lives--;sfx('bad');}
+      continue;
+    }
+    if(p.y>H+40){
+      const prime=isPrime(p.val);
+      const shouldCatch=(st.mode==='prime')?prime:(!prime && p.val>1);
+      if(shouldCatch){st.lives--;sfx('bad');}
+      continue;
+    }
+    next.push(p);
+  }
+  st.pods=next;
+
+  if(st.lives<=0){gameOver();}
+  if(st.score>st.best){st.best=st.score;save();}
+  renderHud();
+}
+
+function drawGrid(){
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#080d21';
+  ctx.fillRect(0,0,W,H);
+
+  for(let i=1;i<LANES;i++){
+    const x=i*(W/LANES);
+    ctx.strokeStyle='rgba(45,226,230,0.2)';ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();
+  }
+
+  const py=catchZoneY();
+  ctx.strokeStyle='rgba(255,78,205,0.55)';ctx.lineWidth=4;
+  ctx.beginPath();ctx.moveTo(0,py+40);ctx.lineTo(W,py+40);ctx.stroke();
+
+  ctx.fillStyle='rgba(255,200,87,.18)';ctx.fillRect(st.lane*(W/LANES)+12,py+10,(W/LANES)-24,70);
+  ctx.strokeStyle='rgba(255,200,87,.85)';ctx.lineWidth=3;
+  ctx.strokeRect(st.lane*(W/LANES)+12,py+10,(W/LANES)-24,70);
+
+  for(const p of st.pods){
+    const x=laneX(p.lane);
+    const prime=isPrime(p.val);
+    ctx.beginPath();ctx.arc(x,p.y,p.r,0,Math.PI*2);
+    ctx.fillStyle=prime?'rgba(68,255,153,0.25)':'rgba(255,93,115,0.25)';
+    ctx.fill();
+    ctx.lineWidth=3;ctx.strokeStyle=prime?'#44ff99':'#ff5d73';ctx.stroke();
+    ctx.fillStyle='#eef7ff';ctx.font='700 34px Inter,system-ui,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(String(p.val),x,p.y+1);
+  }
+
+  ctx.fillStyle='rgba(10,10,26,.78)';ctx.fillRect(0,0,W,70);
+  ctx.fillStyle='#2de2e6';ctx.font='600 28px Inter,system-ui,sans-serif';ctx.textAlign='left';ctx.textBaseline='middle';
+  ctx.fillText(`Target: ${st.mode.toUpperCase()}`,18,36);
+  ctx.fillStyle='#ffc857';ctx.fillText(`Lives ${st.lives}`,W-180,36);
+
+  if(!st.running || st.paused){
+    ctx.fillStyle='rgba(2,6,15,.62)';ctx.fillRect(0,0,W,H);
+    ctx.fillStyle='#eaf7ff';ctx.font='800 52px Inter,system-ui,sans-serif';ctx.textAlign='center';
+    ctx.fillText(st.paused?'PAUSED':'READY',W/2,H/2-24);
+    ctx.font='500 28px Inter,system-ui,sans-serif';ctx.fillStyle='#9bc5ff';
+    ctx.fillText('Start 버튼으로 미션 시작',W/2,H/2+28);
+  }
+}
+
+function renderHud(){
+  el.mode.textContent=st.mode.toUpperCase();
+  el.mode.className='value ' + (st.mode==='prime'?'mode-prime':'mode-composite');
+  el.score.textContent=String(st.score);
+  el.best.textContent=String(st.best);
+  el.lives.textContent=String(st.lives);
+  el.speed.textContent=st.speed.toFixed(1)+'x';
+}
+
+function startGame(){
+  ensureAudio();
+  if(st.audio.state==='suspended') st.audio.resume();
+  st.lane=1;st.mode='prime';st.score=0;st.lives=4;st.pods=[];st.spawnCd=0.35;st.speed=1;st.time=0;st.running=true;st.paused=false;
+  el.overlay.classList.add('hidden');
+  renderHud();
+}
+function resetGame(){st.running=false;st.paused=false;st.score=0;st.lives=4;st.time=0;st.speed=1;st.mode='prime';st.pods=[];renderHud();}
+function gameOver(){
+  st.running=false;
+  const hi=st.score>=st.best;
+  showOverlay('Session Over',`Score ${st.score} · ${hi?'새 최고기록입니다!':'Best '+st.best}`, 'Retry', startGame);
+}
+function showOverlay(title,text,btn,fn){
+  el.ovTitle.textContent=title;el.ovText.textContent=text;el.ovBtn.textContent=btn;el.ovBtn.onclick=()=>{el.overlay.classList.add('hidden');fn&&fn();};
+  el.overlay.classList.remove('hidden');
+}
+
+function onKey(e){
+  const k=e.key.toLowerCase();
+  if(['arrowleft','arrowright','tab','a','d','m','p'].includes(k) || e.key==='Tab') e.preventDefault();
+  if(k==='arrowleft'||k==='a') move(-1);
+  if(k==='arrowright'||k==='d') move(1);
+  if(k==='tab'||k==='m') toggleMode();
+  if(k==='p') st.paused=!st.paused;
+}
+
+document.addEventListener('keydown',onKey,{passive:false});
+
+document.getElementById('leftBtn').addEventListener('pointerdown',()=>move(-1));
+document.getElementById('rightBtn').addEventListener('pointerdown',()=>move(1));
+document.getElementById('modeBtn').addEventListener('pointerdown',toggleMode);
+document.getElementById('pauseBtn').addEventListener('pointerdown',()=>{st.paused=!st.paused;});
+document.getElementById('startBtn').addEventListener('pointerdown',startGame);
+document.getElementById('resetBtn').addEventListener('pointerdown',resetGame);
+document.getElementById('primeBtn').addEventListener('pointerdown',()=>setMode('prime'));
+document.getElementById('compBtn').addEventListener('pointerdown',()=>setMode('composite'));
+
+canvas.addEventListener('pointerdown',e=>{
+  const r=canvas.getBoundingClientRect();
+  const x=(e.clientX-r.left)*(canvas.width/r.width);
+  if(x<canvas.width/2) move(-1); else move(1);
+},{passive:true});
+
+load();
+showOverlay('Prime Orbit Academy','PRIME / COMPOSITE 모드에 맞는 숫자를 받아 점수를 쌓으세요.','Start Mission',startGame);
+
+function frame(ts){
+  if(!st.last) st.last=ts;
+  const dt=Math.min(.05,(ts-st.last)/1000);st.last=ts;
+  update(dt);drawGrid();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

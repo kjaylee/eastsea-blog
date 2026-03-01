@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Mirror Vault Heist</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <style>
+    :root{
+      --bg:#0a0a1a;--panel:#12122a;--line:#39f3ff;--accent:#ff4ecd;--ok:#57ff9a;--warn:#ffc857;--bad:#ff6178;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;
+      background:radial-gradient(circle at top,#18183c,#0a0a1a 60%);color:#eaf8ff;
+      min-height:100svh;padding:calc(12px + env(safe-area-inset-top)) 12px calc(16px + env(safe-area-inset-bottom));
+      display:flex;justify-content:center;
+    }
+    .app{width:min(760px,100%);display:grid;gap:10px}
+    .card{background:linear-gradient(180deg,#151535,#101028);border:1px solid #2a4379;border-radius:14px;padding:12px;box-shadow:0 0 24px #0008,inset 0 0 20px #28427d33}
+    h1{margin:0;font-size:clamp(1.2rem,3vw,1.7rem);color:var(--line);text-shadow:0 0 12px #39f3ff88}
+    .sub{opacity:.78;font-size:.88rem;margin-top:4px}
+    .hud{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+    .stat{background:#091436;border:1px solid #2e4f90;border-radius:10px;padding:8px;text-align:center}
+    .label{font-size:.74rem;opacity:.72}
+    .value{font-weight:800}
+    .boardWrap{display:grid;gap:10px;justify-items:center}
+    canvas{width:min(100%,520px);aspect-ratio:1;border-radius:12px;border:1px solid #3b5e9e;background:#060814;touch-action:none}
+    .legend{display:flex;gap:10px;flex-wrap:wrap;font-size:.82rem;opacity:.9;justify-content:center}
+    .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:4px;vertical-align:middle}
+    .controls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+    button{border:1px solid #375b9f;border-radius:10px;padding:10px 8px;background:#12244d;color:#eff8ff;font-weight:700}
+    button:active{transform:translateY(1px)}
+    .accent{background:linear-gradient(180deg,#4e1f56,#2b1238);border-color:#be69d5}
+    .ok{background:linear-gradient(180deg,#1a5235,#123a27);border-color:#49d891}
+    .danger{background:linear-gradient(180deg,#5f1d2b,#38101b);border-color:#d95d72}
+    .dpad{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;max-width:300px;width:100%;margin:0 auto}
+    .hint{text-align:center;opacity:.75;font-size:.82rem}
+    .overlay{position:fixed;inset:0;background:#060914df;display:grid;place-items:center;padding:16px;z-index:50}
+    .overlay.hidden{display:none}
+    .panel{max-width:560px;width:100%;background:#11122b;border:1px solid #35599b;border-radius:14px;padding:16px;display:grid;gap:10px}
+    .panel h2{margin:0;color:var(--line)}
+    .panel p{margin:0;line-height:1.45}
+    @media (max-width:620px){
+      .hud{grid-template-columns:repeat(3,minmax(0,1fr))}
+      .controls{grid-template-columns:repeat(2,minmax(0,1fr))}
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="card">
+      <h1>🪞 Mirror Vault Heist</h1>
+      <div class="sub">대칭 이동으로 데이터 키를 회수하고 플레이어+미러를 동시 탈출시키세요. 키보드: 방향키/WASD, Space(미러 모드)</div>
+    </div>
+
+    <div class="card hud">
+      <div class="stat"><div class="label">Stage</div><div id="stage" class="value">1 / 6</div></div>
+      <div class="stat"><div class="label">Keys</div><div id="keys" class="value">0 / 0</div></div>
+      <div class="stat"><div class="label">HP</div><div id="hp" class="value">3</div></div>
+      <div class="stat"><div class="label">Score</div><div id="score" class="value">0</div></div>
+      <div class="stat"><div class="label">Best</div><div id="best" class="value">1</div></div>
+    </div>
+
+    <div class="card boardWrap">
+      <canvas id="board" width="520" height="520" aria-label="mirror vault board"></canvas>
+      <div class="legend">
+        <span><i class="dot" style="background:#3af2ff"></i>Player</span>
+        <span><i class="dot" style="background:#ff68d8"></i>Mirror</span>
+        <span><i class="dot" style="background:#ffca57"></i>Key</span>
+        <span><i class="dot" style="background:#ff6178"></i>Laser</span>
+        <span><i class="dot" style="background:#5fff9d"></i>Exit Zone</span>
+      </div>
+    </div>
+
+    <div class="card controls">
+      <button id="mirrorBtn" class="accent">🪞 Mirror: ON (Space)</button>
+      <button id="waitBtn">⏱ Wait Turn</button>
+      <button id="restartBtn" class="danger">↺ Restart Stage</button>
+      <button id="newRunBtn" class="ok">New Run</button>
+    </div>
+
+    <div class="card">
+      <div class="dpad">
+        <span></span><button data-move="up">↑</button><span></span>
+        <button data-move="left">←</button><button data-move="down">↓</button><button data-move="right">→</button>
+        <span></span><span></span><span></span>
+      </div>
+      <div class="hint">터치 버튼 또는 키보드 입력 모두 지원</div>
+    </div>
+  </div>
+
+  <div id="overlay" class="overlay">
+    <div class="panel">
+      <h2 id="ovTitle">Mirror Vault Heist</h2>
+      <p id="ovText">레이저를 피하고 키를 모두 모은 뒤, 플레이어(청록)와 미러(핑크)를 동시에 출구 구역에 올려두면 스테이지 클리어입니다.</p>
+      <button id="startBtn" class="ok">Start Heist</button>
+    </div>
+  </div>
+
+<script>
+(()=>{
+'use strict';
+const SAVE_KEY='mirror-vault-heist-v1';
+const SIZE=8;
+const STAGES=[
+  {walls:[[3,1],[3,2],[3,4],[3,5]],lasers:[[2,3],[5,3]],keys:[[1,1],[6,6]],exit:[[3,7],[4,7]],start:[1,6],hp:3},
+  {walls:[[1,2],[2,2],[5,2],[6,2],[3,4],[4,4]],lasers:[[0,5],[7,5],[3,1],[4,1]],keys:[[2,6],[5,6]],exit:[[3,0],[4,0]],start:[0,7],hp:3},
+  {walls:[[2,1],[2,2],[5,1],[5,2],[1,4],[6,4]],lasers:[[3,3],[4,3],[0,2],[7,2]],keys:[[1,6],[6,6],[3,5]],exit:[[3,0],[4,0]],start:[3,7],hp:3},
+  {walls:[[0,3],[1,3],[2,3],[5,3],[6,3],[7,3],[3,5],[4,5]],lasers:[[3,1],[4,1],[2,6],[5,6]],keys:[[0,7],[7,7],[3,4]],exit:[[3,0],[4,0]],start:[2,7],hp:3},
+  {walls:[[1,1],[2,1],[5,1],[6,1],[1,5],[2,5],[5,5],[6,5],[3,3],[4,3]],lasers:[[0,2],[7,2],[0,4],[7,4]],keys:[[3,7],[4,7],[0,6],[7,6]],exit:[[3,0],[4,0]],start:[1,7],hp:3},
+  {walls:[[3,1],[4,1],[1,2],[6,2],[2,3],[5,3],[2,4],[5,4],[1,5],[6,5],[3,6],[4,6]],lasers:[[0,0],[7,0],[0,7],[7,7],[3,2],[4,2]],keys:[[0,6],[7,6],[0,1],[7,1],[3,4]],exit:[[3,0],[4,0]],start:[3,7],hp:3}
+];
+const $=s=>document.querySelector(s);
+const canvas=$('#board');
+const ctx=canvas.getContext('2d');
+const stageEl=$('#stage');
+const keysEl=$('#keys');
+const hpEl=$('#hp');
+const scoreEl=$('#score');
+const bestEl=$('#best');
+const mirrorBtn=$('#mirrorBtn');
+
+let state={
+  stage:0,
+  score:0,
+  hp:3,
+  mirrorOn:true,
+  player:[1,6],
+  mirror:[6,6],
+  keys:[],
+  collected:0,
+  bestStage:1,
+  audio:null
+};
+
+function loadSave(){
+  try{
+    const saved=JSON.parse(localStorage.getItem(SAVE_KEY)||'{}');
+    state.bestStage=Math.max(1,saved.bestStage||1);
+  }catch(_){ state.bestStage=1; }
+}
+function save(){
+  localStorage.setItem(SAVE_KEY,JSON.stringify({bestStage:state.bestStage}));
+}
+function ensureAudio(){
+  if(!state.audio) state.audio=new (window.AudioContext||window.webkitAudioContext)();
+  if(state.audio.state==='suspended') state.audio.resume();
+}
+function beep(freq=600,dur=0.08,type='sine',gain=0.05){
+  if(!state.audio) return;
+  const t=state.audio.currentTime;
+  const o=state.audio.createOscillator();
+  const g=state.audio.createGain();
+  o.type=type;o.frequency.value=freq;
+  g.gain.setValueAtTime(gain,t);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  o.connect(g).connect(state.audio.destination);
+  o.start(t);o.stop(t+dur);
+}
+function sfx(kind){
+  if(kind==='move'){beep(720,0.05,'square',0.03);}
+  else if(kind==='toggle'){beep(500,0.08,'triangle',0.04);setTimeout(()=>beep(820,0.08,'triangle',0.04),70);}
+  else if(kind==='key'){beep(900,0.08,'triangle',0.05);setTimeout(()=>beep(1200,0.1,'triangle',0.05),90);}
+  else if(kind==='hurt'){beep(230,0.22,'sawtooth',0.06);}
+  else if(kind==='clear'){beep(740,0.08,'triangle',0.05);setTimeout(()=>beep(1020,0.08,'triangle',0.05),100);setTimeout(()=>beep(1320,0.12,'triangle',0.05),200);}
+}
+
+function setupStage(idx,keepScore=false){
+  const st=STAGES[idx];
+  state.stage=idx;
+  if(!keepScore) state.score=0;
+  state.hp=st.hp;
+  state.player=[st.start[0],st.start[1]];
+  state.mirror=[SIZE-1-st.start[0],st.start[1]];
+  state.keys=st.keys.map(k=>({x:k[0],y:k[1],taken:false}));
+  state.collected=0;
+  state.mirrorOn=true;
+  mirrorBtn.textContent='🪞 Mirror: ON (Space)';
+  render();
+}
+
+function cellBlocked(x,y){
+  if(x<0||x>=SIZE||y<0||y>=SIZE) return true;
+  const walls=STAGES[state.stage].walls;
+  return walls.some(w=>w[0]===x&&w[1]===y);
+}
+function onLaser(x,y){
+  return STAGES[state.stage].lasers.some(l=>l[0]===x&&l[1]===y);
+}
+function onExit(x,y){
+  return STAGES[state.stage].exit.some(e=>e[0]===x&&e[1]===y);
+}
+function collectKeys(){
+  let got=false;
+  for(const k of state.keys){
+    if(!k.taken && ((k.x===state.player[0]&&k.y===state.player[1])||(k.x===state.mirror[0]&&k.y===state.mirror[1]))){
+      k.taken=true;state.collected++;state.score+=120;got=true;
+    }
+  }
+  if(got) sfx('key');
+}
+function resetPositions(){
+  const st=STAGES[state.stage];
+  state.player=[st.start[0],st.start[1]];
+  state.mirror=[SIZE-1-st.start[0],st.start[1]];
+}
+
+function tryMove(dx,dy){
+  ensureAudio();
+  const nx=state.player[0]+dx;
+  const ny=state.player[1]+dy;
+  if(!cellBlocked(nx,ny)){
+    state.player=[nx,ny];
+  }
+  if(state.mirrorOn){
+    const mx=state.mirror[0]-dx;
+    const my=state.mirror[1]+dy;
+    if(!cellBlocked(mx,my)){
+      state.mirror=[mx,my];
+    }
+  }
+  state.score=Math.max(0,state.score+4);
+  sfx('move');
+  postTurn();
+}
+
+function waitTurn(){
+  ensureAudio();
+  state.score=Math.max(0,state.score-5);
+  postTurn();
+}
+
+function postTurn(){
+  collectKeys();
+  if(onLaser(state.player[0],state.player[1])||onLaser(state.mirror[0],state.mirror[1])){
+    state.hp--;
+    state.score=Math.max(0,state.score-80);
+    sfx('hurt');
+    if(state.hp<=0){
+      return gameOver();
+    }
+    resetPositions();
+  }
+  const allKeys=state.collected===state.keys.length;
+  if(allKeys && onExit(state.player[0],state.player[1]) && onExit(state.mirror[0],state.mirror[1])){
+    return stageClear();
+  }
+  render();
+}
+
+function stageClear(){
+  sfx('clear');
+  state.score+=300 + state.hp*40;
+  const unlocked=state.stage+2;
+  if(unlocked>state.bestStage){
+    state.bestStage=unlocked;
+    save();
+  }
+  if(state.stage>=STAGES.length-1){
+    showOverlay('Vault Network Cleared 🔓',`최종 점수 ${state.score}. 모든 미러 금고를 동기화 해제했습니다.`,`Play Again`,()=>setupStage(0,false));
+    render();
+    return;
+  }
+  const next=state.stage+1;
+  showOverlay(`Stage ${state.stage+1} Clear`,`다음 스테이지로 이동합니다.`, 'Next Stage',()=>{
+    setupStage(next,true);
+  });
+  render();
+}
+
+function gameOver(){
+  sfx('hurt');
+  showOverlay('Heist Failed',`레이저 보안망에 포착되었습니다. 점수 ${state.score}.`,`Retry Stage`,()=>setupStage(state.stage,true));
+  render();
+}
+
+function draw(){
+  const cell=canvas.width/SIZE;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle='#060914';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  for(let y=0;y<SIZE;y++){
+    for(let x=0;x<SIZE;x++){
+      const even=(x+y)%2===0;
+      ctx.fillStyle=even?'#0d1430':'#0a1028';
+      ctx.fillRect(x*cell,y*cell,cell,cell);
+    }
+  }
+
+  for(const w of STAGES[state.stage].walls){
+    ctx.fillStyle='#24355d';
+    ctx.fillRect(w[0]*cell+4,w[1]*cell+4,cell-8,cell-8);
+  }
+  for(const l of STAGES[state.stage].lasers){
+    ctx.fillStyle='#ff617855';
+    ctx.fillRect(l[0]*cell+2,l[1]*cell+2,cell-4,cell-4);
+    ctx.strokeStyle='#ff6178';ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(l[0]*cell+6,l[1]*cell+6);ctx.lineTo((l[0]+1)*cell-6,(l[1]+1)*cell-6);ctx.stroke();
+    ctx.beginPath();ctx.moveTo((l[0]+1)*cell-6,l[1]*cell+6);ctx.lineTo(l[0]*cell+6,(l[1]+1)*cell-6);ctx.stroke();
+  }
+  for(const e of STAGES[state.stage].exit){
+    ctx.fillStyle='#55ff9a33';
+    ctx.fillRect(e[0]*cell+3,e[1]*cell+3,cell-6,cell-6);
+    ctx.strokeStyle='#55ff9a';ctx.lineWidth=2;
+    ctx.strokeRect(e[0]*cell+6,e[1]*cell+6,cell-12,cell-12);
+  }
+  for(const k of state.keys){
+    if(k.taken) continue;
+    ctx.fillStyle='#ffc857';
+    ctx.beginPath();ctx.arc((k.x+0.5)*cell,(k.y+0.5)*cell,cell*0.17,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#2f2508';ctx.beginPath();ctx.arc((k.x+0.5)*cell,(k.y+0.5)*cell,cell*0.06,0,Math.PI*2);ctx.fill();
+  }
+
+  const p=state.player,m=state.mirror;
+  ctx.fillStyle='#39f3ff';ctx.beginPath();ctx.arc((p[0]+0.5)*cell,(p[1]+0.5)*cell,cell*0.26,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#ff68d8';ctx.beginPath();ctx.arc((m[0]+0.5)*cell,(m[1]+0.5)*cell,cell*0.26,0,Math.PI*2);ctx.fill();
+
+  if(!state.mirrorOn){
+    ctx.fillStyle='#ff68d877';
+    ctx.font=`${Math.floor(cell*0.24)}px system-ui`;
+    ctx.fillText('PAUSE',m[0]*cell+cell*0.14,m[1]*cell+cell*0.9);
+  }
+}
+
+function render(){
+  stageEl.textContent=`${state.stage+1} / ${STAGES.length}`;
+  keysEl.textContent=`${state.collected} / ${state.keys.length}`;
+  hpEl.textContent=state.hp;
+  scoreEl.textContent=state.score;
+  bestEl.textContent=Math.min(STAGES.length,state.bestStage);
+  draw();
+}
+
+const overlay=$('#overlay');
+function showOverlay(title,text,btnText,onClick){
+  $('#ovTitle').textContent=title;
+  $('#ovText').textContent=text;
+  const b=$('#startBtn');
+  b.textContent=btnText;
+  b.onclick=()=>{overlay.classList.add('hidden');onClick&&onClick();};
+  overlay.classList.remove('hidden');
+}
+
+function toggleMirror(){
+  ensureAudio();
+  state.mirrorOn=!state.mirrorOn;
+  mirrorBtn.textContent=`🪞 Mirror: ${state.mirrorOn?'ON':'OFF'} (Space)`;
+  sfx('toggle');
+  render();
+}
+
+function bind(){
+  $('#startBtn').addEventListener('click',()=>{
+    ensureAudio();
+    overlay.classList.add('hidden');
+    setupStage(0,false);
+  });
+  mirrorBtn.addEventListener('click',toggleMirror);
+  $('#waitBtn').addEventListener('click',waitTurn);
+  $('#restartBtn').addEventListener('click',()=>setupStage(state.stage,true));
+  $('#newRunBtn').addEventListener('click',()=>setupStage(0,false));
+
+  document.querySelectorAll('[data-move]').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const mv=btn.getAttribute('data-move');
+      if(mv==='up') tryMove(0,-1);
+      if(mv==='down') tryMove(0,1);
+      if(mv==='left') tryMove(-1,0);
+      if(mv==='right') tryMove(1,0);
+    });
+  });
+
+  window.addEventListener('keydown',e=>{
+    if(!overlay.classList.contains('hidden') && e.key!=='Enter') return;
+    const k=e.key.toLowerCase();
+    if(k==='arrowup'||k==='w') tryMove(0,-1);
+    else if(k==='arrowdown'||k==='s') tryMove(0,1);
+    else if(k==='arrowleft'||k==='a') tryMove(-1,0);
+    else if(k==='arrowright'||k==='d') tryMove(1,0);
+    else if(k===' ') { e.preventDefault(); toggleMirror(); }
+    else if(k==='enter' && !overlay.classList.contains('hidden')) $('#startBtn').click();
+  });
+}
+
+loadSave();
+setupStage(0,false);
+bind();
+render();
+})();
+</script>
+</body>
+</html>

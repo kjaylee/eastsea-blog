@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Timeline Switchyard</title>
+  <meta name="theme-color" content="#0a0a1a" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <style>
+    :root{--bg:#0a0a1a;--panel:#11112a;--cyan:#39d5ff;--pink:#ff4fd8;--lime:#b7ff4a;--text:#e7ecff;--danger:#ff5f7a}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:radial-gradient(circle at top,#15153a 0%,var(--bg) 55%);color:var(--text);min-height:100vh;display:flex;justify-content:center}
+    .wrap{width:min(96vw,720px);padding:14px 12px 28px}
+    .hud{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+    .card{background:rgba(18,18,45,.9);border:1px solid rgba(57,213,255,.35);border-radius:12px;padding:8px 10px;box-shadow:0 0 18px rgba(57,213,255,.15) inset}
+    .title{font-size:clamp(20px,4.5vw,30px);font-weight:800;letter-spacing:.3px;text-shadow:0 0 18px rgba(255,79,216,.4)}
+    .meta{font-size:13px;opacity:.9}
+    canvas{display:block;width:100%;max-width:520px;margin:10px auto;background:#080814;border:2px solid rgba(255,79,216,.45);border-radius:14px;touch-action:none;box-shadow:0 0 30px rgba(255,79,216,.16)}
+    .status{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;font-size:13px;margin-top:8px}
+    .pill{padding:6px 10px;border-radius:999px;border:1px solid rgba(57,213,255,.45);background:rgba(57,213,255,.1)}
+    .controls{margin:12px auto 0;max-width:520px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+    button{appearance:none;border:1px solid rgba(57,213,255,.5);background:#111935;color:var(--text);padding:11px;border-radius:10px;font-weight:700}
+    button:active{transform:translateY(1px);filter:brightness(1.15)}
+    .primary{border-color:rgba(255,79,216,.6);box-shadow:0 0 16px rgba(255,79,216,.26)}
+    .note{margin-top:12px;font-size:12px;opacity:.82;line-height:1.45}
+    @media (max-width:480px){.controls button{padding:13px;font-size:15px}}
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <div class="title">⏳ Timeline Switchyard</div>
+    <div class="hud">
+      <div class="card meta" id="levelInfo"></div>
+      <div class="card meta" id="recordInfo"></div>
+    </div>
+    <canvas id="game" width="520" height="520" aria-label="timeline puzzle board"></canvas>
+    <div class="status">
+      <span class="pill" id="timelineInfo">Timeline: Past</span>
+      <span class="pill" id="orbInfo">Orbs: 0/0</span>
+      <span class="pill" id="message">레벨을 클리어하세요</span>
+    </div>
+    <div class="controls">
+      <button data-act="toggle" class="primary">⏯ 전환 (T)</button>
+      <button data-act="reset">↺ 재시작</button>
+      <button data-act="next">다음 레벨</button>
+      <button data-act="left">◀</button>
+      <button data-act="up">▲</button>
+      <button data-act="right">▶</button>
+      <button data-act="noop"></button>
+      <button data-act="down">▼</button>
+      <button data-act="noop"></button>
+    </div>
+    <p class="note">
+      키보드: 방향키/WASD 이동, <b>T</b> 타임라인 전환, <b>R</b> 재시작, <b>N</b> 다음 레벨.<br>
+      목표: 각 레벨에서 오브를 모두 모은 뒤 출구로 이동하세요. (총 6레벨)
+    </p>
+  </main>
+<script>
+(() => {
+  const STORAGE_KEY = 'timeline_switchyard_best';
+  const levels = [
+    {w:7,h:7,start:[0,0],exit:[6,6],orbs:[[2,1],[4,4]],past:['1,0','1,1','1,2','3,2','3,3','5,4','5,5'],future:['0,3','1,3','2,3','4,1','4,2','4,3','2,5']},
+    {w:7,h:7,start:[0,6],exit:[6,0],orbs:[[2,5],[4,2],[5,5]],past:['1,4','1,5','1,6','3,1','3,2','3,3','5,2'],future:['2,0','2,1','2,2','4,4','4,5','5,4','6,4']},
+    {w:7,h:7,start:[3,6],exit:[3,0],orbs:[[1,4],[5,4],[3,2]],past:['0,5','1,5','2,5','4,5','5,5','6,5','2,2','4,2'],future:['1,1','2,1','4,1','5,1','3,3','3,4','3,5']},
+    {w:7,h:7,start:[6,6],exit:[0,0],orbs:[[5,3],[2,3],[1,1]],past:['6,5','5,5','4,5','3,5','2,4','2,5','2,6'],future:['4,0','4,1','4,2','1,2','2,2','3,2','5,4']},
+    {w:7,h:7,start:[0,3],exit:[6,3],orbs:[[2,1],[2,5],[4,3],[5,1]],past:['1,1','1,2','1,3','1,4','3,2','3,3','3,4','5,5'],future:['2,0','2,2','2,4','2,6','4,1','4,2','4,4','4,5']},
+    {w:7,h:7,start:[0,0],exit:[6,6],orbs:[[1,5],[3,1],[5,3],[4,6]],past:['0,2','1,2','2,2','4,0','4,1','4,2','6,3','6,4','6,5'],future:['2,4','3,4','4,4','1,0','1,1','1,2','3,6','4,6','5,6']}
+  ];
+
+  const c = document.getElementById('game');
+  const ctx = c.getContext('2d');
+  const levelInfo = document.getElementById('levelInfo');
+  const recordInfo = document.getElementById('recordInfo');
+  const timelineInfo = document.getElementById('timelineInfo');
+  const orbInfo = document.getElementById('orbInfo');
+  const message = document.getElementById('message');
+
+  let audioCtx;
+  function tone(freq = 330, dur = 0.06, type = 'sine', gainValue = 0.03) {
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    gain.gain.value = gainValue;
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + dur);
+  }
+  function ensureAudio() {
+    if (!audioCtx) {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (Ctx) audioCtx = new Ctx();
+    }
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+  }
+
+  let unlocked = Math.max(1, Number(localStorage.getItem(STORAGE_KEY) || 1));
+  let levelIndex = 0;
+  let player = {x:0,y:0};
+  let timeline = 0;
+  let collected = new Set();
+
+  function wallSet(level, t) {
+    return new Set(t === 0 ? level.past : level.future);
+  }
+  function k(x,y){ return `${x},${y}`; }
+
+  function loadLevel(index) {
+    levelIndex = Math.min(Math.max(0, index), levels.length - 1);
+    const lv = levels[levelIndex];
+    player.x = lv.start[0];
+    player.y = lv.start[1];
+    timeline = 0;
+    collected = new Set();
+    setMessage('오브를 수집하고 출구로 이동하세요');
+    draw();
+    updateHUD();
+  }
+
+  function setMessage(text, bad = false) {
+    message.textContent = text;
+    message.style.borderColor = bad ? 'rgba(255,95,122,.6)' : 'rgba(57,213,255,.45)';
+  }
+
+  function move(dx,dy) {
+    ensureAudio();
+    const lv = levels[levelIndex];
+    const nx = player.x + dx;
+    const ny = player.y + dy;
+    if (nx < 0 || ny < 0 || nx >= lv.w || ny >= lv.h) {
+      tone(180, 0.05, 'triangle', 0.02);
+      return;
+    }
+    const walls = wallSet(lv, timeline);
+    if (walls.has(k(nx,ny))) {
+      tone(160, 0.05, 'square', 0.02);
+      setMessage('벽으로 막혀 있습니다', true);
+      return;
+    }
+    player.x = nx;
+    player.y = ny;
+    tone(310 + levelIndex * 18, 0.05, 'sine', 0.025);
+
+    lv.orbs.forEach((o, idx) => {
+      if (o[0] === nx && o[1] === ny && !collected.has(idx)) {
+        collected.add(idx);
+        tone(660,0.08,'triangle',0.04);
+        setMessage('오브 수집 +1');
+      }
+    });
+
+    if (nx === lv.exit[0] && ny === lv.exit[1]) {
+      if (collected.size === lv.orbs.length) {
+        tone(520,0.08,'sine',0.04);
+        tone(780,0.12,'triangle',0.04);
+        if (levelIndex + 2 > unlocked) {
+          unlocked = levelIndex + 2;
+          localStorage.setItem(STORAGE_KEY, String(Math.min(unlocked, levels.length)));
+        }
+        if (levelIndex === levels.length - 1) {
+          setMessage('모든 레벨 클리어! 🎉');
+        } else {
+          setMessage('레벨 클리어! N 또는 다음 레벨 버튼');
+        }
+      } else {
+        setMessage('아직 오브를 모두 모으지 않았습니다', true);
+        tone(220,0.06,'sawtooth',0.02);
+      }
+    }
+
+    updateHUD();
+    draw();
+  }
+
+  function toggleTimeline() {
+    ensureAudio();
+    timeline = timeline === 0 ? 1 : 0;
+    tone(timeline ? 490 : 270, 0.07, 'sawtooth', 0.03);
+    setMessage(timeline ? 'Future 라인' : 'Past 라인');
+    updateHUD();
+    draw();
+  }
+
+  function nextLevel() {
+    const next = Math.min(levelIndex + 1, Math.min(unlocked, levels.length) - 1);
+    loadLevel(next);
+  }
+
+  function updateHUD() {
+    const lv = levels[levelIndex];
+    levelInfo.innerHTML = `<b>Level ${levelIndex + 1} / ${levels.length}</b><br>Exit: (${lv.exit[0]+1}, ${lv.exit[1]+1})`;
+    recordInfo.innerHTML = `<b>Best Unlock:</b> ${Math.min(unlocked, levels.length)} / ${levels.length}<br><span style="opacity:.85">Touch + Keyboard 지원</span>`;
+    timelineInfo.textContent = `Timeline: ${timeline === 0 ? 'Past' : 'Future'}`;
+    orbInfo.textContent = `Orbs: ${collected.size}/${lv.orbs.length}`;
+  }
+
+  function draw() {
+    const lv = levels[levelIndex];
+    const size = Math.min(c.width, c.height);
+    const cell = size / lv.w;
+    ctx.clearRect(0,0,c.width,c.height);
+
+    ctx.fillStyle = '#090918';
+    ctx.fillRect(0,0,c.width,c.height);
+
+    const walls = wallSet(lv, timeline);
+    for (let y=0; y<lv.h; y++) {
+      for (let x=0; x<lv.w; x++) {
+        const px = x * cell;
+        const py = y * cell;
+        ctx.strokeStyle = 'rgba(57,213,255,.2)';
+        ctx.strokeRect(px+0.5, py+0.5, cell-1, cell-1);
+
+        if (walls.has(k(x,y))) {
+          ctx.fillStyle = 'rgba(255,95,122,.6)';
+          ctx.fillRect(px+3, py+3, cell-6, cell-6);
+        }
+      }
+    }
+
+    lv.orbs.forEach((o, idx) => {
+      if (collected.has(idx)) return;
+      const cx = (o[0] + 0.5) * cell;
+      const cy = (o[1] + 0.5) * cell;
+      ctx.beginPath();
+      ctx.fillStyle = '#39d5ff';
+      ctx.arc(cx, cy, cell * 0.16, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.strokeStyle = 'rgba(57,213,255,.95)';
+      ctx.arc(cx, cy, cell * 0.25, 0, Math.PI * 2);
+      ctx.stroke();
+    });
+
+    const ex = (lv.exit[0] + 0.5) * cell;
+    const ey = (lv.exit[1] + 0.5) * cell;
+    ctx.fillStyle = 'rgba(255,79,216,.8)';
+    ctx.fillRect(ex - cell*0.22, ey - cell*0.22, cell*0.44, cell*0.44);
+
+    const px = (player.x + 0.5) * cell;
+    const py = (player.y + 0.5) * cell;
+    ctx.beginPath();
+    ctx.fillStyle = '#b7ff4a';
+    ctx.arc(px, py, cell * 0.24, 0, Math.PI*2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.strokeStyle = 'rgba(183,255,74,.95)';
+    ctx.arc(px, py, cell * 0.34, 0, Math.PI*2);
+    ctx.stroke();
+  }
+
+  function resize() {
+    const width = Math.min(window.innerWidth * 0.92, 520);
+    c.width = width;
+    c.height = width;
+    draw();
+  }
+
+  document.querySelectorAll('button[data-act]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      ensureAudio();
+      const act = btn.dataset.act;
+      if (act === 'up') move(0,-1);
+      else if (act === 'down') move(0,1);
+      else if (act === 'left') move(-1,0);
+      else if (act === 'right') move(1,0);
+      else if (act === 'toggle') toggleTimeline();
+      else if (act === 'reset') loadLevel(levelIndex);
+      else if (act === 'next') nextLevel();
+    });
+  });
+
+  window.addEventListener('keydown', (e) => {
+    const k = e.key.toLowerCase();
+    if (['arrowup','arrowdown','arrowleft','arrowright','w','a','s','d','t','r','n'].includes(k)) e.preventDefault();
+    if (k === 'arrowup' || k === 'w') move(0,-1);
+    else if (k === 'arrowdown' || k === 's') move(0,1);
+    else if (k === 'arrowleft' || k === 'a') move(-1,0);
+    else if (k === 'arrowright' || k === 'd') move(1,0);
+    else if (k === 't') toggleTimeline();
+    else if (k === 'r') loadLevel(levelIndex);
+    else if (k === 'n') nextLevel();
+  }, {passive:false});
+
+  let touchStart = null;
+  c.addEventListener('touchstart', (e) => {
+    ensureAudio();
+    const t = e.changedTouches[0];
+    touchStart = {x:t.clientX,y:t.clientY};
+  }, {passive:true});
+  c.addEventListener('touchend', (e) => {
+    if (!touchStart) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - touchStart.x;
+    const dy = t.clientY - touchStart.y;
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 22) {
+      move(dx > 0 ? 1 : -1, 0);
+    } else if (Math.abs(dy) > 22) {
+      move(0, dy > 0 ? 1 : -1);
+    } else {
+      toggleTimeline();
+    }
+    touchStart = null;
+  }, {passive:true});
+
+  window.addEventListener('resize', resize);
+  resize();
+  loadLevel(0);
+})();
+</script>
+</body>
+</html>

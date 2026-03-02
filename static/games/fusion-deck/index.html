@@ -1,0 +1,1108 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+  <title>Fusion Deck — Roguelike Deckbuilder Prototype</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230a0a1a'/%3E%3Cpath d='M14 16h36v8H22v10h24v8H22v14h-8z' fill='%2342f5ff'/%3E%3C/svg%3E" />
+  <style>
+    :root {
+      --bg: #0a0a1a;
+      --panel: #11142a;
+      --panel-2: #141936;
+      --neon-cyan: #42f5ff;
+      --neon-magenta: #ff48d6;
+      --neon-green: #5dff9b;
+      --text: #eaf1ff;
+      --muted: #96a2c8;
+      --warn: #ff8f70;
+    }
+
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(circle at 50% 0%, #141a3d 0%, var(--bg) 45%, #070714 100%);
+      color: var(--text);
+      font-family: "Inter", "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+      overflow: hidden;
+      touch-action: manipulation;
+    }
+
+    body {
+      display: grid;
+      place-items: center;
+      padding: env(safe-area-inset-top) 8px env(safe-area-inset-bottom);
+    }
+
+    #game {
+      background: linear-gradient(180deg, rgba(18,22,44,0.8) 0%, rgba(10,10,26,0.95) 100%);
+      border: 1px solid rgba(66,245,255,0.3);
+      border-radius: 16px;
+      box-shadow:
+        0 0 0 1px rgba(66,245,255,0.15) inset,
+        0 10px 35px rgba(0,0,0,0.55),
+        0 0 42px rgba(66,245,255,0.18);
+      image-rendering: auto;
+      touch-action: none;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="game" width="420" height="760" aria-label="Fusion Deck game canvas" role="img"></canvas>
+
+  <script>
+    (() => {
+      const BASE_W = 420;
+      const BASE_H = 760;
+      const RUN_KEY = "fusionDeck.run.v1";
+      const RECORD_KEY = "fusionDeck.record.v1";
+
+      const canvas = document.getElementById("game");
+      const ctx = canvas.getContext("2d");
+      let clickTargets = [];
+      let fusionSlots = [];
+      let animationTs = 0;
+
+      const CARD_LIBRARY = {
+        strike: { id: "strike", name: "Strike", type: "attack", color: "#ff6b6b", text: "적에게 7 피해" },
+        guard: { id: "guard", name: "Guard", type: "skill", color: "#66b3ff", text: "방어 7 획득" },
+        spark: { id: "spark", name: "Spark", type: "attack", color: "#ffe066", text: "적에게 5 피해, 다음 공격 +2" },
+        venom: { id: "venom", name: "Venom", type: "skill", color: "#7dff8a", text: "중독 3 부여" },
+        siphon: { id: "siphon", name: "Siphon", type: "attack", color: "#ff9fdf", text: "5 피해, 체력 3 회복" },
+        cleave: { id: "cleave", name: "Cleave", type: "attack", color: "#ff8f70", text: "적에게 9 피해" },
+        charge: { id: "charge", name: "Charge", type: "skill", color: "#9f8bff", text: "Charge 2 획득" },
+        shell: { id: "shell", name: "Shell", type: "skill", color: "#7ec8ff", text: "방어 10, 점수 +2" },
+        overclock: { id: "overclock", name: "Overclock", type: "skill", color: "#4efad8", text: "다음 턴 공격 +5" },
+        nova: { id: "nova", name: "Nova", type: "attack", color: "#ffc878", text: "11 피해, 내 방어 -3" },
+
+        twin_strike: { id: "twin_strike", name: "Twin Strike", type: "attack", color: "#ff3b7a", text: "적에게 15 피해" },
+        aegis_core: { id: "aegis_core", name: "Aegis Core", type: "skill", color: "#42f5ff", text: "방어 16 획득" },
+        toxic_arc: { id: "toxic_arc", name: "Toxic Arc", type: "attack", color: "#78ffca", text: "8 피해 + 중독 4" },
+        overload_slash: { id: "overload_slash", name: "Overload Slash", type: "attack", color: "#b97dff", text: "12 피해, Charge 전부 소모해 추가 피해" },
+        blood_plague: { id: "blood_plague", name: "Blood Plague", type: "skill", color: "#ff6cff", text: "중독 6, 체력 4 회복" },
+        fortress_crash: { id: "fortress_crash", name: "Fortress Crash", type: "attack", color: "#6cf2ff", text: "내 방어만큼 추가 피해" }
+      };
+
+      const STARTER_DECK = ["strike", "strike", "guard", "guard", "spark", "venom", "charge", "siphon"];
+      const REWARD_POOL = ["strike", "guard", "spark", "venom", "siphon", "cleave", "charge", "shell", "overclock", "nova"];
+
+      const FUSION_RECIPES = {
+        "strike+strike": "twin_strike",
+        "guard+guard": "aegis_core",
+        "spark+venom": "toxic_arc",
+        "charge+strike": "overload_slash",
+        "siphon+venom": "blood_plague",
+        "cleave+guard": "fortress_crash"
+      };
+
+      const ENEMY_TYPES = [
+        {
+          id: "drone",
+          name: "Sentinel Drone",
+          hpBase: 20,
+          hpScale: 6,
+          intents: [
+            { kind: "attack", min: 4, max: 7, label: "레이저 타격" },
+            { kind: "fortify", min: 4, max: 7, label: "방어 강화" }
+          ]
+        },
+        {
+          id: "brute",
+          name: "Rift Brute",
+          hpBase: 28,
+          hpScale: 8,
+          intents: [
+            { kind: "attack", min: 6, max: 10, label: "중력 강타" },
+            { kind: "attack", min: 7, max: 12, label: "철퇴 분쇄" }
+          ]
+        },
+        {
+          id: "witch",
+          name: "Neon Witch",
+          hpBase: 24,
+          hpScale: 7,
+          intents: [
+            { kind: "attack", min: 4, max: 7, label: "네온 화살" },
+            { kind: "poison", min: 2, max: 4, label: "독무 확산" }
+          ]
+        }
+      ];
+
+      const defaultRecord = { bestFloor: 0, bestScore: 0, runs: 0 };
+      const record = loadJson(RECORD_KEY, defaultRecord);
+
+      const state = {
+        mode: "title",
+        floor: 1,
+        maxFloor: 5,
+        hp: 40,
+        maxHp: 40,
+        block: 0,
+        charge: 0,
+        attackBuff: 0,
+        score: 0,
+        turn: 1,
+        deck: [],
+        choices: [],
+        rewards: [],
+        selectedChoice: 0,
+        selectedReward: 0,
+        enemy: null,
+        message: "",
+        messageUntil: 0,
+        fusion: { selected: [], returnMode: "combat" },
+        hasResume: false,
+        savedRun: null
+      };
+
+      let audioCtx = null;
+      initTelegramWebApp();
+      resizeCanvas();
+      window.addEventListener("resize", resizeCanvas);
+      loadSavedRunMeta();
+      bindInputs();
+      requestAnimationFrame(loop);
+
+      function initTelegramWebApp() {
+        try {
+          if (window.Telegram && window.Telegram.WebApp) {
+            window.Telegram.WebApp.ready();
+            window.Telegram.WebApp.expand();
+          }
+        } catch (_) {
+          // noop
+        }
+      }
+
+      function bindInputs() {
+        canvas.addEventListener("pointerdown", (event) => {
+          unlockAudio();
+          const p = toCanvasPos(event);
+          handlePointer(p.x, p.y);
+        });
+
+        document.addEventListener("keydown", (event) => {
+          unlockAudio();
+          handleKey(event);
+        });
+      }
+
+      function handlePointer(x, y) {
+        for (let i = clickTargets.length - 1; i >= 0; i -= 1) {
+          const target = clickTargets[i];
+          if (x >= target.x && x <= target.x + target.w && y >= target.y && y <= target.y + target.h) {
+            target.onClick();
+            return;
+          }
+        }
+      }
+
+      function handleKey(event) {
+        const key = event.key.toLowerCase();
+
+        if (state.mode === "title") {
+          if (key === "enter") {
+            event.preventDefault();
+            if (state.hasResume) resumeRun();
+            else startNewRun();
+          }
+          if (key === "n") {
+            event.preventDefault();
+            startNewRun();
+          }
+          if (key === "r" && state.hasResume) {
+            event.preventDefault();
+            resumeRun();
+          }
+          return;
+        }
+
+        if (state.mode === "combat") {
+          if (["1", "2", "3"].includes(key)) {
+            event.preventDefault();
+            const idx = Number(key) - 1;
+            playChoice(idx);
+            return;
+          }
+          if (key === "arrowleft") {
+            event.preventDefault();
+            state.selectedChoice = (state.selectedChoice + 2) % 3;
+            return;
+          }
+          if (key === "arrowright") {
+            event.preventDefault();
+            state.selectedChoice = (state.selectedChoice + 1) % 3;
+            return;
+          }
+          if (key === "enter" || key === " ") {
+            event.preventDefault();
+            playChoice(state.selectedChoice);
+            return;
+          }
+          if (key === "f") {
+            event.preventDefault();
+            openFusion("combat");
+          }
+          return;
+        }
+
+        if (state.mode === "reward") {
+          if (["1", "2", "3"].includes(key)) {
+            event.preventDefault();
+            pickReward(Number(key) - 1);
+            return;
+          }
+          if (key === "arrowleft") {
+            event.preventDefault();
+            state.selectedReward = (state.selectedReward + 2) % 3;
+            return;
+          }
+          if (key === "arrowright") {
+            event.preventDefault();
+            state.selectedReward = (state.selectedReward + 1) % 3;
+            return;
+          }
+          if (key === "enter" || key === " ") {
+            event.preventDefault();
+            pickReward(state.selectedReward);
+            return;
+          }
+          if (key === "f") {
+            event.preventDefault();
+            openFusion("reward");
+          }
+          return;
+        }
+
+        if (state.mode === "fusion") {
+          if (key === "escape" || key === "f") {
+            event.preventDefault();
+            closeFusion();
+            return;
+          }
+          if (/^[1-9]$/.test(key)) {
+            event.preventDefault();
+            const idx = Number(key) - 1;
+            if (idx < fusionSlots.length) selectFusionCard(idx);
+          }
+          return;
+        }
+
+        if (state.mode === "gameover" || state.mode === "victory") {
+          if (key === "enter" || key === "n") {
+            event.preventDefault();
+            startNewRun();
+          }
+        }
+      }
+
+      function startNewRun() {
+        state.mode = "combat";
+        state.floor = 1;
+        state.hp = 40;
+        state.maxHp = 40;
+        state.block = 0;
+        state.charge = 0;
+        state.attackBuff = 0;
+        state.score = 0;
+        state.turn = 1;
+        state.deck = STARTER_DECK.slice();
+        state.choices = [];
+        state.rewards = [];
+        state.selectedChoice = 0;
+        state.selectedReward = 0;
+        state.enemy = createEnemy(state.floor);
+        state.fusion.selected = [];
+        setMessage("런 시작. 3장 중 1장 선택하세요.");
+        drawChoices();
+        persistRun();
+      }
+
+      function resumeRun() {
+        if (!state.savedRun) {
+          startNewRun();
+          return;
+        }
+
+        const saved = state.savedRun;
+        Object.assign(state, {
+          mode: saved.mode,
+          floor: saved.floor,
+          maxFloor: saved.maxFloor,
+          hp: saved.hp,
+          maxHp: saved.maxHp,
+          block: saved.block,
+          charge: saved.charge,
+          attackBuff: saved.attackBuff,
+          score: saved.score,
+          turn: saved.turn,
+          deck: Array.isArray(saved.deck) ? saved.deck.slice() : STARTER_DECK.slice(),
+          choices: Array.isArray(saved.choices) ? saved.choices.slice() : [],
+          rewards: Array.isArray(saved.rewards) ? saved.rewards.slice() : [],
+          selectedChoice: 0,
+          selectedReward: 0,
+          enemy: saved.enemy || createEnemy(saved.floor || 1)
+        });
+        state.mode = ["combat", "reward", "fusion"].includes(state.mode) ? state.mode : "combat";
+        if (state.mode === "fusion") state.mode = "combat";
+        if (!state.enemy || typeof state.enemy.hp !== "number") state.enemy = createEnemy(state.floor);
+        setMessage("저장된 런을 재개했습니다.");
+      }
+
+      function loadSavedRunMeta() {
+        const run = loadJson(RUN_KEY, null);
+        if (run && run.v === 1 && run.data) {
+          state.hasResume = true;
+          state.savedRun = run.data;
+        } else {
+          state.hasResume = false;
+          state.savedRun = null;
+        }
+      }
+
+      function persistRun() {
+        const payload = {
+          v: 1,
+          data: {
+            mode: state.mode,
+            floor: state.floor,
+            maxFloor: state.maxFloor,
+            hp: state.hp,
+            maxHp: state.maxHp,
+            block: state.block,
+            charge: state.charge,
+            attackBuff: state.attackBuff,
+            score: state.score,
+            turn: state.turn,
+            deck: state.deck,
+            choices: state.choices,
+            rewards: state.rewards,
+            enemy: state.enemy
+          }
+        };
+        try {
+          localStorage.setItem(RUN_KEY, JSON.stringify(payload));
+          state.hasResume = true;
+          state.savedRun = payload.data;
+        } catch (_) {
+          // noop
+        }
+      }
+
+      function clearRunSave() {
+        try { localStorage.removeItem(RUN_KEY); } catch (_) { /* noop */ }
+        state.hasResume = false;
+        state.savedRun = null;
+      }
+
+      function createEnemy(floor) {
+        const archetype = ENEMY_TYPES[(floor - 1) % ENEMY_TYPES.length];
+        const hp = archetype.hpBase + archetype.hpScale * (floor - 1);
+        const enemy = {
+          typeId: archetype.id,
+          name: archetype.name,
+          maxHp: hp,
+          hp,
+          block: 0,
+          poison: 0,
+          intent: null
+        };
+        enemy.intent = rollEnemyIntent(archetype);
+        return enemy;
+      }
+
+      function rollEnemyIntent(type) {
+        const pattern = type.intents[randi(0, type.intents.length - 1)];
+        const value = randi(pattern.min, pattern.max);
+        return {
+          kind: pattern.kind,
+          value,
+          label: pattern.label
+        };
+      }
+
+      function drawChoices() {
+        state.choices = [
+          drawCardFromDeck(),
+          drawCardFromDeck(),
+          drawCardFromDeck()
+        ];
+        state.selectedChoice = 0;
+        playSfx("draw");
+      }
+
+      function drawCardFromDeck() {
+        if (!state.deck.length) return "strike";
+        return state.deck[randi(0, state.deck.length - 1)];
+      }
+
+      function playChoice(index) {
+        if (state.mode !== "combat") return;
+        const cardId = state.choices[index];
+        if (!cardId) return;
+        const card = CARD_LIBRARY[cardId];
+        if (!card) return;
+
+        resolveCard(cardId);
+      }
+
+      function resolveCard(cardId) {
+        const enemy = state.enemy;
+        if (!enemy) return;
+
+        const card = CARD_LIBRARY[cardId];
+        let dealtDamage = 0;
+
+        const dealDamage = (amount, ignoreCharge = false) => {
+          let dmg = Math.max(0, Math.floor(amount));
+          if (!ignoreCharge) {
+            dmg += state.charge * 3;
+            state.charge = 0;
+            dmg += state.attackBuff;
+            state.attackBuff = 0;
+          }
+
+          let remaining = dmg;
+          if (enemy.block > 0) {
+            const reduced = Math.min(enemy.block, remaining);
+            enemy.block -= reduced;
+            remaining -= reduced;
+          }
+          enemy.hp -= remaining;
+          dealtDamage += remaining;
+        };
+
+        switch (cardId) {
+          case "strike": dealDamage(7); break;
+          case "guard": state.block += 7; break;
+          case "spark": dealDamage(5); state.attackBuff += 2; break;
+          case "venom": enemy.poison += 3; break;
+          case "siphon": dealDamage(5); heal(3); break;
+          case "cleave": dealDamage(9); break;
+          case "charge": state.charge += 2; break;
+          case "shell": state.block += 10; state.score += 2; break;
+          case "overclock": state.attackBuff += 5; break;
+          case "nova": dealDamage(11); state.block = Math.max(0, state.block - 3); break;
+
+          case "twin_strike": dealDamage(15); break;
+          case "aegis_core": state.block += 16; break;
+          case "toxic_arc": dealDamage(8); enemy.poison += 4; break;
+          case "overload_slash": {
+            const base = 12 + state.charge * 4;
+            state.charge = 0;
+            dealDamage(base, true);
+            break;
+          }
+          case "blood_plague": enemy.poison += 6; heal(4); break;
+          case "fortress_crash": {
+            const base = 6 + state.block;
+            dealDamage(base, true);
+            state.block = Math.max(0, state.block - 2);
+            break;
+          }
+          default:
+            dealDamage(6);
+        }
+
+        if (card.type === "attack") playSfx("attack");
+        state.score += Math.max(0, dealtDamage);
+
+        if (enemy.hp <= 0) {
+          onEnemyDefeated();
+          return;
+        }
+
+        enemyTurn();
+      }
+
+      function enemyTurn() {
+        const enemy = state.enemy;
+        if (!enemy) return;
+
+        if (enemy.poison > 0) {
+          const poisonDamage = enemy.poison;
+          enemy.hp -= poisonDamage;
+          enemy.poison = Math.max(0, enemy.poison - 1);
+          state.score += poisonDamage;
+          setMessage(`중독으로 ${poisonDamage} 피해!`);
+          if (enemy.hp <= 0) {
+            onEnemyDefeated();
+            return;
+          }
+        }
+
+        const intent = enemy.intent;
+        if (intent.kind === "attack") {
+          const incoming = intent.value;
+          const blocked = Math.min(state.block, incoming);
+          const taken = incoming - blocked;
+          state.block -= blocked;
+          state.hp -= taken;
+          if (taken > 0) setMessage(`적 공격 ${taken} 피해!`);
+          else setMessage("완벽 방어!");
+        } else if (intent.kind === "poison") {
+          const incoming = intent.value;
+          state.hp -= incoming;
+          setMessage(`독무 ${incoming} 피해!`);
+        } else if (intent.kind === "fortify") {
+          enemy.block += intent.value;
+          setMessage(`적이 방어 ${intent.value} 획득!`);
+        }
+
+        state.block = 0;
+
+        if (state.hp <= 0) {
+          state.hp = 0;
+          onGameOver();
+          return;
+        }
+
+        const archetype = ENEMY_TYPES.find((t) => t.id === enemy.typeId) || ENEMY_TYPES[0];
+        enemy.intent = rollEnemyIntent(archetype);
+        state.turn += 1;
+        drawChoices();
+        persistRun();
+      }
+
+      function onEnemyDefeated() {
+        state.score += 20 + state.floor * 5;
+
+        if (state.floor >= state.maxFloor) {
+          onVictory();
+          return;
+        }
+
+        state.mode = "reward";
+        state.rewards = [
+          REWARD_POOL[randi(0, REWARD_POOL.length - 1)],
+          REWARD_POOL[randi(0, REWARD_POOL.length - 1)],
+          REWARD_POOL[randi(0, REWARD_POOL.length - 1)]
+        ];
+        state.selectedReward = 0;
+        setMessage(`층 ${state.floor} 클리어! 보상 카드를 선택하세요.`);
+        persistRun();
+      }
+
+      function pickReward(index) {
+        if (state.mode !== "reward") return;
+        const cardId = state.rewards[index];
+        if (!cardId) return;
+        state.deck.push(cardId);
+        state.floor += 1;
+        state.turn = 1;
+        heal(2);
+        state.block = 0;
+        state.charge = 0;
+        state.attackBuff = 0;
+        state.enemy = createEnemy(state.floor);
+        state.mode = "combat";
+        setMessage(`${CARD_LIBRARY[cardId].name} 획득! 층 ${state.floor} 진입.`);
+        drawChoices();
+        persistRun();
+      }
+
+      function openFusion(returnMode) {
+        if (!["combat", "reward"].includes(returnMode)) return;
+        state.fusion.returnMode = returnMode;
+        state.fusion.selected = [];
+        state.mode = "fusion";
+        persistRun();
+      }
+
+      function closeFusion() {
+        state.mode = state.fusion.returnMode || "combat";
+        state.fusion.selected = [];
+        persistRun();
+      }
+
+      function selectFusionCard(index) {
+        const slot = fusionSlots[index];
+        if (!slot) return;
+
+        const selected = state.fusion.selected;
+        if (selected.length === 0) {
+          selected.push(slot.id);
+          setMessage(`${CARD_LIBRARY[slot.id].name} 선택됨 (1/2)`);
+          return;
+        }
+
+        const first = selected[0];
+        if (first === slot.id && slot.count < 2) {
+          setMessage("동일 카드 2장 필요합니다.");
+          return;
+        }
+
+        selected.push(slot.id);
+        tryFusion();
+      }
+
+      function tryFusion() {
+        const [a, b] = state.fusion.selected;
+        if (!a || !b) return;
+
+        const key = [a, b].sort().join("+");
+        const result = FUSION_RECIPES[key];
+        if (!result) {
+          setMessage("융합 실패: 해당 조합 레시피 없음");
+          state.fusion.selected = [];
+          return;
+        }
+
+        const removedA = removeCardFromDeck(a);
+        const removedB = removeCardFromDeck(b);
+        if (!removedA || !removedB) {
+          setMessage("융합 실패: 카드 수량 부족");
+          state.fusion.selected = [];
+          return;
+        }
+
+        state.deck.push(result);
+        state.fusion.selected = [];
+        playSfx("fusion");
+        setMessage(`융합 성공! ${CARD_LIBRARY[result].name} 생성.`);
+        persistRun();
+      }
+
+      function removeCardFromDeck(id) {
+        const idx = state.deck.indexOf(id);
+        if (idx === -1) return false;
+        state.deck.splice(idx, 1);
+        return true;
+      }
+
+      function onGameOver() {
+        state.mode = "gameover";
+        finalizeRun();
+        clearRunSave();
+      }
+
+      function onVictory() {
+        state.mode = "victory";
+        state.score += 50;
+        finalizeRun();
+        clearRunSave();
+      }
+
+      function finalizeRun() {
+        record.runs += 1;
+        record.bestFloor = Math.max(record.bestFloor, state.floor);
+        record.bestScore = Math.max(record.bestScore, state.score);
+        try {
+          localStorage.setItem(RECORD_KEY, JSON.stringify(record));
+        } catch (_) {
+          // noop
+        }
+      }
+
+      function heal(amount) {
+        state.hp = Math.min(state.maxHp, state.hp + amount);
+      }
+
+      function setMessage(text) {
+        state.message = text;
+        state.messageUntil = performance.now() + 2200;
+      }
+
+      function toCanvasPos(event) {
+        const rect = canvas.getBoundingClientRect();
+        const sx = canvas.width / rect.width;
+        const sy = canvas.height / rect.height;
+        return {
+          x: (event.clientX - rect.left) * sx,
+          y: (event.clientY - rect.top) * sy
+        };
+      }
+
+      function resizeCanvas() {
+        const pad = 12;
+        const maxW = Math.min(window.innerWidth - pad * 2, 520);
+        const maxH = window.innerHeight - pad * 2;
+        const scale = Math.max(0.45, Math.min(maxW / BASE_W, maxH / BASE_H));
+        canvas.style.width = `${Math.floor(BASE_W * scale)}px`;
+        canvas.style.height = `${Math.floor(BASE_H * scale)}px`;
+      }
+
+      function loop(ts) {
+        animationTs = ts;
+        render();
+        requestAnimationFrame(loop);
+      }
+
+      function render() {
+        clickTargets = [];
+        fusionSlots = [];
+
+        drawBackground();
+        drawFrame();
+        drawHeader();
+
+        if (state.mode === "title") renderTitle();
+        else if (state.mode === "combat") renderCombat();
+        else if (state.mode === "reward") renderReward();
+        else if (state.mode === "fusion") renderFusion();
+        else if (state.mode === "gameover") renderResult(false);
+        else if (state.mode === "victory") renderResult(true);
+
+        drawToast();
+      }
+
+      function drawBackground() {
+        const g = ctx.createLinearGradient(0, 0, 0, BASE_H);
+        g.addColorStop(0, "#13193f");
+        g.addColorStop(0.55, "#0d1030");
+        g.addColorStop(1, "#0a0a1a");
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, BASE_W, BASE_H);
+
+        for (let i = 0; i < 18; i += 1) {
+          const phase = (animationTs * 0.0006 + i * 1.37) % 1;
+          const x = (i * 31 + phase * 160) % BASE_W;
+          const y = (i * 43 + phase * 270) % BASE_H;
+          ctx.fillStyle = `rgba(66,245,255,${0.05 + (i % 3) * 0.03})`;
+          ctx.fillRect(x, y, 2, 2);
+        }
+      }
+
+      function drawFrame() {
+        ctx.strokeStyle = "rgba(66,245,255,0.2)";
+        ctx.lineWidth = 1;
+        roundRectPath(8, 8, BASE_W - 16, BASE_H - 16, 14);
+        ctx.stroke();
+      }
+
+      function drawHeader() {
+        drawPanel(16, 14, BASE_W - 32, 92, "rgba(18,22,44,0.85)");
+        drawText("FUSION DECK", 30, 42, 22, "#42f5ff", 700);
+        drawText("7초 이해: 3장 중 1장 선택 → 적 처치 → 카드 융합", 30, 64, 13, "#d0dcff", 500);
+
+        drawText(`Floor ${state.floor}/${state.maxFloor}`, 30, 89, 12, "#96a2c8", 500);
+        drawText(`Best ${record.bestFloor}F`, 147, 89, 12, "#96a2c8", 500);
+        drawText(`Score ${state.score}`, 230, 89, 12, "#96a2c8", 500);
+      }
+
+      function renderTitle() {
+        drawPanel(26, 134, BASE_W - 52, 340, "rgba(20,25,54,0.82)");
+
+        drawText("Neon Roguelike Deckbuilder", 48, 178, 18, "#eaf1ff", 700);
+        drawText("전투 정보 공개 + 폭발 시너지 + 짧은 루프", 48, 203, 13, "#9fb1df", 500);
+
+        drawText("코어 루프", 48, 241, 15, "#42f5ff", 700);
+        drawText("1) 3장 중 1장 선택", 48, 265, 13, "#dbe6ff", 500);
+        drawText("2) 즉시 결과 확인(피해/방어/상태)", 48, 287, 13, "#dbe6ff", 500);
+        drawText("3) 적 처치 후 보상 카드 획득", 48, 309, 13, "#dbe6ff", 500);
+        drawText("4) Fusion으로 덱 고도화", 48, 331, 13, "#dbe6ff", 500);
+
+        const newBtn = { x: 48, y: 370, w: BASE_W - 96, h: 48 };
+        drawButton(newBtn, "New Run (N)", "#42f5ff");
+        clickTargets.push({ ...newBtn, onClick: startNewRun });
+
+        const resBtn = { x: 48, y: 429, w: BASE_W - 96, h: 44 };
+        drawButton(resBtn, state.hasResume ? "Resume Run (R / Enter)" : "No Saved Run", state.hasResume ? "#ff48d6" : "#5f6b96", !state.hasResume);
+        if (state.hasResume) clickTargets.push({ ...resBtn, onClick: resumeRun });
+
+        drawText(`Runs ${record.runs}  •  Best Score ${record.bestScore}`, 48, 506, 13, "#96a2c8", 500);
+      }
+
+      function renderCombat() {
+        const enemy = state.enemy;
+        if (!enemy) return;
+
+        drawPanel(20, 120, BASE_W - 40, 224, "rgba(19,24,50,0.84)");
+        drawText(enemy.name, 34, 152, 20, "#ffb3f4", 700);
+        drawText(`HP ${Math.max(0, enemy.hp)} / ${enemy.maxHp}`, 34, 177, 13, "#dce7ff", 500);
+        drawBar(34, 186, BASE_W - 68, 14, enemy.hp / enemy.maxHp, "#ff4f88");
+
+        drawText(`Enemy Block ${enemy.block}`, 34, 216, 12, "#96a2c8", 500);
+        drawText(`Enemy Poison ${enemy.poison}`, 150, 216, 12, "#96a2c8", 500);
+
+        drawPanel(34, 228, BASE_W - 68, 100, "rgba(12,16,33,0.9)");
+        drawText("Enemy Intent", 46, 252, 13, "#42f5ff", 700);
+        const intentColor = enemy.intent.kind === "attack" ? "#ff8f70" : enemy.intent.kind === "poison" ? "#9cff9f" : "#8ed0ff";
+        drawText(`${enemy.intent.label}: ${enemy.intent.value}`, 46, 278, 20, intentColor, 700);
+
+        drawPanel(20, 356, BASE_W - 40, 72, "rgba(16,20,44,0.82)");
+        drawText(`HP ${state.hp}/${state.maxHp}`, 30, 382, 13, "#dce7ff", 600);
+        drawText(`Block ${state.block}`, 126, 382, 13, "#8ed0ff", 600);
+        drawText(`Charge ${state.charge}`, 214, 382, 13, "#b89cff", 600);
+        drawText(`Buff ${state.attackBuff}`, 315, 382, 13, "#7dffdb", 600);
+        drawText(`Turn ${state.turn}`, 30, 408, 12, "#96a2c8", 500);
+        drawText(`Deck ${state.deck.length}`, 96, 408, 12, "#96a2c8", 500);
+
+        const fBtn = { x: BASE_W - 126, y: 392, w: 96, h: 30 };
+        drawButton(fBtn, "Fusion (F)", "#ff48d6");
+        clickTargets.push({ ...fBtn, onClick: () => openFusion("combat") });
+
+        drawText("카드 선택 (터치/클릭 또는 1~3, ←/→+Enter)", 24, 448, 12, "#96a2c8", 500);
+
+        const cw = 118;
+        const ch = 210;
+        for (let i = 0; i < 3; i += 1) {
+          const x = 20 + i * (cw + 12);
+          const y = 460;
+          const cardId = state.choices[i];
+          drawCard(cardId, x, y, cw, ch, i === state.selectedChoice, `${i + 1}`);
+          clickTargets.push({ x, y, w: cw, h: ch, onClick: () => playChoice(i) });
+        }
+      }
+
+      function renderReward() {
+        drawPanel(20, 124, BASE_W - 40, 92, "rgba(20,25,54,0.88)");
+        drawText(`층 ${state.floor} 클리어`, 32, 154, 21, "#5dff9b", 700);
+        drawText("보상 카드 1장을 선택하세요", 32, 178, 13, "#dbe6ff", 500);
+
+        const fBtn = { x: BASE_W - 126, y: 176, w: 96, h: 30 };
+        drawButton(fBtn, "Fusion (F)", "#ff48d6");
+        clickTargets.push({ ...fBtn, onClick: () => openFusion("reward") });
+
+        const cw = 118;
+        const ch = 230;
+        for (let i = 0; i < 3; i += 1) {
+          const x = 20 + i * (cw + 12);
+          const y = 244;
+          const cardId = state.rewards[i];
+          drawCard(cardId, x, y, cw, ch, i === state.selectedReward, `${i + 1}`);
+          clickTargets.push({ x, y, w: cw, h: ch, onClick: () => pickReward(i) });
+        }
+
+        drawText("키보드: 1~3 / ←→ + Enter", 26, 496, 12, "#96a2c8", 500);
+        drawDeckSummary(20, 524, BASE_W - 40, 200);
+      }
+
+      function renderFusion() {
+        drawPanel(14, 114, BASE_W - 28, BASE_H - 132, "rgba(10,12,28,0.95)");
+        drawText("Fusion Chamber", 30, 146, 22, "#ff48d6", 700);
+        drawText("카드 2장을 선택해 상위 카드로 융합하세요", 30, 168, 12, "#dce7ff", 500);
+
+        const closeBtn = { x: BASE_W - 118, y: 130, w: 90, h: 30 };
+        drawButton(closeBtn, "Close (Esc)", "#5f6b96");
+        clickTargets.push({ ...closeBtn, onClick: closeFusion });
+
+        const selected = state.fusion.selected.map((id) => CARD_LIBRARY[id]?.name || "?").join(" + ");
+        drawText(`Selected: ${selected || "(없음)"}`, 30, 192, 13, "#9fffe5", 600);
+
+        const counts = deckCountArray();
+        const cols = 3;
+        const sw = 118;
+        const sh = 96;
+        const gap = 10;
+        const startX = 26;
+        const startY = 212;
+
+        counts.forEach((entry, idx) => {
+          const col = idx % cols;
+          const row = Math.floor(idx / cols);
+          const x = startX + col * (sw + gap);
+          const y = startY + row * (sh + gap);
+          const selectedNow = state.fusion.selected.includes(entry.id);
+          drawFusionSlot(entry, x, y, sw, sh, selectedNow, idx + 1);
+          clickTargets.push({ x, y, w: sw, h: sh, onClick: () => selectFusionCard(idx) });
+          fusionSlots.push(entry);
+        });
+
+        drawText("숫자키 1~9로 빠른 선택", 30, BASE_H - 58, 12, "#96a2c8", 500);
+        drawText(`Deck Size ${state.deck.length}`, BASE_W - 126, BASE_H - 58, 12, "#96a2c8", 500);
+      }
+
+      function renderResult(isVictory) {
+        drawPanel(26, 154, BASE_W - 52, 314, "rgba(20,25,54,0.9)");
+        drawText(isVictory ? "VICTORY" : "GAME OVER", 132, 210, 36, isVictory ? "#5dff9b" : "#ff8f70", 800);
+        drawText(`도달 층: ${state.floor} / ${state.maxFloor}`, 118, 248, 16, "#dce7ff", 600);
+        drawText(`점수: ${state.score}`, 160, 274, 16, "#dce7ff", 600);
+        drawText(`Best Floor ${record.bestFloor}  •  Best Score ${record.bestScore}`, 62, 308, 13, "#96a2c8", 500);
+
+        drawText("Fusion 요약", 56, 344, 14, "#ff48d6", 700);
+        drawText(`덱 최종 크기 ${state.deck.length}`, 56, 366, 12, "#dce7ff", 500);
+        drawText("전투/보상 화면에서 F 키로 언제든 융합 가능", 56, 387, 12, "#dce7ff", 500);
+
+        const btn = { x: 64, y: 416, w: BASE_W - 128, h: 44 };
+        drawButton(btn, "New Run (Enter)", "#42f5ff");
+        clickTargets.push({ ...btn, onClick: startNewRun });
+      }
+
+      function drawDeckSummary(x, y, w, h) {
+        drawPanel(x, y, w, h, "rgba(14,18,39,0.85)");
+        drawText("현재 덱", x + 12, y + 24, 13, "#42f5ff", 700);
+        const entries = deckCountArray().slice(0, 14);
+        entries.forEach((entry, idx) => {
+          const tx = x + 12 + (idx % 2) * ((w - 24) / 2);
+          const ty = y + 50 + Math.floor(idx / 2) * 20;
+          drawText(`${entry.name} x${entry.count}`, tx, ty, 12, "#dce7ff", 500);
+        });
+      }
+
+      function drawToast() {
+        if (!state.message || performance.now() > state.messageUntil) return;
+        const alpha = Math.min(1, Math.max(0, (state.messageUntil - performance.now()) / 1200));
+        ctx.fillStyle = `rgba(10,10,26,${0.7 * alpha})`;
+        roundRectPath(20, BASE_H - 40, BASE_W - 40, 26, 10);
+        ctx.fill();
+        drawText(state.message, 30, BASE_H - 22, 12, `rgba(234,241,255,${alpha})`, 600);
+      }
+
+      function drawCard(cardId, x, y, w, h, selected, keyLabel) {
+        const card = CARD_LIBRARY[cardId] || CARD_LIBRARY.strike;
+        const glow = selected ? 0.8 : 0.35;
+        drawPanel(x, y, w, h, "rgba(17,20,42,0.95)");
+
+        ctx.strokeStyle = selected ? "rgba(255,72,214,0.95)" : "rgba(66,245,255,0.45)";
+        ctx.lineWidth = selected ? 2.4 : 1.1;
+        roundRectPath(x + 1, y + 1, w - 2, h - 2, 12);
+        ctx.stroke();
+
+        ctx.fillStyle = card.color;
+        ctx.globalAlpha = 0.1 + glow * 0.1;
+        roundRectPath(x + 6, y + 6, w - 12, 34, 8);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        drawText(`${keyLabel}`, x + w - 22, y + 22, 14, "#96a2c8", 700);
+        drawText(card.name, x + 12, y + 27, 15, card.color, 700);
+        drawText(card.type.toUpperCase(), x + 12, y + 49, 10, "#96a2c8", 700);
+        wrapText(card.text, x + 12, y + 73, w - 24, 16, 12, "#dce7ff");
+      }
+
+      function drawFusionSlot(entry, x, y, w, h, selected, keyLabel) {
+        drawPanel(x, y, w, h, "rgba(17,20,42,0.94)");
+        ctx.strokeStyle = selected ? "#ff48d6" : "rgba(66,245,255,0.4)";
+        ctx.lineWidth = selected ? 2 : 1;
+        roundRectPath(x + 1, y + 1, w - 2, h - 2, 10);
+        ctx.stroke();
+
+        drawText(`${keyLabel}`, x + w - 18, y + 18, 11, "#96a2c8", 700);
+        drawText(entry.name, x + 10, y + 28, 13, CARD_LIBRARY[entry.id].color, 700);
+        drawText(`x${entry.count}`, x + 10, y + 47, 12, "#dce7ff", 600);
+        wrapText(CARD_LIBRARY[entry.id].text, x + 10, y + 65, w - 20, 14, 11, "#dce7ff");
+      }
+
+      function drawPanel(x, y, w, h, color) {
+        ctx.fillStyle = color;
+        roundRectPath(x, y, w, h, 12);
+        ctx.fill();
+      }
+
+      function drawButton(rect, label, accent, disabled = false) {
+        drawPanel(rect.x, rect.y, rect.w, rect.h, disabled ? "rgba(70,80,110,0.3)" : "rgba(17,20,42,0.92)");
+        ctx.strokeStyle = disabled ? "rgba(130,140,170,0.35)" : accent;
+        ctx.lineWidth = 1.4;
+        roundRectPath(rect.x + 1, rect.y + 1, rect.w - 2, rect.h - 2, 10);
+        ctx.stroke();
+        drawText(label, rect.x + 14, rect.y + Math.floor(rect.h * 0.62), 13, disabled ? "#8190b0" : "#eaf1ff", 700);
+      }
+
+      function drawBar(x, y, w, h, ratio, color) {
+        ctx.fillStyle = "rgba(255,255,255,0.08)";
+        roundRectPath(x, y, w, h, 7);
+        ctx.fill();
+        ctx.fillStyle = color;
+        roundRectPath(x, y, Math.max(0, Math.min(w, w * ratio)), h, 7);
+        ctx.fill();
+      }
+
+      function drawText(text, x, y, size = 14, color = "#eaf1ff", weight = 500) {
+        ctx.fillStyle = color;
+        ctx.font = `${weight} ${size}px Inter, Pretendard, sans-serif`;
+        ctx.fillText(text, x, y);
+      }
+
+      function wrapText(text, x, y, maxWidth, lineHeight, fontSize, color) {
+        ctx.fillStyle = color;
+        ctx.font = `${fontSize}px Inter, Pretendard, sans-serif`;
+        const words = text.split(" ");
+        let line = "";
+        let cy = y;
+        for (let i = 0; i < words.length; i += 1) {
+          const test = line ? `${line} ${words[i]}` : words[i];
+          if (ctx.measureText(test).width > maxWidth && line) {
+            ctx.fillText(line, x, cy);
+            line = words[i];
+            cy += lineHeight;
+          } else {
+            line = test;
+          }
+        }
+        if (line) ctx.fillText(line, x, cy);
+      }
+
+      function roundRectPath(x, y, w, h, r) {
+        const rr = Math.min(r, w / 2, h / 2);
+        ctx.beginPath();
+        ctx.moveTo(x + rr, y);
+        ctx.arcTo(x + w, y, x + w, y + h, rr);
+        ctx.arcTo(x + w, y + h, x, y + h, rr);
+        ctx.arcTo(x, y + h, x, y, rr);
+        ctx.arcTo(x, y, x + w, y, rr);
+        ctx.closePath();
+      }
+
+      function deckCountArray() {
+        const map = new Map();
+        for (const id of state.deck) {
+          map.set(id, (map.get(id) || 0) + 1);
+        }
+        return [...map.entries()]
+          .map(([id, count]) => ({ id, count, name: CARD_LIBRARY[id]?.name || id }))
+          .sort((a, b) => a.name.localeCompare(b.name));
+      }
+
+      function loadJson(key, fallback) {
+        try {
+          const raw = localStorage.getItem(key);
+          if (!raw) return fallback;
+          const value = JSON.parse(raw);
+          return value ?? fallback;
+        } catch (_) {
+          return fallback;
+        }
+      }
+
+      function randi(min, max) {
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+      }
+
+      function unlockAudio() {
+        if (audioCtx) {
+          if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
+          return;
+        }
+        try {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        } catch (_) {
+          audioCtx = null;
+        }
+      }
+
+      function playSfx(type) {
+        if (!audioCtx) return;
+        const t0 = audioCtx.currentTime;
+
+        if (type === "draw") {
+          tone(520, 0.05, t0, "triangle", 0.03);
+          tone(680, 0.05, t0 + 0.05, "triangle", 0.02);
+        } else if (type === "attack") {
+          tone(190, 0.08, t0, "square", 0.04);
+          tone(140, 0.06, t0 + 0.05, "square", 0.03);
+        } else if (type === "fusion") {
+          tone(330, 0.08, t0, "sawtooth", 0.04);
+          tone(494, 0.09, t0 + 0.08, "sawtooth", 0.04);
+          tone(659, 0.11, t0 + 0.16, "sawtooth", 0.05);
+        }
+      }
+
+      function tone(freq, duration, at, wave, gain) {
+        const osc = audioCtx.createOscillator();
+        const amp = audioCtx.createGain();
+        osc.type = wave;
+        osc.frequency.value = freq;
+        amp.gain.setValueAtTime(0.0001, at);
+        amp.gain.exponentialRampToValueAtTime(gain, at + 0.01);
+        amp.gain.exponentialRampToValueAtTime(0.0001, at + duration);
+        osc.connect(amp).connect(audioCtx.destination);
+        osc.start(at);
+        osc.stop(at + duration + 0.02);
+      }
+    })();
+  </script>
+</body>
+</html>

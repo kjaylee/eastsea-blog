@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+<title>Prism Break — 빛 굴절 퍼즐</title>
+<script src="https://killedbyapixel.github.io/LittleJS/dist/littlejs.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #e8e4f0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; }
+  #game {
+    display: block;
+    touch-action: none;
+  }
+  #ui {
+    position: fixed;
+    top: 0; left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    padding: 8px 16px;
+    background: rgba(255,255,255,0.85);
+    border-radius: 0 0 16px 16px;
+    font-size: 14px;
+    color: #5a4e7a;
+    pointer-events: none;
+    z-index: 10;
+  }
+  #toolbar {
+    position: fixed;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 8px;
+    background: rgba(255,255,255,0.9);
+    border-radius: 20px;
+    padding: 8px 16px;
+    z-index: 10;
+  }
+  .tool-btn {
+    width: 52px; height: 52px;
+    border-radius: 12px;
+    border: 2px solid #c9b8e8;
+    background: #f3eeff;
+    cursor: pointer;
+    font-size: 22px;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s;
+    user-select: none;
+  }
+  .tool-btn.active {
+    background: #c9b8e8;
+    border-color: #9b7ed4;
+    transform: scale(1.1);
+  }
+  .tool-btn:hover { background: #ddd5f5; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="ui">
+  <span id="levelLabel">Level 1</span>
+  <span>|</span>
+  <span id="movesLabel">Pieces: 0</span>
+  <span>|</span>
+  <span id="hintLabel">클릭: 배치 / 우클릭: 제거</span>
+</div>
+<div id="toolbar">
+  <div class="tool-btn active" id="btn-mirror-a" title="거울 /" onclick="selectTool('mirror-a')">╱</div>
+  <div class="tool-btn" id="btn-mirror-b" title="거울 \\" onclick="selectTool('mirror-b')">╲</div>
+  <div class="tool-btn" id="btn-prism" title="프리즘 (빛 분리)" onclick="selectTool('prism')">🔺</div>
+  <div class="tool-btn" id="btn-blocker" title="차단벽" onclick="selectTool('blocker')">⬛</div>
+</div>
+
+<script>
+'use strict';
+
+const GAME_W = 900, GAME_H = 640;
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+// Pastel palette
+const P = {
+  bg:       '#f0edf8',
+  grid:     '#dcd6f0',
+  cell:     '#f8f6ff',
+  cellHov:  '#ede8fa',
+  wall:     '#8b7ab5',
+  source:   '#a8d8b9',   // mint green
+  target:   '#f7c5d2',   // rose
+  mirror:   '#c4b3e8',
+  prism:    '#b8d8f0',
+  blocker:  '#b0a8c8',
+  ray_red:  '#f2a0b0',
+  ray_grn:  '#a0e0b0',
+  ray_blu:  '#a0c0f5',
+  ray_yel:  '#f5e0a0',
+  ray_cya:  '#a0e8e8',
+  ray_mag:  '#e8a0e8',
+  ray_wht:  '#ffffff',
+  solved:   '#c8efd4',
+  panel:    'rgba(255,255,255,0.92)',
+  text:     '#5a4e7a',
+  shadow:   'rgba(160,140,200,0.18)',
+};
+
+// Colors: bitmask R=1, G=2, B=4
+const COL_R = 1, COL_G = 2, COL_B = 4;
+const COL_Y = COL_R | COL_G;
+const COL_C = COL_G | COL_B;
+const COL_M = COL_R | COL_B;
+const COL_W = COL_R | COL_G | COL_B;
+
+const COLOR_NAMES = {
+  [COL_R]: 'RED',    [COL_G]: 'GREEN', [COL_B]: 'BLUE',
+  [COL_Y]: 'YELLOW', [COL_C]: 'CYAN',  [COL_M]: 'MAGENTA',
+  [COL_W]: 'WHITE',
+};
+const COLOR_CSS = {
+  [COL_R]: '#f2a0b0', [COL_G]: '#a0e0b0', [COL_B]: '#a0c0f5',
+  [COL_Y]: '#f5e0a0', [COL_C]: '#a0e8e8', [COL_M]: '#e8a0e8',
+  [COL_W]: '#ffffff',
+};
+const COLOR_GLOW = {
+  [COL_R]: '#ff6080', [COL_G]: '#40e080', [COL_B]: '#4090ff',
+  [COL_Y]: '#f8d040', [COL_C]: '#40e8e8', [COL_M]: '#e840e8',
+  [COL_W]: '#e8e0ff',
+};
+
+// Directions: 0=right, 1=down, 2=left, 3=up
+const DIR_VEC = [[1,0],[0,1],[-1,0],[0,-1]];
+const DIR_OPP = [2,3,0,1];
+
+// Levels
+const LEVELS = [
+  // Level 1: simple red beam to red target
+  {
+    cols: 7, rows: 6,
+    sources: [{x:0,y:2,dir:0,color:COL_R}],
+    targets: [{x:6,y:2,color:COL_R}],
+    walls: [],
+    fixed: [],
+    hint: '거울을 배치해 빨간 빛을 목표에 연결하세요'
+  },
+  // Level 2: bend red beam down
+  {
+    cols: 7, rows: 7,
+    sources: [{x:0,y:1,dir:0,color:COL_R}],
+    targets: [{x:3,y:6,color:COL_R}],
+    walls: [{x:5,y:1},{x:5,y:2},{x:5,y:3}],
+    fixed: [],
+    hint: '거울로 빛을 아래로 꺾어보세요'
+  },
+  // Level 3: two beams, prism splits
+  {
+    cols: 8, rows: 7,
+    sources: [{x:0,y:3,dir:0,color:COL_W}],
+    targets: [{x:7,y:1,color:COL_R},{x:7,y:3,color:COL_G},{x:7,y:5,color:COL_B}],
+    walls: [],
+    fixed: [{x:4,y:3,type:'prism'}],
+    hint: '프리즘이 흰 빛을 세 색으로 나눕니다'
+  },
+  // Level 4: RGB mixing
+  {
+    cols: 9, rows: 8,
+    sources: [
+      {x:0,y:1,dir:0,color:COL_R},
+      {x:0,y:4,dir:0,color:COL_G},
+      {x:0,y:7,dir:0,color:COL_B},
+    ],
+    targets: [
+      {x:8,y:1,color:COL_Y},
+      {x:8,y:4,color:COL_C},
+      {x:8,y:7,color:COL_M},
+    ],
+    walls: [],
+    fixed: [],
+    hint: '빛을 합쳐 새 색을 만드세요: R+G=Y, G+B=C, R+B=M'
+  },
+  // Level 5: complex routing
+  {
+    cols: 10, rows: 9,
+    sources: [
+      {x:0,y:2,dir:0,color:COL_R},
+      {x:0,y:6,dir:0,color:COL_B},
+    ],
+    targets: [
+      {x:9,y:2,color:COL_M},
+      {x:9,y:6,color:COL_R},
+      {x:5,y:8,color:COL_B},
+    ],
+    walls: [{x:3,y:2},{x:3,y:3},{x:3,y:4},{x:7,y:6},{x:7,y:5}],
+    fixed: [],
+    hint: '두 빛을 같은 목표에 합쳐보세요'
+  },
+];
+
+// State
+let level = 0;
+let board = [];          // [{type: null|'mirror-a'|'mirror-b'|'prism'|'blocker', fixed:bool}]
+let rays = [];           // computed ray segments
+let solved = false;
+let selectedTool = 'mirror-a';
+let hoverCell = null;
+let scale = 1;
+let offsetX = 0, offsetY = 0;
+let celebTimer = 0;
+let particles = [];
+
+// Overlay state
+let showOverlay = false;
+let overlayMsg = '';
+let overlayBtn = '';
+let overlayAction = null;
+
+function selectTool(t) {
+  selectedTool = t;
+  ['mirror-a','mirror-b','prism','blocker'].forEach(id => {
+    const el = document.getElementById('btn-'+id);
+    if (el) el.classList.toggle('active', id === t);
+  });
+}
+
+function initLevel(idx) {
+  level = idx;
+  const lv = LEVELS[idx];
+  board = [];
+  for (let y = 0; y < lv.rows; y++) {
+    board.push([]);
+    for (let x = 0; x < lv.cols; x++) {
+      board[y].push({type: null, fixed: false});
+    }
+  }
+  // place walls
+  (lv.walls||[]).forEach(w => { board[w.y][w.x].type = 'blocker'; board[w.y][w.x].fixed = true; });
+  // place fixed pieces
+  (lv.fixed||[]).forEach(f => { board[f.y][f.x].type = f.type; board[f.y][f.x].fixed = true; });
+  solved = false;
+  particles = [];
+  celebTimer = 0;
+  showOverlay = false;
+  computeRays();
+  updateUI();
+}
+
+function updateUI() {
+  const lv = LEVELS[level];
+  document.getElementById('levelLabel').textContent = `Level ${level+1} / ${LEVELS.length}`;
+  let placed = 0;
+  board.forEach(row => row.forEach(cell => { if (cell.type && !cell.fixed) placed++; }));
+  document.getElementById('movesLabel').textContent = `배치: ${placed}`;
+  document.getElementById('hintLabel').textContent = lv.hint;
+}
+
+// Ray tracing
+function computeRays() {
+  const lv = LEVELS[level];
+  rays = [];
+  // BFS/trace from each source
+  lv.sources.forEach(src => {
+    traceRay(src.x, src.y, src.dir, src.color, new Set());
+  });
+  // Check solve condition
+  checkSolved();
+}
+
+function traceRay(startX, startY, startDir, color, visited) {
+  let x = startX, y = startY, dir = startDir;
+  // move one step into the grid from source
+  let [dx, dy] = DIR_VEC[dir];
+  x += dx; y += dy;
+
+  for (let steps = 0; steps < 200; steps++) {
+    const lv = LEVELS[level];
+    if (x < 0 || y < 0 || x >= lv.cols || y >= lv.rows) {
+      // ray exits
+      const fromX = x - DIR_VEC[dir][0];
+      const fromY = y - DIR_VEC[dir][1];
+      rays.push({x1:fromX, y1:fromY, x2:x, y2:y, color, dir});
+      break;
+    }
+    const cell = board[y][x];
+    const key = `${x},${y},${dir},${color}`;
+    if (visited.has(key)) break;
+    visited.add(key);
+
+    if (cell.type === 'blocker') {
+      // stops here
+      const fromX = x - DIR_VEC[dir][0];
+      const fromY = y - DIR_VEC[dir][1];
+      rays.push({x1:fromX, y1:fromY, x2:x, y2:y, color, dir});
+      break;
+    }
+
+    const prevX = x - DIR_VEC[dir][0];
+    const prevY = y - DIR_VEC[dir][1];
+
+    if (cell.type === 'mirror-a') {
+      // / mirror: 0->3, 1->2, 2->1, 3->0
+      rays.push({x1:prevX, y1:prevY, x2:x, y2:y, color, dir});
+      const newDir = [3,2,1,0][dir];
+      dir = newDir;
+      [dx, dy] = DIR_VEC[dir];
+    } else if (cell.type === 'mirror-b') {
+      // \ mirror: 0->1, 1->0, 2->3, 3->2
+      rays.push({x1:prevX, y1:prevY, x2:x, y2:y, color, dir});
+      const newDir = [1,0,3,2][dir];
+      dir = newDir;
+      [dx, dy] = DIR_VEC[dir];
+    } else if (cell.type === 'prism') {
+      // Prism: splits white into R/G/B, colored into components
+      rays.push({x1:prevX, y1:prevY, x2:x, y2:y, color, dir});
+      // R component continues straight, G turns, B turns other way
+      const straightDir = dir;
+      const leftDir = (dir + 3) % 4;
+      const rightDir = (dir + 1) % 4;
+      if (color & COL_R) {
+        const v2 = visited;
+        const [rdx, rdy] = DIR_VEC[straightDir];
+        traceRay(x, y, straightDir, COL_R, new Set(v2));
+      }
+      if (color & COL_G) {
+        traceRay(x, y, rightDir, COL_G, new Set(visited));
+      }
+      if (color & COL_B) {
+        traceRay(x, y, leftDir, COL_B, new Set(visited));
+      }
+      return; // this branch ends
+    } else {
+      // empty cell, just pass through
+    }
+
+    x += DIR_VEC[dir][0];
+    y += DIR_VEC[dir][1];
+  }
+}
+
+// Map: target cell -> accumulated color from rays
+function getTargetColors() {
+  const lv = LEVELS[level];
+  const result = {};
+  lv.targets.forEach(t => { result[`${t.x},${t.y}`] = 0; });
+
+  rays.forEach(ray => {
+    const lv2 = LEVELS[level];
+    // check if ray endpoint is a target
+    lv2.targets.forEach(t => {
+      if (ray.x2 === t.x && ray.y2 === t.y) {
+        const k = `${t.x},${t.y}`;
+        result[k] = (result[k] || 0) | ray.color;
+      }
+    });
+  });
+  return result;
+}
+
+function checkSolved() {
+  const lv = LEVELS[level];
+  const tc = getTargetColors();
+  const allMet = lv.targets.every(t => {
+    const got = tc[`${t.x},${t.y}`] || 0;
+    return (got & t.color) === t.color && got === t.color;
+  });
+  if (allMet && !solved) {
+    solved = true;
+    celebTimer = 180;
+    spawnCelebParticles();
+    setTimeout(() => {
+      if (level < LEVELS.length - 1) {
+        showLevelComplete();
+      } else {
+        showGameComplete();
+      }
+    }, 1500);
+  }
+}
+
+function showLevelComplete() {
+  showOverlay = true;
+  overlayMsg = `✨ Level ${level+1} 완료!`;
+  overlayBtn = '다음 레벨 →';
+  overlayAction = () => initLevel(level + 1);
+}
+function showGameComplete() {
+  showOverlay = true;
+  overlayMsg = '🌈 모든 레벨 클리어!';
+  overlayBtn = '처음부터 다시';
+  overlayAction = () => initLevel(0);
+}
+
+function spawnCelebParticles() {
+  for (let i = 0; i < 60; i++) {
+    particles.push({
+      x: GAME_W/2 + (Math.random()-0.5)*400,
+      y: GAME_H/2 + (Math.random()-0.5)*200,
+      vx: (Math.random()-0.5)*4,
+      vy: (Math.random()-0.5)*4 - 2,
+      life: 80 + Math.random()*60,
+      maxLife: 140,
+      color: Object.values(COLOR_GLOW)[Math.floor(Math.random()*7)],
+      size: 4 + Math.random()*8,
+    });
+  }
+}
+
+// Resize
+function resize() {
+  const ww = window.innerWidth, wh = window.innerHeight;
+  const lv = LEVELS[level];
+  const cellSize = Math.min(
+    (ww - 60) / (lv.cols + 2),
+    (wh - 150) / (lv.rows + 2)
+  );
+  scale = cellSize / 60;
+  canvas.width = ww;
+  canvas.height = wh;
+}
+
+function cellSize() {
+  const lv = LEVELS[level];
+  return Math.min(
+    (canvas.width - 60) / (lv.cols + 2),
+    (canvas.height - 150) / (lv.rows + 2),
+    80
+  );
+}
+
+function gridOrigin() {
+  const lv = LEVELS[level];
+  const cs = cellSize();
+  const gridW = lv.cols * cs;
+  const gridH = lv.rows * cs;
+  return {
+    x: (canvas.width - gridW) / 2,
+    y: (canvas.height - 140 - gridH) / 2 + 40,
+  };
+}
+
+function canvasToGrid(cx, cy) {
+  const lv = LEVELS[level];
+  const cs = cellSize();
+  const {x:ox, y:oy} = gridOrigin();
+  const gx = Math.floor((cx - ox) / cs);
+  const gy = Math.floor((cy - oy) / cs);
+  if (gx < 0 || gy < 0 || gx >= lv.cols || gy >= lv.rows) return null;
+  return {x: gx, y: gy};
+}
+
+// Drawing
+function drawGrid() {
+  const lv = LEVELS[level];
+  const cs = cellSize();
+  const {x:ox, y:oy} = gridOrigin();
+
+  // Shadow
+  ctx.shadowColor = P.shadow;
+  ctx.shadowBlur = 18;
+  ctx.fillStyle = P.cell;
+  ctx.beginPath();
+  ctx.roundRect(ox - 4, oy - 4, lv.cols*cs + 8, lv.rows*cs + 8, 12);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // Cells
+  for (let y = 0; y < lv.rows; y++) {
+    for (let x = 0; x < lv.cols; x++) {
+      const px = ox + x * cs;
+      const py = oy + y * cs;
+      const hover = hoverCell && hoverCell.x === x && hoverCell.y === y;
+      ctx.fillStyle = hover ? P.cellHov : P.cell;
+      ctx.strokeStyle = P.grid;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(px+1, py+1, cs-2, cs-2, 4);
+      ctx.fill();
+      ctx.stroke();
+    }
+  }
+}
+
+function drawTargets() {
+  const lv = LEVELS[level];
+  const cs = cellSize();
+  const {x:ox, y:oy} = gridOrigin();
+  const tc = getTargetColors();
+
+  lv.targets.forEach(t => {
+    const px = ox + t.x * cs;
+    const py = oy + t.y * cs;
+    const got = tc[`${t.x},${t.y}`] || 0;
+    const met = (got & t.color) === t.color && got === t.color;
+    const col = COLOR_CSS[t.color] || '#fff';
+    const glow = COLOR_GLOW[t.color] || '#fff';
+
+    ctx.save();
+    if (met) {
+      ctx.shadowColor = glow;
+      ctx.shadowBlur = 20;
+    }
+    // Draw crystal/gem shape
+    const cx2 = px + cs/2, cy2 = py + cs/2;
+    const r = cs * 0.32;
+    ctx.beginPath();
+    ctx.moveTo(cx2, cy2 - r);
+    ctx.lineTo(cx2 + r, cy2 - r*0.3);
+    ctx.lineTo(cx2 + r*0.6, cy2 + r);
+    ctx.lineTo(cx2 - r*0.6, cy2 + r);
+    ctx.lineTo(cx2 - r, cy2 - r*0.3);
+    ctx.closePath();
+    ctx.fillStyle = met ? glow : col;
+    ctx.fill();
+    ctx.strokeStyle = met ? glow : '#c9b8e8';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.restore();
+
+    // Label
+    ctx.fillStyle = P.text;
+    ctx.font = `bold ${cs*0.18}px Arial`;
+    ctx.textAlign = 'center';
+    ctx.fillText(COLOR_NAMES[t.color]?.[0] || '?', cx2, py + cs*0.88);
+  });
+}
+
+function drawSources() {
+  const lv = LEVELS[level];
+  const cs = cellSize();
+  const {x:ox, y:oy} = gridOrigin();
+  const arrows = ['→','↓','←','↑'];
+
+  lv.sources.forEach(src => {
+    // Draw source outside grid or at edge
+    const px = ox + src.x * cs;
+    const py = oy + src.y * cs;
+    const col = COLOR_CSS[src.color];
+    const glow = COLOR_GLOW[src.color];
+
+    ctx.save();
+    ctx.shadowColor = glow;
+    ctx.shadowBlur = 12;
+    ctx.fillStyle = col;
+    ctx.strokeStyle = glow;
+    ctx.lineWidth = 2;
+    // Circle
+    ctx.beginPath();
+    ctx.arc(px + cs/2, py + cs/2, cs*0.32, 0, Math.PI*2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.fillStyle = P.text;
+    ctx.font = `${cs*0.3}px Arial`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(arrows[src.dir], px+cs/2, py+cs/2);
+  });
+}
+
+function drawPieces() {
+  const lv = LEVELS[level];
+  const cs = cellSize();
+  const {x:ox, y:oy} = gridOrigin();
+
+  for (let y = 0; y < lv.rows; y++) {
+    for (let x = 0; x < lv.cols; x++) {
+      const cell = board[y][x];
+      if (!cell.type) continue;
+      const px = ox + x * cs;
+      const py = oy + y * cs;
+      drawPiece(px, py, cs, cell.type, cell.fixed);
+    }
+  }
+}
+
+function drawPiece(px, py, cs, type, fixed) {
+  ctx.save();
+  const cx2 = px + cs/2, cy2 = py + cs/2;
+  const r = cs * 0.38;
+  ctx.shadowColor = 'rgba(160,140,200,0.3)';
+  ctx.shadowBlur = 8;
+
+  if (type === 'mirror-a') {
+    // / mirror
+    ctx.fillStyle = fixed ? '#d4c8f0' : P.mirror;
+    ctx.beginPath();
+    ctx.roundRect(px+4, py+4, cs-8, cs-8, 6);
+    ctx.fill();
+    ctx.strokeStyle = fixed ? '#9b7ed4' : '#a08cd0';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(px + cs*0.75, py + cs*0.2);
+    ctx.lineTo(px + cs*0.2, py + cs*0.8);
+    ctx.stroke();
+    ctx.fillStyle = P.text;
+    ctx.font = `bold ${cs*0.35}px Arial`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('╱', cx2, cy2);
+  } else if (type === 'mirror-b') {
+    // \ mirror
+    ctx.fillStyle = fixed ? '#d4c8f0' : P.mirror;
+    ctx.beginPath();
+    ctx.roundRect(px+4, py+4, cs-8, cs-8, 6);
+    ctx.fill();
+    ctx.strokeStyle = fixed ? '#9b7ed4' : '#a08cd0';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(px + cs*0.25, py + cs*0.2);
+    ctx.lineTo(px + cs*0.8, py + cs*0.8);
+    ctx.stroke();
+    ctx.fillStyle = P.text;
+    ctx.font = `bold ${cs*0.35}px Arial`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('╲', cx2, cy2);
+  } else if (type === 'prism') {
+    ctx.fillStyle = fixed ? '#c8e8f8' : P.prism;
+    ctx.beginPath();
+    ctx.moveTo(cx2, py + cs*0.12);
+    ctx.lineTo(px + cs*0.85, py + cs*0.85);
+    ctx.lineTo(px + cs*0.15, py + cs*0.85);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = fixed ? '#4090c0' : '#70b0d8';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = P.text;
+    ctx.font = `${cs*0.22}px Arial`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🔺', cx2, cy2 + cs*0.05);
+  } else if (type === 'blocker') {
+    ctx.fillStyle = fixed ? '#b0a8c8' : '#c8c0e0';
+    ctx.beginPath();
+    ctx.roundRect(px+3, py+3, cs-6, cs-6, 4);
+    ctx.fill();
+    ctx.strokeStyle = '#8878a8';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawRays() {
+  const lv = LEVELS[level];
+  const cs = cellSize();
+  const {x:ox, y:oy} = gridOrigin();
+
+  // Clip to grid
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(ox, oy, lv.cols*cs, lv.rows*cs);
+  ctx.clip();
+
+  rays.forEach(ray => {
+    const x1 = ox + ray.x1 * cs + cs/2;
+    const y1 = oy + ray.y1 * cs + cs/2;
+    const x2 = ox + ray.x2 * cs + cs/2;
+    const y2 = oy + ray.y2 * cs + cs/2;
+    const col = COLOR_GLOW[ray.color] || '#fff';
+
+    ctx.save();
+    ctx.globalAlpha = 0.85;
+    ctx.shadowColor = col;
+    ctx.shadowBlur = 14;
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+    // inner bright line
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 0.6;
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+    ctx.restore();
+  });
+
+  ctx.restore();
+}
+
+function drawParticles() {
+  particles.forEach(p => {
+    const alpha = p.life / p.maxLife;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = p.color;
+    ctx.shadowColor = p.color;
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size * alpha, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  });
+}
+
+function drawOverlay() {
+  if (!showOverlay) return;
+  ctx.save();
+  ctx.fillStyle = 'rgba(240,235,255,0.88)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const cx = canvas.width/2, cy = canvas.height/2;
+  ctx.fillStyle = '#fff';
+  ctx.shadowColor = 'rgba(160,140,220,0.4)';
+  ctx.shadowBlur = 30;
+  ctx.beginPath();
+  ctx.roundRect(cx-200, cy-100, 400, 200, 20);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  ctx.fillStyle = P.text;
+  ctx.font = 'bold 28px Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(overlayMsg, cx, cy - 30);
+
+  // Button
+  const btnX = cx - 100, btnY = cy + 10, btnW = 200, btnH = 50;
+  ctx.fillStyle = '#c9b8e8';
+  ctx.beginPath();
+  ctx.roundRect(btnX, btnY, btnW, btnH, 12);
+  ctx.fill();
+  ctx.fillStyle = '#5a4e7a';
+  ctx.font = 'bold 18px Arial';
+  ctx.fillText(overlayBtn, cx, btnY + btnH/2);
+  ctx.restore();
+}
+
+let lastTime = 0;
+function loop(ts) {
+  const dt = Math.min((ts - lastTime) / 1000, 0.05);
+  lastTime = ts;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Background gradient
+  const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+  grad.addColorStop(0, '#f0edf8');
+  grad.addColorStop(1, '#e8f0f8');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  drawGrid();
+  drawRays();
+  drawTargets();
+  drawSources();
+  drawPieces();
+
+  // Hover ghost
+  if (hoverCell && !showOverlay) {
+    const cs = cellSize();
+    const {x:ox, y:oy} = gridOrigin();
+    const lv = LEVELS[level];
+    const cell = board[hoverCell.y][hoverCell.x];
+    if (!cell.type || !cell.fixed) {
+      ctx.save();
+      ctx.globalAlpha = 0.4;
+      drawPiece(ox + hoverCell.x*cs, oy + hoverCell.y*cs, cs, selectedTool, false);
+      ctx.restore();
+    }
+  }
+
+  // Particles
+  particles = particles.filter(p => p.life > 0);
+  particles.forEach(p => {
+    p.x += p.vx; p.y += p.vy;
+    p.vy += 0.05;
+    p.life--;
+  });
+  drawParticles();
+
+  drawOverlay();
+
+  requestAnimationFrame(loop);
+}
+
+// Input
+function getEventPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  if (e.touches) {
+    return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
+  }
+  return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+}
+
+canvas.addEventListener('mousemove', e => {
+  const {x, y} = getEventPos(e);
+  hoverCell = canvasToGrid(x, y);
+});
+canvas.addEventListener('mouseleave', () => { hoverCell = null; });
+
+canvas.addEventListener('click', e => {
+  const {x, y} = getEventPos(e);
+  // Overlay button
+  if (showOverlay) {
+    const cx = canvas.width/2, cy = canvas.height/2;
+    const btnX = cx-100, btnY = cy+10, btnW=200, btnH=50;
+    if (x >= btnX && x <= btnX+btnW && y >= btnY && y <= btnY+btnH) {
+      showOverlay = false;
+      if (overlayAction) overlayAction();
+    }
+    return;
+  }
+  const gc = canvasToGrid(x, y);
+  if (!gc) return;
+  const cell = board[gc.y][gc.x];
+  if (cell.fixed) return;
+  const lv = LEVELS[level];
+  // Don't place on sources/targets
+  const onSrc = lv.sources.some(s => s.x === gc.x && s.y === gc.y);
+  const onTgt = lv.targets.some(t => t.x === gc.x && t.y === gc.y);
+  if (onSrc || onTgt) return;
+
+  if (cell.type === selectedTool) {
+    cell.type = null;
+  } else {
+    cell.type = selectedTool;
+  }
+  computeRays();
+  updateUI();
+});
+
+canvas.addEventListener('contextmenu', e => {
+  e.preventDefault();
+  const {x, y} = getEventPos(e);
+  const gc = canvasToGrid(x, y);
+  if (!gc) return;
+  const cell = board[gc.y][gc.x];
+  if (cell.fixed) return;
+  cell.type = null;
+  computeRays();
+  updateUI();
+});
+
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  const {x, y} = getEventPos(e);
+  if (showOverlay) {
+    const cx = canvas.width/2, cy = canvas.height/2;
+    const btnX = cx-100, btnY = cy+10, btnW=200, btnH=50;
+    if (x >= btnX && x <= btnX+btnW && y >= btnY && y <= btnY+btnH) {
+      showOverlay = false;
+      if (overlayAction) overlayAction();
+    }
+    return;
+  }
+  const gc = canvasToGrid(x, y);
+  if (!gc) return;
+  const cell = board[gc.y][gc.x];
+  if (cell.fixed) return;
+  const lv = LEVELS[level];
+  const onSrc = lv.sources.some(s => s.x === gc.x && s.y === gc.y);
+  const onTgt = lv.targets.some(t => t.x === gc.x && t.y === gc.y);
+  if (onSrc || onTgt) return;
+
+  if (cell.type === selectedTool) {
+    cell.type = null;
+  } else {
+    cell.type = selectedTool;
+  }
+  computeRays();
+  updateUI();
+}, {passive: false});
+
+window.addEventListener('resize', () => {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+});
+
+// Init
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+initLevel(0);
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

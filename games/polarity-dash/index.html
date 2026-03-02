@@ -2,1082 +2,825 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-<title>Polarity Dash — 자석 극성 플랫포머</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+<title>Polarity Dash — 자기장 아케이드</title>
+<script src="https://killedbyapixel.github.io/LittleJS/dist/littlejs.min.js"></script>
 <style>
-:root {
-  --bg: #0a0a1a;
-  --panel: #11142a;
-  --line: #2a2f55;
-  --txt: #e8ecff;
-  --muted: #9aa6d1;
-  --plusA: #ff5a5f;
-  --plusB: #ff9b3d;
-  --minusA: #44a4ff;
-  --minusB: #3df0ff;
-}
-* { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { width: 100%; height: 100%; background: var(--bg); color: var(--txt); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", sans-serif; }
-body { overflow: hidden; }
-#app {
-  width: min(100vw, 980px);
-  height: 100vh;
-  margin: 0 auto;
-  position: relative;
-  display: flex;
-  flex-direction: column;
-}
-.topbar {
-  height: 62px;
-  padding: 8px 12px;
-  display: grid;
-  grid-template-columns: 1fr auto auto;
-  gap: 8px;
-  align-items: center;
-  background: linear-gradient(180deg, rgba(10,10,30,0.95), rgba(10,10,30,0.55));
-  border-bottom: 1px solid var(--line);
-  z-index: 4;
-}
-.title-wrap { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-#levelLabel { font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-#hint { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.polarity-pill {
-  min-width: 78px;
-  text-align: center;
-  border: 1px solid #3f4472;
-  border-radius: 999px;
-  padding: 8px 12px;
-  font-weight: 800;
-  letter-spacing: 0.3px;
-  font-size: 13px;
-}
-#timeLabel { font-variant-numeric: tabular-nums; font-size: 13px; color: #cfd8ff; }
-#gameWrap { position: relative; flex: 1; min-height: 0; }
-canvas { width: 100%; height: 100%; display: block; background: #0a0a1a; touch-action: none; }
-#touchLayer {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 3;
-}
-.zone {
-  position: absolute;
-  bottom: 0;
-  height: 37%;
-  pointer-events: auto;
-  touch-action: none;
-  border-top: 1px solid rgba(140,160,255,0.15);
-  background: linear-gradient(180deg, rgba(15,18,42,0.02), rgba(15,18,42,0.16));
-}
-.zone.left { left: 0; width: 34%; border-right: 1px solid rgba(140,160,255,0.12); }
-.zone.flip { left: 34%; width: 32%; border-right: 1px solid rgba(140,160,255,0.12); }
-.zone.right { right: 0; width: 34%; }
-.zone::after {
-  content: attr(data-label);
-  position: absolute;
-  bottom: 8px;
-  left: 50%;
-  transform: translateX(-50%);
-  color: rgba(215,225,255,0.65);
-  font-size: 12px;
-  font-weight: 700;
-}
-.zone.active { background: linear-gradient(180deg, rgba(60,84,190,0.12), rgba(60,84,190,0.30)); }
-.zone.flip.active { background: linear-gradient(180deg, rgba(255,140,64,0.15), rgba(255,140,64,0.30)); }
-
-.btn-row {
-  position: absolute;
-  right: 10px;
-  top: 10px;
-  z-index: 5;
-  display: flex;
-  gap: 6px;
-}
-.ui-btn {
-  border: 1px solid #444b7a;
-  background: rgba(17, 21, 46, 0.8);
-  color: #dbe4ff;
-  border-radius: 10px;
-  padding: 7px 10px;
-  font-size: 12px;
-  font-weight: 700;
-}
-#overlay {
-  position: absolute;
-  inset: 0;
-  background: rgba(7, 9, 24, 0.82);
-  backdrop-filter: blur(5px);
-  display: none;
-  align-items: center;
-  justify-content: center;
-  z-index: 10;
-  padding: 14px;
-}
-#overlay.show { display: flex; }
-.panel {
-  width: min(720px, 96vw);
-  max-height: 92vh;
-  overflow: auto;
-  border: 1px solid #39406d;
-  border-radius: 16px;
-  background: radial-gradient(circle at top, #171d3e, #0f1430 60%, #0b0f26);
-  padding: 16px;
-  box-shadow: 0 24px 50px rgba(0,0,0,0.45), 0 0 24px rgba(82,140,255,0.18);
-}
-.panel h1 { font-size: clamp(20px, 4.8vw, 30px); line-height: 1.25; margin-bottom: 8px; }
-.panel p { color: #bcc8f4; line-height: 1.55; font-size: 14px; }
-.pitch { color: #f3f7ff; font-weight: 700; margin-bottom: 8px; }
-.level-grid {
-  margin-top: 12px;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-}
-.lvl {
-  border: 1px solid #46508d;
-  background: rgba(20, 26, 59, 0.9);
-  color: #dfe7ff;
-  border-radius: 10px;
-  padding: 9px 8px;
-  min-height: 66px;
-  text-align: left;
-}
-.lvl .n { font-size: 12px; color: #a8b6ea; }
-.lvl .t { font-size: 13px; font-weight: 700; margin-top: 2px; }
-.lvl .best { font-size: 11px; color: #89ffc8; margin-top: 6px; }
-.lvl.lock { opacity: 0.4; filter: grayscale(0.75); }
-.lvl.active { border-color: #8fd0ff; box-shadow: 0 0 0 2px rgba(109,186,255,0.25) inset; }
-.main-actions { margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap; }
-.main-actions button {
-  border: 0;
-  border-radius: 10px;
-  padding: 10px 13px;
-  font-size: 14px;
-  font-weight: 800;
-  color: #0a1029;
-  background: linear-gradient(135deg, #8fe2ff, #4f80ff);
-}
-.main-actions button.alt {
-  background: rgba(38,46,88,0.9);
-  color: #dfe7ff;
-  border: 1px solid #4c5797;
-}
-.note { margin-top: 10px; color: #9fb0e5; font-size: 12px; }
-
-@media (max-width: 720px) {
-  .topbar { grid-template-columns: 1fr auto; height: 70px; }
-  #timeLabel { grid-column: 1 / -1; }
-  .level-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .panel { padding: 14px; }
-}
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+  #game { display: block; touch-action: none; }
+  #hud {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 16px;
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    color: #0ff;
+    background: rgba(0,0,0,0.7);
+    pointer-events: none;
+    z-index: 10;
+    text-shadow: 0 0 6px #0ff;
+  }
+  #mobileControls {
+    position: fixed;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 12px;
+    z-index: 10;
+  }
+  .m-btn {
+    width: 60px; height: 60px;
+    border-radius: 50%;
+    border: 2px solid;
+    font-size: 22px;
+    display: flex; align-items: center; justify-content: center;
+    user-select: none;
+    cursor: pointer;
+    background: rgba(0,0,0,0.6);
+  }
+  #btn-north { border-color: #f00; color: #f00; text-shadow: 0 0 6px #f00; }
+  #btn-south { border-color: #00f; color: #00f; text-shadow: 0 0 6px #00f; }
 </style>
 </head>
 <body>
-<div id="app">
-  <div class="topbar">
-    <div class="title-wrap">
-      <div id="levelLabel">Polarity Dash</div>
-      <div id="hint">극성을 바꿔 벽을 튕기며 탈출하세요</div>
-    </div>
-    <div id="polarityBadge" class="polarity-pill">+ 극</div>
-    <div id="timeLabel">시간 0.00s</div>
-  </div>
-
-  <div id="gameWrap">
-    <canvas id="game"></canvas>
-
-    <div class="btn-row">
-      <button class="ui-btn" id="retryBtn">재시작</button>
-      <button class="ui-btn" id="menuBtn">메뉴</button>
-    </div>
-
-    <div id="touchLayer">
-      <div class="zone left" id="zoneLeft" data-label="좌 이동"></div>
-      <div class="zone flip" id="zoneFlip" data-label="탭: 극성 전환"></div>
-      <div class="zone right" id="zoneRight" data-label="우 이동"></div>
-    </div>
-
-    <div id="overlay" class="show">
-      <div class="panel" id="panel"></div>
-    </div>
-  </div>
+<canvas id="game"></canvas>
+<div id="hud">
+  <span id="scoreLabel">SCORE: 0</span>
+  <span id="polLabel">⚡ NORTH</span>
+  <span id="livesLabel">❤️❤️❤️</span>
+</div>
+<div id="mobileControls" id="mobileControls">
+  <div class="m-btn" id="btn-north" ontouchstart="setPolarityTouch('N')" onmousedown="setPolarityTouch('N')">N</div>
+  <div class="m-btn" id="btn-south" ontouchstart="setPolarityTouch('S')" onmousedown="setPolarityTouch('S')">S</div>
 </div>
 
 <script>
-(() => {
-  'use strict';
+'use strict';
 
-  const canvas = document.getElementById('game');
-  const ctx = canvas.getContext('2d');
-  const levelLabel = document.getElementById('levelLabel');
-  const hintEl = document.getElementById('hint');
-  const polarityBadge = document.getElementById('polarityBadge');
-  const timeLabel = document.getElementById('timeLabel');
-  const overlay = document.getElementById('overlay');
-  const panel = document.getElementById('panel');
+const GAME_W = 480, GAME_H = 640;
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
 
-  const STORAGE_KEY = 'polarity_dash_progress_v1';
-  const GRAVITY = 980;
-  const MAGNET_RANGE = 250;
-  const MAGNET_POWER = 9800;
-  const REPEL_IMPULSE = 620;
-  const MAX_VEL = 880;
+// Retro 8-bit palette
+const C = {
+  bg:    '#000011',
+  grid:  '#001122',
+  north: '#ff2020',   // North polarity = red
+  south: '#2020ff',   // South polarity = blue
+  neutral:'#888888',
+  yellow: '#ffff00',
+  cyan:   '#00ffff',
+  green:  '#00ff44',
+  white:  '#ffffff',
+  magenta:'#ff00ff',
+  dark_r: '#880000',
+  dark_b: '#000088',
+};
 
-  let progress = loadProgress();
-  let selectedLevel = 1;
-  let mode = 'menu';
-  let currentLevel = null;
-  let levelIndex = 0;
-  let player = null;
-  let camera = { x: 0, y: 0 };
-  let particles = [];
-  let raf = 0;
-  let dpr = 1;
-  let viewW = 0;
-  let viewH = 0;
-  let elapsed = 0;
-  let lastTs = 0;
-  let audioCtx = null;
-  let lastRepelSound = 0;
-  let lastStickSound = 0;
+// Scale/letterbox
+let scale = 1, offX = 0, offY = 0;
+function resize() {
+  const ww = window.innerWidth, wh = window.innerHeight;
+  scale = Math.min(ww / GAME_W, wh / GAME_H);
+  canvas.width = GAME_W * scale;
+  canvas.height = GAME_H * scale;
+  offX = 0; offY = 0;
+}
 
-  const input = { left: false, right: false, flipPressed: false };
+// Game state
+let state = 'menu';  // menu | play | gameover
+let score = 0;
+let hi = 0;
+let lives = 3;
+let polarity = 'N';  // N or S
+let frame = 0;
+let wave = 0;
+let waveTimer = 0;
+let spawnTimer = 0;
+let combo = 0;
+let comboTimer = 0;
 
-  const LEVELS = buildLevels();
+// Player
+const player = {
+  x: GAME_W/2, y: GAME_H * 0.75,
+  w: 24, h: 28,
+  vx: 0, vy: 0,
+  invincible: 0,
+  shootTimer: 0,
+};
 
-  function loadProgress() {
-    try {
-      const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-      const unlocked = Math.max(1, Math.min(8, Number(raw.unlocked || 1)));
-      const best = raw.best && typeof raw.best === 'object' ? raw.best : {};
-      return { unlocked, best };
-    } catch {
-      return { unlocked: 1, best: {} };
+// Bullets, enemies, particles
+let bullets = [];
+let enemies = [];
+let particles = [];
+let explosions = [];
+let powerups = [];
+let floatTexts = [];
+
+// Input
+const keys = {};
+let touchLeft = false, touchRight = false;
+let touchDrag = null;
+
+// Enemy types
+const ENEMY_TYPES = {
+  N: { col: C.north, darkCol: C.dark_r, score: 100, hp: 1, speed: 1.2, size: 14 },
+  S: { col: C.south, darkCol: C.dark_b, score: 100, hp: 1, speed: 1.2, size: 14 },
+  BIG_N: { col: C.north, darkCol: C.dark_r, score: 300, hp: 3, speed: 0.7, size: 22 },
+  BIG_S: { col: C.south, darkCol: C.dark_b, score: 300, hp: 3, speed: 0.7, size: 22 },
+  NEUTRAL: { col: C.neutral, darkCol: '#444', score: 150, hp: 2, speed: 1.5, size: 12 },
+};
+
+function spawnEnemy(type) {
+  const t = ENEMY_TYPES[type];
+  enemies.push({
+    x: 30 + Math.random() * (GAME_W - 60),
+    y: -t.size,
+    vx: (Math.random()-0.5) * 0.8,
+    vy: t.speed,
+    type,
+    hp: t.hp,
+    maxHp: t.hp,
+    size: t.size,
+    flashTimer: 0,
+    wobble: Math.random() * Math.PI * 2,
+  });
+}
+
+function spawnWave() {
+  wave++;
+  const baseCount = 3 + wave * 2;
+  const types = wave < 2 ? ['N','S'] : ['N','S','NEUTRAL','BIG_N','BIG_S'];
+
+  for (let i = 0; i < Math.min(baseCount, 12); i++) {
+    setTimeout(() => {
+      const t = types[Math.floor(Math.random() * Math.min(types.length, 2 + Math.floor(wave/2)))];
+      spawnEnemy(t);
+    }, i * 200);
+  }
+}
+
+function resetGame() {
+  score = 0;
+  lives = 3;
+  polarity = 'N';
+  frame = 0;
+  wave = 0;
+  waveTimer = 0;
+  spawnTimer = 0;
+  combo = 0;
+  comboTimer = 0;
+  bullets = [];
+  enemies = [];
+  particles = [];
+  explosions = [];
+  powerups = [];
+  floatTexts = [];
+  player.x = GAME_W/2;
+  player.y = GAME_H * 0.75;
+  player.vx = 0;
+  player.vy = 0;
+  player.invincible = 0;
+  player.shootTimer = 0;
+}
+
+function setPolarityTouch(p) {
+  polarity = p;
+}
+
+// Physics: magnetic force
+function magneticForce(enemy) {
+  const dx = player.x - enemy.x;
+  const dy = player.y - enemy.y;
+  const dist = Math.sqrt(dx*dx + dy*dy);
+  if (dist < 5) return {fx:0, fy:0};
+
+  const ATTRACT_DIST = 200;
+  const REPEL_DIST = 160;
+
+  let force = 0;
+  let samePolarity = false;
+
+  if (enemy.type === 'NEUTRAL') {
+    // Neutral: slightly attracted to player regardless
+    force = 0.3;
+    samePolarity = false;
+  } else if (enemy.type === 'N' || enemy.type === 'BIG_N') {
+    samePolarity = (polarity === 'N');
+  } else {
+    samePolarity = (polarity === 'S');
+  }
+
+  if (enemy.type !== 'NEUTRAL') {
+    if (samePolarity && dist < REPEL_DIST) {
+      // Repel
+      force = -2.5 * (1 - dist/REPEL_DIST);
+    } else if (!samePolarity && dist < ATTRACT_DIST) {
+      // Attract
+      force = 1.8 * (1 - dist/ATTRACT_DIST);
     }
   }
 
-  function saveProgress() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
+  return {
+    fx: (dx/dist) * force,
+    fy: (dy/dist) * force
+  };
+}
+
+function spawnParticles(x, y, col, count) {
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 1 + Math.random() * 3;
+    particles.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 20 + Math.random() * 20,
+      maxLife: 40,
+      color: col,
+      size: 2 + Math.random() * 3,
+    });
+  }
+}
+
+function addFloat(x, y, text, col) {
+  floatTexts.push({ x, y, text, col, life: 50, vy: -1.2 });
+}
+
+function shoot() {
+  const col = polarity === 'N' ? C.north : C.south;
+  const pierce = polarity === 'N' ? 'N' : 'S';
+  // Triple shot for visual flair
+  bullets.push({x: player.x, y: player.y - 16, vy: -10, polarity: pierce, col, size: 5});
+  if (wave >= 3) {
+    bullets.push({x: player.x - 10, y: player.y - 10, vy: -9, vx: -1.5, polarity: pierce, col, size: 4});
+    bullets.push({x: player.x + 10, y: player.y - 10, vy: -9, vx: 1.5, polarity: pierce, col, size: 4});
+  }
+}
+
+function update() {
+  frame++;
+  if (state !== 'play') return;
+
+  // Wave management
+  waveTimer--;
+  if (waveTimer <= 0 && enemies.length < 8) {
+    spawnWave();
+    waveTimer = 180 + Math.max(0, 120 - wave * 10);
   }
 
-  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
-  function lerp(a, b, t) { return a + (b - a) * t; }
-
-  function polColor(p) {
-    return p > 0
-      ? { a: '#ff6363', b: '#ff9b45', glow: 'rgba(255,120,80,0.8)' }
-      : { a: '#4fa8ff', b: '#40f0ff', glow: 'rgba(80,180,255,0.8)' };
+  // Combo decay
+  if (comboTimer > 0) {
+    comboTimer--;
+    if (comboTimer === 0) combo = 0;
   }
 
-  function surface(x, y, w, h, p, move = null) {
-    return { x, y, w, h, p, move, baseX: x, baseY: y, prevX: x, prevY: y, dx: 0, dy: 0 };
-  }
+  // Player movement
+  let ax = 0, ay = 0;
+  if (keys['ArrowLeft'] || keys['a'] || keys['A'] || touchLeft) ax -= 1;
+  if (keys['ArrowRight'] || keys['d'] || keys['D'] || touchRight) ax += 1;
+  if (keys['ArrowUp'] || keys['w'] || keys['W']) ay -= 1;
+  if (keys['ArrowDown'] || keys['s'] || keys['S']) ay += 1;
 
-  function buildLevels() {
-    return [
-      {
-        id: 1,
-        name: 'L1 반발 점프 기초',
-        hint: '바닥에 붙은 상태에서 Space(탭)로 극성을 바꿔 튕기세요.',
-        world: { w: 1450, h: 900 },
-        start: { x: 90, y: 790, p: 1 },
-        goal: { x: 1320, y: 190, w: 70, h: 90 },
-        surfaces: [
-          surface(0, 840, 1450, 70, -1),
-          surface(300, 710, 130, 130, 1),
-          surface(520, 620, 190, 26, -1),
-          surface(760, 500, 30, 340, 1),
-          surface(910, 420, 220, 24, -1),
-          surface(1160, 310, 170, 24, 1)
-        ]
-      },
-      {
-        id: 2,
-        name: 'L2 반발 연속 점프',
-        hint: '같은 극 표면을 연속으로 튕기며 높이를 만드세요.',
-        world: { w: 1600, h: 920 },
-        start: { x: 120, y: 805, p: 1 },
-        goal: { x: 1470, y: 170, w: 70, h: 90 },
-        surfaces: [
-          surface(0, 850, 1600, 70, -1),
-          surface(280, 720, 140, 130, 1),
-          surface(480, 630, 110, 20, 1),
-          surface(670, 560, 170, 22, -1),
-          surface(910, 480, 110, 20, 1),
-          surface(1080, 400, 170, 22, -1),
-          surface(1330, 300, 170, 22, 1)
-        ]
-      },
-      {
-        id: 3,
-        name: 'L3 흡착 벽타기',
-        hint: '다른 극 벽에 붙은 뒤 좌/우 입력으로 벽타기하세요.',
-        world: { w: 1500, h: 920 },
-        start: { x: 110, y: 810, p: 1 },
-        goal: { x: 1360, y: 120, w: 70, h: 90 },
-        surfaces: [
-          surface(0, 850, 1500, 70, -1),
-          surface(330, 520, 34, 330, -1),
-          surface(500, 390, 34, 460, -1),
-          surface(680, 270, 34, 580, -1),
-          surface(820, 250, 240, 24, 1),
-          surface(1110, 180, 260, 24, -1)
-        ]
-      },
-      {
-        id: 4,
-        name: 'L4 천장 이동',
-        hint: '천장에 흡착 후 극성을 바꿔 반발 점프로 넘어가세요.',
-        world: { w: 1700, h: 940 },
-        start: { x: 110, y: 810, p: 1 },
-        goal: { x: 1570, y: 120, w: 70, h: 90 },
-        surfaces: [
-          surface(0, 860, 1700, 70, -1),
-          surface(280, 180, 260, 24, -1),
-          surface(610, 180, 260, 24, -1),
-          surface(970, 180, 260, 24, 1),
-          surface(1280, 180, 260, 24, -1),
-          surface(630, 450, 34, 410, 1),
-          surface(1220, 360, 34, 500, 1)
-        ]
-      },
-      {
-        id: 5,
-        name: 'L5 공중 전환 콤보 I',
-        hint: '점프 중 공중에서 극성 전환해 궤적을 꺾어보세요.',
-        world: { w: 1820, h: 960 },
-        start: { x: 120, y: 830, p: 1 },
-        goal: { x: 1690, y: 170, w: 70, h: 90 },
-        surfaces: [
-          surface(0, 880, 1820, 70, -1),
-          surface(360, 720, 220, 24, 1),
-          surface(690, 590, 170, 24, -1),
-          surface(930, 460, 170, 24, 1),
-          surface(1180, 360, 170, 24, -1),
-          surface(1420, 260, 170, 24, 1),
-          surface(870, 700, 36, 210, -1),
-          surface(1260, 560, 36, 320, 1)
-        ]
-      },
-      {
-        id: 6,
-        name: 'L6 공중 전환 콤보 II',
-        hint: '흡착→반발→재흡착을 연속으로 연결하세요.',
-        world: { w: 1880, h: 980 },
-        start: { x: 120, y: 845, p: 1 },
-        goal: { x: 1750, y: 130, w: 70, h: 90 },
-        surfaces: [
-          surface(0, 900, 1880, 70, -1),
-          surface(280, 760, 150, 120, 1),
-          surface(500, 640, 180, 24, -1),
-          surface(760, 520, 140, 24, 1),
-          surface(950, 430, 190, 24, -1),
-          surface(1220, 340, 150, 24, 1),
-          surface(1460, 250, 150, 24, -1),
-          surface(600, 300, 32, 280, 1),
-          surface(1080, 210, 32, 300, -1)
-        ]
-      },
-      {
-        id: 7,
-        name: 'L7 움직이는 자성 플랫폼',
-        hint: '움직이는 자성 플랫폼 타이밍을 맞춰 이동하세요.',
-        world: { w: 1950, h: 980 },
-        start: { x: 120, y: 845, p: 1 },
-        goal: { x: 1820, y: 130, w: 70, h: 90 },
-        surfaces: [
-          surface(0, 900, 1950, 70, -1),
-          surface(300, 700, 170, 24, -1, { axis: 'x', amp: 140, speed: 1.25, phase: 0.2 }),
-          surface(650, 560, 170, 24, 1, { axis: 'y', amp: 120, speed: 1.1, phase: 1.0 }),
-          surface(980, 470, 170, 24, -1, { axis: 'x', amp: 120, speed: 1.45, phase: 2.2 }),
-          surface(1310, 360, 170, 24, 1, { axis: 'y', amp: 100, speed: 1.3, phase: 0.5 }),
-          surface(1610, 260, 190, 24, -1),
-          surface(860, 650, 34, 250, 1),
-          surface(1470, 530, 34, 370, -1)
-        ]
-      },
-      {
-        id: 8,
-        name: 'L8 보스: 극성 미궁',
-        hint: '모든 메카닉을 조합해 최종 탈출에 도전하세요.',
-        world: { w: 2150, h: 1020 },
-        start: { x: 130, y: 880, p: 1 },
-        goal: { x: 2020, y: 100, w: 80, h: 100 },
-        surfaces: [
-          surface(0, 940, 2150, 80, -1),
-          surface(280, 780, 180, 24, 1),
-          surface(520, 670, 200, 24, -1, { axis: 'x', amp: 120, speed: 1.5, phase: 0.6 }),
-          surface(800, 560, 180, 24, 1),
-          surface(1060, 450, 210, 24, -1, { axis: 'y', amp: 115, speed: 1.2, phase: 1.8 }),
-          surface(1360, 340, 200, 24, 1),
-          surface(1630, 260, 180, 24, -1, { axis: 'x', amp: 80, speed: 1.8, phase: 2.4 }),
-          surface(1870, 180, 180, 24, 1),
-          surface(700, 300, 36, 410, -1),
-          surface(1240, 240, 36, 450, 1),
-          surface(1740, 360, 36, 580, -1)
-        ]
-      }
-    ];
-  }
-
-  function cloneLevel(data) {
-    return {
-      id: data.id,
-      name: data.name,
-      hint: data.hint,
-      world: { w: data.world.w, h: data.world.h },
-      start: { x: data.start.x, y: data.start.y, p: data.start.p },
-      goal: { ...data.goal },
-      surfaces: data.surfaces.map(s => ({ ...s, move: s.move ? { ...s.move } : null, prevX: s.x, prevY: s.y, dx: 0, dy: 0 }))
-    };
-  }
-
-  function startLevel(n) {
-    levelIndex = clamp(n, 1, LEVELS.length) - 1;
-    currentLevel = cloneLevel(LEVELS[levelIndex]);
-    player = {
-      x: currentLevel.start.x,
-      y: currentLevel.start.y,
-      vx: 0,
-      vy: 0,
-      r: 18,
-      p: currentLevel.start.p,
-      stuck: null,
-      stickyLine: null
-    };
-    particles = [];
-    camera.x = 0;
-    camera.y = 0;
-    elapsed = 0;
-    mode = 'play';
-    overlay.classList.remove('show');
-    updateTopbar();
-  }
-
-  function updateTopbar() {
-    if (!currentLevel || !player) return;
-    levelLabel.textContent = `${currentLevel.name} (${currentLevel.id}/8)`;
-    hintEl.textContent = currentLevel.hint;
-    const c = polColor(player.p);
-    polarityBadge.textContent = player.p > 0 ? '+ 극' : '- 극';
-    polarityBadge.style.background = `linear-gradient(135deg, ${c.a}, ${c.b})`;
-    polarityBadge.style.color = '#fff';
-    polarityBadge.style.boxShadow = `0 0 16px ${c.glow}`;
-    timeLabel.textContent = `시간 ${elapsed.toFixed(2)}s`;
-  }
-
-  function ensureAudio() {
-    if (!audioCtx) {
-      const Ctx = window.AudioContext || window.webkitAudioContext;
-      if (!Ctx) return;
-      audioCtx = new Ctx();
-    }
-    if (audioCtx.state === 'suspended') audioCtx.resume();
-  }
-
-  function playTone(freq, dur, type, volume, endFreq = null, at = 0) {
-    if (!audioCtx) return;
-    const t0 = audioCtx.currentTime + at;
-    const o = audioCtx.createOscillator();
-    const g = audioCtx.createGain();
-    o.type = type || 'sine';
-    o.frequency.setValueAtTime(freq, t0);
-    if (endFreq) o.frequency.exponentialRampToValueAtTime(Math.max(40, endFreq), t0 + dur);
-    g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(volume || 0.05, t0 + dur * 0.15);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-    o.connect(g).connect(audioCtx.destination);
-    o.start(t0);
-    o.stop(t0 + dur + 0.02);
-  }
-
-  function playSound(kind) {
-    if (!audioCtx) return;
-    if (kind === 'switch') {
-      playTone(420, 0.08, 'triangle', 0.05, 760);
-      playTone(190, 0.1, 'sine', 0.03, 150);
-    } else if (kind === 'repel') {
-      playTone(210, 0.07, 'square', 0.06, 95);
-    } else if (kind === 'stick') {
-      playTone(120, 0.1, 'sine', 0.045, 180);
-    } else if (kind === 'clear') {
-      playTone(440, 0.15, 'triangle', 0.05, 660, 0.00);
-      playTone(660, 0.15, 'triangle', 0.05, 880, 0.11);
-      playTone(880, 0.18, 'triangle', 0.06, 1120, 0.22);
+  // Touch drag
+  if (touchDrag) {
+    const tdx = touchDrag.x - player.x;
+    const tdy = touchDrag.y - player.y;
+    const dist = Math.sqrt(tdx*tdx + tdy*tdy);
+    if (dist > 10) {
+      ax = tdx / Math.max(dist, 1) * 2;
+      ay = tdy / Math.max(dist, 1) * 2;
     }
   }
 
-  function togglePolarity() {
-    if (mode !== 'play' || !player) return;
-    player.p *= -1;
-    playSound('switch');
+  player.vx = player.vx * 0.8 + ax * 0.5;
+  player.vy = player.vy * 0.8 + ay * 0.5;
+  player.x = Math.max(16, Math.min(GAME_W-16, player.x + player.vx * 4));
+  player.y = Math.max(60, Math.min(GAME_H-60, player.y + player.vy * 4));
 
-    if (player.stuck) {
-      const s = player.stuck.surface;
-      const nx = player.stuck.nx;
-      const ny = player.stuck.ny;
-      if (s.p === player.p) {
-        player.vx += nx * REPEL_IMPULSE;
-        player.vy += ny * REPEL_IMPULSE;
-        emitParticles(player.x - nx * (player.r - 2), player.y - ny * (player.r - 2), 12, player.p > 0 ? '#ff9d67' : '#6ad8ff', 250);
-        playSound('repel');
-      }
-      player.stuck = null;
-    }
-    updateTopbar();
+  if (player.invincible > 0) player.invincible--;
+
+  // Polarity switch via Space
+  if (keys[' '] && !keys['_prevSpace']) {
+    polarity = polarity === 'N' ? 'S' : 'N';
+  }
+  keys['_prevSpace'] = keys[' '];
+
+  // Auto shoot
+  player.shootTimer--;
+  if (player.shootTimer <= 0) {
+    shoot();
+    player.shootTimer = Math.max(8, 18 - wave);
   }
 
-  function closestPointRect(px, py, r) {
-    return {
-      x: clamp(px, r.x, r.x + r.w),
-      y: clamp(py, r.y, r.y + r.h)
-    };
-  }
+  // Update bullets
+  bullets = bullets.filter(b => b.y > -10 && b.y < GAME_H+10 && b.x > -10 && b.x < GAME_W+10);
+  bullets.forEach(b => {
+    b.x = (b.x || player.x) + (b.vx||0);
+    b.y += b.vy;
+  });
 
-  function emitParticles(x, y, count, color, power = 160) {
-    for (let i = 0; i < count; i++) {
-      const a = Math.random() * Math.PI * 2;
-      const sp = Math.random() * power + 40;
-      particles.push({
-        x, y,
-        vx: Math.cos(a) * sp,
-        vy: Math.sin(a) * sp,
-        life: Math.random() * 0.35 + 0.2,
-        maxLife: 0,
-        size: Math.random() * 3 + 1.8,
-        color
-      });
-      particles[particles.length - 1].maxLife = particles[particles.length - 1].life;
-    }
-  }
+  // Update enemies
+  enemies.forEach(e => {
+    e.wobble += 0.05;
+    const { fx, fy } = magneticForce(e);
+    e.vx = (e.vx + fx) * 0.95;
+    e.vy = ENEMY_TYPES[e.type].speed + fy * 0.5;
+    e.x += e.vx;
+    e.y += e.vy;
+    if (e.flashTimer > 0) e.flashTimer--;
+  });
 
-  function updateMovingSurfaces(t) {
-    if (!currentLevel) return;
-    for (const s of currentLevel.surfaces) {
-      s.prevX = s.x;
-      s.prevY = s.y;
-      if (s.move) {
-        const v = Math.sin(t * s.move.speed + s.move.phase) * s.move.amp;
-        if (s.move.axis === 'x') s.x = s.baseX + v;
-        else s.y = s.baseY + v;
-      }
-      s.dx = s.x - s.prevX;
-      s.dy = s.y - s.prevY;
-    }
-  }
+  // Bullet-enemy collision
+  bullets.forEach((b, bi) => {
+    enemies.forEach((e, ei) => {
+      const dx = b.x - e.x;
+      const dy = b.y - e.y;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      if (dist < e.size + (b.size||5)) {
+        // Check polarity match — bullets with matching polarity do extra damage
+        const typeIsN = (e.type === 'N' || e.type === 'BIG_N');
+        const sameAsEnemy = (b.polarity === 'N') === typeIsN;
+        const dmg = (e.type === 'NEUTRAL' || sameAsEnemy) ? 1 : 2; // opposite polarity bullet does double damage
 
-  function updatePlayer(dt, nowMs) {
-    if (!player || !currentLevel) return;
+        e.hp -= dmg;
+        e.flashTimer = 6;
+        spawnParticles(b.x, b.y, b.col, 5);
+        bullets[bi]._dead = true;
 
-    const dir = (input.right ? 1 : 0) - (input.left ? 1 : 0);
-    const surfaces = currentLevel.surfaces;
-
-    if (player.stuck && player.stuck.surface.move) {
-      player.x += player.stuck.surface.dx;
-      player.y += player.stuck.surface.dy;
-    }
-
-    let ax = 0;
-    let ay = GRAVITY;
-
-    for (const s of surfaces) {
-      const cp = closestPointRect(player.x, player.y, s);
-      const vx = cp.x - player.x;
-      const vy = cp.y - player.y;
-      const dist = Math.hypot(vx, vy);
-      if (dist > MAGNET_RANGE) continue;
-      const nx = dist > 0.0001 ? vx / dist : 0;
-      const ny = dist > 0.0001 ? vy / dist : -1;
-      const f = MAGNET_POWER / (dist + 26);
-      const sign = s.p === player.p ? -1 : 1;
-      ax += nx * f * sign;
-      ay += ny * f * sign;
-    }
-
-    if (player.stuck && player.stuck.surface.p !== player.p) {
-      if (Math.abs(player.stuck.nx) > 0.65) {
-        if (dir !== 0) player.vy = -130;
-        else player.vy = Math.max(player.vy, 40);
-        player.vx *= 0.86;
-      } else {
-        const target = dir * 230;
-        player.vx = lerp(player.vx, target, Math.min(1, dt * 11));
-      }
-    } else {
-      const target = dir * 240;
-      player.vx = lerp(player.vx, target, Math.min(1, dt * 7));
-    }
-
-    player.vx += ax * dt;
-    player.vy += ay * dt;
-    player.vx = clamp(player.vx, -MAX_VEL, MAX_VEL);
-    player.vy = clamp(player.vy, -MAX_VEL, MAX_VEL);
-
-    player.x += player.vx * dt;
-    player.y += player.vy * dt;
-
-    let bestStick = null;
-
-    for (let iter = 0; iter < 2; iter++) {
-      for (const s of surfaces) {
-        const cp = closestPointRect(player.x, player.y, s);
-        let dx = player.x - cp.x;
-        let dy = player.y - cp.y;
-        let dist = Math.hypot(dx, dy);
-        if (dist >= player.r) continue;
-
-        let nx, ny;
-        if (dist < 0.0001) {
-          const dl = Math.abs(player.x - s.x);
-          const dr = Math.abs(s.x + s.w - player.x);
-          const dtp = Math.abs(player.y - s.y);
-          const db = Math.abs(s.y + s.h - player.y);
-          const m = Math.min(dl, dr, dtp, db);
-          if (m === dl) { nx = -1; ny = 0; }
-          else if (m === dr) { nx = 1; ny = 0; }
-          else if (m === dtp) { nx = 0; ny = -1; }
-          else { nx = 0; ny = 1; }
-          dist = 0;
-        } else {
-          nx = dx / dist;
-          ny = dy / dist;
-        }
-
-        const pen = player.r - dist + 0.02;
-        player.x += nx * pen;
-        player.y += ny * pen;
-
-        const same = s.p === player.p;
-        const vn = player.vx * nx + player.vy * ny;
-
-        if (same) {
-          const impulse = Math.max(220, 420 - vn);
-          player.vx += nx * impulse * 0.55;
-          player.vy += ny * impulse * 0.55;
-
-          if (nowMs - lastRepelSound > 80) {
-            playSound('repel');
-            lastRepelSound = nowMs;
-          }
-          emitParticles(cp.x, cp.y, 6, player.p > 0 ? '#ff9c66' : '#7ee5ff', 140);
-        } else {
-          if (vn < 0) {
-            player.vx -= vn * nx;
-            player.vy -= vn * ny;
-          }
-          player.vx *= 0.97;
-          player.vy *= 0.97;
-
-          if (!bestStick || pen > bestStick.pen) {
-            bestStick = { surface: s, nx, ny, cx: cp.x, cy: cp.y, pen };
-          }
-
-          if (nowMs - lastStickSound > 120) {
-            playSound('stick');
-            lastStickSound = nowMs;
-          }
+        if (e.hp <= 0) {
+          combo++;
+          comboTimer = 90;
+          const t = ENEMY_TYPES[e.type];
+          const pts = t.score * combo;
+          score += pts;
+          if (score > hi) hi = score;
+          addFloat(e.x, e.y, `+${pts}`, combo > 2 ? C.yellow : C.white);
+          spawnParticles(e.x, e.y, t.col, 16);
+          enemies[ei]._dead = true;
         }
       }
-    }
+    });
+  });
 
-    player.stuck = bestStick;
+  bullets = bullets.filter(b => !b._dead);
+  enemies = enemies.filter(e => !e._dead);
 
-    if (player.y > currentLevel.world.h + 240 || player.x < -220 || player.x > currentLevel.world.w + 220) {
-      failLevel('자기장 밖으로 이탈했습니다');
-      return;
-    }
-
-    const g = currentLevel.goal;
-    const gx = clamp(player.x, g.x, g.x + g.w);
-    const gy = clamp(player.y, g.y, g.y + g.h);
-    if (Math.hypot(player.x - gx, player.y - gy) <= player.r) {
-      clearLevel();
-      return;
-    }
+  // Enemy-player collision
+  if (player.invincible === 0) {
+    enemies.forEach(e => {
+      const dx = player.x - e.x;
+      const dy = player.y - e.y;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      if (dist < e.size + 14) {
+        lives--;
+        player.invincible = 120;
+        combo = 0;
+        spawnParticles(player.x, player.y, C.white, 20);
+        enemies = enemies.filter(x => x !== e);
+        if (lives <= 0) {
+          state = 'gameover';
+          if (score > hi) hi = score;
+        }
+      }
+    });
   }
 
-  function clearLevel() {
-    if (mode !== 'play') return;
-    mode = 'clear';
-    playSound('clear');
+  // Remove enemies that pass the screen
+  enemies = enemies.filter(e => e.y < GAME_H + 50);
 
-    const key = String(levelIndex + 1);
-    const prevBest = progress.best[key];
-    if (!prevBest || elapsed < prevBest) progress.best[key] = Number(elapsed.toFixed(2));
+  // Update particles
+  particles.forEach(p => { p.x += p.vx; p.y += p.vy; p.vy += 0.05; p.life--; });
+  particles = particles.filter(p => p.life > 0);
 
-    if (progress.unlocked < levelIndex + 2) progress.unlocked = Math.min(LEVELS.length, levelIndex + 2);
-    saveProgress();
+  // Update float texts
+  floatTexts.forEach(f => { f.y += f.vy; f.life--; });
+  floatTexts = floatTexts.filter(f => f.life > 0);
 
-    const best = progress.best[key];
-    const nextOpen = levelIndex + 2 <= LEVELS.length;
+  updateHUD();
+}
 
-    panel.innerHTML = `
-      <h1>✅ 레벨 클리어</h1>
-      <p><strong>${currentLevel.name}</strong>을(를) 돌파했습니다.</p>
-      <p style="margin-top:8px">기록 <strong>${elapsed.toFixed(2)}s</strong> · 베스트 <strong>${best.toFixed(2)}s</strong></p>
-      <div class="main-actions">
-        ${nextOpen ? `<button id="nextBtn">다음 레벨</button>` : `<button id="menuOnlyBtn">메뉴로</button>`}
-        <button class="alt" id="retryOverlayBtn">같은 레벨 다시</button>
-      </div>
-      <div class="note">localStorage에 진행도가 저장되었습니다. (${progress.unlocked}/8 해금)</div>
-    `;
-    overlay.classList.add('show');
-  }
+function updateHUD() {
+  document.getElementById('scoreLabel').textContent = `SCORE: ${score}`;
+  document.getElementById('polLabel').textContent = polarity === 'N' ?
+    '⚡ NORTH [RED]' : '⚡ SOUTH [BLUE]';
+  document.getElementById('polLabel').style.color = polarity === 'N' ? '#ff4444' : '#4444ff';
+  document.getElementById('polLabel').style.textShadow = polarity === 'N' ? '0 0 8px #f00' : '0 0 8px #00f';
+  const h = '❤️'.repeat(lives) + '🖤'.repeat(Math.max(0, 3-lives));
+  document.getElementById('livesLabel').textContent = h;
+}
 
-  function failLevel(reason) {
-    if (mode !== 'play') return;
-    mode = 'fail';
-    panel.innerHTML = `
-      <h1>💥 실패</h1>
-      <p>${reason}</p>
-      <div class="main-actions">
-        <button id="retryOverlayBtn">다시 도전</button>
-        <button class="alt" id="menuOnlyBtn">메뉴</button>
-      </div>
-    `;
-    overlay.classList.add('show');
-  }
+// Drawing
+function drawBackground() {
+  ctx.save();
+  ctx.scale(scale, scale);
 
-  function showMenu() {
-    mode = 'menu';
-    overlay.classList.add('show');
+  // Dark grid background
+  ctx.fillStyle = C.bg;
+  ctx.fillRect(0, 0, GAME_W, GAME_H);
 
-    const rows = LEVELS.map(lv => {
-      const id = lv.id;
-      const locked = id > progress.unlocked;
-      const best = progress.best[String(id)];
-      return `
-        <button class="lvl ${locked ? 'lock' : ''} ${selectedLevel === id ? 'active' : ''}" data-level="${id}" ${locked ? 'disabled' : ''}>
-          <div class="n">레벨 ${id}</div>
-          <div class="t">${lv.name.replace(/^L\d+\s*/, '')}</div>
-          <div class="best">${best ? `Best ${Number(best).toFixed(2)}s` : '미기록'}</div>
-        </button>
-      `;
-    }).join('');
-
-    panel.innerHTML = `
-      <h1>🧲 Polarity Dash</h1>
-      <p class="pitch">"극성을 바꿔 벽을 튕기며 탈출하는 자석 플랫포머"</p>
-      <p>같은 극은 반발, 다른 극은 흡착. 공중 전환으로 벽타기/슬링샷 콤보를 만드세요.</p>
-      <div class="note">해금: ${progress.unlocked}/8 · 입력: 터치(좌/우/중앙탭), 키보드(←→, Space)</div>
-      <div class="level-grid">${rows}</div>
-      <div class="main-actions">
-        <button id="startBtn">레벨 ${selectedLevel} 시작</button>
-        <button class="alt" id="resetProgressBtn">진행도 초기화</button>
-      </div>
-      <div class="note">네온 다크 테마 / Web Audio / localStorage 저장 지원</div>
-    `;
-  }
-
-  function drawBackground() {
-    const grad = ctx.createLinearGradient(0, 0, 0, viewH);
-    grad.addColorStop(0, '#0a0a1a');
-    grad.addColorStop(1, '#131737');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, viewW, viewH);
-
-    ctx.strokeStyle = 'rgba(110,130,255,0.11)';
-    ctx.lineWidth = 1;
-    const step = 44;
-    const ox = -((camera.x * 0.35) % step);
-    const oy = -((camera.y * 0.35) % step);
-    for (let x = ox; x <= viewW; x += step) {
-      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, viewH); ctx.stroke();
-    }
-    for (let y = oy; y <= viewH; y += step) {
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(viewW, y); ctx.stroke();
-    }
-  }
-
-  function drawSurface(s, t) {
-    const sx = s.x - camera.x;
-    const sy = s.y - camera.y;
-    if (sx + s.w < -50 || sy + s.h < -50 || sx > viewW + 50 || sy > viewH + 50) return;
-
-    const c = polColor(s.p);
-    const pulse = 0.55 + Math.sin(t * 4 + (s.x + s.y) * 0.02) * 0.18;
-
-    ctx.save();
-    ctx.shadowBlur = 16;
-    ctx.shadowColor = c.glow;
-    const g = ctx.createLinearGradient(sx, sy, sx + s.w, sy + s.h);
-    g.addColorStop(0, c.a);
-    g.addColorStop(1, c.b);
-    ctx.fillStyle = g;
-    ctx.globalAlpha = 0.92;
-    ctx.fillRect(sx, sy, s.w, s.h);
-
-    ctx.globalAlpha = 0.5 + pulse * 0.35;
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 1.2;
-    ctx.strokeRect(sx + 0.5, sy + 0.5, s.w - 1, s.h - 1);
-
-    if (s.move) {
-      ctx.globalAlpha = 0.55;
-      ctx.strokeStyle = 'rgba(220,235,255,0.5)';
-      ctx.setLineDash([7, 6]);
-      ctx.strokeRect(sx - 3, sy - 3, s.w + 6, s.h + 6);
-      ctx.setLineDash([]);
-    }
-    ctx.restore();
-  }
-
-  function drawGoal(t) {
-    const g = currentLevel.goal;
-    const x = g.x - camera.x;
-    const y = g.y - camera.y;
-    if (x + g.w < -40 || y + g.h < -40 || x > viewW + 40 || y > viewH + 40) return;
-
-    const pulse = (Math.sin(t * 4) + 1) * 0.5;
-    ctx.save();
-    ctx.shadowColor = 'rgba(110,255,190,0.9)';
-    ctx.shadowBlur = 20 + pulse * 8;
-    ctx.fillStyle = 'rgba(70,255,170,0.15)';
-    ctx.fillRect(x, y, g.w, g.h);
-    ctx.strokeStyle = '#72ffd1';
-    ctx.lineWidth = 3;
-    ctx.strokeRect(x, y, g.w, g.h);
-
-    ctx.fillStyle = '#d9ffe9';
-    ctx.font = '700 13px -apple-system, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('EXIT', x + g.w / 2, y + g.h / 2 + 4);
-    ctx.restore();
-  }
-
-  function drawMagneticLines(t) {
-    if (!player.stuck || player.stuck.surface.p === player.p) return;
-    const cx = player.x - camera.x;
-    const cy = player.y - camera.y;
-    const tx = player.stuck.cx - camera.x;
-    const ty = player.stuck.cy - camera.y;
-
-    ctx.save();
-    ctx.lineWidth = 1.25;
-    ctx.strokeStyle = 'rgba(180,220,255,0.55)';
-    for (let i = -1; i <= 1; i++) {
-      const wobble = Math.sin(t * 10 + i * 1.7) * 8;
-      ctx.globalAlpha = 0.45 + (i + 1) * 0.12;
-      ctx.beginPath();
-      ctx.moveTo(cx, cy);
-      ctx.quadraticCurveTo((cx + tx) * 0.5 + wobble, (cy + ty) * 0.5 - wobble, tx, ty);
-      ctx.stroke();
-    }
-    ctx.restore();
-  }
-
-  function drawPlayer(t) {
-    const x = player.x - camera.x;
-    const y = player.y - camera.y;
-    const c = polColor(player.p);
-
-    ctx.save();
-    ctx.shadowColor = c.glow;
-    ctx.shadowBlur = 24;
-    const rg = ctx.createRadialGradient(x - 4, y - 5, 2, x, y, player.r + 8);
-    rg.addColorStop(0, c.b);
-    rg.addColorStop(1, c.a);
-    ctx.fillStyle = rg;
+  // Grid lines
+  ctx.strokeStyle = C.grid;
+  ctx.lineWidth = 0.5;
+  ctx.globalAlpha = 0.5;
+  const gridSize = 32;
+  const scrollY = (frame * 0.5) % gridSize;
+  for (let y = -gridSize; y < GAME_H + gridSize; y += gridSize) {
     ctx.beginPath();
-    ctx.arc(x, y, player.r, 0, Math.PI * 2);
+    ctx.moveTo(0, y + scrollY);
+    ctx.lineTo(GAME_W, y + scrollY);
+    ctx.stroke();
+  }
+  for (let x = 0; x < GAME_W; x += gridSize) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, GAME_H);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+function drawPlayer() {
+  ctx.save();
+  ctx.scale(scale, scale);
+  const p = player;
+  const blink = p.invincible > 0 && Math.floor(frame/4) % 2 === 0;
+  if (!blink) {
+    const col = polarity === 'N' ? C.north : C.south;
+    ctx.shadowColor = col;
+    ctx.shadowBlur = 16;
+
+    // Ship body
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y - 16);
+    ctx.lineTo(p.x + 12, p.y + 12);
+    ctx.lineTo(p.x, p.y + 6);
+    ctx.lineTo(p.x - 12, p.y + 12);
+    ctx.closePath();
     ctx.fill();
 
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = 'rgba(255,255,255,0.8)';
-    ctx.stroke();
+    // Engine glow
+    ctx.fillStyle = C.yellow;
+    ctx.shadowColor = C.yellow;
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.ellipse(p.x, p.y + 12, 5, 3 + Math.sin(frame*0.3)*2, 0, 0, Math.PI*2);
+    ctx.fill();
 
+    // Polarity indicator
+    ctx.fillStyle = C.white;
     ctx.shadowBlur = 0;
-    ctx.fillStyle = '#fff';
-    ctx.font = '700 18px -apple-system, sans-serif';
+    ctx.font = `bold ${10}px "Courier New"`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(player.p > 0 ? '+' : '−', x, y + 1);
-
-    const aura = Math.sin(t * 8) * 0.5 + 0.5;
-    ctx.strokeStyle = player.p > 0 ? `rgba(255,130,90,${0.35 + aura * 0.3})` : `rgba(80,210,255,${0.35 + aura * 0.3})`;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(x, y, player.r + 7 + aura * 4, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
+    ctx.fillText(polarity, p.x, p.y - 2);
   }
+  ctx.restore();
+}
 
-  function updateParticles(dt) {
-    for (let i = particles.length - 1; i >= 0; i--) {
-      const p = particles[i];
-      p.life -= dt;
-      if (p.life <= 0) {
-        particles.splice(i, 1);
-        continue;
-      }
-      p.vy += 420 * dt;
-      p.x += p.vx * dt;
-      p.y += p.vy * dt;
-      p.vx *= 0.97;
-      p.vy *= 0.97;
-    }
-  }
+function drawEnemies() {
+  ctx.save();
+  ctx.scale(scale, scale);
+  enemies.forEach(e => {
+    const t = ENEMY_TYPES[e.type];
+    const flash = e.flashTimer > 0;
+    const col = flash ? C.white : t.col;
 
-  function drawParticles() {
-    for (const p of particles) {
-      const alpha = clamp(p.life / p.maxLife, 0, 1);
-      const x = p.x - camera.x;
-      const y = p.y - camera.y;
-      if (x < -20 || y < -20 || x > viewW + 20 || y > viewH + 20) continue;
-      ctx.save();
-      ctx.globalAlpha = alpha;
-      ctx.fillStyle = p.color;
-      ctx.shadowColor = p.color;
-      ctx.shadowBlur = 8;
+    ctx.shadowColor = t.col;
+    ctx.shadowBlur = 10;
+
+    // Enemy shape based on type
+    ctx.fillStyle = col;
+    const wobX = Math.sin(e.wobble) * 2;
+
+    if (e.type === 'BIG_N' || e.type === 'BIG_S') {
+      // Pentagon
       ctx.beginPath();
-      ctx.arc(x, y, p.size, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    }
-  }
-
-  function updateCamera(dt) {
-    const targetX = clamp(player.x - viewW * 0.35, 0, Math.max(0, currentLevel.world.w - viewW));
-    const targetY = clamp(player.y - viewH * 0.55, 0, Math.max(0, currentLevel.world.h - viewH));
-    camera.x = lerp(camera.x, targetX, Math.min(1, dt * 6));
-    camera.y = lerp(camera.y, targetY, Math.min(1, dt * 6));
-  }
-
-  function tick(ts) {
-    raf = requestAnimationFrame(tick);
-    const dt = clamp((ts - lastTs) / 1000 || 0, 0, 0.033);
-    lastTs = ts;
-
-    if (mode === 'play') {
-      elapsed += dt;
-      updateMovingSurfaces(elapsed);
-      updatePlayer(dt, ts);
-      updateParticles(dt);
-      updateCamera(dt);
-      updateTopbar();
-    }
-
-    drawBackground();
-
-    if (currentLevel) {
-      for (const s of currentLevel.surfaces) drawSurface(s, elapsed);
-      drawGoal(elapsed);
-    }
-
-    drawParticles();
-
-    if (player) {
-      drawMagneticLines(elapsed);
-      drawPlayer(elapsed);
-    }
-  }
-
-  function resize() {
-    dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-    const rect = canvas.getBoundingClientRect();
-    viewW = Math.max(320, Math.floor(rect.width));
-    viewH = Math.max(480, Math.floor(rect.height));
-    canvas.width = Math.floor(viewW * dpr);
-    canvas.height = Math.floor(viewH * dpr);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  }
-
-  function bindZoneHold(el, key) {
-    const clear = () => {
-      input[key] = false;
-      el.classList.remove('active');
-    };
-    el.addEventListener('pointerdown', (e) => {
-      if (mode !== 'play') return;
-      ensureAudio();
-      input[key] = true;
-      el.classList.add('active');
-      el.setPointerCapture(e.pointerId);
-      e.preventDefault();
-    });
-    el.addEventListener('pointerup', clear);
-    el.addEventListener('pointercancel', clear);
-    el.addEventListener('pointerleave', clear);
-  }
-
-  bindZoneHold(document.getElementById('zoneLeft'), 'left');
-  bindZoneHold(document.getElementById('zoneRight'), 'right');
-
-  const flipZone = document.getElementById('zoneFlip');
-  flipZone.addEventListener('pointerdown', (e) => {
-    if (mode !== 'play') return;
-    ensureAudio();
-    flipZone.classList.add('active');
-    togglePolarity();
-    e.preventDefault();
-  });
-  ['pointerup', 'pointercancel', 'pointerleave'].forEach(type => {
-    flipZone.addEventListener(type, () => flipZone.classList.remove('active'));
-  });
-
-  document.addEventListener('keydown', (e) => {
-    ensureAudio();
-    if (e.code === 'ArrowLeft') { input.left = true; e.preventDefault(); }
-    if (e.code === 'ArrowRight') { input.right = true; e.preventDefault(); }
-    if (e.code === 'Space' && !e.repeat) { togglePolarity(); e.preventDefault(); }
-  }, { passive: false });
-
-  document.addEventListener('keyup', (e) => {
-    if (e.code === 'ArrowLeft') input.left = false;
-    if (e.code === 'ArrowRight') input.right = false;
-  });
-
-  panel.addEventListener('click', (e) => {
-    const lvBtn = e.target.closest('[data-level]');
-    if (lvBtn) {
-      const n = Number(lvBtn.getAttribute('data-level'));
-      if (n >= 1 && n <= progress.unlocked) {
-        selectedLevel = n;
-        showMenu();
+      for (let i = 0; i < 5; i++) {
+        const angle = (i/5) * Math.PI*2 - Math.PI/2 + e.wobble*0.1;
+        const r = e.size;
+        const px2 = e.x + Math.cos(angle)*r + wobX;
+        const py2 = e.y + Math.sin(angle)*r;
+        i === 0 ? ctx.moveTo(px2, py2) : ctx.lineTo(px2, py2);
       }
+      ctx.closePath();
+      ctx.fill();
+    } else if (e.type === 'NEUTRAL') {
+      // Diamond
+      ctx.beginPath();
+      ctx.moveTo(e.x + wobX, e.y - e.size);
+      ctx.lineTo(e.x + e.size, e.y);
+      ctx.lineTo(e.x + wobX, e.y + e.size);
+      ctx.lineTo(e.x - e.size, e.y);
+      ctx.closePath();
+      ctx.fill();
+    } else {
+      // Regular triangle pointing down
+      ctx.beginPath();
+      ctx.moveTo(e.x + wobX, e.y + e.size);
+      ctx.lineTo(e.x + e.size, e.y - e.size*0.5);
+      ctx.lineTo(e.x - e.size, e.y - e.size*0.5);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // HP bar for multi-hp enemies
+    if (e.maxHp > 1) {
+      const bw = e.size * 2;
+      ctx.fillStyle = '#333';
+      ctx.fillRect(e.x - bw/2, e.y - e.size - 8, bw, 3);
+      ctx.fillStyle = t.col;
+      ctx.fillRect(e.x - bw/2, e.y - e.size - 8, bw * (e.hp/e.maxHp), 3);
+    }
+
+    // Polarity label
+    if (e.type !== 'NEUTRAL') {
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = C.white;
+      ctx.font = `bold 9px "Courier New"`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(e.type.includes('N') ? 'N' : 'S', e.x, e.y);
+    }
+  });
+  ctx.restore();
+}
+
+function drawBullets() {
+  ctx.save();
+  ctx.scale(scale, scale);
+  bullets.forEach(b => {
+    ctx.shadowColor = b.col;
+    ctx.shadowBlur = 12;
+    ctx.fillStyle = b.col;
+    ctx.beginPath();
+    ctx.ellipse(b.x, b.y, b.size || 5, (b.size||5)*1.8, 0, 0, Math.PI*2);
+    ctx.fill();
+    // Trailing dot
+    ctx.globalAlpha = 0.4;
+    ctx.beginPath();
+    ctx.ellipse(b.x - (b.vx||0)*2, b.y - b.vy*2, (b.size||5)*0.6, (b.size||5)*1.2, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  });
+  ctx.restore();
+}
+
+function drawParticles() {
+  ctx.save();
+  ctx.scale(scale, scale);
+  particles.forEach(p => {
+    ctx.globalAlpha = p.life / p.maxLife;
+    ctx.fillStyle = p.color;
+    ctx.shadowColor = p.color;
+    ctx.shadowBlur = 6;
+    ctx.fillRect(p.x - p.size/2, p.y - p.size/2, p.size, p.size);
+  });
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+function drawFloatTexts() {
+  ctx.save();
+  ctx.scale(scale, scale);
+  floatTexts.forEach(f => {
+    ctx.globalAlpha = f.life / 50;
+    ctx.fillStyle = f.col;
+    ctx.shadowColor = f.col;
+    ctx.shadowBlur = 6;
+    ctx.font = 'bold 14px "Courier New"';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(f.text, f.x, f.y);
+  });
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+function drawCombo() {
+  if (combo < 2 || comboTimer <= 0) return;
+  ctx.save();
+  ctx.scale(scale, scale);
+  ctx.globalAlpha = Math.min(1, comboTimer / 30);
+  ctx.fillStyle = C.yellow;
+  ctx.shadowColor = C.yellow;
+  ctx.shadowBlur = 12;
+  ctx.font = `bold ${16 + combo}px "Courier New"`;
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'top';
+  ctx.fillText(`${combo}x COMBO`, GAME_W - 10, 50);
+  ctx.restore();
+}
+
+function drawMagneticField() {
+  ctx.save();
+  ctx.scale(scale, scale);
+  const col = polarity === 'N' ? 'rgba(255,0,0,' : 'rgba(0,0,255,';
+  const radius = 160;
+  const rings = 3;
+  for (let r = 0; r < rings; r++) {
+    const t2 = (frame * 0.02 + r / rings) % 1;
+    const rr = t2 * radius;
+    ctx.globalAlpha = (1 - t2) * 0.15;
+    ctx.strokeStyle = polarity === 'N' ? '#ff2020' : '#2020ff';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(player.x, player.y, rr, 0, Math.PI*2);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+function drawMenu() {
+  ctx.save();
+  ctx.scale(scale, scale);
+
+  ctx.fillStyle = 'rgba(0,0,0,0.85)';
+  ctx.fillRect(0, 0, GAME_W, GAME_H);
+
+  ctx.textAlign = 'center';
+
+  // Title
+  ctx.fillStyle = C.cyan;
+  ctx.shadowColor = C.cyan;
+  ctx.shadowBlur = 20;
+  ctx.font = 'bold 40px "Courier New"';
+  ctx.fillText('POLARITY', GAME_W/2, GAME_H*0.25);
+  ctx.fillStyle = C.magenta;
+  ctx.shadowColor = C.magenta;
+  ctx.fillText('DASH', GAME_W/2, GAME_H*0.25 + 48);
+
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = C.white;
+  ctx.font = '14px "Courier New"';
+  ctx.fillText('자기장 극성 아케이드 슈터', GAME_W/2, GAME_H*0.42);
+
+  ctx.fillStyle = '#888';
+  ctx.font = '12px "Courier New"';
+  ctx.fillText('N극 = 레드 적 밀치기 / S극 적 끌어당기기', GAME_W/2, GAME_H*0.50);
+  ctx.fillText('SPACE: 극성 전환 | WASD/방향키: 이동', GAME_W/2, GAME_H*0.55);
+  ctx.fillText('같은 극성 총알 = 적 색 일치 (2배 데미지)', GAME_W/2, GAME_H*0.60);
+
+  // Blink start
+  if (Math.floor(frame/20) % 2 === 0) {
+    ctx.fillStyle = C.green;
+    ctx.shadowColor = C.green;
+    ctx.shadowBlur = 10;
+    ctx.font = 'bold 20px "Courier New"';
+    ctx.fillText('[ CLICK TO START ]', GAME_W/2, GAME_H*0.75);
+  }
+
+  if (hi > 0) {
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = C.yellow;
+    ctx.font = '14px "Courier New"';
+    ctx.fillText(`HI: ${hi}`, GAME_W/2, GAME_H*0.85);
+  }
+
+  ctx.restore();
+}
+
+function drawGameOver() {
+  ctx.save();
+  ctx.scale(scale, scale);
+  ctx.fillStyle = 'rgba(0,0,0,0.8)';
+  ctx.fillRect(0, 0, GAME_W, GAME_H);
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = C.north;
+  ctx.shadowColor = C.north;
+  ctx.shadowBlur = 20;
+  ctx.font = 'bold 36px "Courier New"';
+  ctx.fillText('GAME OVER', GAME_W/2, GAME_H*0.35);
+
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = C.white;
+  ctx.font = '20px "Courier New"';
+  ctx.fillText(`SCORE: ${score}`, GAME_W/2, GAME_H*0.48);
+  ctx.fillStyle = C.yellow;
+  ctx.fillText(`HI: ${hi}`, GAME_W/2, GAME_H*0.56);
+
+  if (Math.floor(frame/20) % 2 === 0) {
+    ctx.fillStyle = C.green;
+    ctx.shadowColor = C.green;
+    ctx.shadowBlur = 10;
+    ctx.font = 'bold 18px "Courier New"';
+    ctx.fillText('[ CLICK TO RETRY ]', GAME_W/2, GAME_H*0.72);
+  }
+  ctx.restore();
+}
+
+// Main loop
+let lastTime = 0;
+function loop(ts) {
+  const dt = Math.min((ts - lastTime)/16, 3);
+  lastTime = ts;
+
+  update();
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawBackground();
+
+  if (state === 'menu') {
+    drawMenu();
+  } else if (state === 'play') {
+    drawMagneticField();
+    drawBullets();
+    drawEnemies();
+    drawPlayer();
+    drawParticles();
+    drawFloatTexts();
+    drawCombo();
+  } else if (state === 'gameover') {
+    drawEnemies();
+    drawPlayer();
+    drawParticles();
+    drawGameOver();
+  }
+
+  requestAnimationFrame(loop);
+}
+
+// Input handlers
+window.addEventListener('keydown', e => {
+  keys[e.key] = true;
+  if (e.key === ' ') {
+    e.preventDefault();
+    if (state === 'play') {
+      polarity = polarity === 'N' ? 'S' : 'N';
+    }
+  }
+});
+window.addEventListener('keyup', e => { keys[e.key] = false; });
+
+canvas.addEventListener('click', e => {
+  if (state === 'menu') {
+    state = 'play';
+    resetGame();
+    spawnWave();
+  } else if (state === 'gameover') {
+    state = 'play';
+    resetGame();
+    spawnWave();
+  }
+});
+
+// Touch controls
+let touchIds = {};
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  for (const t of e.changedTouches) {
+    const x = t.clientX / scale;
+    const y = t.clientY / scale;
+
+    if (state !== 'play') {
+      state = 'play';
+      resetGame();
+      spawnWave();
       return;
     }
 
-    const id = e.target.id;
-    if (id === 'startBtn') {
-      ensureAudio();
-      startLevel(selectedLevel);
-    } else if (id === 'nextBtn') {
-      ensureAudio();
-      selectedLevel = clamp(levelIndex + 2, 1, LEVELS.length);
-      startLevel(selectedLevel);
-    } else if (id === 'retryOverlayBtn') {
-      ensureAudio();
-      startLevel(levelIndex + 1);
-    } else if (id === 'menuOnlyBtn') {
-      showMenu();
-    } else if (id === 'resetProgressBtn') {
-      if (confirm('진행도를 초기화할까요?')) {
-        progress = { unlocked: 1, best: {} };
-        saveProgress();
-        selectedLevel = 1;
-        showMenu();
-      }
+    touchIds[t.identifier] = { x, y };
+    touchDrag = { x, y };
+  }
+}, {passive: false});
+
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  for (const t of e.changedTouches) {
+    if (touchIds[t.identifier]) {
+      touchIds[t.identifier] = { x: t.clientX / scale, y: t.clientY / scale };
+      touchDrag = { x: t.clientX / scale, y: t.clientY / scale };
     }
-  });
+  }
+}, {passive: false});
 
-  document.getElementById('retryBtn').addEventListener('click', () => {
-    ensureAudio();
-    if (currentLevel) startLevel(levelIndex + 1);
-  });
+canvas.addEventListener('touchend', e => {
+  for (const t of e.changedTouches) {
+    delete touchIds[t.identifier];
+  }
+  if (Object.keys(touchIds).length === 0) touchDrag = null;
+}, {passive: false});
 
-  document.getElementById('menuBtn').addEventListener('click', () => {
-    showMenu();
-  });
-
-  window.addEventListener('resize', resize);
-
+window.addEventListener('resize', () => {
   resize();
-  showMenu();
-  lastTs = performance.now();
-  raf = requestAnimationFrame(tick);
-})();
+});
+
+function setPolarityTouch(p) {
+  polarity = p;
+}
+window.setPolarityTouch = setPolarityTouch;
+
+// Init
+resize();
+requestAnimationFrame(loop);
 </script>
 </body>
 </html>
-<!-- deployed Sat Feb 28 20:31:30 KST 2026 -->

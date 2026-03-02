@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+<title>Echo Grid — 에코 그리드 퍼즐 | Free HTML5 Game</title>
+<meta name="description" content="Echo Grid — 에코 그리드 퍼즐: 셀을 탭하면 자신과 인접 4칸 값이 +1 증가(순환). 모든 셀을 목표 값으로 맞추는 전략 퍼즐. Echo Grid is a unique puzzle where tapping propagates +1 to a cell and its 4 neighbors cyclically." />
+<meta name="keywords" content="puzzle,strategy,echo,grid,html5,free game,퍼즐,전략,브라우저게임" />
+<meta property="og:title" content="Echo Grid — 에코 그리드 퍼즐" />
+<meta property="og:description" content="셀을 탭해 파동 전파로 모든 칸을 목표값으로 맞추는 고유 전략 퍼즐." />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://games.eastsea.xyz/echo-grid/" />
+<meta name="twitter:card" content="summary_large_image" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"VideoGame","name":"Echo Grid — 에코 그리드 퍼즐","genre":"Puzzle","applicationCategory":"Game","operatingSystem":"Any","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"author":{"@type":"Organization","name":"J&J Games"},"url":"https://games.eastsea.xyz/echo-grid/"}
+</script>
+<link rel="canonical" href="https://games.eastsea.xyz/echo-grid/" />
+<!-- LittleJS CDN -->
+<script src="https://killedbyapixel.github.io/LittleJS/dist/littlejs.min.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{width:100%;height:100%;overflow:hidden;background:#f0ebe4;font-family:'Segoe UI',Arial,sans-serif}
+  canvas{display:block;touch-action:none}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<script>
+'use strict';
+
+// ── Letterbox setup ──────────────────────────────────────────────────────────
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const BASE_W = 480, BASE_H = 700;
+let scale = 1, ox = 0, oy = 0;
+
+function resize() {
+  const sw = window.innerWidth, sh = window.innerHeight;
+  scale = Math.min(sw / BASE_W, sh / BASE_H);
+  canvas.width = sw; canvas.height = sh;
+  ox = (sw - BASE_W * scale) / 2;
+  oy = (sh - BASE_H * scale) / 2;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ── Pastel palette by cell value ─────────────────────────────────────────────
+// 4 values: 0,1,2,3
+const CELL_COLORS = [
+  { bg: '#e8dff4', stroke: '#c8b8e0', text: '#a090c0' }, // 0 – lavender
+  { bg: '#c8e8f4', stroke: '#98c0d8', text: '#5890b0' }, // 1 – sky
+  { bg: '#c8f4d8', stroke: '#98d8a8', text: '#58a070' }, // 2 – mint
+  { bg: '#f4e4c8', stroke: '#d8c098', text: '#b09060' }, // 3 – peach
+];
+
+const TARGET_BG = ['#f4e0ef','#d8eef8','#d8f8e0','#fef4e0'];
+const MAX_VAL = 4; // values cycle 0‑3
+
+// ── Level definitions ─────────────────────────────────────────────────────────
+// Each level: {n: grid size, moves, targetVal, initial board (flat array or null=random)}
+const LEVELS = [
+  { n:3, moves:10, targetVal:1, board:[0,2,0, 0,1,0, 0,0,2] },
+  { n:4, moves:14, targetVal:2, board:[0,1,3,0, 2,0,1,2, 1,3,0,1, 0,2,1,0] },
+  { n:4, moves:18, targetVal:0, board:[1,2,3,1, 2,1,2,3, 3,2,1,2, 1,3,2,1] },
+  { n:5, moves:22, targetVal:3, board:[0,0,1,0,0, 0,2,1,2,0, 1,1,2,1,1, 0,2,1,2,0, 0,0,1,0,0] },
+  { n:5, moves:28, targetVal:1, board:[3,2,0,2,3, 2,0,3,0,2, 0,3,1,3,0, 2,0,3,0,2, 3,2,0,2,3] },
+];
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let gs = 'title'; // title | play | win | lose
+let level = 0;
+let grid = [], n = 4, movesLeft = 0, targetVal = 0;
+let score = 0, totalScore = 0;
+let animT = 0;
+let pulseAnims = []; // {r,c,t}  – ripple animation
+let bestScore = +(localStorage.getItem('echogrid-best') || 0);
+
+// ── Grid helpers ──────────────────────────────────────────────────────────────
+function initLevel(lv) {
+  level = lv;
+  const L = LEVELS[lv % LEVELS.length];
+  n = L.n;
+  movesLeft = L.moves;
+  targetVal = L.targetVal;
+  score = 0;
+  pulseAnims = [];
+  grid = L.board.map(v => v);
+  gs = 'play';
+}
+
+function tapCell(r, c) {
+  if (gs !== 'play') return;
+  if (movesLeft <= 0) return;
+
+  // echo pulse: self + 4 neighbors +1 mod MAX_VAL
+  const affected = [[r, c], [r-1,c],[r+1,c],[r,c-1],[r,c+1]];
+  affected.forEach(([rr, cc]) => {
+    if (rr >= 0 && rr < n && cc >= 0 && cc < n) {
+      grid[rr * n + cc] = (grid[rr * n + cc] + 1) % MAX_VAL;
+      pulseAnims.push({ r: rr, c: cc, t: 1 });
+    }
+  });
+
+  movesLeft--;
+
+  // Check win: all cells == targetVal
+  if (grid.every(v => v === targetVal)) {
+    const bonus = movesLeft * 10;
+    score += 100 + bonus;
+    totalScore += score;
+    if (totalScore > bestScore) {
+      bestScore = totalScore;
+      localStorage.setItem('echogrid-best', bestScore);
+    }
+    gs = 'win';
+  } else if (movesLeft <= 0) {
+    gs = 'lose';
+  }
+}
+
+// ── Drawing ───────────────────────────────────────────────────────────────────
+function rr(x, y, w, h, rad, fill, stroke) {
+  ctx.beginPath();
+  ctx.moveTo(x+rad, y);
+  ctx.lineTo(x+w-rad, y); ctx.quadraticCurveTo(x+w,y,x+w,y+rad);
+  ctx.lineTo(x+w,y+h-rad); ctx.quadraticCurveTo(x+w,y+h,x+w-rad,y+h);
+  ctx.lineTo(x+rad,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-rad);
+  ctx.lineTo(x,y+rad); ctx.quadraticCurveTo(x,y,x+rad,y);
+  ctx.closePath();
+  if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+  if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 2.5; ctx.stroke(); }
+}
+
+function drawBtn(x, y, w, h, label, bg) {
+  rr(x, y, w, h, 10, bg, 'rgba(0,0,0,0.12)');
+  ctx.fillStyle = '#4a3a6a';
+  ctx.font = `bold ${16}px Segoe UI,Arial`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, x + w/2, y + h/2);
+}
+
+function drawTitle() {
+  // Background decoration
+  ctx.fillStyle = '#f0ebe4';
+  ctx.fillRect(0, 0, BASE_W, BASE_H);
+
+  // Title
+  ctx.fillStyle = '#7a5ab0';
+  ctx.font = `bold 52px Segoe UI,Arial`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillText('Echo Grid', BASE_W/2, 60);
+  ctx.fillStyle = '#a08ac8';
+  ctx.font = `22px Segoe UI,Arial`;
+  ctx.fillText('에코 그리드 퍼즐', BASE_W/2, 122);
+
+  // Demo grid (3x3 pastel)
+  const demo_cell = 60, demo_gap = 8;
+  const demo_n = 3;
+  const demo_w = demo_n * demo_cell + (demo_n-1) * demo_gap;
+  const demo_x = (BASE_W - demo_w) / 2;
+  const demo_y = 180;
+  const demo_vals = [0,1,2, 1,3,1, 2,1,0];
+  for (let r=0;r<demo_n;r++) for (let c=0;c<demo_n;c++) {
+    const v = demo_vals[r*demo_n+c];
+    const col = CELL_COLORS[v];
+    const dx = demo_x + c*(demo_cell+demo_gap);
+    const dy = demo_y + r*(demo_cell+demo_gap);
+    rr(dx,dy,demo_cell,demo_cell,10, col.bg, col.stroke);
+    ctx.fillStyle = col.text;
+    ctx.font = `bold 20px Segoe UI,Arial`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(v, dx+demo_cell/2, dy+demo_cell/2);
+  }
+
+  // Ripple arrow demo
+  ctx.fillStyle = '#c0a8e0';
+  ctx.font = `32px Segoe UI,Arial`;
+  ctx.textAlign = 'center';
+  ctx.fillText('⬇', BASE_W/2, 386);
+
+  // How to play
+  ctx.fillStyle = '#7a5ab0';
+  ctx.font = `15px Segoe UI,Arial`;
+  ctx.textAlign = 'center';
+  ctx.fillText('셀을 탭하면 자신 + 인접 4칸 +1 (0~3 순환)', BASE_W/2, 428);
+  ctx.fillText('모든 칸을 목표 값으로 맞추세요!', BASE_W/2, 452);
+
+  // Target indicator
+  const tv = 1;
+  const col = CELL_COLORS[tv];
+  const tx = BASE_W/2 - 25;
+  rr(tx, 476, 50, 50, 10, col.bg, col.stroke);
+  ctx.fillStyle = col.text;
+  ctx.font = `bold 22px Segoe UI,Arial`;
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(tv, tx+25, 501);
+  ctx.fillStyle = '#9a80c0';
+  ctx.font = `13px Segoe UI,Arial`;
+  ctx.fillText('← 목표 값 예시', BASE_W/2 + 40, 501);
+
+  ctx.fillStyle = '#b0a0cc';
+  ctx.font = `14px Segoe UI,Arial`;
+  ctx.textAlign = 'center';
+  ctx.fillText(`🏆 Best: ${bestScore}`, BASE_W/2, 546);
+
+  drawBtn(BASE_W/2 - 100, 580, 200, 54, '▶ START', '#d4c0f4');
+}
+
+function drawPlay() {
+  ctx.fillStyle = '#f0ebe4';
+  ctx.fillRect(0, 0, BASE_W, BASE_H);
+
+  const L = LEVELS[level % LEVELS.length];
+
+  // Header
+  ctx.fillStyle = '#7a5ab0';
+  ctx.font = `bold 13px Segoe UI,Arial`;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText(`LEVEL ${level+1}`, 24, 16);
+  ctx.textAlign = 'center';
+  ctx.fillText(`MOVES: ${movesLeft}`, BASE_W/2, 16);
+  ctx.textAlign = 'right';
+  ctx.fillText(`SCORE: ${totalScore + score}`, BASE_W-24, 16);
+
+  // Target display
+  const tcol = CELL_COLORS[targetVal];
+  const tx = BASE_W/2 - 80;
+  ctx.fillStyle = '#9a80c0';
+  ctx.font = `12px Segoe UI,Arial`;
+  ctx.textAlign = 'center';
+  ctx.fillText('TARGET', BASE_W/2, 38);
+  rr(BASE_W/2 - 20, 52, 40, 40, 8, tcol.bg, tcol.stroke);
+  ctx.fillStyle = tcol.text;
+  ctx.font = `bold 20px Segoe UI,Arial`;
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(targetVal, BASE_W/2, 72);
+
+  // Moves progress bar
+  const pct = movesLeft / L.moves;
+  rr(24, 104, BASE_W-48, 10, 5, '#e0d4f0', null);
+  if (pct > 0) rr(24, 104, (BASE_W-48)*pct, 10, 5, '#b4a0d8', null);
+
+  // Grid
+  const gap = 8;
+  const cell = Math.floor((BASE_W - 48 - gap*(n-1)) / n);
+  const grid_w = n * cell + (n-1) * gap;
+  const grid_x = (BASE_W - grid_w) / 2;
+  const grid_y = 130;
+
+  for (let r=0; r<n; r++) {
+    for (let c=0; c<n; c++) {
+      const v = grid[r*n+c];
+      const col = CELL_COLORS[v];
+      const cx = grid_x + c*(cell+gap);
+      const cy = grid_y + r*(cell+gap);
+
+      // Pulse animation overlay
+      const anim = pulseAnims.find(a => a.r===r && a.c===c && a.t > 0);
+      const pulseScale = anim ? 1 + 0.12 * anim.t : 1;
+      const pd = (pulseScale - 1) * cell / 2;
+
+      rr(cx - pd, cy - pd, cell + pd*2, cell + pd*2, 10, col.bg, col.stroke);
+
+      ctx.fillStyle = col.text;
+      ctx.font = `bold ${Math.floor(cell*0.4)}px Segoe UI,Arial`;
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(v, cx + cell/2, cy + cell/2);
+
+      // Target ring highlight
+      if (v === targetVal) {
+        ctx.save();
+        ctx.strokeStyle = `rgba(160,130,220,${0.5 + 0.3*Math.sin(animT*4)})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.roundRect(cx+2, cy+2, cell-4, cell-4, 8);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+  }
+
+  // Stats row below grid
+  const grid_bottom = grid_y + n*(cell+gap) - gap + 16;
+  const correct = grid.filter(v => v === targetVal).length;
+  const total = n * n;
+  ctx.fillStyle = '#9a80c0';
+  ctx.font = `14px Segoe UI,Arial`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillText(`목표 달성: ${correct} / ${total}칸`, BASE_W/2, grid_bottom);
+
+  // Progress bar for correct cells
+  const cpct = correct / total;
+  rr(BASE_W/2 - 100, grid_bottom + 22, 200, 8, 4, '#e0d4f0', null);
+  if (cpct > 0) rr(BASE_W/2 - 100, grid_bottom + 22, 200*cpct, 8, 4, '#90d0a0', null);
+}
+
+function drawWin() {
+  drawPlay();
+  ctx.fillStyle = 'rgba(240,235,228,0.88)';
+  ctx.fillRect(0, 0, BASE_W, BASE_H);
+  ctx.fillStyle = '#5ab070';
+  ctx.font = `bold 42px Segoe UI,Arial`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('🎉 CLEAR!', BASE_W/2, BASE_H/2 - 70);
+  ctx.fillStyle = '#7a5ab0';
+  ctx.font = `20px Segoe UI,Arial`;
+  ctx.fillText(`Score: ${totalScore}`, BASE_W/2, BASE_H/2 - 20);
+  ctx.fillText(`Best: ${bestScore}`, BASE_W/2, BASE_H/2 + 20);
+  drawBtn(BASE_W/2 - 110, BASE_H/2 + 60, 220, 52, '▶ NEXT LEVEL', '#c0e8c8');
+}
+
+function drawLose() {
+  drawPlay();
+  ctx.fillStyle = 'rgba(240,235,228,0.88)';
+  ctx.fillRect(0, 0, BASE_W, BASE_H);
+  ctx.fillStyle = '#c05060';
+  ctx.font = `bold 40px Segoe UI,Arial`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('💔 GAME OVER', BASE_W/2, BASE_H/2 - 70);
+  ctx.fillStyle = '#7a5ab0';
+  ctx.font = `20px Segoe UI,Arial`;
+  ctx.fillText(`Score: ${totalScore + score}`, BASE_W/2, BASE_H/2 - 20);
+  ctx.fillText(`Best: ${bestScore}`, BASE_W/2, BASE_H/2 + 20);
+  drawBtn(BASE_W/2 - 110, BASE_H/2 + 60, 220, 52, '↺ TRY AGAIN', '#f4c8c8');
+}
+
+// ── Input ─────────────────────────────────────────────────────────────────────
+function toLocal(cx, cy) {
+  return { x: (cx - ox) / scale, y: (cy - oy) / scale };
+}
+
+function handleTap(cx, cy) {
+  const p = toLocal(cx, cy);
+
+  if (gs === 'title') {
+    if (p.x >= BASE_W/2-100 && p.x <= BASE_W/2+100 && p.y >= 580 && p.y <= 634) {
+      totalScore = 0;
+      initLevel(0);
+    }
+    return;
+  }
+  if (gs === 'win') {
+    if (p.y >= BASE_H/2+60 && p.y <= BASE_H/2+112) initLevel(level + 1);
+    return;
+  }
+  if (gs === 'lose') {
+    if (p.y >= BASE_H/2+60 && p.y <= BASE_H/2+112) { totalScore = 0; initLevel(level); }
+    return;
+  }
+  if (gs === 'play') {
+    const L = LEVELS[level % LEVELS.length];
+    const gap = 8;
+    const cell = Math.floor((BASE_W - 48 - gap*(n-1)) / n);
+    const grid_w = n * cell + (n-1) * gap;
+    const grid_x = (BASE_W - grid_w) / 2;
+    const grid_y = 130;
+
+    const c = Math.floor((p.x - grid_x) / (cell + gap));
+    const r = Math.floor((p.y - grid_y) / (cell + gap));
+    if (r >= 0 && r < n && c >= 0 && c < n) {
+      // Validate within cell (not in gap)
+      const cellX = grid_x + c * (cell + gap);
+      const cellY = grid_y + r * (cell + gap);
+      if (p.x >= cellX && p.x <= cellX+cell && p.y >= cellY && p.y <= cellY+cell) {
+        tapCell(r, c);
+      }
+    }
+  }
+}
+
+canvas.addEventListener('click', e => handleTap(e.clientX, e.clientY));
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  const t = e.touches[0];
+  handleTap(t.clientX, t.clientY);
+}, { passive: false });
+
+// ── Game loop ─────────────────────────────────────────────────────────────────
+let lastTs = 0;
+function loop(ts) {
+  const dt = Math.min((ts - lastTs) / 1000, 0.05);
+  lastTs = ts;
+  animT += dt;
+
+  // Update pulse animations
+  pulseAnims = pulseAnims.map(a => ({ ...a, t: a.t - dt * 4 })).filter(a => a.t > 0);
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.save();
+  ctx.translate(ox, oy);
+  ctx.scale(scale, scale);
+
+  if (gs === 'title') drawTitle();
+  else if (gs === 'play') drawPlay();
+  else if (gs === 'win') drawWin();
+  else if (gs === 'lose') drawLose();
+
+  ctx.restore();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

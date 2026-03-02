@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+<title>Meteor Blitz — 메테오 블리츠 | Free HTML5 Game</title>
+<meta name="description" content="Meteor Blitz — 메테오 블리츠: 충전 후 해제하면 충격파 링이 팽창하여 반경 내 운석을 격파. 타이밍이 전부인 고유 Phase Burst 아케이드 게임." />
+<meta name="keywords" content="arcade,action,meteor,shockwave,html5,free game,아케이드,액션,브라우저게임" />
+<meta property="og:title" content="Meteor Blitz — 메테오 블리츠" />
+<meta property="og:description" content="Charge & release to explode a shockwave ring. Destroy meteors with perfect timing!" />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://games.eastsea.xyz/meteor-blitz/" />
+<meta name="twitter:card" content="summary_large_image" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"VideoGame","name":"Meteor Blitz — 메테오 블리츠","genre":"Arcade","applicationCategory":"Game","operatingSystem":"Any","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"author":{"@type":"Organization","name":"J&J Games"},"url":"https://games.eastsea.xyz/meteor-blitz/"}
+</script>
+<link rel="canonical" href="https://games.eastsea.xyz/meteor-blitz/" />
+<!-- LittleJS CDN -->
+<script src="https://killedbyapixel.github.io/LittleJS/dist/littlejs.min.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{width:100%;height:100%;overflow:hidden;background:#0d0d0d;font-family:'Segoe UI',Arial,monospace}
+  canvas{display:block;touch-action:none}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<script>
+'use strict';
+
+// ── Letterbox ────────────────────────────────────────────────────────────────
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const BASE_W = 480, BASE_H = 700;
+let scale = 1, ox = 0, oy = 0;
+
+function resize() {
+  const sw = window.innerWidth, sh = window.innerHeight;
+  scale = Math.min(sw / BASE_W, sh / BASE_H);
+  canvas.width = sw; canvas.height = sh;
+  ox = (sw - BASE_W * scale) / 2;
+  oy = (sh - BASE_H * scale) / 2;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ── Retro 8-bit palette (minimal) ─────────────────────────────────────────────
+const C = {
+  bg:     '#0d0d0d',
+  bg2:    '#1a1a2a',
+  grid:   '#1e1e2e',
+  player: '#f0f0f0',
+  playerG:'#c0c0c0',
+  wave:   '#e8e840',   // shockwave ring
+  wave2:  '#e8a020',
+  small:  '#a0a0b0',   // small meteor
+  large:  '#c04030',   // large meteor
+  largeG: '#801820',
+  hud:    '#d0d0d0',
+  accent: '#60c0f0',
+  danger: '#ff4444',
+  text:   '#f0f0f0',
+  dim:    '#888888',
+};
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let gs = 'title'; // title | play | dead
+let score = 0, wave = 0, lives = 3;
+let charge = 0, maxCharge = 1.5; // seconds to full charge
+let isCharging = false;
+let shockwaves = []; // {r, maxR, t}  t=1→0
+let meteors = [];    // {x,y,vx,vy,size,r,hp,dmgT}
+let particles = [];  // {x,y,vx,vy,t,col}
+let animT = 0, lastTs = 0;
+let waveTimer = 0, waveInterval = 3;
+let spawnCount = 0, spawnMax = 5;
+let bestScore = +(localStorage.getItem('meteorblitz-best') || 0);
+let chargeLockout = false; // brief delay after burst
+
+// Player is at center of play area
+const PX = BASE_W / 2, PY = BASE_H * 0.5;
+const PLAY_R = 220; // play field radius
+
+// ── Meteor helpers ─────────────────────────────────────────────────────────────
+function spawnMeteor() {
+  const angle = Math.random() * Math.PI * 2;
+  const edgeDist = PLAY_R - 10;
+  const x = PX + Math.cos(angle) * edgeDist;
+  const y = PY + Math.sin(angle) * edgeDist;
+  const large = Math.random() < 0.3 + wave * 0.04;
+  const speed = 40 + wave * 8 + Math.random() * 20;
+  const dx = PX - x, dy = PY - y;
+  const dist = Math.hypot(dx, dy);
+  meteors.push({
+    x, y,
+    vx: (dx/dist) * speed * (0.8 + Math.random()*0.4),
+    vy: (dy/dist) * speed * (0.8 + Math.random()*0.4),
+    size: large ? 22 : 12,
+    hp: large ? 2 : 1,
+    pts: large ? 50 : 20,
+    dmgT: 0,
+  });
+}
+
+function spawnParticles(x, y, col, count, speed) {
+  for (let i = 0; i < count; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const s = speed * (0.5 + Math.random());
+    particles.push({ x, y, vx: Math.cos(a)*s, vy: Math.sin(a)*s, t: 1, col });
+  }
+}
+
+// ── Update ─────────────────────────────────────────────────────────────────────
+function update(dt) {
+  animT += dt;
+
+  // Wave spawning
+  waveTimer += dt;
+  if (waveTimer >= waveInterval) {
+    waveTimer = 0;
+    const toSpawn = Math.min(spawnMax, 2 + Math.floor(wave / 2));
+    for (let i = 0; i < toSpawn; i++) spawnMeteor();
+    spawnCount += toSpawn;
+    wave++;
+    waveInterval = Math.max(1.5, 3 - wave * 0.1);
+  }
+
+  // Charge
+  if (isCharging && !chargeLockout) {
+    charge = Math.min(charge + dt / maxCharge, 1);
+  }
+
+  // Move meteors
+  meteors.forEach(m => {
+    m.x += m.vx * dt;
+    m.y += m.vy * dt;
+    if (m.dmgT > 0) m.dmgT -= dt;
+    // Bounce off circle boundary (elastic)
+    const ddx = m.x - PX, ddy = m.y - PY;
+    const dist = Math.hypot(ddx, ddy);
+    if (dist + m.size > PLAY_R) {
+      // reflect velocity component
+      const nx = ddx/dist, ny = ddy/dist;
+      const dot = m.vx*nx + m.vy*ny;
+      m.vx -= 2*dot*nx;
+      m.vy -= 2*dot*ny;
+      // push back inside
+      const push = PLAY_R - m.size - 2;
+      m.x = PX + nx * push;
+      m.y = PY + ny * push;
+    }
+  });
+
+  // Shockwave collisions
+  shockwaves.forEach(sw => {
+    sw.t -= dt * 1.6;
+    const currR = sw.maxR * (1 - sw.t);
+    meteors.forEach(m => {
+      const dist = Math.hypot(m.x - PX, m.y - PY);
+      const ring_thick = 28;
+      if (Math.abs(dist - currR) < ring_thick + m.size) {
+        m.hp--;
+        m.dmgT = 0.15;
+        if (m.hp <= 0) {
+          spawnParticles(m.x, m.y, C.wave, 8, 80);
+          score += m.pts;
+          m.hp = -99; // mark for removal
+        } else {
+          spawnParticles(m.x, m.y, C.wave2, 4, 60);
+        }
+      }
+    });
+  });
+  shockwaves = shockwaves.filter(sw => sw.t > 0);
+  meteors = meteors.filter(m => m.hp > 0);
+
+  // Meteor vs player collision
+  meteors.forEach(m => {
+    if (Math.hypot(m.x - PX, m.y - PY) < 18 + m.size) {
+      lives--;
+      spawnParticles(PX, PY, C.danger, 12, 100);
+      m.hp = -99;
+      if (lives <= 0) {
+        if (score > bestScore) { bestScore = score; localStorage.setItem('meteorblitz-best', bestScore); }
+        gs = 'dead';
+      }
+    }
+  });
+  meteors = meteors.filter(m => m.hp > 0);
+
+  // Particles
+  particles.forEach(p => {
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    p.vx *= 0.92; p.vy *= 0.92;
+    p.t -= dt * 2;
+  });
+  particles = particles.filter(p => p.t > 0);
+}
+
+// ── Draw ───────────────────────────────────────────────────────────────────────
+function drawPlay() {
+  // Background
+  ctx.fillStyle = C.bg;
+  ctx.fillRect(0, 0, BASE_W, BASE_H);
+
+  // Play field
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(PX, PY, PLAY_R, 0, Math.PI*2);
+  ctx.fillStyle = C.bg2;
+  ctx.fill();
+  ctx.strokeStyle = '#333355';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.restore();
+
+  // Grid rings (decorative)
+  for (let rr = 60; rr < PLAY_R; rr += 60) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(60,60,100,0.4)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 8]);
+    ctx.beginPath();
+    ctx.arc(PX, PY, rr, 0, Math.PI*2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // Particles
+  particles.forEach(p => {
+    ctx.save();
+    ctx.globalAlpha = p.t;
+    ctx.fillStyle = p.col;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 3, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  });
+
+  // Meteors
+  meteors.forEach(m => {
+    ctx.save();
+    ctx.translate(m.x, m.y);
+    ctx.rotate(animT * 1.2 * (m.size > 15 ? 0.6 : 1));
+    const hit = m.dmgT > 0;
+    const col = m.size > 15 ? (hit ? '#ff9080' : C.large) : (hit ? '#d0d0ff' : C.small);
+    // Hexagonal shape
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2 - Math.PI / 6;
+      const ix = Math.cos(a) * m.size, iy = Math.sin(a) * m.size;
+      i === 0 ? ctx.moveTo(ix, iy) : ctx.lineTo(ix, iy);
+    }
+    ctx.closePath();
+    ctx.fillStyle = col;
+    ctx.fill();
+    ctx.strokeStyle = m.size > 15 ? C.largeG : '#6060a0';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    // HP indicator for large
+    if (m.size > 15 && m.hp > 1) {
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 10px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(m.hp, 0, 0);
+    }
+    ctx.restore();
+  });
+
+  // Shockwaves
+  shockwaves.forEach(sw => {
+    const currR = sw.maxR * (1 - sw.t);
+    const alpha = Math.pow(sw.t, 0.5) * 0.8;
+    ctx.save();
+    ctx.strokeStyle = C.wave;
+    ctx.lineWidth = 20 * sw.t;
+    ctx.globalAlpha = alpha;
+    ctx.beginPath();
+    ctx.arc(PX, PY, currR, 0, Math.PI*2);
+    ctx.stroke();
+    ctx.globalAlpha = alpha * 0.5;
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 4 * sw.t;
+    ctx.stroke();
+    ctx.restore();
+  });
+
+  // Player
+  const pulsR = 14 + Math.sin(animT * 6) * 2;
+  ctx.save();
+  // Glow when charging
+  if (isCharging && charge > 0) {
+    ctx.shadowColor = C.wave;
+    ctx.shadowBlur = 20 * charge;
+  }
+  ctx.beginPath();
+  ctx.arc(PX, PY, pulsR, 0, Math.PI*2);
+  ctx.fillStyle = C.player;
+  ctx.fill();
+  ctx.strokeStyle = C.playerG;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  // Charge ring
+  if (charge > 0) {
+    ctx.strokeStyle = C.wave;
+    ctx.lineWidth = 4;
+    ctx.globalAlpha = charge;
+    ctx.beginPath();
+    ctx.arc(PX, PY, pulsR + 6 + charge * 10, 0, Math.PI * 2 * charge);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // Charge bar
+  const barX = BASE_W/2 - 90, barY = PY + PLAY_R + 16;
+  ctx.fillStyle = '#333';
+  ctx.fillRect(barX, barY, 180, 14);
+  ctx.fillStyle = charge >= 1 ? C.wave : C.accent;
+  ctx.fillRect(barX, barY, 180 * charge, 14);
+  ctx.strokeStyle = '#555';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(barX, barY, 180, 14);
+  ctx.fillStyle = C.dim;
+  ctx.font = '11px monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillText(charge >= 1 ? 'RELEASE TO BURST!' : 'HOLD TO CHARGE', BASE_W/2, barY + 18);
+
+  // HUD
+  ctx.fillStyle = C.hud;
+  ctx.font = 'bold 15px monospace';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText(`WAVE ${wave}`, 16, 16);
+  ctx.textAlign = 'center';
+  ctx.fillText(`${score} pts`, BASE_W/2, 16);
+  ctx.textAlign = 'right';
+  ctx.fillStyle = lives > 1 ? C.hud : C.danger;
+  ctx.fillText('♥'.repeat(lives), BASE_W - 16, 16);
+}
+
+function drawTitle() {
+  ctx.fillStyle = C.bg;
+  ctx.fillRect(0, 0, BASE_W, BASE_H);
+
+  // Star field
+  ctx.fillStyle = '#fff';
+  for (let i = 0; i < 60; i++) {
+    const sx = ((i * 137.5 + 50) % BASE_W);
+    const sy = ((i * 97.3 + 30) % (BASE_H - 100)) + 50;
+    const sr = Math.sin(animT * 2 + i) * 0.5 + 1;
+    ctx.beginPath();
+    ctx.arc(sx, sy, sr, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  // Title glow
+  ctx.save();
+  ctx.shadowColor = C.wave;
+  ctx.shadowBlur = 30;
+  ctx.fillStyle = C.wave;
+  ctx.font = 'bold 54px monospace';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillText('METEOR', BASE_W/2, 80);
+  ctx.fillText('BLITZ', BASE_W/2, 142);
+  ctx.restore();
+
+  ctx.fillStyle = C.dim;
+  ctx.font = '18px Segoe UI,Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('메테오 블리츠', BASE_W/2, 208);
+
+  // Demo shockwave ring
+  const demoR = 60 + Math.sin(animT * 2) * 20;
+  ctx.save();
+  ctx.strokeStyle = C.wave;
+  ctx.lineWidth = 12 * (0.5 + 0.5*Math.sin(animT*2));
+  ctx.globalAlpha = 0.6 + 0.4*Math.sin(animT*2);
+  ctx.beginPath();
+  ctx.arc(BASE_W/2, 320, demoR, 0, Math.PI*2);
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.fillStyle = C.player;
+  ctx.beginPath();
+  ctx.arc(BASE_W/2, 320, 12, 0, Math.PI*2);
+  ctx.fill();
+
+  ctx.fillStyle = C.text;
+  ctx.font = '15px Segoe UI,Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('꾹 눌러 충전 → 놓으면 충격파 폭발!', BASE_W/2, 398);
+  ctx.fillText('Hold to charge · Release to BURST!', BASE_W/2, 422);
+
+  ctx.fillStyle = C.dim;
+  ctx.font = '14px monospace';
+  ctx.fillText(`BEST: ${bestScore}`, BASE_W/2, 460);
+
+  // Start button
+  ctx.save();
+  ctx.shadowColor = C.wave;
+  ctx.shadowBlur = 10;
+  ctx.fillStyle = C.wave;
+  ctx.fillRect(BASE_W/2 - 100, 504, 200, 52);
+  ctx.restore();
+  ctx.fillStyle = '#0d0d0d';
+  ctx.font = 'bold 20px monospace';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('▶ START', BASE_W/2, 530);
+
+  ctx.fillStyle = C.dim;
+  ctx.font = '12px monospace';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillText('SPACE / click+hold to charge', BASE_W/2, 580);
+}
+
+function drawDead() {
+  drawPlay();
+  ctx.fillStyle = 'rgba(13,13,13,0.82)';
+  ctx.fillRect(0, 0, BASE_W, BASE_H);
+  ctx.save();
+  ctx.shadowColor = C.danger;
+  ctx.shadowBlur = 20;
+  ctx.fillStyle = C.danger;
+  ctx.font = 'bold 44px monospace';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('GAME OVER', BASE_W/2, BASE_H/2 - 70);
+  ctx.restore();
+  ctx.fillStyle = C.hud;
+  ctx.font = '20px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText(`Score: ${score}`, BASE_W/2, BASE_H/2 - 20);
+  ctx.fillText(`Best:  ${bestScore}`, BASE_W/2, BASE_H/2 + 20);
+  ctx.fillStyle = C.wave;
+  ctx.fillRect(BASE_W/2 - 100, BASE_H/2 + 60, 200, 52);
+  ctx.fillStyle = '#0d0d0d';
+  ctx.font = 'bold 18px monospace';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('↺ RETRY', BASE_W/2, BASE_H/2 + 86);
+}
+
+// ── Burst (fire shockwave) ─────────────────────────────────────────────────────
+function burst() {
+  if (gs !== 'play' || chargeLockout) return;
+  const burstR = 80 + charge * (PLAY_R - 80);
+  shockwaves.push({ maxR: burstR, t: 1 });
+  spawnParticles(PX, PY, C.wave, Math.floor(6 + charge * 10), 120);
+  charge = 0;
+  chargeLockout = true;
+  setTimeout(() => { chargeLockout = false; }, 300);
+}
+
+// ── Input ──────────────────────────────────────────────────────────────────────
+function toLocal(cx, cy) {
+  return { x: (cx - ox) / scale, y: (cy - oy) / scale };
+}
+
+// Touch / mouse
+canvas.addEventListener('mousedown', e => {
+  const p = toLocal(e.clientX, e.clientY);
+  if (gs === 'title') {
+    if (p.y >= 504 && p.y <= 556) startGame();
+    else isCharging = true;
+    return;
+  }
+  if (gs === 'dead') {
+    if (p.y >= BASE_H/2+60 && p.y <= BASE_H/2+112) startGame();
+    return;
+  }
+  isCharging = true;
+});
+canvas.addEventListener('mouseup', () => { if (isCharging) { burst(); isCharging = false; } });
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  const t = e.touches[0];
+  const p = toLocal(t.clientX, t.clientY);
+  if (gs === 'title') {
+    if (p.y >= 504 && p.y <= 556) { startGame(); return; }
+  }
+  if (gs === 'dead') {
+    if (p.y >= BASE_H/2+60 && p.y <= BASE_H/2+112) { startGame(); return; }
+  }
+  isCharging = true;
+}, { passive: false });
+canvas.addEventListener('touchend', e => {
+  e.preventDefault();
+  if (isCharging) { burst(); isCharging = false; }
+}, { passive: false });
+
+// Keyboard
+window.addEventListener('keydown', e => {
+  if (e.code === 'Space') {
+    e.preventDefault();
+    if (gs === 'title') { startGame(); return; }
+    if (gs === 'dead') { startGame(); return; }
+    isCharging = true;
+  }
+});
+window.addEventListener('keyup', e => {
+  if (e.code === 'Space' && isCharging) { burst(); isCharging = false; }
+});
+
+function startGame() {
+  gs = 'play';
+  score = 0; wave = 0; lives = 3;
+  charge = 0; isCharging = false; chargeLockout = false;
+  waveTimer = 0; waveInterval = 3;
+  meteors = []; shockwaves = []; particles = [];
+  // Spawn initial wave
+  for (let i = 0; i < 3; i++) spawnMeteor();
+}
+
+// ── Loop ───────────────────────────────────────────────────────────────────────
+function loop(ts) {
+  const dt = Math.min((ts - lastTs) / 1000, 0.05);
+  lastTs = ts;
+
+  if (gs === 'play') update(dt);
+  else animT += dt;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.save();
+  ctx.translate(ox, oy);
+  ctx.scale(scale, scale);
+
+  if (gs === 'title') drawTitle();
+  else if (gs === 'play') drawPlay();
+  else if (gs === 'dead') drawDead();
+
+  ctx.restore();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

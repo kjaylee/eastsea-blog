@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CAC Payback Period Calculator | 고객 획득 회수기간 계산기</title>
+  <meta name="description" content="고객 획득 비용(CAC) 회수기간을 계산합니다. ARPU, 그로스 마진, 이탈률로 월별 누적 기여이익 및 손익분기 시점을 시각화합니다." />
+  <style>
+    :root{--bg:#0a0f1e;--card:#101929;--line:#1c2f4a;--txt:#e6efff;--muted:#6b89a8;--pri:#7c3aed;--ok:#10b981;--warn:#f59e0b;--err:#ef4444;--acc:#06b6d4}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;background:radial-gradient(ellipse at 0% 0%,#1a0a3d 0%,#0a0f1e 60%);color:var(--txt);min-height:100vh}
+    .wrap{max-width:1080px;margin:0 auto;padding:20px 14px 60px}
+    .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;gap:10px;flex-wrap:wrap}
+    .topbar h1{font-size:clamp(1.1rem,2.5vw,1.6rem);font-weight:800}
+    .topbar .sub{color:var(--muted);font-size:.85rem;margin-top:4px}
+    .home{color:#c5d9f5;text-decoration:none;border:1px solid var(--line);padding:7px 12px;border-radius:10px;background:#101929;white-space:nowrap;font-size:.85rem}
+    .layout{display:grid;grid-template-columns:340px 1fr;gap:12px}
+    .card{background:linear-gradient(155deg,#142040,#101929);border:1px solid var(--line);border-radius:14px;padding:16px}
+    .card h2{font-size:.95rem;font-weight:700;margin-bottom:13px;color:#b5cae8}
+    .field{margin-bottom:11px}
+    .field label{display:block;font-size:.78rem;color:var(--muted);margin-bottom:5px}
+    .field input,.field select{width:100%;padding:9px 11px;background:#080e1c;border:1px solid var(--line);border-radius:9px;color:var(--txt);font-size:.9rem}
+    .field input:focus,.field select:focus{outline:none;border-color:var(--pri)}
+    .field .hint{font-size:.72rem;color:#3e5a78;margin-top:3px}
+    .btn-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}
+    button{width:100%;padding:10px;border:none;border-radius:10px;cursor:pointer;font-size:.9rem;font-weight:700}
+    .btn-calc{background:linear-gradient(135deg,var(--pri),#5b21b6);color:#fff}
+    .btn-reset{background:#0c1526;color:var(--muted);border:1px solid var(--line)}
+    .kpi-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+    .kpi{background:#080e1c;border:1px solid var(--line);border-radius:11px;padding:11px;text-align:center}
+    .kpi .label{font-size:.72rem;color:var(--muted);margin-bottom:5px}
+    .kpi .val{font-size:1.3rem;font-weight:800}
+    .kpi .sub-val{font-size:.73rem;color:var(--muted);margin-top:2px}
+    .good{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--err)}.acc{color:var(--acc)}
+    .chart-area{position:relative;height:220px;margin-top:10px}
+    canvas{width:100%!important;height:100%!important}
+    .breakdown-table{width:100%;border-collapse:collapse;font-size:.81rem;margin-top:10px}
+    .breakdown-table th,.breakdown-table td{padding:7px 7px;border-bottom:1px solid var(--line);text-align:right}
+    .breakdown-table th:first-child,.breakdown-table td:first-child{text-align:left}
+    .breakdown-table th{color:var(--muted);font-weight:600}
+    .highlight-row{background:rgba(16,185,129,.1);font-weight:700}
+    .insight-box{margin-top:12px;padding:12px;background:#080e1c;border:1px solid var(--line);border-radius:11px;font-size:.83rem;color:#8aaccc;line-height:1.65}
+    .insight-box strong{color:var(--txt)}
+    .segment-bar{margin:10px 0;display:flex;align-items:center;gap:10px;font-size:.8rem}
+    .seg-fill{height:12px;border-radius:999px;transition:width .5s ease}
+    .seg-bg{flex:1;background:#080e1c;border-radius:999px;overflow:hidden;border:1px solid var(--line)}
+    .full-col{grid-column:1/-1}
+    @media(max-width:740px){.layout{grid-template-columns:1fr}.kpi-grid{grid-template-columns:1fr 1fr}}
+  </style>
+  <script src="/assets/analytics.js"></script>
+</head>
+<body>
+<main class="wrap">
+  <div class="topbar">
+    <div>
+      <h1>⏱️ CAC 회수기간 계산기</h1>
+      <div class="sub">Customer Acquisition Cost Payback Period · 월별 누적 기여이익 시뮬레이션</div>
+    </div>
+    <a href="/tools/" class="home">← 도구 목록</a>
+  </div>
+
+  <div class="layout">
+    <!-- INPUT -->
+    <div class="card">
+      <h2>📥 입력값</h2>
+      <div class="field">
+        <label>CAC – 고객 획득 비용 ($)</label>
+        <input id="cac" type="number" value="600" min="0" />
+        <div class="hint">마케팅+영업 비용 ÷ 신규 고객 수</div>
+      </div>
+      <div class="field">
+        <label>ARPU – 월 평균 매출 ($)</label>
+        <input id="arpu" type="number" value="80" min="0" />
+        <div class="hint">Average Revenue Per User (월)</div>
+      </div>
+      <div class="field">
+        <label>그로스 마진 (%)</label>
+        <input id="margin" type="number" value="75" min="0" max="100" />
+        <div class="hint">매출총이익률 (COGS 제외)</div>
+      </div>
+      <div class="field">
+        <label>월 이탈률 (%)</label>
+        <input id="churn" type="number" value="2.5" min="0" max="100" step="0.1" />
+        <div class="hint">0 = 이탈 없음 (보수적 기준: 0 권장)</div>
+      </div>
+      <div class="field">
+        <label>월 확장 ARPU 증가 (%)</label>
+        <input id="expansion" type="number" value="1" min="0" max="20" step="0.1" />
+        <div class="hint">업셀/교차판매로 인한 월별 ARPU 성장</div>
+      </div>
+      <div class="field">
+        <label>시뮬레이션 기간 (개월)</label>
+        <input id="simMonths" type="number" value="36" min="6" max="120" />
+      </div>
+      <div class="btn-row">
+        <button class="btn-calc" onclick="calculate()">계산하기</button>
+        <button class="btn-reset" onclick="reset()">초기화</button>
+      </div>
+    </div>
+
+    <!-- RESULTS -->
+    <div>
+      <div class="card" style="margin-bottom:12px">
+        <h2>📊 핵심 지표</h2>
+        <div class="kpi-grid">
+          <div class="kpi">
+            <div class="label">회수기간 (단순)</div>
+            <div class="val" id="simplePayback">—</div>
+            <div class="sub-val">CAC ÷ (ARPU × 마진)</div>
+          </div>
+          <div class="kpi">
+            <div class="label">회수기간 (이탈 반영)</div>
+            <div class="val" id="adjPayback">—</div>
+            <div class="sub-val">생존 곡선 기준</div>
+          </div>
+          <div class="kpi">
+            <div class="label">LTV (추정)</div>
+            <div class="val acc" id="ltv">—</div>
+            <div class="sub-val" id="ltvCacRatio">LTV:CAC —</div>
+          </div>
+          <div class="kpi">
+            <div class="label">월 기여이익</div>
+            <div class="val good" id="monthlyContrib">—</div>
+            <div class="sub-val">ARPU × 마진</div>
+          </div>
+        </div>
+        <div class="insight-box" id="insightBox">입력 후 계산하기 버튼을 누르세요.</div>
+      </div>
+
+      <div class="card" id="tableCard" style="display:none">
+        <h2>📅 월별 누적 기여이익 (회수 추적)</h2>
+        <div style="overflow-x:auto">
+          <table class="breakdown-table" id="paybackTable"></table>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+function fmt(n,d=0){const abs=Math.abs(n);const s=abs.toLocaleString(undefined,{maximumFractionDigits:d});return (n<0?'−$':'$')+s}
+function pct(n,d=1){return n.toFixed(d)+'%'}
+
+function calculate(){
+  const cac=+document.getElementById('cac').value||0;
+  const arpu=+document.getElementById('arpu').value||0;
+  const margin=+document.getElementById('margin').value/100||0;
+  const churnRate=+document.getElementById('churn').value/100||0;
+  const expansionRate=+document.getElementById('expansion').value/100||0;
+  const months=Math.max(6,Math.min(120,+document.getElementById('simMonths').value||36));
+
+  if(cac<=0||arpu<=0||margin<=0){alert('CAC, ARPU, 마진을 입력하세요.');return;}
+
+  const monthlyContrib=arpu*margin;
+  const simplePayback=monthlyContrib>0?cac/monthlyContrib:Infinity;
+
+  // Simple KPIs
+  document.getElementById('monthlyContrib').textContent=fmt(monthlyContrib,2);
+
+  let adjPaybackMonth=null;
+  let cumulative=0;
+  const rows=[];
+
+  let curArpu=arpu;
+  let survival=1.0; // fraction of customer still active
+
+  for(let m=1;m<=months;m++){
+    survival=survival*(1-churnRate);
+    curArpu=curArpu*(1+expansionRate);
+    const mContrib=survival*curArpu*margin;
+    cumulative+=mContrib;
+    const recovered=cumulative;
+    const remaining=cac-recovered;
+
+    if(adjPaybackMonth===null && recovered>=cac){
+      adjPaybackMonth=m;
+    }
+    rows.push({m,survival,curArpu,mContrib,cumulative,remaining:Math.max(0,remaining)});
+  }
+
+  // LTV = sum of all monthly contributions over lifetime
+  let ltv=0;
+  let tempSurv=1;
+  let tempArpu=arpu;
+  // estimate LTV using geometric series approximation if no churn
+  if(churnRate===0){
+    // unbounded; cap at 120 months for display
+    for(let i=1;i<=120;i++){tempArpu*=(1+expansionRate);ltv+=tempArpu*margin;}
+  } else {
+    for(let i=1;i<=1200;i++){tempSurv*=(1-churnRate);tempArpu*=(1+expansionRate);ltv+=tempSurv*tempArpu*margin;}
+  }
+  const ltvCac=cac>0?ltv/cac:0;
+
+  // Display
+  const sbClass=simplePayback<=12?'good':simplePayback<=24?'warn':'bad';
+  const apClass=adjPaybackMonth?(adjPaybackMonth<=12?'good':adjPaybackMonth<=24?'warn':'bad'):'bad';
+
+  document.getElementById('simplePayback').textContent=isFinite(simplePayback)?simplePayback.toFixed(1)+'개월':'∞';
+  document.getElementById('simplePayback').className='val '+sbClass;
+  document.getElementById('adjPayback').textContent=adjPaybackMonth?adjPaybackMonth+'개월':'미회수';
+  document.getElementById('adjPayback').className='val '+(adjPaybackMonth?apClass:'bad');
+  document.getElementById('ltv').textContent=fmt(ltv,0);
+  document.getElementById('ltvCacRatio').textContent='LTV:CAC = '+ltvCac.toFixed(1)+'x';
+
+  // Insight
+  let insightHtml=`<strong>📌 분석 요약</strong><br>`;
+  insightHtml+=`• 단순 회수기간: <strong>${isFinite(simplePayback)?simplePayback.toFixed(1)+'개월':'∞'}</strong> | 이탈 반영 회수기간: <strong>${adjPaybackMonth?adjPaybackMonth+'개월':'${months}개월 내 미회수'}</strong><br>`;
+  insightHtml+=`• LTV:CAC = <strong>${ltvCac.toFixed(1)}x</strong>${ltvCac>=3?' ✅ 우수 (기준: 3x+)':ltvCac>=1?' ⚠️ 개선 필요':' 🚨 CAC > LTV 위험'}<br>`;
+  if(simplePayback<=12) insightHtml+=`• 12개월 이내 회수 — <strong>빠른 성장에 적합한 유닛 이코노믹스</strong>입니다.`;
+  else if(simplePayback<=18) insightHtml+=`• 18개월 내 회수 — SaaS 업계 평균 수준입니다. 마진 또는 업셀 개선으로 단축 가능합니다.`;
+  else insightHtml+=`• 회수기간이 깁니다. <strong>ARPU 인상, 마진 개선, 또는 CAC 절감</strong>을 우선 검토하세요.`;
+  document.getElementById('insightBox').innerHTML=insightHtml;
+
+  // Table (show first 36 or all if <= 36)
+  const showRows=Math.min(months,36);
+  document.getElementById('tableCard').style.display='block';
+  let thead='<thead><tr><th>월</th><th>생존율</th><th>ARPU</th><th>월 기여이익</th><th>누적 회수</th><th>잔여 CAC</th></tr></thead><tbody>';
+  let tbody='';
+  for(let i=0;i<showRows;i++){
+    const r=rows[i];
+    const isBreak=r.m===adjPaybackMonth;
+    const rowCls=isBreak?' class="highlight-row"':'';
+    tbody+=`<tr${rowCls}><td>${r.m}월${isBreak?' ✅':''}</td><td>${(r.survival*100).toFixed(1)}%</td><td>${fmt(r.curArpu,2)}</td><td>${fmt(r.mContrib,2)}</td><td>${fmt(r.cumulative,2)}</td><td style="color:${r.remaining>0?'var(--err)':'var(--ok)'}">${fmt(r.remaining,2)}</td></tr>`;
+  }
+  tbody+='</tbody>';
+  document.getElementById('paybackTable').innerHTML=thead+tbody;
+}
+
+function reset(){
+  document.getElementById('cac').value=600;
+  document.getElementById('arpu').value=80;
+  document.getElementById('margin').value=75;
+  document.getElementById('churn').value=2.5;
+  document.getElementById('expansion').value=1;
+  document.getElementById('simMonths').value=36;
+  ['simplePayback','adjPayback','ltv','monthlyContrib'].forEach(id=>{
+    const el=document.getElementById(id);el.textContent='—';el.className='val';
+  });
+  document.getElementById('ltvCacRatio').textContent='LTV:CAC —';
+  document.getElementById('insightBox').textContent='입력 후 계산하기 버튼을 누르세요.';
+  document.getElementById('tableCard').style.display='none';
+}
+
+window.addEventListener('DOMContentLoaded',calculate);
+</script>
+</body>
+</html>

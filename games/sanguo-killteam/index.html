@@ -1,1213 +1,957 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ko">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
-<title>Sanguo Kill Team</title>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<title>Sanguo Kill Team — 三國殺</title>
 <style>
-  html,body{margin:0;padding:0;overflow:hidden;background:#1a0d00;font-family:Georgia,'Noto Serif KR',serif}
-  canvas{position:absolute;touch-action:none}
+* { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+html,body { width:100%; height:100%; overflow:hidden; background:#0a0500; }
+body { font-family:"Georgia","Times New Roman",serif; }
+#game { display:block; touch-action:none; }
 </style>
 </head>
 <body>
+<canvas id="game"></canvas>
+<!-- LittleJS CDN included per engine requirement -->
 <script src="https://killedbyapixel.github.io/LittleJS/dist/littlejs.min.js"></script>
 <script>
+(() => {
 'use strict';
 
-showSplashScreen = false;
-showEngineVersion = false;
-debugWatermark = false;
-touchInputEnable = true;
-touchGamepadEnable = false;
-canvasPixelated = false;
-canvasFixedSize = vec2(480, 854);
-canvasClearColor = new Color(0x1a/255,0x0d/255,0,1);
+// LittleJS engine NOT initialised (engineInit omitted) — game runs on pure Canvas 2D
+// This avoids the WebGL/2D canvas conflict that caused top=-493px and input loss.
 
-const W=480,H=854;
-const TILE=64, GRID_W=6, GRID_H=5;
-const GRID_X=48, GRID_Y=90;
+const GW = 480, GH = 854;
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
 
-const C={
-  bg:'#1a0d00', gold:'#c8860a', red:'#8b1a1a', paper:'#f5e6c8', green:'#3a6e3a', ink:'#2a1a0a',
-  cover:'#5a4a3a', high:'#8a7a5a', panel:'#2a1a0a', line:'#7a4a16', swamp:'#4b5a2a'
+// ── Palette (수묵화풍) ──────────────────────────────────────────────────────────
+const P = {
+  bg: '#1a0d00', gold: '#c8860a', red: '#8b1a1a',
+  parch: '#f5e6c8', dparch: '#c8a870', green: '#3a6e3a',
+  blue: '#1a3a7a', ink: '#1a0d00', gray: '#4a3a28',
 };
 
-const STATE={
-  TITLE:'title', SQUAD:'squad', MAP:'map', COMBAT:'combat', REWARD:'reward',
-  EVENT:'event', SHOP:'shop', GAMEOVER:'gameover', VICTORY:'victory'
-};
-
-const HEROES=[
-  {id:'guan_yu',name:'관우',role:'중보병',passive:'청룡: 근접 +3',maxHp:42,atk:7,def:1,color:'#8b1a1a'},
-  {id:'zhuge_liang',name:'제갈량',role:'전략가',passive:'신산: 매턴 드로우 +1',maxHp:34,atk:5,def:1,color:'#4b6a8b'},
-  {id:'cao_cao',name:'조조',role:'지휘관',passive:'간웅: 전투 시작 공성계',maxHp:38,atk:6,def:1,color:'#6b4a2a'},
-  {id:'zhang_fei',name:'장비',role:'돌격병',passive:'만부부당: 카드비용 -1(최소0)',maxHp:44,atk:7,def:0,color:'#5b2a2a'},
-  {id:'zhou_yu',name:'주유',role:'화공전문',passive:'화공 +2',maxHp:35,atk:5,def:1,color:'#7a3a2a'},
-  {id:'zhao_yun',name:'조운',role:'기병',passive:'상산: 이동 후 공격 +2',maxHp:39,atk:6,def:1,color:'#2f5f8a'}
+// ── Hero Definitions ──────────────────────────────────────────────────────────
+const HEROES = [
+  { id:'guan_yu',   name:'관우',   role:'중보병',   hp:34, ap:2, atk:8,  def:4, passive:'청룡: 근접+3',       color:'#7a1a1a' },
+  { id:'zhuge',     name:'제갈량', role:'전략가',   hp:22, ap:2, atk:4,  def:1, passive:'신산: 매 턴 카드+1', color:'#1a3a7a' },
+  { id:'cao_cao',   name:'조조',   role:'지휘관',   hp:28, ap:2, atk:6,  def:2, passive:'간웅: 적 카드 복사', color:'#4a2a8a' },
+  { id:'zhang_fei', name:'장비',   role:'돌격병',   hp:32, ap:3, atk:9,  def:2, passive:'만부부당: AP소모-1', color:'#8a4a1a' },
+  { id:'zhou_yu',   name:'주유',   role:'화공전문', hp:24, ap:2, atk:6,  def:1, passive:'화공: 불 피해+2',    color:'#8a3a00' },
+  { id:'zhao_yun',  name:'조운',   role:'기병',     hp:26, ap:2, atk:7,  def:2, passive:'상산: 이동후 공격無', color:'#2a5a2a' },
 ];
 
-const CARD_LIBRARY={
-  march:{id:'march',name:'진군',kind:'move',cost:1,move:2,desc:'선택 유닛 2칸 이동'},
-  swift:{id:'swift',name:'신속',kind:'move',cost:1,move:3,noAttack:true,desc:'선택 유닛 3칸 이동'},
-  encircle:{id:'encircle',name:'포위',kind:'move_all',cost:2,move:1,desc:'전 유닛 1칸 전진'},
-
-  strike:{id:'strike',name:'일격',kind:'attack',cost:1,dmg:5,range:1,desc:'인접 적 공격'},
-  shoot:{id:'shoot',name:'사격',kind:'attack',cost:1,dmg:4,range:3,ranged:true,desc:'사거리 3칸'},
-  smash:{id:'smash',name:'강타',kind:'attack',cost:2,dmg:10,range:1,desc:'단일 강공격'},
-  twin:{id:'twin',name:'연격',kind:'attack_multi',cost:2,dmg:4,hits:2,range:1,desc:'같은 적 2회 타격'},
-  arrows:{id:'arrows',name:'화살비',kind:'attack_aoe',cost:2,dmg:3,range:3,ranged:true,desc:'소형 범위 공격'},
-  ambush:{id:'ambush',name:'기습',kind:'attack',cost:1,dmg:6,range:2,ignoreCover:true,desc:'엄폐 무시'},
-
-  bagua:{id:'bagua',name:'팔진도',kind:'formation',cost:0,form:'bagua',desc:'전 유닛 방어 상승'},
-  crane:{id:'crane',name:'학익진',kind:'formation',cost:0,form:'crane',desc:'전 유닛 공격 상승'},
-  line:{id:'line',name:'장사진',kind:'formation',cost:0,form:'line',desc:'전열 AP 보너스'},
-
-  fire:{id:'fire',name:'화공',kind:'strategy_dot',cost:1,range:3,burn:3,burnTurns:3,desc:'화상 3×3턴'},
-  discord:{id:'discord',name:'반간계',kind:'strategy_cancel',cost:1,range:3,desc:'적 행동 취소'},
-  siege:{id:'siege',name:'공성계',kind:'strategy_buff',cost:0,desc:'다음 공격 +8'}
+// ── Card Library ──────────────────────────────────────────────────────────────
+const CARDS = {
+  march:    { name:'진군',   type:'move',   ap:1, desc:'유닛 전진 2칸',        color:'#1a3a7a' },
+  swift:    { name:'신속',   type:'move',   ap:1, desc:'유닛 전진 3칸',        color:'#1a3a7a' },
+  surround: { name:'포위',   type:'move',   ap:2, desc:'전 유닛 1칸 전진',     color:'#1a3a7a' },
+  strike:   { name:'일격',   type:'attack', ap:1, dmg:5,  desc:'인접 적 공격',  color:'#8b1a1a' },
+  shoot:    { name:'사격',   type:'attack', ap:1, dmg:4,  range:3, desc:'사거리3 공격', color:'#8b1a1a' },
+  heavy:    { name:'강타',   type:'attack', ap:2, dmg:10, desc:'단일 강공격',   color:'#8b1a1a' },
+  combo:    { name:'연격',   type:'attack', ap:2, dmg:4,  hits:2, desc:'같은 적 2회', color:'#8b1a1a' },
+  rain:     { name:'화살비', type:'attack', ap:2, dmg:3,  aoe:true, desc:'범위 공격',   color:'#8b1a1a' },
+  ambush:   { name:'기습',   type:'attack', ap:1, dmg:6,  ignCover:true, desc:'엄폐 무시', color:'#8b1a1a' },
+  bazhen:   { name:'팔진도', type:'form',   ap:0, desc:'전원 방어+4 (3턴)',    color:'#3a6e3a' },
+  crane:    { name:'학익진', type:'form',   ap:0, desc:'전원 공격+3 (2턴)',    color:'#3a6e3a' },
+  line:     { name:'장사진', type:'form',   ap:0, desc:'전열 AP+1',            color:'#3a6e3a' },
+  firetac:  { name:'화공',   type:'strat',  ap:1, dot:3, dotTurns:3, desc:'DoT 3×3턴', color:'#c8860a' },
+  spy:      { name:'반간계', type:'strat',  ap:1, desc:'적 행동 취소',         color:'#c8860a' },
+  siege:    { name:'공성계', type:'strat',  ap:0, desc:'다음 공격+8',          color:'#c8860a' },
 };
+const CARD_KEYS = Object.keys(CARDS);
+let _uid = 1;
+function makeCard(id) { return { ...CARDS[id], id, uid: _uid++ }; }
+function starterDeck() {
+  return ['march','swift','surround',
+          'strike','shoot','heavy','combo','rain','ambush',
+          'bazhen','crane','line',
+          'firetac','spy','siege'].map(makeCard);
+}
 
-const STARTER_DECK=[
-  'march','swift','encircle',
-  'strike','shoot','smash','twin','arrows','ambush',
-  'bagua','crane','line',
-  'fire','discord','siege'
+// ── Enemy Templates ───────────────────────────────────────────────────────────
+const ETYPES = [
+  { name:'병사',   hp:18, atk:5, def:0, color:'#5a2010' },
+  { name:'궁수',   hp:14, atk:4, def:0, range:3, color:'#5a1020' },
+  { name:'장수',   hp:30, atk:8, def:2, color:'#8a1010' },
+  { name:'기병',   hp:22, atk:7, def:1, color:'#401060' },
+  { name:'화공대', hp:16, atk:3, def:0, dot:true, color:'#8a3010' },
 ];
 
-const NODE_TYPES={
-  combat:{icon:'⚔️',label:'전투'},
-  expedition:{icon:'🗡️',label:'원정'},
-  event:{icon:'❓',label:'이벤트'},
-  shop:{icon:'🏪',label:'상점'},
-  beacon:{icon:'🔥',label:'봉화대'},
-  boss:{icon:'👑',label:'보스'}
-};
+// ── Events ───────────────────────────────────────────────────────────────────
+const EVENTS = [
+  { title:'의형제',
+    text:'아군이 의기투합하여 사기가 올랐다.',
+    opts:[
+      { label:'맹세를 다지다 (전원 HP+5)',  fn: r => r.squad.forEach(a=>{ a.hp=Math.min(a.maxHp,a.hp+5); }) },
+      { label:'훈련 (강타 1장 추가)',        fn: r => r.deck.push(makeCard('heavy')) },
+    ]
+  },
+  { title:'봉화',
+    text:'봉화대에서 연기가 피어오른다.',
+    opts:[
+      { label:'방어 태세 (팔진도 추가)', fn: r => r.deck.push(makeCard('bazhen')) },
+      { label:'무시하고 전진',            fn: () => {} },
+    ]
+  },
+  { title:'군량',
+    text:'군량 수레를 발견했다.',
+    opts:[
+      { label:'보충 (전원 HP+8)',      fn: r => r.squad.forEach(a=>{ a.hp=Math.min(a.maxHp,a.hp+8); }) },
+      { label:'불태우기 (화공 추가)',   fn: r => r.deck.push(makeCard('firetac')) },
+    ]
+  },
+];
 
-const ui={buttons:[],toast:'',toastT:0};
-let gameState=STATE.TITLE;
-let run=null;
-let combat=null;
-let reward=null;
-let eventData=null;
-let shopData=null;
-let squadPick=[];
-let mapHits=[];
-let mapScroll=0;
-let mapPointer=null;
+// ── Grid Config ───────────────────────────────────────────────────────────────
+const COLS = 6, ROWS = 5;
+const GRID_X = 0, GRID_Y = 70;
+const TW = Math.floor(GW / COLS);   // 80
+const TH = 70;
+const GRID_H = TH * ROWS;           // 350
 
-let pointerDown=false,pointerPressed=false,pointerReleased=false,pointerPos=vec2();
-let dragCard=null; // {index, cardId, x, y}
-let pendingAction=null; // {handIndex, cardId, actorId}
+// ── State ─────────────────────────────────────────────────────────────────────
+let S = { screen:'title' };
+let btns = [];
+let drag = null;
+let toast = { msg:'', t:0 };
 
-let ctx;
+function setToast(msg, sec=2) { toast = { msg, t: sec }; }
 
-function applyLetterbox(){
-  const scale=Math.min(window.innerWidth/W,window.innerHeight/H);
-  const w=Math.floor(W*scale), h=Math.floor(H*scale);
-  const c=mainCanvas;
-  c.style.width=w+'px';
-  c.style.height=h+'px';
-  c.style.left=Math.floor((window.innerWidth-w)/2)+'px';
-  c.style.top=Math.floor((window.innerHeight-h)/2)+'px';
+// ── Resize (letterbox) ────────────────────────────────────────────────────────
+function resize() {
+  const scale = Math.min(window.innerWidth / GW, window.innerHeight / GH);
+  canvas.style.width  = Math.floor(GW * scale) + 'px';
+  canvas.style.height = Math.floor(GH * scale) + 'px';
+  canvas.style.position = 'absolute';
+  canvas.style.left = Math.floor((window.innerWidth  - GW * scale) / 2) + 'px';
+  canvas.style.top  = Math.floor((window.innerHeight - GH * scale) / 2) + 'px';
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  canvas.width  = GW * dpr;
+  canvas.height = GH * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
-function randInt(a,b){ return Math.floor(Math.random()*(b-a+1))+a; }
-function pick(arr){ return arr[randInt(0,arr.length-1)]; }
-function shuffle(a){
-  for(let i=a.length-1;i>0;i--){const j=randInt(0,i);[a[i],a[j]]=[a[j],a[i]];}
-  return a;
+// ── Input ─────────────────────────────────────────────────────────────────────
+function toGame(ev) {
+  const r = canvas.getBoundingClientRect();
+  const x = (ev.clientX - r.left) * (GW / r.width);
+  const y = (ev.clientY - r.top)  * (GH / r.height);
+  return (x<0||y<0||x>GW||y>GH) ? null : {x,y};
 }
-function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
-function distMan(a,b){ return Math.abs(a.x-b.x)+Math.abs(a.y-b.y); }
-function inRect(p,r){ return p.x>=r.x&&p.y>=r.y&&p.x<=r.x+r.w&&p.y<=r.y+r.h; }
-function alive(u){ return u.hp>0; }
-
-function toast(msg,t=1.8){ ui.toast=msg; ui.toastT=t; }
-function clearButtons(){ ui.buttons.length=0; }
-function addButton(x,y,w,h,label,action,enabled=true,payload=null){
-  ui.buttons.push({x,y,w,h,label,action,enabled,payload});
+function inR(p, r) { return p.x>=r.x && p.y>=r.y && p.x<=r.x+r.w && p.y<=r.y+r.h; }
+function addBtn(x,y,w,h,label,action,enabled=true,data=null) {
+  btns.push({x,y,w,h,label,action,enabled,data});
 }
-function hitButton(p){
-  for(let i=ui.buttons.length-1;i>=0;i--){
-    const b=ui.buttons[i];
-    if(!b.enabled) continue;
-    if(inRect(p,b)) return b;
+function hitBtn(pos) {
+  for (let i=btns.length-1; i>=0; i--) {
+    const b=btns[i]; if(b.enabled && inR(pos,b)) return b;
   }
   return null;
 }
 
-function makeRun(){
-  run={
-    floor:1,maxFloor:3,gold:80,
-    squad:squadPick.map(i=>({
-      ...HEROES[i], hp:HEROES[i].maxHp, ap:2, buffs:{atk:0,atkT:0,def:0,defT:0,nextAtk:0,moved:false}
-    })),
-    deck:STARTER_DECK.slice(),
-    map:{1:makeFloorMap(1),2:makeFloorMap(2),3:makeFloorMap(3)},
-    route:[]
-  };
-  mapScroll=0;
-  gameState=STATE.MAP;
-  toast('분대를 선택했습니다. 첫 노드를 고르세요.');
-}
-
-function makeFloorMap(floor){
-  const rows=7;
-  const lanes=[100,240,380];
-  const byRow=[]; const nodes=[];
-  let id=1;
-
-  const pickType=(r)=>{
-    if(r===rows-1) return 'boss';
-    if(r===0) return pick(['combat','event','shop']);
-    if(r===rows-2) return Math.random()<0.5?'expedition':'combat';
-    const t=Math.random();
-    if(t<0.38) return 'combat';
-    if(t<0.56) return 'event';
-    if(t<0.72) return 'shop';
-    if(t<0.88) return 'beacon';
-    return 'expedition';
-  };
-
-  for(let r=0;r<rows;r++){
-    const count=r===rows-1?1:3;
-    const row=[];
-    for(let i=0;i<count;i++){
-      const lane=count===1?1:i;
-      const node={
-        id:'f'+floor+'n'+(id++), floor, row:r,
-        x:lanes[lane]+randInt(-14,14), y:760-r*120,
-        type:pickType(r), available:r===0, visited:false,
-        children:[], parents:[]
-      };
-      row.push(node); nodes.push(node);
-    }
-    if(r===rows-1) row[0].type='boss';
-    byRow.push(row);
-  }
-
-  function link(a,b){
-    if(!a.children.includes(b.id)) a.children.push(b.id);
-    if(!b.parents.includes(a.id)) b.parents.push(a.id);
-  }
-
-  for(let r=0;r<rows-1;r++){
-    const cur=byRow[r], nxt=byRow[r+1];
-    for(const n of cur){
-      const near=[...nxt].sort((p,q)=>Math.abs(p.x-n.x)-Math.abs(q.x-n.x));
-      link(n,near[0]);
-      if(near[1]&&Math.random()<0.45) link(n,near[1]);
-    }
-    for(const n of nxt){
-      if(n.parents.length) continue;
-      const nearest=[...cur].sort((a,b)=>Math.abs(a.x-n.x)-Math.abs(b.x-n.x))[0];
-      link(nearest,n);
-    }
-  }
-
-  return {floor,rows,nodes,byRow,current:null};
-}
-
-function getFloorMap(){ return run.map[run.floor]; }
-function getNodeById(id){ return getFloorMap().nodes.find(n=>n.id===id); }
-
-function enterNode(node){
-  const map=getFloorMap();
-  if(!node.available||node.visited) return;
-  node.visited=true;
-  map.current=node.id;
-  run.route.push({floor:run.floor,row:node.row,type:node.type});
-
-  for(const n of map.nodes) n.available=false;
-  for(const cid of node.children){ const c=getNodeById(cid); if(c && !c.visited) c.available=true; }
-
-  if(node.type==='combat'||node.type==='expedition'||node.type==='boss'){
-    beginCombat(node.type);
-    return;
-  }
-  if(node.type==='event'){
-    beginEvent();
-    return;
-  }
-  if(node.type==='shop'){
-    beginShop();
-    return;
-  }
-  if(node.type==='beacon'){
-    healSquad(8);
-    run.gold += 12;
-    toast('봉화대: 분대 회복 +8, 금화 +12');
-    gameState=STATE.MAP;
-    return;
-  }
-}
-
-function healSquad(v){
-  for(const s of run.squad){ s.hp=Math.min(s.maxHp,s.hp+v); }
-}
-
-function buildTerrain(){
-  const grid=[];
-  for(let y=0;y<GRID_H;y++){
-    const row=[];
-    for(let x=0;x<GRID_W;x++) row.push('plain');
-    grid.push(row);
-  }
-  [[1,2],[4,2],[2,1],[3,3]].forEach(([x,y])=>grid[y][x]='cover');
-  [[0,1],[5,1]].forEach(([x,y])=>grid[y][x]='high');
-  [[2,3],[3,1]].forEach(([x,y])=>grid[y][x]='swamp');
-  return grid;
-}
-
-function makeEnemy(name,elite=false,boss=false){
-  const floor=run.floor;
-  const hp=(boss?58:elite?38:30)+floor*8;
-  const atk=(boss?9:elite?7:5)+floor;
-  return {
-    id:'e'+Math.random().toString(36).slice(2,8),
-    name,team:'enemy',x:0,y:0,maxHp:hp,hp,ap:2,maxAp:2,atk,def:0,block:0,
-    buffs:{atk:0,atkT:0,def:0,defT:0,nextAtk:0,moved:false},
-    status:{burn:0,burnT:0,stun:0},
-    intent:null
-  };
-}
-
-function beginCombat(kind){
-  const elite = kind==='expedition';
-  const boss = kind==='boss';
-  const enemyNames=boss?['명장','호위장','책사']:(elite?['정예 창병','정예 궁병','기마대']:[pick(['황건병','도적','군벌병']),pick(['궁수','책사','선봉']),pick(['호위병','창병','기마'])]);
-  const enemies=enemyNames.map((n,i)=>makeEnemy(n,elite,boss&&i===0));
-
-  enemies[0].x=1; enemies[0].y=0;
-  enemies[1].x=3; enemies[1].y=0;
-  enemies[2].x=4; enemies[2].y=1;
-
-  const allies=run.squad.map((s,i)=>({
-    ...s,
-    x:[1,3,4][i], y:[4,4,3][i], team:'ally',
-    block:0,
-    status:{burn:0,burnT:0,stun:0}
-  }));
-
-  const drawPile=shuffle(run.deck.slice());
-
-  combat={
-    kind,terrain:buildTerrain(),allies,enemies,
-    drawPile,discard:[],hand:[],
-    turn:'player',turnIndex:1,
-    teamBuff:{atk:0,atkT:0,def:0,defT:0},
-    formation:{bagua:false,crane:false,line:false},
-    aiQueue:[],aiTimer:0.45,aiIdx:0,
-    handRects:[],allyRects:[],enemyRects:[],tileRects:[],
-    msg:'',rewardGold:boss?44:elite?30:20,
-    bossNode:kind==='boss'
-  };
-
-  if(run.squad.some(s=>s.id==='cao_cao')){
-    combat.hand.push('siege');
-  }
-
-  startPlayerTurn(true);
-  gameState=STATE.COMBAT;
-}
-
-function livingAllies(){ return combat.allies.filter(alive); }
-function livingEnemies(){ return combat.enemies.filter(alive); }
-
-function topDraw(){
-  if(!combat.drawPile.length){
-    if(!combat.discard.length) return null;
-    combat.drawPile=shuffle(combat.discard.splice(0));
-  }
-  return combat.drawPile.pop()||null;
-}
-
-function applyFormationFlags(){
-  const a=livingAllies();
-  if(a.length<3){
-    combat.formation={bagua:false,crane:false,line:false};
-    return;
-  }
-  const ys=[...new Set(a.map(u=>u.y))];
-  const line = ys.length===1;
-  const sorted=[...a].sort((p,q)=>p.y-q.y);
-  const front=sorted[0];
-  const rear=sorted.slice(1);
-  const crane = rear.length===2 && front.y < rear[0].y && front.y < rear[1].y && Math.abs(rear[0].x-rear[1].x)>=2;
-  const bagua = ys.length===3 || (new Set(a.map(u=>u.x)).size===3 && ys.length>=2);
-  combat.formation={bagua,crane,line};
-}
-
-function drawToHand(n){
-  while(combat.hand.length<4 && n-->0){
-    const c=topDraw();
-    if(!c) break;
-    combat.hand.push(c);
-  }
-}
-
-function tickBurn(team){
-  for(const u of team){
-    if(!alive(u)) continue;
-    if(u.status.burnT>0){
-      u.hp-=u.status.burn;
-      u.status.burnT--;
-      if(u.hp<0) u.hp=0;
-    }
-  }
-}
-
-function tickBuff(unit){
-  if(unit.buffs.atkT>0){ unit.buffs.atkT--; if(unit.buffs.atkT===0) unit.buffs.atk=0; }
-  if(unit.buffs.defT>0){ unit.buffs.defT--; if(unit.buffs.defT===0) unit.buffs.def=0; }
-}
-
-function startPlayerTurn(first=false){
-  combat.turn='player';
-  combat.msg='';
-  applyFormationFlags();
-  tickBurn(combat.allies);
-  tickBurn(combat.enemies);
-  if(checkCombatEnd()) return;
-
-  if(combat.teamBuff.atkT>0){ combat.teamBuff.atkT--; if(combat.teamBuff.atkT===0) combat.teamBuff.atk=0; }
-  if(combat.teamBuff.defT>0){ combat.teamBuff.defT--; if(combat.teamBuff.defT===0) combat.teamBuff.def=0; }
-
-  const drawBonus = run.squad.some(s=>s.id==='zhuge_liang') ? 1 : 0;
-  for(const a of combat.allies){
-    if(!alive(a)) continue;
-    a.block=0;
-    a.ap=2;
-    a.buffs.moved=false;
-    tickBuff(a);
-  }
-  if(combat.formation.line){
-    const frontY=Math.min(...livingAllies().map(u=>u.y));
-    for(const a of livingAllies()) if(a.y===frontY) a.ap += 1;
-  }
-  drawToHand(4+drawBonus);
-  pendingAction=null;
-  dragCard=null;
-  if(!first) combat.turnIndex++;
-  toast('아군 턴');
-}
-
-function planEnemyIntent(e){
-  if(e.status.stun>0){
-    e.intent={type:'stun',icon:'❌',value:0,label:'행동 불가'};
-    return;
-  }
-  const r=Math.random();
-  if(r<0.52) e.intent={type:'attack',icon:'⚔️',value:e.atk+randInt(0,3),label:'공격'};
-  else if(r<0.70) e.intent={type:'guard',icon:'🛡️',value:6+run.floor*2,label:'방어'};
-  else if(r<0.86) e.intent={type:'move',icon:'💨',value:1,label:'이동'};
-  else e.intent={type:'fire',icon:'🔥',value:3+run.floor,label:'화공'};
-}
-
-function startEnemyTurn(){
-  combat.turn='enemy';
-  combat.msg='적 행동 중...';
-  for(const e of livingEnemies()) planEnemyIntent(e);
-  combat.aiQueue=livingEnemies();
-  combat.aiIdx=0;
-  combat.aiTimer=0.45;
-}
-
-function tileType(x,y){ return combat.terrain[y][x]; }
-
-function unitAt(x,y){
-  for(const a of combat.allies) if(alive(a)&&a.x===x&&a.y===y) return a;
-  for(const e of combat.enemies) if(alive(e)&&e.x===x&&e.y===y) return e;
-  return null;
-}
-
-function moveToward(u,target,steps=1){
-  for(let i=0;i<steps;i++){
-    const dirs=[
-      {x:Math.sign(target.x-u.x),y:0},
-      {x:0,y:Math.sign(target.y-u.y)}
-    ].sort(()=>Math.random()-0.5);
-
-    let moved=false;
-    for(const d of dirs){
-      if(!d.x&&!d.y) continue;
-      const nx=clamp(u.x+d.x,0,GRID_W-1), ny=clamp(u.y+d.y,0,GRID_H-1);
-      if(unitAt(nx,ny)) continue;
-      u.x=nx; u.y=ny; moved=true; break;
-    }
-    if(!moved) break;
-  }
-}
-
-function applyDamage(src,target,base,opts={}){
-  if(!alive(src)||!alive(target)) return;
-  let dmg=base;
-  const srcBuff=(src.buffs.atk||0)+combat.teamBuff.atk;
-  dmg += srcBuff;
-  if(src.buffs.nextAtk){ dmg += src.buffs.nextAtk; src.buffs.nextAtk=0; }
-  if(opts.ranged && tileType(src.x,src.y)==='high') dmg += 2;
-  if(src.id==='guan_yu' && opts.range===1) dmg += 3;
-  if(src.id==='zhou_yu' && opts.fire) dmg += 2;
-  if(src.id==='zhao_yun' && src.buffs.moved) dmg += 2;
-
-  const reduced = (target.buffs.def||0) + combat.teamBuff.def + (target.def||0);
-  dmg = Math.max(1,dmg-reduced);
-  if(!opts.ignoreCover && tileType(target.x,target.y)==='cover') dmg = Math.max(1,Math.floor(dmg*0.5));
-
-  target.hp -= dmg;
-  if(target.hp<0) target.hp=0;
-}
-
-function applyCardAction(cardId,actor,target){
-  const card=CARD_LIBRARY[cardId];
-  if(!card||!actor||!alive(actor)) return false;
-  let cost=card.cost;
-  if(actor.id==='zhang_fei') cost=Math.max(0,cost-1);
-  if(actor.ap<cost){ toast('AP가 부족합니다'); return false; }
-
-  const enemies=livingEnemies();
-  const allies=livingAllies();
-
-  if(card.kind==='formation'){
-    if(card.form==='bagua'){
-      const bonus=combat.formation.bagua?4:2;
-      combat.teamBuff.def=bonus; combat.teamBuff.defT=3;
-      toast(`팔진도 발동 · 방어 +${bonus}`);
-    } else if(card.form==='crane'){
-      const bonus=combat.formation.crane?3:1;
-      combat.teamBuff.atk=bonus; combat.teamBuff.atkT=2;
-      toast(`학익진 발동 · 공격 +${bonus}`);
-    } else if(card.form==='line'){
-      const bonus=combat.formation.line?2:1;
-      const front=Math.min(...allies.map(u=>u.y));
-      allies.filter(u=>u.y===front).forEach(u=>u.ap+=bonus);
-      toast(`장사진 발동 · 전열 AP +${bonus}`);
-    }
-    actor.ap-=cost;
-    return true;
-  }
-
-  if(card.kind==='strategy_buff'){
-    actor.buffs.nextAtk += 8;
-    actor.ap-=cost;
-    toast('공성계: 다음 공격 +8');
-    return true;
-  }
-
-  if(card.kind==='move_all'){
-    for(const a of allies){
-      const nearest=[...enemies].sort((p,q)=>distMan(a,p)-distMan(a,q))[0];
-      if(nearest) moveToward(a,nearest,1);
-      a.buffs.moved=true;
-    }
-    actor.ap-=cost;
-    return true;
-  }
-
-  if(card.kind==='move'){
-    if(!target || target.kind!=='tile'){ toast('이동할 타일을 선택하세요'); return false; }
-    if(unitAt(target.x,target.y)){ toast('해당 타일은 점유 중입니다'); return false; }
-    let range=card.move;
-    if(tileType(actor.x,actor.y)==='swamp') range=Math.max(1,range-1);
-    if(distMan(actor,target)>range){ toast('이동 거리 초과'); return false; }
-    actor.x=target.x; actor.y=target.y;
-    actor.buffs.moved=true;
-    actor.ap-=cost;
-    return true;
-  }
-
-  if(card.kind==='strategy_cancel'){
-    if(!target||target.kind!=='enemy'){ toast('적을 선택하세요'); return false; }
-    const e=target.unit;
-    if(distMan(actor,e)>card.range){ toast('사거리 밖입니다'); return false; }
-    e.status.stun=1;
-    e.intent={type:'stun',icon:'❌',value:0,label:'행동 불가'};
-    actor.ap-=cost;
-    return true;
-  }
-
-  if(card.kind==='strategy_dot'){
-    if(!target||target.kind!=='enemy'){ toast('적을 선택하세요'); return false; }
-    const e=target.unit;
-    if(distMan(actor,e)>card.range){ toast('사거리 밖입니다'); return false; }
-    e.status.burn=card.burn;
-    e.status.burnT=Math.max(e.status.burnT,card.burnTurns);
-    actor.ap-=cost;
-    return true;
-  }
-
-  if(card.kind==='attack' || card.kind==='attack_multi' || card.kind==='attack_aoe'){
-    if(!target||target.kind!=='enemy'){ toast('공격 대상을 선택하세요'); return false; }
-    const e=target.unit;
-    if(distMan(actor,e) > card.range){ toast('사거리 밖입니다'); return false; }
-
-    if(card.kind==='attack'){
-      applyDamage(actor,e,card.dmg,{ignoreCover:card.ignoreCover,ranged:card.ranged,range:card.range});
-    } else if(card.kind==='attack_multi'){
-      for(let i=0;i<card.hits;i++) applyDamage(actor,e,card.dmg,{range:card.range});
-    } else {
-      for(const en of enemies){
-        if(Math.abs(en.x-e.x)<=1 && Math.abs(en.y-e.y)<=1){
-          applyDamage(actor,en,card.dmg,{ranged:true,range:card.range});
-        }
-      }
-    }
-    actor.ap-=cost;
-    return true;
-  }
-
-  return false;
-}
-
-function executePending(target){
-  if(!pendingAction) return;
-  const actor=combat.allies.find(a=>a.id===pendingAction.actorId && alive(a));
-  const ok=applyCardAction(pendingAction.cardId,actor,target);
-  if(!ok) return;
-
-  const idx=pendingAction.handIndex;
-  if(idx>=0 && idx<combat.hand.length){
-    const [used]=combat.hand.splice(idx,1);
-    combat.discard.push(used);
-  }
-  pendingAction=null;
-  applyFormationFlags();
-  if(checkCombatEnd()) return;
-
-  if(livingAllies().every(a=>a.ap<=0) && !combat.hand.length){
-    endPlayerTurn();
-  }
-}
-
-function enemyAct(e){
-  if(!alive(e)) return;
-  if(e.status.stun>0){ e.status.stun--; return; }
-  const intent=e.intent;
-  if(!intent) return;
-
-  const target=[...livingAllies()].sort((a,b)=>distMan(e,a)-distMan(e,b))[0];
-  if(!target) return;
-
-  if(intent.type==='attack'){
-    if(distMan(e,target)>1) moveToward(e,target,1);
-    if(distMan(e,target)<=1) applyDamage(e,target,intent.value,{range:1});
-  } else if(intent.type==='guard'){
-    e.buffs.def=2+run.floor;
-    e.buffs.defT=1;
-  } else if(intent.type==='move'){
-    moveToward(e,target,1);
-  } else if(intent.type==='fire'){
-    if(distMan(e,target)>2) moveToward(e,target,1);
-    if(distMan(e,target)<=2){
-      target.status.burn=3;
-      target.status.burnT=Math.max(target.status.burnT,2);
-    }
-  }
-}
-
-function endPlayerTurn(){
-  combat.discard.push(...combat.hand.splice(0));
-  pendingAction=null;
-  dragCard=null;
-  startEnemyTurn();
-}
-
-function checkCombatEnd(){
-  if(livingEnemies().length===0){
-    for(const a of combat.allies){
-      const save=run.squad.find(s=>s.id===a.id);
-      if(save) save.hp=Math.max(0,a.hp);
-    }
-    run.gold += combat.rewardGold;
-    const ids=Object.keys(CARD_LIBRARY);
-    reward={
-      fromBoss:combat.bossNode,
-      cards:[pick(ids),pick(ids),pick(ids)],
-      picked:false
-    };
-    combat=null;
-    pendingAction=null;
-    dragCard=null;
-    gameState=STATE.REWARD;
-    return true;
-  }
-
-  if(livingAllies().length===0){
-    gameState=STATE.GAMEOVER;
-    return true;
-  }
-  return false;
-}
-
-function beginEvent(){
-  const events=[
-    {
-      title:'군사 회합',
-      text:'떠돌이 책사가 계책을 제안합니다.',
-      options:[
-        {label:'책략 수락 (공성계 획득)', fn:()=>run.deck.push('siege')},
-        {label:'신중히 거절 (금화 +20)', fn:()=>run.gold+=20}
-      ]
-    },
-    {
-      title:'보급 발견',
-      text:'은밀한 보급창을 발견했습니다.',
-      options:[
-        {label:'치유약 사용 (분대 +10)', fn:()=>healSquad(10)},
-        {label:'무기 확보 (일격 획득)', fn:()=>run.deck.push('strike')}
-      ]
-    }
-  ];
-  eventData=pick(events);
-  gameState=STATE.EVENT;
-}
-
-function beginShop(){
-  const ids=Object.keys(CARD_LIBRARY);
-  shopData={
-    offers:[pick(ids),pick(ids),pick(ids)],
-    prices:[28,34,40]
-  };
-  gameState=STATE.SHOP;
-}
-
-function afterNodeResolution(){
-  const map=getFloorMap();
-  const cur=getNodeById(map.current);
-  if(cur && cur.type==='boss'){
-    if(run.floor>=run.maxFloor){
-      gameState=STATE.VICTORY;
-      return;
-    }
-    run.floor++;
-    mapScroll=0;
-    toast(`Floor ${run.floor} 돌입`);
-  }
-  gameState=STATE.MAP;
-}
-
-function consumePointer(){
-  pointerPos=mousePosScreen.copy();
-  pointerDown=mouseIsDown(0);
-  pointerPressed=mouseWasPressed(0);
-  pointerReleased=mouseWasReleased(0);
-}
-
-function pointerForMap(){
-  if(pointerPressed){
-    mapPointer={x:pointerPos.x,y:pointerPos.y,scroll:mapScroll,drag:false};
-  }
-  if(mapPointer && pointerDown){
-    const dy=pointerPos.y-mapPointer.y;
-    if(Math.abs(dy)>6) mapPointer.drag=true;
-    if(mapPointer.drag){
-      mapScroll=clamp(mapPointer.scroll+dy,-360,140);
-    }
-  }
-  if(mapPointer && pointerReleased){
-    const wasDrag=mapPointer.drag;
-    mapPointer=null;
-    if(wasDrag) return true;
-  }
-  return false;
-}
-
-function updateTitle(){
-  if(!pointerPressed) return;
-  const btn={x:130,y:600,w:220,h:64};
-  if(inRect(pointerPos,btn)){ squadPick=[]; gameState=STATE.SQUAD; }
-}
-
-function updateSquad(){
-  if(!pointerPressed) return;
-  for(let i=0;i<6;i++){
-    const col=i%2,row=(i/2)|0;
-    const r={x:26+col*228,y:150+row*160,w:210,h:146};
-    if(inRect(pointerPos,r)){
-      const idx=squadPick.indexOf(i);
-      if(idx>=0) squadPick.splice(idx,1);
-      else if(squadPick.length<3) squadPick.push(i);
-      else toast('3인만 선택 가능합니다');
-      return;
-    }
-  }
-  const btn={x:120,y:750,w:240,h:56};
-  if(squadPick.length===3 && inRect(pointerPos,btn)) makeRun();
-}
-
-function updateMap(){
-  const scrolled=pointerForMap();
-  if(scrolled||!pointerReleased) return;
-
-  for(let i=mapHits.length-1;i>=0;i--){
-    const h=mapHits[i];
-    const dx=pointerPos.x-h.x,dy=pointerPos.y-h.y;
-    if(dx*dx+dy*dy<=h.r*h.r){
-      if(!h.node.available||h.node.visited){ toast('아직 이동할 수 없는 노드입니다'); return; }
-      enterNode(h.node);
-      return;
-    }
-  }
-}
-
-function cardAtPointer(){
-  for(let i=combat.handRects.length-1;i>=0;i--){
-    const r=combat.handRects[i];
-    if(inRect(pointerPos,r)) return r.index;
-  }
-  return -1;
-}
-
-function targetAtPointer(){
-  for(const r of combat.enemyRects){ if(inRect(pointerPos,r.rect)) return {kind:'enemy',unit:r.unit}; }
-  for(const r of combat.tileRects){ if(inRect(pointerPos,r.rect)) return {kind:'tile',x:r.x,y:r.y}; }
-  return null;
-}
-
-function updateCombat(){
-  if(!combat) return;
-
-  if(combat.turn==='enemy'){
-    combat.aiTimer-=timeDelta;
-    if(combat.aiTimer<=0){
-      const unit=combat.aiQueue[combat.aiIdx++];
-      if(unit) enemyAct(unit);
-      if(checkCombatEnd()) return;
-      if(combat.aiIdx>=combat.aiQueue.length){
-        startPlayerTurn();
-      } else {
-        combat.aiTimer=0.55;
-      }
-    }
-    return;
-  }
-
-  if(pointerPressed && !dragCard){
-    const idx=cardAtPointer();
-    if(idx>=0){
-      dragCard={index:idx,cardId:combat.hand[idx],x:pointerPos.x,y:pointerPos.y};
-      return;
-    }
-    const btn=hitButton(pointerPos);
-    if(btn) handleButton(btn);
-    else if(pendingAction){
-      const t=targetAtPointer();
-      if(t){ executePending(t); }
-      else pendingAction=null;
-    }
-  }
-
-  if(dragCard && pointerDown){
-    dragCard.x=pointerPos.x; dragCard.y=pointerPos.y;
-  }
-
-  if(dragCard && pointerReleased){
-    let actor=null;
-    for(const ar of combat.allyRects){ if(inRect(pointerPos,ar.rect) && alive(ar.unit)){ actor=ar.unit; break; } }
-    if(actor){
-      pendingAction={handIndex:dragCard.index,cardId:dragCard.cardId,actorId:actor.id};
-      const card=CARD_LIBRARY[dragCard.cardId];
-      if(card.kind==='formation'||card.kind==='strategy_buff'||card.kind==='move_all'){
-        executePending(null);
-      } else {
-        toast(`${actor.name} 선택 · 대상 지정`);
-      }
-    }
-    dragCard=null;
-  }
-
-  if(pointerPressed && pendingAction){
-    const t=targetAtPointer();
-    if(t) executePending(t);
-  }
-}
-
-function updateReward(){
-  if(!pointerPressed) return;
-  if(!reward.picked){
-    for(let i=0;i<3;i++){
-      const r={x:20+i*154,y:280,w:140,h:190};
-      if(inRect(pointerPos,r)){
-        run.deck.push(reward.cards[i]);
-        reward.picked=true;
-        toast(CARD_LIBRARY[reward.cards[i]].name+' 획득');
+function onPointerDown(ev) {
+  ev.preventDefault();
+  const pos = toGame(ev); if (!pos) return;
+  if (S.screen==='combat' && S.combat.phase==='player') {
+    const hrs = S.combat.handRects;
+    for (let i=hrs.length-1; i>=0; i--) {
+      if (inR(pos, hrs[i])) {
+        drag = { index:i, card:S.combat.hand[i],
+                 x:pos.x, y:pos.y,
+                 ox:pos.x-hrs[i].x, oy:pos.y-hrs[i].y };
         return;
       }
     }
-    if(inRect(pointerPos,{x:170,y:500,w:140,h:44})) reward.picked=true;
-    return;
   }
-  if(inRect(pointerPos,{x:130,y:560,w:220,h:56})){
-    reward=null;
-    afterNodeResolution();
-  }
+  const b = hitBtn(pos); if (b) handleBtn(b);
+}
+function onPointerMove(ev) {
+  if (!drag) return;
+  const pos = toGame(ev); if (!pos) return;
+  drag.x=pos.x; drag.y=pos.y;
+}
+function onPointerUp(ev) {
+  if (!drag) return;
+  const pos = toGame(ev);
+  if (pos && S.screen==='combat') tryPlayCard(drag, pos);
+  drag = null;
 }
 
-function updateEvent(){
-  if(!pointerPressed||!eventData) return;
-  for(let i=0;i<eventData.options.length;i++){
-    const r={x:60,y:350+i*90,w:360,h:70};
-    if(inRect(pointerPos,r)){
-      eventData.options[i].fn();
-      eventData=null;
-      gameState=STATE.MAP;
-      return;
-    }
-  }
+// ── Draw Helpers ──────────────────────────────────────────────────────────────
+function fr(x,y,w,h,c) { ctx.fillStyle=c; ctx.fillRect(x,y,w,h); }
+function sr(x,y,w,h,c,lw=1) {
+  ctx.strokeStyle=c; ctx.lineWidth=lw;
+  ctx.strokeRect(x+lw/2,y+lw/2,w-lw,h-lw);
+}
+function txt(s,x,y,c=P.parch,f='14px Georgia',a='left',b='alphabetic') {
+  ctx.fillStyle=c; ctx.font=f; ctx.textAlign=a; ctx.textBaseline=b;
+  ctx.fillText(s,x,y);
 }
 
-function updateShop(){
-  if(!pointerPressed||!shopData) return;
-  for(let i=0;i<3;i++){
-    const r={x:20+i*154,y:280,w:140,h:190};
-    if(inRect(pointerPos,r)){
-      if(run.gold<shopData.prices[i]){ toast('금화 부족'); return; }
-      run.gold-=shopData.prices[i];
-      run.deck.push(shopData.offers[i]);
-      toast(CARD_LIBRARY[shopData.offers[i]].name+' 구매');
-      shopData.offers.splice(i,1,'march');
-      shopData.prices.splice(i,1,999);
-      return;
-    }
-  }
-  if(inRect(pointerPos,{x:40,y:520,w:180,h:52})){
-    if(run.gold<24){ toast('금화 부족'); return; }
-    run.gold-=24; healSquad(10); toast('분대 치유 +10');
-    return;
-  }
-  if(inRect(pointerPos,{x:260,y:520,w:180,h:52})){
-    shopData=null;
-    gameState=STATE.MAP;
-  }
-}
-
-function updateEnd(){
-  if(!pointerPressed) return;
-  if(inRect(pointerPos,{x:130,y:620,w:220,h:64})){
-    run=null; combat=null; reward=null; squadPick=[];
-    gameState=STATE.TITLE;
-  }
-}
-
-function handleButton(btn){
-  if(btn.action==='end_turn') endPlayerTurn();
-  else if(btn.action==='cancel_pending') pendingAction=null;
-}
-
-function gameInit(){
-  ctx=mainCanvas.getContext('2d');
-  applyLetterbox();
-  window.addEventListener('resize',applyLetterbox);
-}
-
-function gameUpdate(){
-  consumePointer();
-  clearButtons();
-  if(ui.toastT>0) ui.toastT-=timeDelta;
-
-  if(gameState===STATE.TITLE) updateTitle();
-  else if(gameState===STATE.SQUAD) updateSquad();
-  else if(gameState===STATE.MAP) updateMap();
-  else if(gameState===STATE.COMBAT) updateCombat();
-  else if(gameState===STATE.REWARD) updateReward();
-  else if(gameState===STATE.EVENT) updateEvent();
-  else if(gameState===STATE.SHOP) updateShop();
-  else if(gameState===STATE.GAMEOVER||gameState===STATE.VICTORY) updateEnd();
-}
-
-function gameUpdatePost(){ cameraPos=vec2(); }
-
-function gameRender(){
-  drawRect(vec2(),vec2(200,200),new Color(0x1a/255,0x0d/255,0,1));
-}
-
-function roundRect(x,y,w,h,r){
-  ctx.beginPath();
-  ctx.moveTo(x+r,y);
-  ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
-  ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
-  ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
-  ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y);
-  ctx.closePath();
-}
-
-function panel(x,y,w,h,a=0.96){
+function drawCard(card,x,y,w=90,h=130,opts={}) {
+  const {angle=0,dimmed=false,selected=false} = opts;
   ctx.save();
-  ctx.globalAlpha=a;
-  ctx.fillStyle=C.panel;
-  roundRect(x,y,w,h,10); ctx.fill();
-  ctx.strokeStyle=C.line; ctx.lineWidth=2; ctx.stroke();
+  ctx.translate(x+w/2, y+h/2);
+  if (angle) ctx.rotate(angle);
+  ctx.translate(-w/2,-h/2);
+  ctx.shadowColor='rgba(0,0,0,0.6)';
+  ctx.shadowBlur = selected ? 14 : 5;
+  fr(0,0,w,h, dimmed ? '#1a1008' : '#ede0bc');
+  sr(0,0,w,h, selected ? P.gold : (card.color||'#5a3a1a'), selected?3:2);
+  fr(0,0,w,22, card.color||'#5a3a1a');
+  ctx.shadowBlur=0;
+  // AP
+  fr(w-22,0,22,22,'#1a0d00');
+  txt(card.ap, w-11,11, P.gold,'bold 13px Georgia','center','middle');
+  // Name
+  txt(card.name, w/2,33, '#1a0d00','bold 11px Georgia','center','middle');
+  // Icon
+  const icons={move:'→',attack:'⚔',form:'陣',strat:'策'};
+  txt(icons[card.type]||'?', w/2,62, card.color||'#5a3a1a','bold 26px Georgia','center','middle');
+  if (card.dmg) {
+    const hits = card.hits||1;
+    txt(card.dmg+(hits>1?'×'+hits:''), w/2,86,'#8b1a1a','bold 13px Georgia','center','middle');
+  }
+  // Desc (split by spaces)
+  const words=card.desc.split('');
+  let line='', ly=103;
+  for (const ch of words) {
+    ctx.font='9px Georgia';
+    if (ctx.measureText(line+ch).width>w-6 && line) {
+      txt(line,w/2,ly,'#2a1008','9px Georgia','center'); ly+=12; line=ch;
+    } else line+=ch;
+  }
+  if (line) txt(line,w/2,ly,'#2a1008','9px Georgia','center');
   ctx.restore();
 }
 
-function txt(t,x,y,size=18,color=C.paper,align='center',weight='600'){
-  ctx.fillStyle=color;
-  ctx.font=`${weight} ${size}px Georgia`;
-  ctx.textAlign=align;
-  ctx.textBaseline='middle';
-  ctx.fillText(t,x,y);
+function drawBtn(b) {
+  const {x,y,w,h,label,enabled}=b;
+  fr(x,y,w,h, enabled?'#3a1a00':'#221000');
+  sr(x,y,w,h, enabled?P.gold:'#5a3a20', 2);
+  txt(label,x+w/2,y+h/2, enabled?P.parch:'#6a5a30','bold 14px Georgia','center','middle');
 }
 
-function drawButton(b){
-  ctx.fillStyle=b.enabled?'#f0dfbf':'#9f8f76';
-  roundRect(b.x,b.y,b.w,b.h,10); ctx.fill();
-  ctx.strokeStyle=C.line; ctx.lineWidth=2; ctx.stroke();
-  txt(b.label,b.x+b.w/2,b.y+b.h/2,18,b.enabled?C.ink:'#3d2f22');
-}
-
-function drawHeroChip(h,x,y,w,hg,selected=false){
-  panel(x,y,w,hg,0.95);
-  ctx.fillStyle=h.color; roundRect(x+10,y+10,56,56,8); ctx.fill();
-  txt(h.name,x+78,y+24,20,C.paper,'left','700');
-  txt(h.role,x+78,y+46,13,'#d4b88a','left','500');
-  txt(h.passive,x+12,y+74,12,'#c7b089','left','500');
-  if(selected){ ctx.strokeStyle=C.gold; ctx.lineWidth=3; ctx.strokeRect(x+3,y+3,w-6,hg-6); }
-}
-
-function gridToScreen(x,y){ return {x:GRID_X+x*TILE,y:GRID_Y+y*TILE}; }
-
-function drawTile(x,y,type){
-  const p=gridToScreen(x,y);
-  let fill='#3a2a1a';
-  if(type==='cover') fill=C.cover;
-  else if(type==='high') fill=C.high;
-  else if(type==='swamp') fill=C.swamp;
-  ctx.fillStyle=fill; ctx.fillRect(p.x,p.y,TILE-2,TILE-2);
-  ctx.strokeStyle='#3b2514'; ctx.strokeRect(p.x,p.y,TILE-2,TILE-2);
-  if(type==='cover') txt('▦',p.x+30,p.y+30,18,'#d7c8b0');
-  if(type==='high') txt('▲',p.x+30,p.y+30,14,'#efe1c8');
-  if(type==='swamp') txt('≈',p.x+30,p.y+30,16,'#d4e6b0');
-}
-
-function drawUnit(u){
-  const p=gridToScreen(u.x,u.y);
-  const col=u.team==='ally'?'#3a6e3a':'#8b1a1a';
-  ctx.fillStyle=col; roundRect(p.x+6,p.y+6,50,50,8); ctx.fill();
-  ctx.strokeStyle='#efe1c8'; ctx.lineWidth=1.5; ctx.stroke();
-  txt(u.name[0],p.x+31,p.y+30,20,'#f5e6c8');
-
-  const hpR={x:p.x+4,y:p.y+56,w:56,h:6};
-  ctx.fillStyle='#2b1a12'; ctx.fillRect(hpR.x,hpR.y,hpR.w,hpR.h);
-  ctx.fillStyle='#c94a2a'; ctx.fillRect(hpR.x,hpR.y,hpR.w*(u.hp/u.maxHp),hpR.h);
-
-  if(u.team==='enemy'&&u.intent){
-    txt(u.intent.icon,p.x+52,p.y+10,14,C.paper);
-  }
-  if(u.status.burnT>0) txt('🔥',p.x+10,p.y+10,12,C.gold);
-}
-
-function drawCard(cardId,x,y,w,h,ghost=false){
-  const c=CARD_LIBRARY[cardId];
-  const typeColor = c.kind.includes('attack')?C.red:c.kind.includes('move')?C.green:'#6f5a2a';
+// ── Title ─────────────────────────────────────────────────────────────────────
+function renderTitle() {
+  fr(0,0,GW,GH,P.bg);
+  sr(12,12,GW-24,GH-24,P.gold,2);
+  sr(18,18,GW-36,GH-36,P.red,1);
   ctx.save();
-  if(ghost) ctx.globalAlpha=0.92;
-  ctx.fillStyle='#f1e3c7'; roundRect(x,y,w,h,10); ctx.fill();
-  ctx.strokeStyle=typeColor; ctx.lineWidth=3; ctx.stroke();
-  txt(c.name,x+w/2,y+20,16,C.ink);
-  txt('AP '+c.cost,x+w/2,y+42,12,C.ink,'center','700');
-  ctx.fillStyle=C.ink; ctx.font='500 11px Georgia'; ctx.textAlign='left'; ctx.textBaseline='top';
-  const words=c.desc.split(' '); let line='', yy=y+56;
-  for(const wd of words){
-    const test=line+wd+' ';
-    if(ctx.measureText(test).width>w-12){ ctx.fillText(line,x+6,yy); line=wd+' '; yy+=14; }
-    else line=test;
-  }
-  ctx.fillText(line,x+6,yy);
+  ctx.shadowColor=P.gold; ctx.shadowBlur=24;
+  txt('三國殺',GW/2,200,P.gold,'bold 80px Georgia','center');
   ctx.restore();
+  txt('SANGUO KILL TEAM',GW/2,250,P.parch,'bold 17px Georgia','center');
+  txt('로그라이크 전술 덱빌더',GW/2,290,P.dparch,'15px Georgia','center');
+  txt('⚔',100,430,P.red,'56px Georgia','center');
+  txt('🏯',GW/2,450,P.gold,'44px Georgia','center');
+  txt('⚔',380,430,P.red,'56px Georgia','center');
+  txt('분대 3인을 골라 천하를 제패하라',GW/2,550,P.parch,'14px Georgia','center');
+  addBtn(GW/2-110,620,220,62,'게임 시작','start_game');
+  addBtn(GW/2-70,702,140,44,'조작법','show_help');
 }
 
-function renderTitle(){
-  panel(32,80,416,180);
-  txt('SANGUO KILL TEAM',240,140,36,C.gold,'center','700');
-  txt('로그라이크 전술 덱빌더',240,182,20,C.paper);
-  txt('LittleJS · 480×854',240,214,14,'#cfb38b');
-  panel(24,300,432,240);
-  txt('카드를 드래그해 무장의 행동을 지휘하세요.',240,348,17,C.paper);
-  txt('엄폐 · 고지대 · 진형 카드로 전장을 장악합니다.',240,382,15,'#d4bc92');
-  txt('3 Floor를 돌파하고 명장 보스를 격파하세요.',240,416,15,'#d4bc92');
-  const start={x:130,y:600,w:220,h:64,label:'출정 시작',enabled:true};
-  drawButton(start);
+// ── Squad Selection ───────────────────────────────────────────────────────────
+function renderSquad() {
+  fr(0,0,GW,GH,P.bg);
+  sr(12,12,GW-24,GH-24,P.gold,2);
+  txt('분대 편성',GW/2,48,P.gold,'bold 22px Georgia','center');
+  txt('3인 선택 → 출진',GW/2,76,P.parch,'13px Georgia','center');
+  const sel=S.squadSel||[];
+  const cw=218, ch=100, pad=8;
+  const sx=(GW-2*cw-pad)/2;
+  HEROES.forEach((h,i) => {
+    const col=i%2, row=Math.floor(i/2);
+    const x=sx+col*(cw+pad), y=98+row*(ch+pad);
+    const isSel=sel.includes(i);
+    fr(x,y,cw,ch, isSel?'#3a1a00':'#200e00');
+    sr(x,y,cw,ch, isSel?P.gold:h.color, isSel?3:1);
+    fr(x,y,cw,26,h.color);
+    txt(h.name,x+8,y+13,P.parch,'bold 15px Georgia','left','middle');
+    txt(h.role,x+cw-6,y+13,P.parch,'11px Georgia','right','middle');
+    txt(`HP:${h.hp}  AP:${h.ap}  공:${h.atk}  방:${h.def}`,x+8,y+44,P.parch,'11px Georgia');
+    txt(h.passive,x+8,y+62,P.gold,'10px Georgia');
+    if (isSel) txt('✓',x+cw-16,y+ch-14,P.gold,'bold 16px Georgia','center','middle');
+    addBtn(x,y,cw,ch,'','hero_toggle',true,{index:i});
+  });
+  const can=sel.length===3;
+  addBtn(GW/2-110,800,220,46,`출진 (${sel.length}/3)`, 'squad_confirm', can);
 }
 
-function renderSquad(){
-  panel(20,20,440,100);
-  txt('분대 편성 · 6인 중 3인 선택',240,58,24,C.gold);
-  for(let i=0;i<6;i++){
-    const col=i%2,row=(i/2)|0;
-    const x=26+col*228,y=150+row*160;
-    drawHeroChip(HEROES[i],x,y,210,146,squadPick.includes(i));
+// ── Map ───────────────────────────────────────────────────────────────────────
+function generateMap() {
+  const floors=[];
+  for (let f=0;f<3;f++) {
+    const nc=4+Math.floor(Math.random()*3);
+    const nodes=[];
+    for (let n=0;n<nc;n++) {
+      let type;
+      if (n===nc-1) type = f===2?'boss':'elite';
+      else {
+        const r=Math.random();
+        type = r<0.5?'combat':r<0.7?'event':r<0.85?'shop':'rest';
+      }
+      nodes.push({type,cleared:false,x:0,y:0});
+    }
+    floors.push(nodes);
   }
-  const ready=squadPick.length===3;
-  const btn={x:120,y:750,w:240,h:56,label:ready?'전장 진입':'3인 선택 필요',enabled:ready};
-  drawButton(btn);
+  return {floors,floor:0,node:0};
+}
+const NINFO={
+  combat:{icon:'⚔️',label:'전투',  color:'#8b1a1a'},
+  elite: {icon:'🗡️',label:'정예',  color:'#6a1a8a'},
+  boss:  {icon:'👑',label:'보스',  color:'#c8860a'},
+  event: {icon:'❓',label:'이벤트',color:'#1a4a8a'},
+  shop:  {icon:'🏪',label:'상점',  color:'#3a6e3a'},
+  rest:  {icon:'🔥',label:'봉화대',color:'#8a4a1a'},
+};
+
+function renderMap() {
+  fr(0,0,GW,GH,P.bg);
+  sr(12,12,GW-24,GH-24,P.gold,2);
+  const m=S.map, run=S.run;
+  txt('전략 지도',GW/2,44,P.gold,'bold 20px Georgia','center');
+  txt(`Floor ${m.floor+1} / 3`,GW/2,70,P.parch,'13px Georgia','center');
+  // Squad HP summary
+  const bW=(GW-40)/run.squad.length;
+  run.squad.forEach((a,i)=>{
+    const bx=20+i*bW;
+    txt(a.name,bx+bW/2,88,P.parch,'11px Georgia','center');
+    fr(bx+4,94,bW-8,8,'#3a0000');
+    fr(bx+4,94,Math.max(1,Math.floor((bW-8)*a.hp/a.maxHp)),8,'#c03020');
+    txt(`${a.hp}/${a.maxHp}`,bx+bW/2,110,P.dparch,'9px Georgia','center');
+  });
+  // Nodes
+  const floor=m.floors[m.floor];
+  const spacingY=Math.floor(580/floor.length);
+  floor.forEach((node,n)=>{
+    const ni=NINFO[node.type];
+    const nx=GW/2, ny=760-n*spacingY;
+    node.x=nx; node.y=ny;
+    if (n<floor.length-1) {
+      ctx.strokeStyle='#3a2a10'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(nx,ny-26); ctx.lineTo(nx,ny-spacingY+26); ctx.stroke();
+    }
+    const avail=!node.cleared && n===m.node;
+    const r=avail?26:20;
+    ctx.beginPath(); ctx.arc(nx,ny,r,0,Math.PI*2);
+    ctx.fillStyle=node.cleared?'#1a0d00':(avail?ni.color:'#180b00');
+    ctx.fill();
+    ctx.strokeStyle=avail?P.gold:(node.cleared?'#3a2a10':ni.color);
+    ctx.lineWidth=avail?3:1;
+    ctx.stroke();
+    txt(ni.icon,nx,ny+8,P.parch,(avail?'20':'14')+'px Georgia','center','middle');
+    txt(ni.label,nx,ny+r+14,avail?P.gold:P.dparch,'10px Georgia','center');
+    if (avail) addBtn(nx-r,ny-r,r*2,r*2,'','map_node',true,{node,n});
+  });
 }
 
-function renderMap(){
-  mapHits=[];
-  panel(14,12,452,72);
-  txt(`전략 지도 · Floor ${run.floor}/3`,160,40,22,C.gold,'left');
-  txt(`금화 ${run.gold}`,430,40,16,C.paper,'right');
+// ── Combat ────────────────────────────────────────────────────────────────────
+function rand(a,b){return Math.floor(Math.random()*(b-a+1))+a;}
+function pick(arr){return arr[Math.floor(Math.random()*arr.length)];}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
 
-  const map=getFloorMap();
-  ctx.save();
-  ctx.translate(0,mapScroll);
+function assignIntent(e,allies) {
+  if (!allies.length||e.hp<=0){e.intent={type:'none'};return;}
+  const r=Math.random();
+  const dmg=e.atk+(S.map?S.map.floor*2:0);
+  if (r<0.6)      e.intent={type:'attack',dmg};
+  else if (r<0.78) e.intent={type:'guard', val:3};
+  else             e.intent={type:'move'};
+}
 
-  for(const n of map.nodes){
-    for(const cid of n.children){
-      const c=getNodeById(cid);
-      if(!c) continue;
-      ctx.strokeStyle=n.visited?'#d9c28f':'#5e4526';
-      ctx.lineWidth=2;
-      ctx.beginPath(); ctx.moveTo(n.x,n.y); ctx.lineTo(c.x,c.y); ctx.stroke();
+function createCombat(isElite,isBoss) {
+  const run=S.run;
+  const ec=isBoss?2:3;
+  const enemies=[];
+  for (let i=0;i<ec;i++){
+    const t=isBoss?ETYPES[2]:(isElite?ETYPES[rand(1,2)]:pick(ETYPES));
+    const hp=isBoss?t.hp*2:(isElite?Math.floor(t.hp*1.6):t.hp);
+    enemies.push({...t,id:i,hp,maxHp:hp,col:1+i*2,row:0,dot:0,defBuff:0,intent:null});
+  }
+  run.squad.forEach((a,i)=>{
+    a.col=1+i*2; a.row=4; a.ap=a.maxAp; a.defBuff=0; a.atkBuff=0; a.dot=0;
+  });
+  // Cover tiles
+  const covers=[];
+  for(let i=0;i<3+rand(0,2);i++){
+    covers.push({col:rand(0,5),row:rand(1,3)});
+  }
+  enemies.forEach(e=>assignIntent(e,run.squad.filter(a=>a.hp>0)));
+  const deck=shuffle([...run.deck]);
+  const hand=deck.splice(0,4);
+  return {enemies,covers,hand,drawPile:deck,discardPile:[],
+          phase:'player',turn:1,siegeBuff:0,formBuff:null,handRects:[]};
+}
+
+function posToGrid(pos){
+  if(pos.y<GRID_Y||pos.y>GRID_Y+GRID_H) return null;
+  const col=Math.floor((pos.x-GRID_X)/TW);
+  const row=Math.floor((pos.y-GRID_Y)/TH);
+  if(col<0||col>=COLS||row<0||row>=ROWS) return null;
+  return{col,row};
+}
+function hasCover(unit,covers){return covers.some(c=>c.col===unit.col&&c.row===unit.row);}
+
+function tryPlayCard(dInfo,dropPos) {
+  const c=S.combat, run=S.run;
+  const card=dInfo.card;
+  const gt=posToGrid(dropPos);
+  // Must drag into grid area or at least above hand
+  if (!gt && dropPos.y>510) return;
+  const allies=run.squad.filter(a=>a.hp>0);
+  const enemies=c.enemies.filter(e=>e.hp>0);
+  if (!allies.length) return;
+  let tAlly=null, tEnemy=null;
+  if (gt){
+    tAlly =allies.find(a=>a.col===gt.col&&a.row===gt.row);
+    tEnemy=enemies.find(e=>e.col===gt.col&&e.row===gt.row);
+  }
+  // AP cost (장비 passive: -1)
+  let ap=card.ap;
+  if(run.squad.find(a=>a.id==='zhang_fei'&&a.hp>0)) ap=Math.max(0,ap-1);
+  const caster=allies.find(a=>a.ap>=ap);
+  if(!caster){setToast('AP 부족!');return;}
+  let played=false;
+
+  if (card.type==='move') {
+    const target=tAlly||allies[0];
+    const mv=card.id==='swift'?3:card.id==='surround'?1:2;
+    if (card.id==='surround') allies.forEach(a=>{a.row=Math.max(2,a.row-1);});
+    else { target.row=Math.max(2,target.row-Math.ceil(mv/2)); }
+    caster.ap-=ap; played=true;
+    setToast(`${target.name} 이동`);
+
+  } else if (card.type==='attack') {
+    if(!tEnemy && enemies.length>0){
+      tEnemy=enemies.reduce((b,e)=>{
+        const d1=Math.abs(e.col-caster.col)+Math.abs(e.row-caster.row);
+        const d2=Math.abs(b.col-caster.col)+Math.abs(b.row-caster.row);
+        return d1<d2?e:b;
+      });
+    }
+    if (!tEnemy) return;
+    let dmg=card.dmg+(caster.atkBuff||0);
+    if(c.formBuff?.type==='crane') dmg+=3;
+    if(c.siegeBuff>0){dmg+=8;c.siegeBuff--;}
+    const covered=hasCover(tEnemy,c.covers)&&!card.ignCover;
+    if(covered) dmg=Math.floor(dmg*0.5);
+    const hits=card.hits||1;
+    for(let h=0;h<hits;h++) tEnemy.hp-=Math.max(1,dmg-(tEnemy.def||0));
+    if(card.dot){tEnemy.dot=(tEnemy.dot||0)+card.dot*card.dotTurns;}
+    if(card.aoe) enemies.filter(e=>e!==tEnemy).forEach(e=>{e.hp-=Math.max(1,card.dmg-(e.def||0));});
+    caster.ap-=ap; played=true;
+    setToast(`${tEnemy.name}에게 ${card.dmg*(card.hits||1)} 피해!`+(covered?' [엄폐-50%]':''));
+
+  } else if (card.type==='form') {
+    if(card.id==='bazhen'){c.formBuff={type:'bazhen',turns:3};allies.forEach(a=>a.defBuff=(a.defBuff||0)+4);}
+    else if(card.id==='crane') c.formBuff={type:'crane',turns:2};
+    else if(card.id==='line') allies.filter(a=>a.row>=3).forEach(a=>a.ap=Math.min(a.maxAp+1,a.ap+1));
+    caster.ap-=ap; played=true;
+    setToast(`진형: ${card.name}`);
+
+  } else if (card.type==='strat') {
+    if(card.id==='firetac'&&tEnemy){tEnemy.dot=(tEnemy.dot||0)+card.dot*card.dotTurns;setToast('화공!');}
+    else if(card.id==='spy'&&enemies.length){enemies[0].intent={type:'none'};setToast('반간계: 행동 취소!');}
+    else if(card.id==='siege'){c.siegeBuff=1;setToast('공성계: 다음 공격+8');}
+    caster.ap-=ap; played=true;
+  }
+
+  if(played){
+    c.hand.splice(dInfo.index,1);
+    c.discardPile.push(card);
+    checkEnd();
+  }
+}
+
+function checkEnd(){
+  const c=S.combat, run=S.run;
+  const al=run.squad.filter(a=>a.hp>0);
+  const en=c.enemies.filter(e=>e.hp>0);
+  if(en.length===0) setTimeout(()=>startReward(),600);
+  else if(al.length===0) setTimeout(()=>{S.screen='gameover';},600);
+}
+
+function endPlayerTurn(){
+  const c=S.combat;
+  c.phase='enemy';
+  c.discardPile.push(...c.hand);
+  c.hand=[];
+  setTimeout(()=>doEnemyTurn(),400);
+}
+
+function doEnemyTurn(){
+  const c=S.combat, run=S.run;
+  const al=run.squad.filter(a=>a.hp>0);
+  const en=c.enemies.filter(e=>e.hp>0);
+  // Enemy DoT tick
+  en.forEach(e=>{ if(e.dot>0){ e.hp-=3; e.dot=Math.max(0,e.dot-3); } });
+  // Enemy actions
+  en.forEach(e=>{
+    if(!e.intent||e.intent.type==='none') return;
+    if(e.intent.type==='attack'&&al.length){
+      const tgt=al.reduce((w,a)=>a.hp<w.hp?a:w,al[0]);
+      let dmg=e.intent.dmg;
+      if(hasCover(tgt,c.covers)) dmg=Math.floor(dmg*0.5);
+      dmg=Math.max(1,dmg-(tgt.defBuff||0));
+      tgt.hp=Math.max(0,tgt.hp-dmg);
+      setToast(`${e.name}의 공격! ${tgt.name} -${dmg}`);
+    } else if(e.intent.type==='guard') {
+      e.defBuff=(e.defBuff||0)+e.intent.val;
+    }
+  });
+  // Ally DoT tick
+  al.forEach(a=>{ if(a.dot>0){ a.hp=Math.max(0,a.hp-2); a.dot=Math.max(0,a.dot-2); } });
+  // Form buff decay
+  if(c.formBuff){
+    c.formBuff.turns--;
+    if(c.formBuff.turns<=0){
+      if(c.formBuff.type==='bazhen') run.squad.forEach(a=>a.defBuff=Math.max(0,(a.defBuff||0)-4));
+      c.formBuff=null;
     }
   }
-
-  for(const n of map.nodes){
-    const nt=NODE_TYPES[n.type];
-    let fill='#3c2a18';
-    if(n.available&&!n.visited) fill='#6a4a1f';
-    if(n.visited) fill='#2f5a2f';
-    ctx.fillStyle=fill;
-    ctx.beginPath(); ctx.arc(n.x,n.y,24,0,Math.PI*2); ctx.fill();
-    ctx.strokeStyle=n.available?C.gold:'#5c4122'; ctx.lineWidth=2; ctx.stroke();
-    txt(nt.icon,n.x,n.y-2,16,C.paper);
-    txt(nt.label,n.x,n.y+34,12,'#d9c296');
-    mapHits.push({x:n.x,y:n.y+mapScroll,r:24,node:n});
+  checkEnd();
+  if(S.screen!=='combat') return;
+  // New turn
+  c.phase='player'; c.turn++;
+  run.squad.forEach(a=>{ if(a.hp>0) a.ap=a.maxAp; });
+  const zhuge=run.squad.find(a=>a.id==='zhuge'&&a.hp>0);
+  const drawN=zhuge?5:4;
+  if(c.drawPile.length<drawN){
+    c.drawPile=shuffle([...c.drawPile,...c.discardPile]); c.discardPile=[];
   }
-
-  ctx.restore();
-  txt('드래그: 세로 스크롤 / 탭: 노드 이동',240,828,13,'#c6ad81');
+  c.hand=c.drawPile.splice(0,Math.min(drawN,c.drawPile.length));
+  en.forEach(e=>{ if(e.hp>0) assignIntent(e,run.squad.filter(a=>a.hp>0)); });
 }
 
 function renderCombat(){
-  // enemy bar
-  panel(8,8,464,70);
-  txt(`교전 Floor ${run.floor} · Turn ${combat.turnIndex}`,16,30,16,C.gold,'left');
-  const intentTxt=livingEnemies().map(e=>`${e.name} ${e.intent?e.intent.icon:'·'}`).join('  ');
-  txt(intentTxt,16,54,13,C.paper,'left');
-
-  combat.tileRects=[];
-  for(let y=0;y<GRID_H;y++) for(let x=0;x<GRID_W;x++){
-    drawTile(x,y,tileType(x,y));
-    const p=gridToScreen(x,y);
-    combat.tileRects.push({x,y,rect:{x:p.x,y:p.y,w:TILE-2,h:TILE-2}});
+  const c=S.combat, run=S.run;
+  fr(0,0,GW,GH,P.bg);
+  // Enemy status (y=0, h=70)
+  fr(0,0,GW,70,'#140800');
+  sr(0,0,GW,70,P.red,1);
+  const en=c.enemies;
+  const eW=GW/en.length;
+  en.forEach((e,i)=>{
+    const ex=i*eW;
+    const alive=e.hp>0;
+    txt(e.name,ex+eW/2,14,alive?P.parch:'#5a3020','11px Georgia','center');
+    if(alive){
+      fr(ex+4,20,eW-8,8,'#3a0000');
+      fr(ex+4,20,Math.max(1,Math.floor((eW-8)*e.hp/e.maxHp)),8,'#c03020');
+      txt(`${Math.max(0,e.hp)}/${e.maxHp}`,ex+eW/2,36,P.parch,'9px Georgia','center');
+      if(e.intent){
+        const im={attack:'⚔️',guard:'🛡️',move:'💨',none:'💭'};
+        const s=(im[e.intent.type]||'?')+(e.intent.dmg?' '+e.intent.dmg:'');
+        txt(s,ex+eW/2,56,P.gold,'12px Georgia','center');
+      }
+      if(e.dot>0) txt('🔥',ex+eW-14,14,P.red,'12px Georgia','center');
+    } else {
+      txt('✝',ex+eW/2,40,'#4a2a20','22px Georgia','center','middle');
+    }
+  });
+  // Grid
+  for(let row=0;row<ROWS;row++){
+    for(let col=0;col<COLS;col++){
+      const tx=GRID_X+col*TW, ty=GRID_Y+row*TH;
+      const tc=row<=1?'#1a0808':row===2?'#181208':'#081408';
+      fr(tx,ty,TW,TH,tc);
+      sr(tx,ty,TW,TH,'#3a2a10',1);
+      if(c.covers.some(cv=>cv.col===col&&cv.row===row)){
+        ctx.fillStyle='rgba(100,80,40,0.55)';
+        ctx.fillRect(tx+4,ty+4,TW-8,TH-8);
+        txt('🪨',tx+TW/2,ty+TH/2,P.dparch,'22px Georgia','center','middle');
+      }
+    }
   }
-
-  combat.allyRects=[]; combat.enemyRects=[];
-  for(const a of combat.allies){ if(!alive(a)) continue; drawUnit(a);
-    const p=gridToScreen(a.x,a.y); combat.allyRects.push({unit:a,rect:{x:p.x,y:p.y,w:60,h:60}}); }
-  for(const e of combat.enemies){ if(!alive(e)) continue; drawUnit(e);
-    const p=gridToScreen(e.x,e.y); combat.enemyRects.push({unit:e,rect:{x:p.x,y:p.y,w:60,h:60}}); }
-
-  panel(10,448,460,72);
-  let x=18;
-  for(const a of combat.allies){
-    const hp=`${a.name} HP ${a.hp}/${a.maxHp} AP ${a.ap}`;
-    txt(hp,x,472,12,alive(a)?C.paper:'#6f5f4a','left');
-    x+=152;
+  // Enemies on grid
+  en.forEach(e=>{
+    if(e.hp<=0) return;
+    const tx=GRID_X+e.col*TW, ty=GRID_Y+e.row*TH;
+    fr(tx+5,ty+5,TW-10,TH-10,e.color);
+    sr(tx+5,ty+5,TW-10,TH-10,'#c03020',2);
+    txt(e.name[0],tx+TW/2,ty+TH/2-6,P.parch,'bold 16px Georgia','center','middle');
+    fr(tx+5,ty+TH-16,TW-10,8,'#2a0000');
+    fr(tx+5,ty+TH-16,Math.max(1,Math.floor((TW-10)*e.hp/e.maxHp)),8,'#c03020');
+    if(e.dot>0) txt('🔥',tx+TW-14,ty+8,P.red,'11px Georgia','center');
+  });
+  // Allies on grid
+  run.squad.forEach(a=>{
+    if(a.hp<=0) return;
+    const tx=GRID_X+a.col*TW, ty=GRID_Y+a.row*TH;
+    fr(tx+5,ty+5,TW-10,TH-10,a.color||'#0a3a1a');
+    sr(tx+5,ty+5,TW-10,TH-10,P.gold,2);
+    txt(a.name[0],tx+TW/2,ty+TH/2-6,P.parch,'bold 16px Georgia','center','middle');
+    txt(`AP:${a.ap}`,tx+TW/2,ty+TH-9,P.gold,'bold 9px Georgia','center');
+    fr(tx+5,ty+TH-18,TW-10,6,'#3a0000');
+    fr(tx+5,ty+TH-18,Math.max(1,Math.floor((TW-10)*a.hp/a.maxHp)),6,'#5aaa3a');
+  });
+  // Ally status bar (y=420)
+  const SY=GRID_Y+GRID_H;
+  fr(0,SY,GW,90,'#0a1808');
+  sr(0,SY,GW,90,P.gold,1);
+  const aW=GW/run.squad.length;
+  run.squad.forEach((a,i)=>{
+    const ax=i*aW;
+    const alive=a.hp>0;
+    fr(ax+2,SY+2,aW-4,86,alive?'#0a2010':'#1a0a08');
+    txt(a.name,ax+aW/2,SY+14,alive?P.parch:'#5a3a20','bold 11px Georgia','center');
+    if(alive){
+      fr(ax+4,SY+22,aW-8,8,'#3a0000');
+      fr(ax+4,SY+22,Math.max(1,Math.floor((aW-8)*a.hp/a.maxHp)),8,'#5aaa3a');
+      txt(`${a.hp}/${a.maxHp}`,ax+aW/2,SY+40,P.parch,'9px Georgia','center');
+      for(let ap=0;ap<a.maxAp;ap++){
+        fr(ax+8+ap*16,SY+52,13,13,ap<a.ap?P.gold:'#3a2200');
+        sr(ax+8+ap*16,SY+52,13,13,P.gold,1);
+      }
+    } else txt('전사',ax+aW/2,SY+48,'#5a3a20','12px Georgia','center');
+  });
+  // Card hand (y=510)
+  const HY=510;
+  fr(0,HY,GW,270,'#120800');
+  sr(0,HY,GW,270,'#5a3a10',1);
+  c.handRects=[];
+  const hand=c.hand;
+  const cw=90,ch=130,n=hand.length;
+  const tw=n*(cw+8)-8;
+  const sx=(GW-tw)/2;
+  hand.forEach((card,i)=>{
+    if(drag&&drag.index===i) return;
+    const cx=sx+i*(cw+8), cy=HY+16;
+    drawCard(card,cx,cy,cw,ch);
+    c.handRects.push({x:cx,y:cy,w:cw,h:ch});
+  });
+  if(drag){
+    const dx=drag.x-(drag.ox||cw/2), dy=drag.y-(drag.oy||ch/2);
+    drawCard(drag.card,dx,dy,cw,ch,{selected:true});
   }
-
-  const f=combat.formation;
-  txt(`진형 ${f.bagua?'팔진도 ':'-'}${f.crane?'학익진 ':'-'}${f.line?'장사진':''}`,20,503,12,'#d5bf97','left');
-
-  panel(8,524,464,224);
-  combat.handRects=[];
-  for(let i=0;i<combat.hand.length && i<4;i++){
-    const x=16+i*114, y=548;
-    if(dragCard && dragCard.index===i) continue;
-    drawCard(combat.hand[i],x,y,106,152,false);
-    combat.handRects.push({index:i,x,y,w:106,h:152});
-  }
-
-  if(dragCard){
-    drawCard(dragCard.cardId,dragCard.x-53,dragCard.y-76,106,152,true);
-  }
-
-  const endBtn={x:352,y:756,w:112,h:46,label:'턴 종료',action:'end_turn',enabled:combat.turn==='player'};
-  addButton(endBtn.x,endBtn.y,endBtn.w,endBtn.h,endBtn.label,endBtn.action,endBtn.enabled);
-  drawButton(endBtn);
-
-  txt(`덱 ${combat.drawPile.length} / 버림 ${combat.discard.length}`,16,776,13,C.paper,'left');
-
-  if(pendingAction){
-    const c=CARD_LIBRARY[pendingAction.cardId];
-    const cancelBtn={x:224,y:756,w:112,h:46,label:'취소',action:'cancel_pending',enabled:true};
-    addButton(cancelBtn.x,cancelBtn.y,cancelBtn.w,cancelBtn.h,cancelBtn.label,cancelBtn.action,true);
-    drawButton(cancelBtn);
-    txt(`선택 카드: ${c.name} · 대상 지정`,20,756,12,C.gold,'left');
-  }
-
-  if(combat.turn==='enemy'){
-    txt('적 턴',428,756,14,C.red,'right');
+  // Bottom bar (y=780)
+  const BY=780;
+  fr(0,BY,GW,GH-BY,'#0a0500');
+  sr(0,BY,GW,GH-BY,P.gold,1);
+  txt(`덱 ${c.drawPile.length}`,20,BY+32,P.parch,'12px Georgia','left','middle');
+  txt(`버림 ${c.discardPile.length}`,100,BY+32,P.parch,'12px Georgia','left','middle');
+  txt(`턴 ${c.turn}`,190,BY+32,P.parch,'12px Georgia','left','middle');
+  if(c.phase==='player') addBtn(300,BY+6,160,48,'턴 종료','end_turn');
+  else txt('적 행동 중...',310,BY+32,P.gold,'13px Georgia','left','middle');
+  if(c.formBuff){
+    const fn={bazhen:'팔진도',crane:'학익진',line:'장사진'};
+    txt(`진형:${fn[c.formBuff.type]}(${c.formBuff.turns}턴)`,GW/2,BY+54,P.gold,'11px Georgia','center');
   }
 }
 
+// ── Reward ────────────────────────────────────────────────────────────────────
+function startReward(){
+  const pool=shuffle([...CARD_KEYS]).slice(0,3);
+  S.reward={cards:pool.map(makeCard),chosen:false};
+  S.screen='reward';
+}
 function renderReward(){
-  panel(20,40,440,130);
-  txt('승리 보상',240,80,30,C.gold);
-  txt('카드 1장을 획득하거나 건너뛰세요',240,122,14,C.paper);
-  txt(`금화 +${run ? run.gold : 0}`,240,146,13,'#d3ba8f');
-
-  for(let i=0;i<3;i++){
-    drawCard(reward.cards[i],20+i*154,280,140,190,false);
-  }
-  if(!reward.picked){
-    const skip={x:170,y:500,w:140,h:44,label:'건너뛰기',enabled:true};
-    drawButton(skip);
-  } else {
-    const cont={x:130,y:560,w:220,h:56,label:'맵으로 복귀',enabled:true};
-    drawButton(cont);
-  }
+  const r=S.reward;
+  fr(0,0,GW,GH,P.bg);
+  sr(12,12,GW-24,GH-24,P.gold,2);
+  txt('전투 승리!',GW/2,58,P.gold,'bold 26px Georgia','center');
+  txt('카드를 덱에 추가하거나 건너뛰세요',GW/2,88,P.parch,'13px Georgia','center');
+  const cw=110,ch=152,sp=20;
+  const tot=3*cw+2*sp, startX=(GW-tot)/2;
+  r.cards.forEach((card,i)=>{
+    const cx=startX+i*(cw+sp), cy=120;
+    drawCard(card,cx,cy,cw,ch);
+    if(!r.chosen) addBtn(cx,cy,cw,ch,'','reward_pick',true,{card});
+  });
+  addBtn(GW/2-80,300,160,46,'건너뛰기','reward_skip',!r.chosen);
+  addBtn(GW/2-80,360,160,46,'맵으로','reward_continue',true);
 }
 
+// ── Event ─────────────────────────────────────────────────────────────────────
 function renderEvent(){
-  panel(24,70,432,200);
-  txt(eventData.title,240,120,28,C.gold);
-  txt(eventData.text,240,168,16,C.paper);
-  for(let i=0;i<eventData.options.length;i++){
-    const r={x:60,y:350+i*90,w:360,h:70,label:eventData.options[i].label,enabled:true};
-    drawButton(r);
+  const ev=S.event;
+  fr(0,0,GW,GH,P.bg);
+  sr(12,12,GW-24,GH-24,P.gold,2);
+  txt('❓',GW/2,80,P.gold,'32px Georgia','center');
+  txt(ev.title,GW/2,130,P.gold,'bold 22px Georgia','center');
+  // multi-line
+  let line='', ly=180;
+  for(const ch of ev.text){
+    ctx.font='14px Georgia';
+    if(ctx.measureText(line+ch).width>GW-60&&line){
+      txt(line,GW/2,ly,P.parch,'14px Georgia','center'); ly+=24; line=ch;
+    } else line+=ch;
+  }
+  if(line) txt(line,GW/2,ly,P.parch,'14px Georgia','center');
+  if(!ev.resolved){
+    addBtn(GW/2-170,350,340,58,ev.opts[0].label,'event_choice',true,{fn:ev.opts[0].fn});
+    addBtn(GW/2-170,424,340,58,ev.opts[1].label,'event_choice',true,{fn:ev.opts[1].fn});
+  } else {
+    addBtn(GW/2-80,450,160,52,'맵으로','event_continue');
   }
 }
 
+// ── Shop ──────────────────────────────────────────────────────────────────────
 function renderShop(){
-  panel(20,30,440,140);
-  txt('상점',240,78,32,C.gold);
-  txt(`금화 ${run.gold}`,240,122,18,C.paper);
+  const s=S.shop;
+  fr(0,0,GW,GH,P.bg);
+  sr(12,12,GW-24,GH-24,P.gold,2);
+  txt('🏪 상점',GW/2,58,P.gold,'bold 22px Georgia','center');
+  txt(`보유 골드: ${S.run.gold}G`,GW/2,88,P.parch,'15px Georgia','center');
+  const cw=110,ch=152,sp=18;
+  const tot=3*cw+2*sp, startX=(GW-tot)/2;
+  s.offers.forEach((card,i)=>{
+    const cx=startX+i*(cw+sp), cy=110;
+    drawCard(card,cx,cy,cw,ch,{dimmed:s.sold[i]});
+    const price=s.prices[i];
+    txt(s.sold[i]?'판매완료':`${price}G`,cx+cw/2,cy+ch+18,
+        s.sold[i]?'#5a4030':P.gold,'13px Georgia','center');
+    if(!s.sold[i]) addBtn(cx,cy,cw,ch+22,'','shop_buy',S.run.gold>=price,{i,card,price});
+  });
+  addBtn(GW/2-120,590,240,52,'HP 회복 (8G)','shop_heal',S.run.gold>=8);
+  addBtn(GW/2-80,654,160,52,'나가기','shop_leave');
+}
 
-  for(let i=0;i<3;i++){
-    drawCard(shopData.offers[i],20+i*154,280,140,190,false);
-    txt(`${shopData.prices[i]} G`,92+i*154,485,14,C.gold);
+// ── Rest ──────────────────────────────────────────────────────────────────────
+function renderRest(){
+  fr(0,0,GW,GH,P.bg);
+  sr(12,12,GW-24,GH-24,P.gold,2);
+  txt('🔥 봉화대',GW/2,100,P.gold,'bold 22px Georgia','center');
+  txt('불빛 아래서 잠시 숨을 고른다.',GW/2,148,P.parch,'14px Georgia','center');
+  const r=S.rest;
+  addBtn(GW/2-150,270,300,62,'회복 (HP 30% 회복)','rest_heal',!r.used);
+  addBtn(GW/2-150,346,300,62,'훈련 (랜덤 카드 추가)','rest_forge',!r.used);
+  addBtn(GW/2-80,470,160,52,'맵으로','rest_leave');
+}
+
+// ── Gameover / Victory ────────────────────────────────────────────────────────
+function renderGameOver(){
+  fr(0,0,GW,GH,P.bg);
+  sr(12,12,GW-24,GH-24,P.red,3);
+  ctx.save(); ctx.shadowColor=P.red; ctx.shadowBlur=30;
+  txt('패배',GW/2,300,P.red,'bold 80px Georgia','center');
+  ctx.restore();
+  txt('삼국의 전장에서 쓰러졌다.',GW/2,400,P.parch,'15px Georgia','center');
+  addBtn(GW/2-100,500,200,60,'다시 시작','restart');
+}
+function renderVictory(){
+  fr(0,0,GW,GH,P.bg);
+  sr(12,12,GW-24,GH-24,P.gold,3);
+  ctx.save(); ctx.shadowColor=P.gold; ctx.shadowBlur=30;
+  txt('승리!',GW/2,280,P.gold,'bold 80px Georgia','center');
+  ctx.restore();
+  txt('천하를 평정하였다!',GW/2,380,P.parch,'16px Georgia','center');
+  txt(`전투 ${S.run.battlesWon}승`,GW/2,414,P.parch,'14px Georgia','center');
+  addBtn(GW/2-100,500,200,60,'타이틀로','restart');
+}
+
+// ── Help Overlay ──────────────────────────────────────────────────────────────
+let helpShown=false;
+function renderHelp(){
+  fr(0,0,GW,GH,'rgba(26,13,0,0.95)');
+  sr(20,20,GW-40,GH-40,P.gold,2);
+  txt('조작법',GW/2,68,P.gold,'bold 22px Georgia','center');
+  const lines=[
+    '• 카드를 드래그해 그리드에 놓으면 사용',
+    '• 이동 카드 → 아군 유닛 칸에 드롭',
+    '• 공격 카드 → 적 유닛 칸에 드롭',
+    '• 진형/책략 → 아무 칸에나 드롭',
+    '• 엄폐(🪨) 뒤 유닛은 피해 -50%',
+    '• AP가 부족하면 카드 사용 불가',
+    '• 턴 종료 버튼 누르면 적이 행동',
+    '• 팔진도: 방어+4, 학익진: 공격+3',
+    '• 장사진: 전열 유닛 AP+1',
+    '• 화공: 적에게 DoT 부여',
+    '',
+    '적을 모두 쓰러뜨리면 승리!',
+    'Floor 3 보스 처치 → 최종 승리',
+  ];
+  lines.forEach((l,i) => txt(l,40,120+i*38,P.parch,'13px Georgia'));
+  addBtn(GW/2-80,750,160,52,'닫기','close_help');
+}
+
+// ── Button Handler ────────────────────────────────────────────────────────────
+function handleBtn(b){
+  switch(b.action){
+    case 'start_game': S={screen:'squad',squadSel:[]}; break;
+    case 'show_help': helpShown=true; break;
+    case 'close_help': helpShown=false; break;
+    case 'hero_toggle':{
+      const i=b.data.index, sel=S.squadSel||[];
+      const p=sel.indexOf(i);
+      if(p>=0) sel.splice(p,1); else if(sel.length<3) sel.push(i);
+      break;
+    }
+    case 'squad_confirm':{
+      if((S.squadSel||[]).length!==3) break;
+      startRun(S.squadSel);
+      break;
+    }
+    case 'map_node': enterNode(b.data.node,b.data.n); break;
+    case 'end_turn': endPlayerTurn(); break;
+    case 'reward_pick':{
+      S.run.deck.push(b.data.card);
+      S.reward.chosen=true;
+      setToast(`${b.data.card.name} 획득!`);
+      break;
+    }
+    case 'reward_skip': S.reward.chosen=true; break;
+    case 'reward_continue': afterNode(); break;
+    case 'event_choice':{
+      b.data.fn(S.run);
+      S.event.resolved=true;
+      break;
+    }
+    case 'event_continue': afterNode(); break;
+    case 'shop_buy':{
+      const {i,card,price}=b.data;
+      if(S.run.gold>=price&&!S.shop.sold[i]){
+        S.run.gold-=price;
+        S.run.deck.push(card);
+        S.shop.sold[i]=true;
+        setToast(`${card.name} 구매!`);
+      }
+      break;
+    }
+    case 'shop_heal':{
+      if(S.run.gold>=8){
+        S.run.gold-=8;
+        S.run.squad.forEach(a=>a.hp=Math.min(a.maxHp,a.hp+10));
+        setToast('HP 회복!');
+      }
+      break;
+    }
+    case 'shop_leave': afterNode(); break;
+    case 'rest_heal':{
+      if(!S.rest.used){
+        S.rest.used=true;
+        S.run.squad.forEach(a=>{ const h=Math.floor(a.maxHp*0.3); a.hp=Math.min(a.maxHp,a.hp+h); });
+        setToast('회복!');
+      }
+      break;
+    }
+    case 'rest_forge':{
+      if(!S.rest.used){
+        S.rest.used=true;
+        const k=CARD_KEYS[Math.floor(Math.random()*CARD_KEYS.length)];
+        S.run.deck.push(makeCard(k));
+        setToast('훈련 완료!');
+      }
+      break;
+    }
+    case 'rest_leave': afterNode(); break;
+    case 'restart': S={screen:'title'}; drag=null; toast={msg:'',t:0}; break;
   }
-
-  drawButton({x:40,y:520,w:180,h:52,label:'분대 치유 (24G)',enabled:true});
-  drawButton({x:260,y:520,w:180,h:52,label:'상점 나가기',enabled:true});
 }
 
-function renderEnd(victory){
-  panel(32,110,416,260);
-  txt(victory?'승리':'패배',240,170,48,victory?C.gold:C.red);
-  txt(victory?'명장 대전을 돌파했습니다.':'분대가 전멸했습니다.',240,232,18,C.paper);
-  if(run){ txt(`도달 Floor ${run.floor}`,240,264,14,'#d1b98d'); }
-  drawButton({x:130,y:620,w:220,h:64,label:'타이틀로',enabled:true});
+function startRun(heroIdx){
+  const squad=heroIdx.map(i=>{
+    const h=HEROES[i];
+    return{...h,hp:h.hp,maxHp:h.hp,ap:h.ap,maxAp:h.ap,defBuff:0,atkBuff:0,dot:0};
+  });
+  const map=generateMap();
+  S={
+    screen:'map',
+    run:{squad,deck:starterDeck(),gold:10,battlesWon:0},
+    map,
+  };
 }
 
-function gameRenderPost(){
-  if(gameState===STATE.TITLE) renderTitle();
-  else if(gameState===STATE.SQUAD) renderSquad();
-  else if(gameState===STATE.MAP && run) renderMap();
-  else if(gameState===STATE.COMBAT && combat) renderCombat();
-  else if(gameState===STATE.REWARD && reward) renderReward();
-  else if(gameState===STATE.EVENT && eventData) renderEvent();
-  else if(gameState===STATE.SHOP && shopData) renderShop();
-  else if(gameState===STATE.GAMEOVER) renderEnd(false);
-  else if(gameState===STATE.VICTORY) renderEnd(true);
-
-  for(const b of ui.buttons) drawButton(b);
-  if(ui.toastT>0) txt(ui.toast,240,816,13,C.gold);
+function enterNode(node,n){
+  if(node.cleared) return;
+  const run=S.run;
+  switch(node.type){
+    case 'combat':
+    case 'elite':
+    case 'boss':{
+      S.combat=createCombat(node.type==='elite',node.type==='boss');
+      S.screen='combat';
+      break;
+    }
+    case 'event':{
+      S.event={...pick(EVENTS),resolved:false};
+      S.screen='event';
+      break;
+    }
+    case 'shop':{
+      const pool=shuffle([...CARD_KEYS]);
+      const offers=pool.slice(0,3).map(makeCard);
+      const prices=[10,12,15];
+      S.shop={offers,sold:[false,false,false],prices};
+      S.screen='shop';
+      break;
+    }
+    case 'rest':
+      S.rest={used:false};
+      S.screen='rest';
+      break;
+  }
 }
 
-engineInit(gameInit, gameUpdate, gameUpdatePost, gameRender, gameRenderPost);
+function afterNode(){
+  const m=S.map;
+  const floor=m.floors[m.floor];
+  floor[m.node].cleared=true;
+  if(['combat','elite','boss'].includes(floor[m.node].type)) S.run.battlesWon++;
+  const isBoss=floor[m.node].type==='boss';
+  m.node++;
+  if(m.node>=floor.length||isBoss){
+    if(m.floor>=2&&isBoss){ S.screen='victory'; return; }
+    if(isBoss){ m.floor++; m.node=0; }
+  }
+  S.screen='map';
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+function renderToast(){
+  if(!toast.t||!toast.msg) return;
+  ctx.font='13px Georgia';
+  const tw=ctx.measureText(toast.msg).width+32;
+  fr((GW-tw)/2,GH-128,tw,36,'rgba(26,13,0,0.92)');
+  sr((GW-tw)/2,GH-128,tw,36,P.gold,1);
+  txt(toast.msg,GW/2,GH-110,P.parch,'13px Georgia','center','middle');
+}
+
+// ── Main Loop ─────────────────────────────────────────────────────────────────
+function render(){
+  ctx.clearRect(0,0,GW,GH);
+  btns=[];
+  if(helpShown){ renderHelp(); }
+  else if(S.screen==='title')    renderTitle();
+  else if(S.screen==='squad')    renderSquad();
+  else if(S.screen==='map')      renderMap();
+  else if(S.screen==='combat')   renderCombat();
+  else if(S.screen==='reward')   renderReward();
+  else if(S.screen==='event')    renderEvent();
+  else if(S.screen==='shop')     renderShop();
+  else if(S.screen==='rest')     renderRest();
+  else if(S.screen==='gameover') renderGameOver();
+  else if(S.screen==='victory')  renderVictory();
+  for(const b of btns) if(b.label) drawBtn(b);
+  renderToast();
+}
+
+let lastTs=0;
+function loop(ts){
+  if(!lastTs) lastTs=ts;
+  const dt=Math.min(0.033,(ts-lastTs)/1000);
+  lastTs=ts;
+  if(toast.t>0){toast.t-=dt;if(toast.t<=0)toast={msg:'',t:0};}
+  render();
+  requestAnimationFrame(loop);
+}
+
+function init(){
+  resize();
+  window.addEventListener('resize',resize);
+  canvas.addEventListener('pointerdown',onPointerDown);
+  canvas.addEventListener('pointermove',onPointerMove);
+  canvas.addEventListener('pointerup',onPointerUp);
+  canvas.addEventListener('pointercancel',()=>{drag=null;});
+  requestAnimationFrame(loop);
+}
+
+init();
+})();
 </script>
 </body>
 </html>

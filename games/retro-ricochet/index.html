@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Retro Ricochet — 레트로 리코셋</title>
+<meta name="description" content="각도를 조준해 공을 발사하고 벽에 튕겨 모든 블록을 파괴하세요. 체인 연격으로 콤보 점수를 노리세요.">
+<meta name="keywords" content="html5,arcade,action,retro,8bit,ricochet,bounce,minimal,mobile">
+<meta property="og:title" content="Retro Ricochet — 레트로 리코셋">
+<meta property="og:type" content="website">
+<link rel="manifest" href="/games/manifest.json">
+<script src="https://killedbyapixel.github.io/LittleJS/dist/littlejs.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;overflow:hidden;background:#0a0a1a;touch-action:none;
+  font-family:'Courier New',Courier,monospace}
+canvas{display:block;touch-action:none;position:fixed;left:0;top:0}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+(function(){
+'use strict';
+
+// ── Canvas / Letterbox ─────────────────────────────────────────────
+const GW=420,GH=740;
+const cv=document.getElementById('c');
+const cx=cv.getContext('2d');
+let sc=1,ox=0,oy=0;
+function resize(){
+  const sw=innerWidth,sh=innerHeight;
+  sc=Math.min(sw/GW,sh/GH);
+  cv.width=sw;cv.height=sh;
+  ox=(sw-GW*sc)/2;oy=(sh-GH*sc)/2;
+  cx.setTransform(sc,0,0,sc,ox,oy);
+}
+addEventListener('resize',resize);resize();
+
+// ── Retro 8-bit palette (NO neon) ─────────────────────────────────
+const C_BG   ='#0E0E1C'; // dark navy
+const C_WALL ='#2A2A4E'; // mid navy
+const C_GRID ='#1A1A30'; // subtle grid
+const C_BALL ='#F0D840'; // warm yellow
+const C_BALL2='#C8A820'; // shadow
+const C_UI   ='#D8D8D8'; // off-white
+const C_TRAJ ='rgba(240,216,64,.3)';
+// Target colors (muted 8-bit style)
+const TARGET_COLS=[
+  {fill:'#C03838',stroke:'#802020',hp:1},  // red
+  {fill:'#3860C0',stroke:'#204080',hp:2},  // blue (takes 2 hits)
+  {fill:'#38A038',stroke:'#206020',hp:1},  // green
+  {fill:'#C07830',stroke:'#804010',hp:3},  // orange (3 hits)
+];
+
+// ── Arena ─────────────────────────────────────────────────────────
+const AR_L=20,AR_T=90,AR_W=380,AR_H=500;
+const AR_R=AR_L+AR_W,AR_B=AR_T+AR_H;
+
+// Shooter position (bottom center of arena)
+const SH_X=AR_L+AR_W/2;
+const SH_Y=AR_B-20;
+
+// Max ricochets before ball dies
+const MAX_BOUNCE=8;
+
+// ── State ─────────────────────────────────────────────────────────
+let targets,ball,score,lives,level,state,shots,maxShots;
+let aimX=SH_X,aimY=SH_Y-100; // aim point
+let dragging=false;
+let combo=0,comboTimer=0;
+let particles=[];
+let tPrev=0;
+
+// ── Level definitions ─────────────────────────────────────────────
+function makeLevel(lvl){
+  const n=(lvl-1)%5;
+  const t=[];
+  const mid=AR_L+AR_W/2;
+  if(n===0){
+    for(let c=0;c<5;c++){
+      t.push(mkT(AR_L+20+c*72,AR_T+60,52,38,1,0));
+      t.push(mkT(AR_L+20+c*72,AR_T+116,52,38,1,2));
+    }
+  }else if(n===1){
+    const cx0=mid-25,cy0=AR_T+AR_H/2-60;
+    [[-108,-54],[0,-54],[108,-54],[-54,0],[54,0],[-108,54],[0,54],[108,54],[0,-108]].forEach(([dx,dy])=>
+      t.push(mkT(cx0+dx,cy0+dy,50,36,1,Math.abs(dx)<10?3:1)));
+  }else if(n===2){
+    for(let c=0;c<4;c++){
+      t.push(mkT(AR_L+50+c*76,AR_T+70,56,40,2,1));
+      t.push(mkT(AR_L+50+c*76,AR_T+146,56,40,1,0));
+      t.push(mkT(AR_L+50+c*76,AR_T+222,56,40,1,2));
+    }
+  }else if(n===3){
+    for(let r=0;r<4;r++)for(let c=0;c<5;c++)
+      if((r+c)%2===0)t.push(mkT(AR_L+20+c*72,AR_T+50+r*60,52,42,1,(r+c)%3));
+  }else{
+    t.push(mkT(mid-60,AR_T+60,120,52,3,3));
+    [[-140,160],[40,160],[-140,240],[40,240],[-60,300],[60,300]].forEach(([dx,dy])=>
+      t.push(mkT(mid+dx-25,AR_T+dy-19,50,38,1,2)));
+  }
+  return t;
+}
+
+function mkT(x,y,w,h,hp,ci){
+  return{x,y,w,h,hp,mhp:hp,ci,flash:0};
+}
+
+function initLevel(){
+  targets=makeLevel(level);
+  ball=null;
+  shots=0;maxShots=3+Math.floor(level/2);
+  combo=0;comboTimer=0;
+  particles=[];
+  dragging=false;
+  aimX=SH_X;aimY=SH_Y-80;
+  state='aim';
+}
+function initGame(){score=0;lives=3;level=1;initLevel();}
+
+// ── Ball launch ───────────────────────────────────────────────────
+function launchBall(){
+  if(ball||shots>=maxShots)return;
+  const dx=aimX-SH_X,dy=aimY-SH_Y;
+  const len=Math.sqrt(dx*dx+dy*dy)||1;
+  // Don't shoot downward
+  if(dy>-10)return;
+  const spd=7;
+  ball={x:SH_X,y:SH_Y,vx:(dx/len)*spd,vy:(dy/len)*spd,bounces:0,alive:true};
+  shots++;
+  combo=0;
+}
+
+// ── Physics step ─────────────────────────────────────────────────
+function stepBall(dt){
+  if(!ball||!ball.alive)return;
+  const steps=3;
+  for(let s=0;s<steps;s++){
+    ball.x+=ball.vx*(dt/16)/steps;
+    ball.y+=ball.vy*(dt/16)/steps;
+    // Wall bounces
+    if(ball.x<=AR_L+8){ball.x=AR_L+8;ball.vx=Math.abs(ball.vx);bounceFx();}
+    if(ball.x>=AR_R-8){ball.x=AR_R-8;ball.vx=-Math.abs(ball.vx);bounceFx();}
+    if(ball.y<=AR_T+8){ball.y=AR_T+8;ball.vy=Math.abs(ball.vy);bounceFx();}
+    // Bottom: ball dies
+    if(ball.y>=AR_B+20){ball.alive=false;combo=0;break;}
+    // Max bounces
+    if(ball.bounces>=MAX_BOUNCE){ball.alive=false;break;}
+    // Target collision
+    for(const t of targets){
+      if(!t.alive&&t.hp<=0)continue;
+      if(ball.x+8>t.x&&ball.x-8<t.x+t.w&&ball.y+8>t.y&&ball.y-8<t.y+t.h){
+        // Determine reflection axis
+        const overL=ball.x+8-t.x,overR=t.x+t.w-(ball.x-8);
+        const overT=ball.y+8-t.y,overB=t.y+t.h-(ball.y-8);
+        const minH=Math.min(overL,overR),minV=Math.min(overT,overB);
+        if(minH<minV){ball.vx=-ball.vx;ball.x+=ball.vx>0?3:-3;}
+        else{ball.vy=-ball.vy;ball.y+=ball.vy>0?3:-3;}
+        ball.bounces++;
+        t.hp--;t.flash=8;
+        combo++;comboTimer=120;
+        const pts=combo>=3?combo*50:100;
+        score+=pts;
+        spawnParticles(t.x+t.w/2,t.y+t.h/2,TARGET_COLS[t.ci].fill,pts);
+        if(t.hp<=0){spawnParticles(t.x+t.w/2,t.y+t.h/2,TARGET_COLS[t.ci].fill,0,true);}
+        break;
+      }
+    }
+  }
+  if(!ball.alive)ball=null;
+}
+
+function bounceFx(){
+  if(ball)ball.bounces++;
+}
+
+// ── Particles ─────────────────────────────────────────────────────
+function spawnParticles(x,y,col,pts,big=false){
+  const n=big?12:4;
+  for(let i=0;i<n;i++){
+    const a=Math.random()*Math.PI*2,spd=big?(Math.random()*4+2):(Math.random()*2+1);
+    particles.push({x,y,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,
+      col,life:1,maxLife:big?40:20,size:big?4:2.5,pts:i===0?pts:0});
+  }
+}
+
+// ── Trajectory preview ────────────────────────────────────────────
+function computeTraj(startX,startY,vx,vy,steps=200,bounceLimit=6){
+  const pts=[[startX,startY]];
+  let x=startX,y=startY,bx=vx*.8,by=vy*.8;
+  let b=0;
+  for(let i=0;i<steps;i++){
+    x+=bx;y+=by;
+    if(x<=AR_L+2){x=AR_L+2;bx=Math.abs(bx);b++;if(b>=bounceLimit)break;}
+    if(x>=AR_R-2){x=AR_R-2;bx=-Math.abs(bx);b++;if(b>=bounceLimit)break;}
+    if(y<=AR_T+2){y=AR_T+2;by=Math.abs(by);b++;if(b>=bounceLimit)break;}
+    if(y>=AR_B){break;}
+    pts.push([x,y]);
+  }
+  return pts;
+}
+
+// ── Input ─────────────────────────────────────────────────────────
+function gpt(e){
+  const r=cv.getBoundingClientRect();
+  const s=e.touches?e.touches[0]:e;
+  return{x:(s.clientX-r.left-ox)/sc,y:(s.clientY-r.top-oy)/sc};
+}
+
+cv.addEventListener('pointerdown',e=>{
+  e.preventDefault();
+  const p=gpt(e);
+  if(state==='title'){initGame();return;}
+  if(state==='win'||state==='over'){
+    if(state==='win')level++;
+    else{score=0;lives=3;level=1;}
+    initLevel();return;
+  }
+  if(state==='aim'&&!ball){
+    dragging=true;aimX=p.x;aimY=p.y;
+  }
+});
+cv.addEventListener('pointermove',e=>{
+  if(!dragging)return;
+  const p=gpt(e);
+  aimX=p.x;aimY=p.y;
+});
+cv.addEventListener('pointerup',e=>{
+  if(!dragging)return;
+  dragging=false;
+  const p=gpt(e);
+  aimX=p.x;aimY=p.y;
+  if(state==='aim')launchBall();
+});
+
+document.addEventListener('keydown',e=>{
+  if(state==='title'){initGame();return;}
+  if(state==='win'||state==='over'){
+    if(state==='win')level++;
+    else{score=0;lives=3;level=1;}
+    initLevel();return;
+  }
+  if(e.key===' '&&state==='aim'&&!ball){launchBall();}
+});
+
+// ── Update ────────────────────────────────────────────────────────
+function update(ts){
+  const dt=Math.min(ts-tPrev,80);tPrev=ts;
+  if(state!=='aim')return;
+
+  // Combo timer
+  if(comboTimer>0)comboTimer-=dt/16;
+  else if(comboTimer<=0&&combo>0){combo=0;}
+
+  stepBall(dt);
+
+  // Particles
+  for(const p of particles){
+    p.x+=p.vx;p.y+=p.vy;p.vy+=.08;p.life-=1/p.maxLife;
+  }
+  particles=particles.filter(p=>p.life>0);
+
+  // Target flash
+  for(const t of targets)if(t.flash>0)t.flash--;
+
+  // Level complete?
+  if(targets.every(t=>t.hp<=0)){state='win';return;}
+
+  // No more shots and ball gone
+  if(!ball&&shots>=maxShots){
+    // Check if any targets left
+    if(targets.some(t=>t.hp>0)){lives--;if(lives<=0){state='over';return;}initLevel();}
+  }
+}
+
+// ── Draw ──────────────────────────────────────────────────────────
+function drawBG(){
+  cx.fillStyle=C_BG;cx.fillRect(0,0,GW,GH);
+  // pixel grid
+  cx.strokeStyle=C_GRID;cx.lineWidth=1;
+  for(let x=0;x<GW;x+=20){
+    cx.beginPath();cx.moveTo(x,0);cx.lineTo(x,GH);cx.stroke();
+  }
+  for(let y=0;y<GH;y+=20){
+    cx.beginPath();cx.moveTo(0,y);cx.lineTo(GW,y);cx.stroke();
+  }
+}
+
+function drawArena(){
+  // Arena border (thick retro-style)
+  cx.strokeStyle='#3848A0';cx.lineWidth=4;
+  cx.strokeRect(AR_L,AR_T,AR_W,AR_H);
+  // inner glow border
+  cx.strokeStyle='rgba(100,120,200,.2)';cx.lineWidth=8;
+  cx.strokeRect(AR_L,AR_T,AR_W,AR_H);
+}
+
+function drawTarget(t){
+  if(t.hp<=0)return;
+  const tc=TARGET_COLS[t.ci];
+  // Flash effect
+  const flash=t.flash>0;
+  cx.fillStyle=flash?'#FFFFFF':tc.fill;
+  cx.fillRect(t.x,t.y,t.w,t.h);
+  // HP indicator (pixel blocks)
+  cx.fillStyle=flash?tc.fill:'rgba(0,0,0,.4)';
+  cx.fillRect(t.x+2,t.y+2,t.w-4,t.h-4);
+  cx.fillStyle=flash?'#FFFFFF':tc.fill;
+  // HP bars as mini squares in top-right
+  for(let i=0;i<t.hp;i++){
+    cx.fillRect(t.x+t.w-6-i*7,t.y+3,5,5);
+  }
+  // Border
+  cx.strokeStyle=tc.stroke;cx.lineWidth=1.5;
+  cx.strokeRect(t.x+1,t.y+1,t.w-2,t.h-2);
+  // Retro shine
+  cx.fillStyle='rgba(255,255,255,.15)';
+  cx.fillRect(t.x+2,t.y+2,t.w-4,6);
+}
+
+function drawBall(){
+  if(!ball)return;
+  const x=ball.x,y=ball.y;
+  // Shadow
+  cx.beginPath();cx.arc(x+2,y+3,9,0,Math.PI*2);
+  cx.fillStyle='rgba(0,0,0,.4)';cx.fill();
+  // Ball
+  cx.beginPath();cx.arc(x,y,9,0,Math.PI*2);
+  cx.fillStyle=C_BALL;cx.fill();
+  cx.beginPath();cx.arc(x,y,9,0,Math.PI*2);
+  cx.strokeStyle=C_BALL2;cx.lineWidth=1.5;cx.stroke();
+  // Highlight
+  cx.beginPath();cx.arc(x-3,y-3,3.5,0,Math.PI*2);
+  cx.fillStyle='rgba(255,255,255,.7)';cx.fill();
+}
+
+function drawShooter(){
+  // Shooter base (triangle)
+  cx.fillStyle='#6080E0';
+  cx.beginPath();
+  cx.moveTo(SH_X-14,SH_Y+10);
+  cx.lineTo(SH_X+14,SH_Y+10);
+  cx.lineTo(SH_X,SH_Y-10);
+  cx.closePath();cx.fill();
+  cx.strokeStyle='#A0B8F8';cx.lineWidth=1.5;cx.stroke();
+
+  // Aim indicator line (if dragging)
+  if(dragging&&!ball){
+    const dx=aimX-SH_X,dy=aimY-SH_Y;
+    const len=Math.sqrt(dx*dx+dy*dy)||1;
+    const spd=7;
+    const traj=computeTraj(SH_X,SH_Y,(dx/len)*spd,(dy/len)*spd);
+    if(traj.length>1){
+      cx.strokeStyle=C_TRAJ;cx.lineWidth=1.5;cx.setLineDash([6,6]);
+      cx.beginPath();cx.moveTo(traj[0][0],traj[0][1]);
+      for(let i=1;i<traj.length;i+=4)cx.lineTo(traj[i][0],traj[i][1]);
+      cx.stroke();cx.setLineDash([]);
+    }
+    // Aim dot
+    cx.beginPath();cx.arc(aimX,aimY,5,0,Math.PI*2);
+    cx.fillStyle='rgba(240,216,64,.5)';cx.fill();
+  }
+}
+
+function drawParticles(){
+  for(const p of particles){
+    cx.globalAlpha=p.life;
+    cx.fillStyle=p.col;
+    cx.fillRect(p.x-p.size/2,p.y-p.size/2,p.size,p.size);
+    if(p.pts>0){
+      cx.fillStyle=C_UI;cx.font='bold 12px Courier New';cx.textAlign='center';
+      cx.fillText(`+${p.pts}`,p.x,p.y-8);
+    }
+  }
+  cx.globalAlpha=1;cx.textAlign='left';
+}
+
+function drawHUD(){
+  // Score
+  cx.fillStyle=C_UI;cx.font='bold 18px Courier New';cx.textAlign='left';
+  cx.fillText(`SCORE ${score}`,14,28);
+  cx.textAlign='center';
+  cx.fillText(`LV.${level}`,GW/2,28);
+  // Lives
+  cx.textAlign='right';
+  for(let i=0;i<3;i++){
+    cx.fillStyle=i<lives?'#E03030':'#382828';
+    cx.fillRect(GW-16-i*20,14,12,12);
+  }
+  // Shots
+  cx.textAlign='left';cx.font='12px Courier New';cx.fillStyle='#A0A8C0';
+  const remaining=maxShots-shots+(ball?1:0);
+  for(let i=0;i<maxShots;i++){
+    cx.fillStyle=i<remaining?C_BALL:'#302838';
+    cx.beginPath();cx.arc(AR_L+14+i*20,AR_B+24,6,0,Math.PI*2);cx.fill();
+  }
+  cx.fillStyle='#A0A8C0';cx.font='11px Courier New';
+  cx.fillText('SHOTS',AR_L+14+maxShots*20+6,AR_B+28);
+
+  // Combo
+  if(combo>=2&&comboTimer>0){
+    cx.textAlign='center';cx.font=`bold ${12+combo*3}px Courier New`;
+    cx.fillStyle=combo>=5?'#F0D840':combo>=3?'#F08020':'#E0E0E0';
+    cx.fillText(`${combo}x COMBO!`,GW/2,AR_T-10);
+  }
+  cx.textAlign='left';
+}
+
+function drawPanel(t1,t2,btn){
+  cx.fillStyle='rgba(14,14,28,.92)';
+  cx.beginPath();cx.roundRect(GW/2-155,GH/2-105,310,215,8);cx.fill();
+  cx.strokeStyle='#4858C0';cx.lineWidth=3;cx.stroke();
+  // Pixel decoration corners
+  cx.fillStyle='#F0D840';
+  [[GW/2-155,GH/2-105],[GW/2+155-8,GH/2-105],
+   [GW/2-155,GH/2+110-8],[GW/2+155-8,GH/2+110-8]].forEach(([px,py])=>cx.fillRect(px,py,8,8));
+  cx.fillStyle=C_UI;cx.font='bold 24px Courier New';cx.textAlign='center';
+  cx.fillText(t1,GW/2,GH/2-52);
+  cx.font='14px Courier New';cx.fillStyle='#A0B0D0';
+  cx.fillText(t2,GW/2,GH/2-18);
+  cx.fillStyle='#4858C0';
+  cx.fillRect(GW/2-60,GH/2+30,120,36);
+  cx.fillStyle=C_UI;cx.font='bold 14px Courier New';
+  cx.fillText(btn,GW/2,GH/2+53);
+  cx.textAlign='left';
+}
+
+function draw(){
+  cx.clearRect(0,0,GW,GH);
+  drawBG();
+
+  if(state==='title'){
+    cx.fillStyle=C_UI;cx.font='bold 30px Courier New';cx.textAlign='center';
+    cx.fillText('RETRO RICOCHET',GW/2,GH/2-90);
+    cx.font='14px Courier New';cx.fillStyle='#A0B0D0';
+    cx.fillText('조준-드래그 후 공을 발사하세요',GW/2,GH/2-50);
+    cx.fillText('벽에 튕겨 모든 블록을 파괴',GW/2,GH/2-22);
+    cx.fillText('체인 히트로 COMBO 보너스!',GW/2,GH/2+4);
+    cx.fillStyle='#4858C0';cx.fillRect(GW/2-60,GH/2+44,120,36);
+    cx.fillStyle=C_UI;cx.font='bold 14px Courier New';cx.fillText('INSERT COIN',GW/2,GH/2+67);
+    cx.textAlign='left';return;
+  }
+
+  drawArena();
+  for(const t of targets)drawTarget(t);
+  drawShooter();
+  drawBall();
+  drawParticles();
+  drawHUD();
+
+  // Instruction (first level, no ball launched yet)
+  if(level===1&&shots===0&&!ball){
+    cx.fillStyle='rgba(160,176,220,.7)';cx.font='11px Courier New';cx.textAlign='center';
+    cx.fillText('Drag to aim ↑  Release to fire',GW/2,AR_B+56);
+    cx.textAlign='left';
+  }
+
+  if(state==='win')drawPanel(`LEVEL ${level} CLEAR!`,`SCORE: ${score}`,'NEXT LEVEL');
+  if(state==='over')drawPanel('GAME OVER',`FINAL SCORE: ${score}`,'RETRY');
+}
+
+// ── Loop ──────────────────────────────────────────────────────────
+function loop(ts){
+  if(!tPrev)tPrev=ts;
+  update(ts);draw();
+  requestAnimationFrame(loop);
+}
+state='title';
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

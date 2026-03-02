@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Dewdrop Maze — 이슬방울 미로</title>
+<meta name="description" content="색 이슬방울을 나뭇잎 가이드로 꽃에 흘려보내는 수채화 퍼즐. 나뭇잎을 배치해 경로를 만드세요.">
+<meta name="keywords" content="html5,puzzle,watercolor,pastel,touch,routing,mobile">
+<meta property="og:title" content="Dewdrop Maze — 이슬방울 미로">
+<meta property="og:type" content="website">
+<link rel="manifest" href="/games/manifest.json">
+<script src="https://killedbyapixel.github.io/LittleJS/dist/littlejs.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;overflow:hidden;background:#c8e4d4;touch-action:none;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+canvas{display:block;touch-action:none;position:fixed;left:0;top:0}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+(function(){
+'use strict';
+
+// ── Canvas / Letterbox ─────────────────────────────────────────────
+const GW=420,GH=740;
+const cv=document.getElementById('c');
+const cx=cv.getContext('2d');
+let sc=1,ox=0,oy=0;
+function resize(){
+  const sw=innerWidth,sh=innerHeight;
+  sc=Math.min(sw/GW,sh/GH);
+  cv.width=sw;cv.height=sh;
+  ox=(sw-GW*sc)/2;oy=(sh-GH*sc)/2;
+  cx.setTransform(sc,0,0,sc,ox,oy);
+}
+addEventListener('resize',resize);resize();
+
+// ── Grid constants ─────────────────────────────────────────────────
+const COLS=5,ROWS=8;
+const CW=76,CH=68;          // cell width/height
+const GL=(GW-COLS*CW)/2;    // grid left  = 22
+const GT=100;               // grid top
+const GB=GT+ROWS*CH;        // grid bottom = 644
+
+// ── Palette (pastel watercolor, zero neon) ─────────────────────────
+const PAL=['#F4A7B9','#B5B8F4','#A8E6CF','#F9C784','#A8D8EA'];
+const DRK=['#B8446C','#5558C4','#2EA870','#C49020','#3088C0'];
+
+// ── Deflectors ─────────────────────────────────────────────────────
+const NONE=0,RSLOPE=1,LSLOPE=2; // ╱ and ╲
+
+// ── Levels ────────────────────────────────────────────────────────
+// f: flower defs {col,c}, q: drop queue (color indices), md: max leaves
+const LEVELS=[
+  {f:[{col:1,c:0},{col:3,c:1}],
+   q:[0,1,0,1,0,1,0,1],md:3},
+  {f:[{col:0,c:2},{col:2,c:0},{col:4,c:1}],
+   q:[2,0,1,2,0,1,2,0,1],md:4},
+  {f:[{col:1,c:3},{col:3,c:2},{col:0,c:1}],
+   q:[3,2,1,3,2,1,3,2,1],md:5},
+  {f:[{col:0,c:0},{col:2,c:1},{col:4,c:2},{col:1,c:3}],
+   q:[0,1,2,3,0,3,2,1,0,1,2,3],md:6},
+  {f:[{col:0,c:4},{col:2,c:0},{col:4,c:3},{col:3,c:1}],
+   q:[4,0,3,1,4,0,3,1,4,0,3,1],md:6},
+];
+function LD(){return LEVELS[(level-1)%LEVELS.length];}
+
+// ── State ─────────────────────────────────────────────────────────
+let grid,drops,flowers,score,lives,level,pending,spawnTick,state;
+const TICK=380; // ms per cell step
+
+function initLevel(){
+  const l=LD();
+  grid=Array.from({length:ROWS},()=>Array(COLS).fill(NONE));
+  drops=[];
+  flowers=l.f.map(f=>({col:f.col,c:f.c,filled:false,boom:0}));
+  pending=[...l.q];
+  spawnTick=800;
+  state='play';
+}
+function initGame(){score=0;lives=3;level=1;initLevel();}
+
+// ── Input helpers ─────────────────────────────────────────────────
+function gpt(e){
+  const r=cv.getBoundingClientRect();
+  const s=e.touches?e.touches[0]:e;
+  return{x:(s.clientX-r.left-ox)/sc,y:(s.clientY-r.top-oy)/sc};
+}
+function cellAt(x,y){
+  const c=Math.floor((x-GL)/CW),r=Math.floor((y-GT)/CH);
+  return(c<0||c>=COLS||r<0||r>=ROWS)?null:{r,c};
+}
+function tapCell(r,c){
+  const l=LD();
+  let cnt=0;
+  for(let rr=0;rr<ROWS;rr++)for(let cc=0;cc<COLS;cc++)if(grid[rr][cc]!==NONE)cnt++;
+  if(grid[r][c]===NONE&&cnt>=l.md)return;
+  grid[r][c]=(grid[r][c]+1)%3;
+}
+
+cv.addEventListener('pointerdown',e=>{
+  e.preventDefault();
+  const p=gpt(e);
+  if(state==='title'){initGame();return;}
+  if(state==='win'){level++;initLevel();return;}
+  if(state==='over'){score=0;lives=3;level=1;initLevel();return;}
+  if(state!=='play')return;
+  const cell=cellAt(p.x,p.y);
+  if(cell)tapCell(cell.r,cell.c);
+});
+document.addEventListener('keydown',e=>{
+  if(state==='title'){initGame();return;}
+  if(state==='win'){level++;initLevel();return;}
+  if(state==='over'){score=0;lives=3;level=1;initLevel();return;}
+});
+
+// ── Drop spawn ────────────────────────────────────────────────────
+function spawnDrop(){
+  if(!pending.length)return;
+  const c=pending.shift();
+  const col=Math.floor(Math.random()*COLS);
+  drops.push({row:0,col,dir:'down',c,pr:-1,pc:col,t:1,state:'fall'});
+}
+
+// ── Drop step (discrete cell move) ────────────────────────────────
+function stepDrop(d){
+  d.pr=d.row;d.pc=d.col;
+  if(d.dir==='down')d.row++;
+  else if(d.dir==='right')d.col++;
+  else if(d.dir==='left')d.col--;
+  else d.row--;
+  d.t=0;
+
+  // Out of bounds (sides or top)
+  if(d.col<0||d.col>=COLS||d.row<0){lives--;d.state='dead';d.t=0;return;}
+
+  // Reached flower row
+  if(d.row>=ROWS){
+    const fl=flowers.find(f=>f.col===d.col&&!f.filled);
+    if(fl&&fl.c===d.c){fl.filled=true;fl.boom=30;score+=100;d.state='scored';}
+    else{lives--;d.state='dead';}
+    d.t=0;return;
+  }
+
+  // Apply deflector (consume on use)
+  const def=grid[d.row][d.col];
+  if(def===RSLOPE){
+    // ╱ : down→right, right→down, left→up, up→left
+    const map={down:'right',right:'down',left:'up',up:'left'};
+    d.dir=map[d.dir];
+    grid[d.row][d.col]=NONE;
+  }else if(def===LSLOPE){
+    // ╲ : down→left, left→down, right→up, up→right
+    const map={down:'left',left:'down',right:'up',up:'right'};
+    d.dir=map[d.dir];
+    grid[d.row][d.col]=NONE;
+  }
+}
+
+// ── Update ────────────────────────────────────────────────────────
+let tPrev=0;
+function update(ts){
+  const dt=Math.min(ts-tPrev,80);tPrev=ts;
+  if(state!=='play')return;
+
+  spawnTick-=dt;
+  if(spawnTick<=0&&pending.length){spawnDrop();spawnTick=600;}
+
+  for(const d of drops){
+    if(d.state==='fall'){
+      d.t+=dt/TICK;
+      while(d.t>=1&&d.state==='fall'){d.t-=1;stepDrop(d);}
+    }else{d.t+=dt/300;}
+  }
+  // Remove finished anims
+  drops=drops.filter(d=>d.state==='fall'||d.t<1);
+  for(const f of flowers)if(f.boom>0)f.boom--;
+
+  if(lives<=0){state='over';return;}
+  if(flowers.every(f=>f.filled)&&!pending.length&&
+     drops.every(d=>d.state!=='fall')){state='win';}
+}
+
+// ── Draw helpers ──────────────────────────────────────────────────
+function drawBG(){
+  cx.fillStyle='#F5EFE4';cx.fillRect(0,0,GW,GH);
+  const blobs=[
+    [60,120,180,'#C4E8D4'],[340,200,150,'#D4D8F8'],
+    [100,500,200,'#FAE8D8'],[370,580,130,'#D8F4E8'],
+  ];
+  for(const [bx,by,br,bc] of blobs){
+    const g=cx.createRadialGradient(bx,by,0,bx,by,br);
+    g.addColorStop(0,bc+'70');g.addColorStop(1,'transparent');
+    cx.fillStyle=g;cx.fillRect(0,0,GW,GH);
+  }
+}
+
+function drawLeaf(col,row,type){
+  const x=GL+col*CW+CW/2,y=GT+row*CH+CH/2;
+  const hw=CW*.36,hh=CH*.28;
+  cx.save();cx.translate(x,y);
+  if(type===RSLOPE){
+    cx.fillStyle='rgba(140,210,100,.42)';
+    cx.strokeStyle='#5A8A3A';cx.lineWidth=3;cx.lineCap='round';
+    cx.beginPath();cx.ellipse(0,0,hw*.9,hh*.85,-Math.PI/4,0,Math.PI*2);
+    cx.fill();cx.lineWidth=1.2;cx.stroke();
+    cx.beginPath();cx.moveTo(-hw,hh);cx.lineTo(hw,-hh);
+    cx.strokeStyle='#3A6A1A';cx.lineWidth=2.5;cx.stroke();
+    // vein
+    cx.beginPath();cx.moveTo(-hw*.5,hh*.5);cx.lineTo(hw*.5,-hh*.5);
+    cx.strokeStyle='rgba(255,255,255,.5)';cx.lineWidth=1;cx.stroke();
+  }else{
+    cx.fillStyle='rgba(140,210,100,.42)';
+    cx.strokeStyle='#5A8A3A';cx.lineWidth=3;cx.lineCap='round';
+    cx.beginPath();cx.ellipse(0,0,hw*.9,hh*.85,Math.PI/4,0,Math.PI*2);
+    cx.fill();cx.lineWidth=1.2;cx.stroke();
+    cx.beginPath();cx.moveTo(-hw,-hh);cx.lineTo(hw,hh);
+    cx.strokeStyle='#3A6A1A';cx.lineWidth=2.5;cx.stroke();
+    cx.beginPath();cx.moveTo(-hw*.5,-hh*.5);cx.lineTo(hw*.5,hh*.5);
+    cx.strokeStyle='rgba(255,255,255,.5)';cx.lineWidth=1;cx.stroke();
+  }
+  cx.restore();
+}
+
+function drawFlower(col,c,filled,boom){
+  const x=GL+col*CW+CW/2,y=GB+CH*.55;
+  cx.save();cx.translate(x,y);
+  if(boom>0){const s=1+(1-boom/30)*.4;cx.scale(s,s);}
+  const r=19,alpha=filled?1:.38;
+  cx.globalAlpha=alpha;
+  for(let i=0;i<5;i++){
+    const a=(i/5)*Math.PI*2;
+    cx.beginPath();
+    cx.ellipse(Math.cos(a)*r*.62,Math.sin(a)*r*.62,r*.48,r*.28,a,0,Math.PI*2);
+    cx.fillStyle=PAL[c];cx.fill();
+    cx.strokeStyle=DRK[c];cx.lineWidth=.8;cx.stroke();
+  }
+  cx.beginPath();cx.arc(0,0,r*.28,0,Math.PI*2);
+  cx.fillStyle='#FFF8C0';cx.fill();
+  cx.globalAlpha=1;cx.restore();
+  // stem
+  cx.strokeStyle='#7A9A5A';cx.lineWidth=1.8;
+  cx.beginPath();cx.moveTo(x,GB);cx.lineTo(x,y-r*.7);cx.stroke();
+}
+
+function dropXY(d){
+  // interpolate visual position
+  const pr=d.pr<0?-.4:d.pr;
+  const t=Math.min(d.t,1);
+  const vx=GL+(d.pc+(d.col-d.pc)*t)*CW+CW/2;
+  const vy=GT+(pr+(d.row-pr)*t)*CH+CH/2;
+  return[vx,vy];
+}
+
+function drawDrop(d){
+  const [rx,ry]=dropXY(d);
+  cx.save();cx.translate(rx,ry);
+  const r=11;
+  if(d.state==='dead'){
+    const prog=Math.min(d.t,1);
+    cx.globalAlpha=1-prog;
+    cx.beginPath();cx.arc(0,0,r+prog*22,0,Math.PI*2);
+    cx.fillStyle=PAL[d.c]+'60';cx.fill();
+    cx.restore();return;
+  }
+  if(d.state==='scored'){
+    cx.globalAlpha=1-Math.min(d.t,1);
+    cx.scale(1+d.t*.8,1+d.t*.8);
+  }
+  // Teardrop shape based on motion dir
+  const ang=d.dir==='down'?0:d.dir==='right'?-Math.PI/2:d.dir==='left'?Math.PI/2:-Math.PI;
+  cx.rotate(ang);
+  cx.beginPath();
+  cx.moveTo(0,-r*1.35);
+  cx.bezierCurveTo(r*.85,-r*.4,r,r*.5,0,r);
+  cx.bezierCurveTo(-r,r*.5,-r*.85,-r*.4,0,-r*1.35);
+  const g=cx.createRadialGradient(-r*.2,-r*.35,0,0,0,r*1.1);
+  g.addColorStop(0,'rgba(255,255,255,.75)');
+  g.addColorStop(.45,PAL[d.c]);
+  g.addColorStop(1,DRK[d.c]+'C0');
+  cx.fillStyle=g;cx.fill();
+  // highlight
+  cx.beginPath();cx.ellipse(-r*.25,-r*.5,r*.18,r*.1,-.35,0,Math.PI*2);
+  cx.fillStyle='rgba(255,255,255,.65)';cx.fill();
+  cx.restore();
+}
+
+function drawHUD(){
+  cx.fillStyle='#5A4A3A';cx.font='bold 18px sans-serif';cx.textAlign='left';
+  cx.fillText(`Score: ${score}`,14,30);
+  cx.textAlign='center';
+  cx.fillText(`Lv.${level}`,GW/2,30);
+  for(let i=0;i<3;i++){
+    const hx=GW-18-i*26;
+    cx.beginPath();cx.arc(hx,22,9,0,Math.PI*2);
+    cx.fillStyle=i<lives?'#F4A7B9':'#DDD0C0';cx.fill();
+    cx.strokeStyle=i<lives?DRK[0]:'#B0A090';cx.lineWidth=1.5;cx.stroke();
+  }
+  const l=LD();
+  let cnt=0;for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++)if(grid[r][c]!==NONE)cnt++;
+  cx.textAlign='center';cx.font='12px sans-serif';cx.fillStyle='#7A6A5A';
+  cx.fillText(`🍃 Leaves ${cnt}/${l.md}   Drops: ${pending.length+drops.filter(d=>d.state==='fall').length}`,GW/2,58);
+  cx.textAlign='left';cx.font='11px sans-serif';cx.fillStyle='#9A8A7A';
+  cx.fillText('Tap: place leaf ╱╲  tap again: rotate/remove',14,76);
+}
+
+function drawPanel(t1,t2,btn){
+  cx.fillStyle='rgba(245,239,228,.93)';
+  cx.beginPath();cx.roundRect(GW/2-155,GH/2-105,310,215,18);cx.fill();
+  cx.strokeStyle='rgba(160,140,120,.4)';cx.lineWidth=2;cx.stroke();
+  cx.fillStyle='#4A3828';cx.font='bold 28px sans-serif';cx.textAlign='center';
+  cx.fillText(t1,GW/2,GH/2-52);
+  cx.font='16px sans-serif';cx.fillStyle='#7A6A58';
+  cx.fillText(t2,GW/2,GH/2-16);
+  cx.fillStyle='#A8E6CF';
+  cx.beginPath();cx.roundRect(GW/2-65,GH/2+28,130,38,10);cx.fill();
+  cx.fillStyle='#204820';cx.font='bold 15px sans-serif';
+  cx.fillText(btn,GW/2,GH/2+52);
+  cx.textAlign='left';
+}
+
+// ── Draw frame ────────────────────────────────────────────────────
+function draw(){
+  cx.clearRect(0,0,GW,GH);
+  drawBG();
+
+  if(state==='title'){
+    cx.fillStyle='#4A3828';cx.font='bold 34px sans-serif';cx.textAlign='center';
+    cx.fillText('💧 Dewdrop Maze',GW/2,GH/2-90);
+    cx.font='16px sans-serif';cx.fillStyle='#6A5848';
+    cx.fillText('색 이슬방울을 꽃에 흘려보내세요',GW/2,GH/2-50);
+    cx.fillText('Tap cells to place leaf guides',GW/2,GH/2-22);
+    cx.fillText('╱ and ╲ redirect the drops',GW/2,GH/2+4);
+    cx.fillStyle='#A8E6CF';cx.beginPath();cx.roundRect(GW/2-65,GH/2+44,130,40,10);cx.fill();
+    cx.fillStyle='#204820';cx.font='bold 16px sans-serif';cx.fillText('START',GW/2,GH/2+70);
+    cx.textAlign='left';return;
+  }
+
+  // Grid lines
+  cx.strokeStyle='rgba(160,140,120,.18)';cx.lineWidth=1;
+  for(let r=0;r<=ROWS;r++){
+    cx.beginPath();cx.moveTo(GL,GT+r*CH);cx.lineTo(GL+COLS*CW,GT+r*CH);cx.stroke();
+  }
+  for(let c=0;c<=COLS;c++){
+    cx.beginPath();cx.moveTo(GL+c*CW,GT);cx.lineTo(GL+c*CW,GB);cx.stroke();
+  }
+  // Flower target zones (bottom strip)
+  cx.fillStyle='rgba(200,230,200,.22)';
+  cx.fillRect(GL,GB,COLS*CW,CH*.7);
+
+  // Deflectors
+  for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++)
+    if(grid[r][c]!==NONE)drawLeaf(c,r,grid[r][c]);
+
+  // Flowers
+  for(const f of flowers)drawFlower(f.col,f.c,f.filled,f.boom);
+
+  // Drops
+  for(const d of drops)drawDrop(d);
+
+  drawHUD();
+
+  if(state==='win')drawPanel(`Level ${level} Clear! 🌸`,`Score: ${score}`,'Next →');
+  if(state==='over')drawPanel('Game Over 💧',`Final Score: ${score}`,'Retry');
+}
+
+// ── Loop ──────────────────────────────────────────────────────────
+function loop(ts){
+  if(!tPrev)tPrev=ts;
+  update(ts);draw();
+  requestAnimationFrame(loop);
+}
+state='title';
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

@@ -3,7 +3,8 @@ const fs = require('fs');
 const path = require('path');
 
 const base = 'http://127.0.0.1:4173';
-const outDir = '/home/spritz/tmp/p1-games-unique-0302/specs/p1-games-batch-20260302-1307';
+const workspaceRoot = process.env.WORKSPACE || process.cwd();
+const outDir = path.join(workspaceRoot, 'tmp', 'p1-games-unique-0302', 'specs', 'p1-games-batch-20260302-1307');
 const shotsDir = path.join(outDir, 'qa-screenshots');
 fs.mkdirSync(shotsDir, { recursive: true });
 

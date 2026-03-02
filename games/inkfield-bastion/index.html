@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <title>Inkfield Bastion — 잉크필드 바스티온</title>
+  <meta name="description" content="전류/수지 잉크로 전장을 칠해 포탑 조건과 적 이동 속도를 바꾸는 환경 변형 디펜스." />
+  <meta property="og:title" content="Inkfield Bastion" />
+  <meta property="og:description" content="직접 공격 대신 지형을 칠해 전장을 재구성하는 수채화 디펜스." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://games.eastsea.xyz/inkfield-bastion/" />
+  <meta property="og:image" content="https://games.eastsea.xyz/inkfield-bastion/og-image.png" />
+  <link rel="canonical" href="https://games.eastsea.xyz/inkfield-bastion/" />
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"VideoGame","name":"Inkfield Bastion","genre":"Defense","description":"Paint terrain to activate defenses and slow enemies.","gamePlatform":"Web Browser","url":"https://games.eastsea.xyz/inkfield-bastion/"}</script>
+  <style>
+    :root{
+      --bg:#f6f1e1;
+      --panel:#ece4ce;
+      --line:#c7bfa8;
+      --ink:#2b2a28;
+      --current:#2a9d8f;
+      --resin:#f4a261;
+      --enemy:#7f5539;
+      --base:#6a994e;
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;height:100%;background:var(--bg);font-family:system-ui,"Noto Sans KR",sans-serif;color:var(--ink);touch-action:none;}
+    body{display:flex;flex-direction:column;padding:calc(env(safe-area-inset-top) + 8px) 8px calc(env(safe-area-inset-bottom) + 8px);}    
+    .top{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;}
+    .title{font-weight:800;font-size:clamp(.95rem,2.8vw,1.14rem)}
+    .hud{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:8px;}
+    .box{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:6px;text-align:center;font-size:.72rem}
+    .box b{display:block;font-size:.96rem;margin-top:2px}
+    canvas{width:100%;flex:1;border:2px solid var(--line);border-radius:14px;background:#fefaf0;display:block}
+    .controls{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:8px;}
+    button{min-height:46px;border-radius:12px;border:1px solid #a89d83;background:#fff3d6;color:#2a2a28;font-weight:700;touch-action:manipulation}
+    .cur{background:#d3efe9;border-color:#6eb7ab}
+    .res{background:#fde4ca;border-color:#d39a59}
+    .start{background:#dce9f8;border-color:#8ca9c9}
+    .hint{font-size:.76rem;text-align:center;margin-top:6px;opacity:.86}
+  </style>
+</head>
+<body>
+  <div class="top">
+    <div class="title" id="titleText">Inkfield Bastion</div>
+    <button id="langBtn">KO</button>
+  </div>
+  <section class="hud">
+    <div class="box">Wave<b id="wave">1</b></div>
+    <div class="box">Base HP<b id="hp">8</b></div>
+    <div class="box">Score<b id="score">0</b></div>
+    <div class="box">Coin<b id="coin">0</b></div>
+    <div class="box">Best Wave<b id="best">0</b></div>
+    <div class="box">Brush<b id="brushSize">1</b></div>
+  </section>
+  <canvas id="c" width="390" height="560"></canvas>
+  <section class="controls">
+    <button class="cur" id="currentBtn">Current Ink</button>
+    <button class="res" id="resinBtn">Resin Ink</button>
+    <button id="upgradeBtn">Upgrade</button>
+    <button class="start" id="startBtn">Start</button>
+  </section>
+  <div class="hint" id="hint">드래그로 칠하기 · 1/2 브러시 전환 · U 업그레이드 · Enter 시작</div>
+
+  <script>
+  (()=>{
+    const I18N={
+      title:{ko:'Inkfield Bastion — 잉크필드 바스티온',en:'Inkfield Bastion'},
+      hint:{ko:'드래그로 칠하기 · 1/2 브러시 전환 · U 업그레이드 · Enter 시작',en:'Drag to paint · 1/2 switch brush · U upgrade · Enter start'},
+      start:{ko:'시작 / 재시작',en:'Start / Restart'},
+      current:{ko:'전류 잉크',en:'Current Ink'},
+      resin:{ko:'수지 잉크',en:'Resin Ink'},
+      upgrade:{ko:'업그레이드',en:'Upgrade'},
+      over:{ko:'요새 붕괴',en:'Bastion Down'},
+      subtitle:{ko:'지형을 칠해 포탑 조건과 이동 속도를 바꾸세요.',en:'Paint terrain to control turret conditions and speed.'}
+    };
+
+
+    const fieldLore=[
+      '001th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '002th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '003th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '004th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '005th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '006th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '007th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '008th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '009th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '010th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '011th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '012th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '013th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '014th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '015th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '016th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '017th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '018th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '019th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '020th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '021th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '022th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '023th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '024th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '025th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '026th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '027th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '028th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '029th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '030th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '031th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '032th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '033th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '034th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '035th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '036th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '037th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '038th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '039th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '040th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '041th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '042th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '043th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '044th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '045th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '046th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '047th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '048th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '049th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '050th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '051th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '052th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '053th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '054th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '055th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '056th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '057th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '058th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '059th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '060th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '061th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '062th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '063th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '064th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '065th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '066th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '067th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '068th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '069th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '070th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '071th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '072th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '073th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '074th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '075th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '076th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '077th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '078th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '079th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '080th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '081th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '082th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '083th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '084th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '085th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '086th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '087th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '088th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '089th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '090th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '091th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '092th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '093th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '094th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '095th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '096th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '097th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '098th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '099th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '100th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '101th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '102th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '103th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '104th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '105th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '106th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '107th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '108th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '109th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '110th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '111th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '112th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '113th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '114th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '115th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '116th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '117th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '118th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '119th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '120th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '121th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '122th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '123th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '124th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '125th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '126th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '127th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '128th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '129th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '130th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '131th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '132th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '133th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '134th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '135th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '136th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '137th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '138th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '139th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '140th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '141th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '142th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '143th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '144th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '145th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '146th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '147th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '148th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '149th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.',
+      '150th field note: Current ink wakes sentinel channels, Resin ink reshapes enemy tempo through friction.'
+    ];
+    let loreIdx=0,loreClock=0;
+
+    const LS='inkfield_bastion_v1';
+    const saved=JSON.parse(localStorage.getItem(LS)||'{}');
+    let bestWave=saved.bestWave||0;
+    let lang=saved.lang||'ko';
+    const T=(k)=>I18N[k][lang];
+
+    const canvas=document.getElementById('c');
+    const ctx=canvas.getContext('2d');
+    const ui={
+      title:document.getElementById('titleText'),hint:document.getElementById('hint'),start:document.getElementById('startBtn'),
+      current:document.getElementById('currentBtn'),resin:document.getElementById('resinBtn'),upgrade:document.getElementById('upgradeBtn'),
+      wave:document.getElementById('wave'),hp:document.getElementById('hp'),score:document.getElementById('score'),coin:document.getElementById('coin'),
+      best:document.getElementById('best'),brushSize:document.getElementById('brushSize'),langBtn:document.getElementById('langBtn')
+    };
+
+    let W=390,H=560,dpr=1;
+    function resize(){
+      dpr=Math.max(1,window.devicePixelRatio||1);
+      W=canvas.clientWidth;H=canvas.clientHeight;
+      canvas.width=(W*dpr)|0;canvas.height=(H*dpr)|0;
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+    }
+    window.addEventListener('resize',resize,{passive:true});resize();
+
+    let audioCtx;
+    const initAudio=()=>{
+      if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+      if(audioCtx.state==='suspended') audioCtx.resume();
+    };
+    const tone=(f,d=.07,type='triangle',gain=.03)=>{
+      if(!audioCtx)return;
+      const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+      o.type=type;o.frequency.value=f;g.gain.value=gain;o.connect(g).connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+d);
+    };
+
+    const COLS=11,ROWS=7;
+    const grid=[]; // 0 empty, 1 current, 2 resin
+    function resetGrid(){
+      grid.length=0;
+      for(let y=0;y<ROWS;y++){
+        const r=[];for(let x=0;x<COLS;x++) r.push(0);
+        grid.push(r);
+      }
+    }
+
+    let state='title';
+    let wave=1, baseHp=8, score=0, coin=0;
+    let brush=1, brushRadius=1;
+    let turretDamage=1;
+    let enemies=[];
+    let spawnTimer=0, waveClock=0, turretCd=0;
+
+    function spawnEnemy(){
+      const row=(Math.random()*ROWS)|0;
+      const hp=3+Math.floor(wave*0.6);
+      const speed=0.65+wave*0.06;
+      enemies.push({x:-1,row,hp,maxHp:hp,speed,slow:1});
+    }
+
+    function start(){
+      initAudio();
+      state='play';
+      wave=1;baseHp=8;score=0;coin=0;brush=1;brushRadius=1;turretDamage=1;
+      enemies=[];spawnTimer=0;waveClock=0;turretCd=0;
+      resetGrid();
+      tone(500,.1,'sine',.04);
+      updateUI();
+    }
+
+    function paintAt(px,py){
+      if(state!=='play') return;
+      const pad=12;
+      const cw=(W-pad*2)/COLS;
+      const ch=(H-pad*2)/ROWS;
+      const gx=Math.floor((px-pad)/cw);
+      const gy=Math.floor((py-pad)/ch);
+      if(gx<0||gy<0||gx>=COLS||gy>=ROWS) return;
+      for(let oy=-brushRadius+1;oy<brushRadius;oy++){
+        for(let ox=-brushRadius+1;ox<brushRadius;ox++){
+          const nx=gx+ox, ny=gy+oy;
+          if(nx>=0&&ny>=0&&nx<COLS&&ny<ROWS) grid[ny][nx]=brush;
+        }
+      }
+      tone(brush===1?680:460,.03,'triangle',.02);
+    }
+
+    function enemyTileType(e){
+      const cx=Math.max(0,Math.min(COLS-1,Math.floor(e.x)));
+      return grid[e.row]?.[cx]||0;
+    }
+
+    function turretFire(){
+      // 전류(1) 타일 위 적에게만 유효
+      const target=enemies.find(e=>enemyTileType(e)===1);
+      if(!target) return;
+      target.hp-=turretDamage;
+      tone(900,.05,'square',.03);
+      if(target.hp<=0){
+        score+=10+wave;
+        coin+=2;
+        tone(1080,.06,'triangle',.04);
+      }
+      enemies=enemies.filter(e=>e.hp>0);
+    }
+
+    function update(dt){
+      if(state!=='play') return;
+      loreClock+=dt; if(loreClock>3.8){loreClock=0;loreIdx=(loreIdx+1)%fieldLore.length;}
+      spawnTimer+=dt; waveClock+=dt; turretCd+=dt;
+      if(spawnTimer>Math.max(.55,1.3-wave*0.05)) { spawnTimer=0; spawnEnemy(); }
+      if(waveClock>18){ waveClock=0; wave++; coin+=3; }
+
+      for(const e of enemies){
+        const t=enemyTileType(e);
+        e.slow=t===2?0.45:1;
+        e.x+=e.speed*e.slow*dt;
+      }
+
+      if(turretCd>0.35){turretCd=0;turretFire();}
+
+      for(const e of enemies){
+        if(e.x>=COLS-0.2){
+          baseHp--;
+          tone(180,.08,'sawtooth',.05);
+          e.x=-99;
+        }
+      }
+      enemies=enemies.filter(e=>e.x>-10&&e.x<COLS+2&&e.hp>0);
+
+      if(baseHp<=0){
+        state='gameover';
+        if(wave>bestWave) bestWave=wave;
+        localStorage.setItem(LS,JSON.stringify({bestWave,lang}));
+      }
+    }
+
+    function drawGrid(){
+      const pad=12;
+      const cw=(W-pad*2)/COLS;
+      const ch=(H-pad*2)/ROWS;
+      const grad=ctx.createLinearGradient(0,0,0,H);
+      grad.addColorStop(0,'#fff8e9');grad.addColorStop(1,'#f5ecd7');
+      ctx.fillStyle=grad;ctx.fillRect(0,0,W,H);
+
+      for(let y=0;y<ROWS;y++){
+        for(let x=0;x<COLS;x++){
+          const px=pad+x*cw, py=pad+y*ch;
+          const t=grid[y][x];
+          if(t===1){ctx.fillStyle='rgba(42,157,143,.55)';ctx.fillRect(px,py,cw,ch);}
+          else if(t===2){ctx.fillStyle='rgba(244,162,97,.55)';ctx.fillRect(px,py,cw,ch);}
+          ctx.strokeStyle='#d7cfba';ctx.strokeRect(px,py,cw,ch);
+        }
+      }
+
+      // base zone
+      ctx.fillStyle='rgba(106,153,78,.35)';
+      ctx.fillRect(pad+(COLS-1)*cw,pad,cw,ROWS*ch);
+      ctx.fillStyle='#466a32';ctx.font='700 12px system-ui';ctx.fillText('BASE',pad+(COLS-1)*cw+4,pad+14);
+
+      // turrets
+      const turretX=pad+(COLS-2.4)*cw;
+      [1,3,5].forEach(r=>{
+        const y=pad+(r+.5)*ch;
+        ctx.fillStyle='#2f4858';ctx.beginPath();ctx.arc(turretX,y,10,0,Math.PI*2);ctx.fill();
+        ctx.fillStyle='#9bd5cc';ctx.fillRect(turretX,y-2,16,4);
+      });
+
+      // enemies
+      for(const e of enemies){
+        const x=pad+e.x*cw;
+        const y=pad+(e.row+.5)*ch;
+        ctx.fillStyle='#7f5539';ctx.beginPath();ctx.arc(x,y,10,0,Math.PI*2);ctx.fill();
+        ctx.fillStyle='#f7e6ca';ctx.fillRect(x-8,y-16,16,4);
+        ctx.fillStyle='#c83e4d';ctx.fillRect(x-8,y-16,16*(e.hp/e.maxHp),4);
+      }
+
+      if(state==='title'){
+        ctx.fillStyle='rgba(255,248,232,.9)';ctx.fillRect(24,24,W-48,126);
+        ctx.strokeStyle='#ccb88b';ctx.strokeRect(24,24,W-48,126);
+        ctx.fillStyle='#2b2a28';ctx.font='800 30px system-ui';ctx.fillText('INKFIELD',38,72);
+        ctx.font='800 26px system-ui';ctx.fillText('BASTION',38,104);
+        ctx.font='600 14px system-ui';ctx.fillText(T('subtitle'),38,130);
+      }
+
+      ctx.fillStyle='rgba(34,31,28,.55)';ctx.fillRect(16,H-58,W-32,34);
+      ctx.fillStyle='#fff6df';ctx.font='600 12px monospace';ctx.fillText(fieldLore[loreIdx],22,H-36);
+
+      if(state==='gameover'){
+        ctx.fillStyle='rgba(40,28,22,.64)';ctx.fillRect(26,26,W-52,116);
+        ctx.fillStyle='#fff4da';ctx.font='800 28px system-ui';ctx.fillText(T('over'),40,76);
+        ctx.font='700 18px system-ui';ctx.fillText(`Wave ${wave} · Score ${score}`,40,106);
+      }
+    }
+
+    function updateUI(){
+      ui.title.textContent=T('title');
+      ui.hint.textContent=T('hint');
+      ui.start.textContent=T('start');
+      ui.current.textContent=T('current');
+      ui.resin.textContent=T('resin');
+      ui.upgrade.textContent=`${T('upgrade')} (${4+brushRadius*2})`;
+      ui.wave.textContent=wave;
+      ui.hp.textContent=baseHp;
+      ui.score.textContent=score;
+      ui.coin.textContent=coin;
+      ui.best.textContent=bestWave;
+      ui.brushSize.textContent=brushRadius;
+      ui.langBtn.textContent=lang.toUpperCase();
+      ui.current.style.outline=brush===1?'3px solid #2a9d8f':'none';
+      ui.resin.style.outline=brush===2?'3px solid #f4a261':'none';
+    }
+
+    let last=performance.now();
+    function loop(now){
+      const dt=Math.min(.033,(now-last)/1000);last=now;
+      update(dt);
+      updateUI();
+      drawGrid();
+      requestAnimationFrame(loop);
+    }
+
+    let painting=false;
+    canvas.addEventListener('pointerdown',(e)=>{painting=true;const r=canvas.getBoundingClientRect();paintAt(e.clientX-r.left,e.clientY-r.top);});
+    canvas.addEventListener('pointermove',(e)=>{if(!painting)return;const r=canvas.getBoundingClientRect();paintAt(e.clientX-r.left,e.clientY-r.top);});
+    window.addEventListener('pointerup',()=>painting=false);
+
+    ui.current.addEventListener('click',()=>{brush=1;tone(660,.05,'triangle',.03);});
+    ui.resin.addEventListener('click',()=>{brush=2;tone(420,.05,'triangle',.03);});
+    ui.start.addEventListener('click',start);
+    ui.upgrade.addEventListener('click',()=>{
+      const cost=4+brushRadius*2;
+      if(coin>=cost){
+        coin-=cost;
+        if(Math.random()<0.55 && brushRadius<3) brushRadius++;
+        else turretDamage=Math.min(5,turretDamage+1);
+        tone(860,.06,'square',.03);
+      }else tone(180,.06,'square',.03);
+    });
+    ui.langBtn.addEventListener('click',()=>{lang=lang==='ko'?'en':'ko';localStorage.setItem(LS,JSON.stringify({bestWave,lang}));updateUI();});
+
+    window.addEventListener('keydown',(e)=>{
+      if(e.key==='1') brush=1;
+      if(e.key==='2') brush=2;
+      if(e.key==='u'||e.key==='U') ui.upgrade.click();
+      if(e.key==='Enter') start();
+    });
+
+    updateUI();
+    resetGrid();
+    requestAnimationFrame(loop);
+  })();
+  </script>
+</body>
+</html>

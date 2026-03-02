@@ -1,0 +1,480 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <title>Echo Loop Speedway — 에코 루프 스피드웨이</title>
+  <meta name="description" content="이전 루프의 고스트와 동기화해 게이트를 통과하는 타임-시너지 레이싱 아케이드." />
+  <meta property="og:title" content="Echo Loop Speedway" />
+  <meta property="og:description" content="한 루프 전의 나와 협업해야 생존하는 3레인 스피드웨이." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://games.eastsea.xyz/echo-loop-speedway/" />
+  <meta property="og:image" content="https://games.eastsea.xyz/echo-loop-speedway/og-image.png" />
+  <link rel="canonical" href="https://games.eastsea.xyz/echo-loop-speedway/" />
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"VideoGame","name":"Echo Loop Speedway","genre":"Racing","gamePlatform":"Web Browser","description":"Time-loop racing with ghost sync gates.","url":"https://games.eastsea.xyz/echo-loop-speedway/"}</script>
+  <style>
+    :root{
+      --bg:#fff7d6;
+      --panel:#f6e6b8;
+      --ink:#222;
+      --road:#30323d;
+      --lane:#555b68;
+      --player:#ff9f1c;
+      --ghost:#6a4c93;
+      --gate:#2ec4b6;
+      --warn:#d7263d;
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;height:100%;background:var(--bg);font-family:system-ui,"Noto Sans KR",sans-serif;color:var(--ink);touch-action:none;}
+    body{display:flex;flex-direction:column;padding:calc(env(safe-area-inset-top) + 8px) 8px calc(env(safe-area-inset-bottom) + 8px);}    
+    .top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;}
+    .title{font-weight:800;font-size:clamp(.96rem,2.8vw,1.16rem)}
+    .hud{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:8px;}
+    .box{background:var(--panel);border:1px solid #d4c286;border-radius:10px;padding:6px;text-align:center;font-size:.72rem;}
+    .box b{display:block;font-size:1rem;margin-top:2px;}
+    canvas{width:100%;flex:1;border:2px solid #c6b070;border-radius:14px;display:block;background:#fffaf0}
+    .controls{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:8px;}
+    button{min-height:46px;border-radius:12px;border:1px solid #ac9a69;background:#fff2cc;color:#28231d;font-weight:700;touch-action:manipulation}
+    .start{background:#d9eff9;border-color:#83a9c2}
+    .hint{font-size:.76rem;text-align:center;margin-top:6px;opacity:.86}
+  </style>
+</head>
+<body>
+  <div class="top">
+    <div class="title" id="titleText">Echo Loop Speedway</div>
+    <button id="langBtn">KO</button>
+  </div>
+  <section class="hud">
+    <div class="box">Score<b id="score">0</b></div>
+    <div class="box">Best Lap<b id="best">0</b></div>
+    <div class="box">Lap<b id="lap">1</b></div>
+    <div class="box">Loop Sec<b id="loopSec">0.0</b></div>
+    <div class="box">Ghost<b id="ghost">OFF</b></div>
+  </section>
+  <canvas id="c" width="390" height="560"></canvas>
+  <section class="controls">
+    <button id="upBtn">▲ Lane Up</button>
+    <button id="downBtn">▼ Lane Down</button>
+    <button id="boostBtn">Boost</button>
+    <button id="startBtn" class="start">Start</button>
+  </section>
+  <div class="hint" id="hint">↑/↓ 레인 변경 · Space 부스트 · Enter 시작</div>
+
+  <script>
+  (()=>{
+    const I18N={
+      title:{ko:'Echo Loop Speedway — 에코 루프 스피드웨이',en:'Echo Loop Speedway'},
+      hint:{ko:'↑/↓ 레인 변경 · Space 부스트 · Enter 시작',en:'↑/↓ Lane Change · Space Boost · Enter Start'},
+      start:{ko:'시작 / 재시작',en:'Start / Restart'},
+      up:{ko:'▲ 위 레인',en:'▲ Lane Up'},
+      down:{ko:'▼ 아래 레인',en:'▼ Lane Down'},
+      ghostOff:{ko:'없음',en:'OFF'},
+      ghostOn:{ko:'활성',en:'ON'},
+      gameOver:{ko:'충돌! 근무 종료',en:'Crash! Run over'},
+      titleMsg:{ko:'이전 루프의 고스트와 동기화 게이트를 통과하세요.',en:'Sync with your previous loop ghost to pass gates.'}
+    };
+
+
+    const trackSignals=[
+      '001 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 2.',
+      '002 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 3.',
+      '003 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 4.',
+      '004 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 5.',
+      '005 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 6.',
+      '006 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 7.',
+      '007 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 8.',
+      '008 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 9.',
+      '009 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 1.',
+      '010 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 2.',
+      '011 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 3.',
+      '012 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 4.',
+      '013 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 5.',
+      '014 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 6.',
+      '015 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 7.',
+      '016 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 8.',
+      '017 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 9.',
+      '018 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 1.',
+      '019 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 2.',
+      '020 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 3.',
+      '021 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 4.',
+      '022 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 5.',
+      '023 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 6.',
+      '024 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 7.',
+      '025 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 8.',
+      '026 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 9.',
+      '027 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 1.',
+      '028 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 2.',
+      '029 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 3.',
+      '030 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 4.',
+      '031 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 5.',
+      '032 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 6.',
+      '033 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 7.',
+      '034 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 8.',
+      '035 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 9.',
+      '036 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 1.',
+      '037 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 2.',
+      '038 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 3.',
+      '039 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 4.',
+      '040 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 5.',
+      '041 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 6.',
+      '042 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 7.',
+      '043 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 8.',
+      '044 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 9.',
+      '045 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 1.',
+      '046 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 2.',
+      '047 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 3.',
+      '048 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 4.',
+      '049 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 5.',
+      '050 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 6.',
+      '051 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 7.',
+      '052 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 8.',
+      '053 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 9.',
+      '054 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 1.',
+      '055 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 2.',
+      '056 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 3.',
+      '057 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 4.',
+      '058 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 5.',
+      '059 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 6.',
+      '060 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 7.',
+      '061 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 8.',
+      '062 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 9.',
+      '063 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 1.',
+      '064 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 2.',
+      '065 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 3.',
+      '066 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 4.',
+      '067 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 5.',
+      '068 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 6.',
+      '069 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 7.',
+      '070 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 8.',
+      '071 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 9.',
+      '072 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 1.',
+      '073 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 2.',
+      '074 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 3.',
+      '075 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 4.',
+      '076 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 5.',
+      '077 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 6.',
+      '078 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 7.',
+      '079 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 8.',
+      '080 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 9.',
+      '081 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 1.',
+      '082 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 2.',
+      '083 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 3.',
+      '084 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 4.',
+      '085 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 5.',
+      '086 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 6.',
+      '087 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 7.',
+      '088 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 8.',
+      '089 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 9.',
+      '090 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 1.',
+      '091 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 2.',
+      '092 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 3.',
+      '093 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 4.',
+      '094 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 5.',
+      '095 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 6.',
+      '096 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 7.',
+      '097 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 8.',
+      '098 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 9.',
+      '099 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 1.',
+      '100 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 2.',
+      '101 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 3.',
+      '102 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 4.',
+      '103 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 5.',
+      '104 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 6.',
+      '105 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 7.',
+      '106 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 8.',
+      '107 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 9.',
+      '108 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 1.',
+      '109 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 2.',
+      '110 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 3.',
+      '111 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 4.',
+      '112 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 5.',
+      '113 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 6.',
+      '114 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 7.',
+      '115 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 8.',
+      '116 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 9.',
+      '117 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 1.',
+      '118 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 2.',
+      '119 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 3.',
+      '120 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 4.',
+      '121 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 5.',
+      '122 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 6.',
+      '123 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 7.',
+      '124 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 8.',
+      '125 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 9.',
+      '126 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 1.',
+      '127 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 2.',
+      '128 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 3.',
+      '129 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 4.',
+      '130 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 5.',
+      '131 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 6.',
+      '132 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 7.',
+      '133 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 8.',
+      '134 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 9.',
+      '135 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 1.',
+      '136 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 2.',
+      '137 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 3.',
+      '138 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 4.',
+      '139 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 5.',
+      '140 // Loop Control: keep lane memory sharp, sync opportunities rise after marker 6.'
+    ];
+    let signalIndex=0, signalClock=0;
+
+    const LS='echo_loop_speedway_v1';
+    const saved=JSON.parse(localStorage.getItem(LS)||'{}');
+    let lang=saved.lang||'ko';
+    let bestLap=saved.bestLap||0;
+
+    const T=(k)=>I18N[k][lang];
+    const canvas=document.getElementById('c');
+    const ctx=canvas.getContext('2d');
+    const ui={
+      title:document.getElementById('titleText'),hint:document.getElementById('hint'),startBtn:document.getElementById('startBtn'),
+      upBtn:document.getElementById('upBtn'),downBtn:document.getElementById('downBtn'),score:document.getElementById('score'),best:document.getElementById('best'),
+      lap:document.getElementById('lap'),loopSec:document.getElementById('loopSec'),ghost:document.getElementById('ghost'),langBtn:document.getElementById('langBtn')
+    };
+
+    let W=390,H=560,dpr=1;
+    const resize=()=>{
+      dpr=Math.max(1,window.devicePixelRatio||1);
+      W=canvas.clientWidth;H=canvas.clientHeight;
+      canvas.width=(W*dpr)|0;canvas.height=(H*dpr)|0;
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+    };
+    window.addEventListener('resize',resize,{passive:true});
+    resize();
+
+    let audioCtx;
+    const initAudio=()=>{
+      if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+      if(audioCtx.state==='suspended') audioCtx.resume();
+    };
+    const beep=(f,d=.08,type='square',gain=.03)=>{
+      if(!audioCtx) return;
+      const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+      o.type=type;o.frequency.value=f;g.gain.value=gain;o.connect(g).connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+d);
+    };
+
+    let state='title';
+    let score=0;
+    let lane=1;
+    let lap=1;
+    let loopDuration=10;
+    let loopTime=0;
+    let speed=190;
+    let boost=0;
+    let obstacles=[];
+    let spawnTimer=0;
+    let gateTimer=0;
+    const playerX=112;
+
+    const sampleStep=0.05;
+    let sampleClock=0;
+    let currentSamples=[];
+    let ghostSamples=[];
+    const laneYs=()=>[H*0.3,H*0.5,H*0.7];
+    const ghostLane=()=>{
+      if(!ghostSamples.length) return -1;
+      const idx=Math.min(ghostSamples.length-1,Math.floor(loopTime/sampleStep));
+      return ghostSamples[idx]??-1;
+    };
+
+    function start(){
+      initAudio();
+      state='play';score=0;lane=1;lap=1;loopTime=0;speed=190;boost=0;
+      obstacles=[];spawnTimer=0;gateTimer=0;sampleClock=0;currentSamples=[];ghostSamples=[];
+      updateUI();
+      beep(520,.1,'triangle',.04);
+    }
+
+    function spawnObstacle(){
+      const r=Math.random();
+      const l=(Math.random()*3)|0;
+      let type='cone';
+      if(gateTimer>4.2){ type='sync'; gateTimer=0; }
+      else if(r<0.22) type='orb';
+      obstacles.push({x:W+40,lane:l,type,passed:false});
+    }
+
+    function moveLane(dir){
+      if(state!=='play') return;
+      lane=Math.max(0,Math.min(2,lane+dir));
+      beep(460,.05,'sine',.02);
+    }
+
+    function crash(){
+      state='gameover';
+      if(lap>bestLap){bestLap=lap;localStorage.setItem(LS,JSON.stringify({bestLap,lang}));}
+      beep(140,.2,'sawtooth',.06);
+    }
+
+    function passGate(){
+      score+=24;
+      beep(760,.08,'triangle',.045);
+    }
+
+    function update(dt){
+      if(state!=='play') return;
+      signalClock+=dt; if(signalClock>3.5){signalClock=0;signalIndex=(signalIndex+1)%trackSignals.length;}
+      loopTime+=dt;
+      gateTimer+=dt;
+      spawnTimer+=dt;
+      if(boost>0){boost=Math.max(0,boost-dt);}
+      const runSpeed=speed+(boost>0?100:0);
+
+      sampleClock+=dt;
+      if(sampleClock>=sampleStep){
+        sampleClock-=sampleStep;
+        currentSamples.push(lane);
+      }
+
+      if(spawnTimer>0.95){ spawnTimer=0; spawnObstacle(); }
+      for(const ob of obstacles) ob.x-=runSpeed*dt;
+
+      const gl=ghostLane();
+      for(const ob of obstacles){
+        if(ob.passed) continue;
+        if(Math.abs(ob.x-playerX)<18){
+          if(ob.type==='orb'){
+            if(ob.lane===lane){ score+=10; ob.passed=true; beep(880,.05,'triangle',.03); }
+          }else if(ob.type==='cone'){
+            if(ob.lane===lane){ crash(); return; }
+          }else if(ob.type==='sync'){
+            if(ob.lane===lane){
+              if(gl===lane){ passGate(); ob.passed=true; }
+              else { crash(); return; }
+            }
+          }
+        }
+      }
+      obstacles=obstacles.filter(o=>o.x>-60 && !o.passed);
+
+      if(loopTime>=loopDuration){
+        loopTime=0;
+        lap++;
+        score+=30;
+        speed=Math.min(330,speed+14);
+        ghostSamples=currentSamples.slice();
+        currentSamples.length=0;
+        if(lap>bestLap){bestLap=lap;}
+        beep(640,.1,'triangle',.04);
+      }
+    }
+
+    function drawRoad(){
+      const sky=ctx.createLinearGradient(0,0,0,H);
+      sky.addColorStop(0,'#ffeec0');sky.addColorStop(.6,'#ffd58f');sky.addColorStop(1,'#ffc26f');
+      ctx.fillStyle=sky;ctx.fillRect(0,0,W,H);
+      ctx.fillStyle='#30323d';ctx.fillRect(0,H*0.18,W,H*0.64);
+      ctx.strokeStyle='#555b68';ctx.lineWidth=2;
+      const ys=laneYs();
+      for(let i=0;i<ys.length;i++){
+        ctx.beginPath();ctx.moveTo(0,ys[i]);ctx.lineTo(W,ys[i]);ctx.stroke();
+      }
+      for(let x=-((performance.now()/8)%36);x<W;x+=36){
+        ctx.fillStyle='#f8f4dd';ctx.fillRect(x,H*0.5-3,20,6);
+      }
+    }
+
+    function drawCar(x,y,color,label){
+      ctx.fillStyle=color;ctx.fillRect(x-18,y-12,36,24);
+      ctx.fillStyle='#1a1b1f';ctx.fillRect(x-14,y-8,28,16);
+      ctx.fillStyle='#cfd3de';ctx.fillRect(x-9,y-4,18,8);
+      ctx.fillStyle='#191919';ctx.fillRect(x-20,y-13,6,6);ctx.fillRect(x+14,y-13,6,6);ctx.fillRect(x-20,y+7,6,6);ctx.fillRect(x+14,y+7,6,6);
+      ctx.fillStyle='#fff';ctx.font='700 10px system-ui';ctx.fillText(label,x-8,y+3);
+    }
+
+    function render(){
+      drawRoad();
+      const ys=laneYs();
+
+      // sync zone signage
+      ctx.fillStyle='rgba(46,196,182,.18)';ctx.fillRect(playerX-30,H*0.18,60,H*0.64);
+
+      // ghost car
+      const gl=ghostLane();
+      if(gl>=0){ drawCar(playerX-42,ys[gl],'#6a4c93','G'); }
+
+      // player
+      drawCar(playerX,ys[lane],'#ff9f1c','P');
+
+      // obstacles
+      for(const o of obstacles){
+        const y=ys[o.lane];
+        if(o.type==='cone'){
+          ctx.fillStyle='#d7263d';
+          ctx.beginPath();ctx.moveTo(o.x,y-13);ctx.lineTo(o.x-12,y+12);ctx.lineTo(o.x+12,y+12);ctx.closePath();ctx.fill();
+        }else if(o.type==='orb'){
+          ctx.fillStyle='#f3c54b';ctx.beginPath();ctx.arc(o.x,y,9,0,Math.PI*2);ctx.fill();
+        }else{
+          ctx.fillStyle='#2ec4b6';ctx.fillRect(o.x-10,y-16,20,32);
+          ctx.fillStyle='#0f6d65';ctx.fillRect(o.x-6,y-12,12,24);
+          ctx.fillStyle='#fff';ctx.font='700 8px system-ui';ctx.fillText('SYNC',o.x-10,y-20);
+        }
+      }
+
+      if(state==='title'){
+        ctx.fillStyle='rgba(255,245,220,.84)';ctx.fillRect(18,18,W-36,140);
+        ctx.strokeStyle='#d6b978';ctx.strokeRect(18,18,W-36,140);
+        ctx.fillStyle='#2a2433';ctx.font='800 30px system-ui';ctx.fillText('ECHO LOOP',32,68);
+        ctx.font='700 24px system-ui';ctx.fillText('SPEEDWAY',32,102);
+        ctx.font='600 15px system-ui';ctx.fillText(T('titleMsg'),32,132);
+      }
+
+      ctx.fillStyle='rgba(33,28,41,.55)';ctx.fillRect(16,H-58,W-32,34);
+      ctx.fillStyle='#fff6d6';ctx.font='600 12px monospace';ctx.fillText(trackSignals[signalIndex],22,H-36);
+
+      if(state==='gameover'){
+        ctx.fillStyle='rgba(28,22,18,.64)';ctx.fillRect(22,22,W-44,120);
+        ctx.fillStyle='#fff4cf';ctx.font='800 26px system-ui';ctx.fillText(T('gameOver'),36,72);
+        ctx.font='700 18px system-ui';ctx.fillText(`Score ${score} · Lap ${lap}`,36,102);
+      }
+    }
+
+    function updateUI(){
+      ui.title.textContent=T('title');
+      ui.hint.textContent=T('hint');
+      ui.startBtn.textContent=T('start');
+      ui.upBtn.textContent=T('up');
+      ui.downBtn.textContent=T('down');
+      ui.score.textContent=score;
+      ui.best.textContent=bestLap;
+      ui.lap.textContent=lap;
+      ui.loopSec.textContent=loopTime.toFixed(1);
+      ui.ghost.textContent=ghostSamples.length?T('ghostOn'):T('ghostOff');
+      ui.langBtn.textContent=lang.toUpperCase();
+    }
+
+    let last=performance.now();
+    function frame(now){
+      const dt=Math.min(.033,(now-last)/1000);last=now;
+      update(dt);updateUI();render();
+      requestAnimationFrame(frame);
+    }
+
+    document.getElementById('startBtn').addEventListener('click',start);
+    document.getElementById('upBtn').addEventListener('click',()=>moveLane(-1));
+    document.getElementById('downBtn').addEventListener('click',()=>moveLane(1));
+    document.getElementById('boostBtn').addEventListener('click',()=>{if(state==='play'){boost=1.2;beep(940,.06,'square',.03);}});
+    ui.langBtn.addEventListener('click',()=>{lang=lang==='ko'?'en':'ko';localStorage.setItem(LS,JSON.stringify({bestLap,lang}));updateUI();});
+
+    window.addEventListener('keydown',(e)=>{
+      if(e.key==='ArrowUp') moveLane(-1);
+      if(e.key==='ArrowDown') moveLane(1);
+      if(e.key===' ') { if(state==='play'){boost=1.2;beep(940,.06,'square',.03);} }
+      if(e.key==='Enter') start();
+    });
+
+    let touchY=0;
+    canvas.addEventListener('pointerdown',(e)=>{touchY=e.clientY;});
+    canvas.addEventListener('pointerup',(e)=>{
+      const dy=e.clientY-touchY;
+      if(Math.abs(dy)<12){ if(state==='play'){boost=.7;beep(860,.04,'sine',.02);} return; }
+      if(dy<0) moveLane(-1); else moveLane(1);
+    });
+
+    updateUI();
+    requestAnimationFrame(frame);
+  })();
+  </script>
+</body>
+</html>

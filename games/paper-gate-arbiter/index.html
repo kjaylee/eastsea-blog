@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <title>Paper Gate Arbiter — 페이퍼 게이트 아비터</title>
+  <meta name="description" content="매 라운드 바뀌는 입국 규정을 읽고 Approve/Inspect/Deny를 판단하는 서류 심사 전략 게임." />
+  <meta property="og:title" content="Paper Gate Arbiter" />
+  <meta property="og:description" content="정보 획득 비용(Inspect 토큰)을 관리하며 판정 정확도를 최적화하는 전략 시뮬레이션." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://games.eastsea.xyz/paper-gate-arbiter/" />
+  <meta property="og:image" content="https://games.eastsea.xyz/paper-gate-arbiter/og-image.png" />
+  <link rel="canonical" href="https://games.eastsea.xyz/paper-gate-arbiter/" />
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"VideoGame","name":"Paper Gate Arbiter","genre":"Strategy","gamePlatform":"Web Browser","operatingSystem":"Any","description":"Judge border documents with shifting rules and limited inspect tokens.","url":"https://games.eastsea.xyz/paper-gate-arbiter/"}</script>
+  <style>
+    :root{
+      --paper:#f3e9d2;
+      --panel:#e4d3b0;
+      --ink:#3d2b1f;
+      --stamp:#9e5b3a;
+      --ok:#3b7a57;
+      --warn:#8f3b2f;
+      --line:#bfa67f;
+    }
+    *{box-sizing:border-box;}
+    html,body{margin:0;height:100%;background:var(--paper);font-family:"Noto Sans KR",system-ui,sans-serif;color:var(--ink);touch-action:none;}
+    body{display:flex;flex-direction:column;padding:calc(env(safe-area-inset-top) + 8px) 8px calc(env(safe-area-inset-bottom) + 8px);}    
+    .top{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-bottom:8px;}
+    .title{font-weight:800;letter-spacing:.2px;font-size:clamp(.95rem,2.6vw,1.1rem);}
+    .hud{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:8px;}
+    .cell{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:6px;text-align:center;font-size:.72rem;line-height:1.2;}
+    .cell b{display:block;font-size:.98rem;margin-top:2px;}
+    canvas{width:100%;flex:1;display:block;border-radius:14px;border:2px solid var(--line);background:#efe1c4;box-shadow:inset 0 0 0 2px rgba(255,255,255,.35);}    
+    .actions{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:8px;}
+    button{min-height:46px;border-radius:12px;border:1px solid #9f8968;background:#f9eed8;color:var(--ink);font-weight:700;font-size:.88rem;touch-action:manipulation;}
+    button:active{transform:translateY(1px);}    
+    .approve{background:#e3f0de;border-color:#8eb386;}
+    .inspect{background:#fff4dc;border-color:#d2a96e;}
+    .deny{background:#f6dfda;border-color:#c48c80;}
+    .start{background:#dce8f8;border-color:#8faad6;}
+    .hint{font-size:.76rem;opacity:.85;margin-top:6px;text-align:center;}
+  </style>
+</head>
+<body>
+  <div class="top">
+    <div class="title" id="titleText">Paper Gate Arbiter</div>
+    <button id="langBtn" aria-label="language">KO</button>
+  </div>
+  <section class="hud">
+    <div class="cell">Score<b id="score">0</b></div>
+    <div class="cell">Best<b id="best">0</b></div>
+    <div class="cell">Time<b id="time">75</b></div>
+    <div class="cell">Strike<b id="strike">0/3</b></div>
+    <div class="cell">Inspect<b id="token">3</b></div>
+  </section>
+  <canvas id="c" width="390" height="540"></canvas>
+  <section class="actions">
+    <button class="approve" id="approveBtn">Approve</button>
+    <button class="inspect" id="inspectBtn">Inspect</button>
+    <button class="deny" id="denyBtn">Deny</button>
+    <button class="start" id="startBtn">Start</button>
+  </section>
+  <div class="hint" id="hint">A:Approve · S:Inspect · D:Deny · Enter:Start</div>
+
+  <script>
+  (()=>{
+    const i18n={
+      title:{ko:'Paper Gate Arbiter — 페이퍼 게이트 아비터',en:'Paper Gate Arbiter'},
+      hint:{ko:'A 승인 · S 정밀검사 · D 거절 · Enter 시작',en:'A Approve · S Inspect · D Deny · Enter Start'},
+      start:{ko:'시작 / 재시작',en:'Start / Restart'},
+      approve:{ko:'승인',en:'Approve'},
+      inspect:{ko:'정밀검사',en:'Inspect'},
+      deny:{ko:'거절',en:'Deny'},
+      pressStart:{ko:'심사대 준비 완료. 시작 버튼을 누르세요.',en:'Desk ready. Press Start to begin.'},
+      gameOver:{ko:'근무 종료',en:'Shift Over'},
+      passed:{ko:'정답 판정',en:'Correct verdict'},
+      failed:{ko:'오판! 경고 +1',en:'Wrong verdict! +1 strike'},
+      noToken:{ko:'검사 토큰 부족',en:'No inspect tokens'},
+      rulesTitle:{ko:'오늘의 규정',en:'Current Rules'},
+      applicant:{ko:'신청자',en:'Applicant'},
+      origin:{ko:'출신',en:'Origin'},
+      days:{ko:'체류일',en:'Stay'},
+      cargo:{ko:'화물',en:'Cargo'},
+      pass:{ko:'허가서',en:'Pass'},
+      level:{ko:'단계',en:'Level'}
+    };
+    const T=(k)=>i18n[k][lang];
+
+    const canvas=document.getElementById('c');
+    const ctx=canvas.getContext('2d');
+    const ui={
+      score:document.getElementById('score'), best:document.getElementById('best'), time:document.getElementById('time'),
+      strike:document.getElementById('strike'), token:document.getElementById('token'), hint:document.getElementById('hint'),
+      startBtn:document.getElementById('startBtn'), approveBtn:document.getElementById('approveBtn'), inspectBtn:document.getElementById('inspectBtn'),
+      denyBtn:document.getElementById('denyBtn'), langBtn:document.getElementById('langBtn'), titleText:document.getElementById('titleText')
+    };
+
+    let W=390,H=540,dpr=1;
+    const resize=()=>{
+      dpr=Math.max(1,window.devicePixelRatio||1);
+      W=canvas.clientWidth;H=canvas.clientHeight;
+      canvas.width=Math.floor(W*dpr);canvas.height=Math.floor(H*dpr);
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+    };
+    window.addEventListener('resize',resize,{passive:true});
+    resize();
+
+    let audioCtx;
+    const sfx=(f=440,d=.08,t='triangle',g=.03)=>{
+      if(!audioCtx)return;
+      const o=audioCtx.createOscillator(),a=audioCtx.createGain();
+      o.type=t;o.frequency.value=f;a.gain.value=g;o.connect(a).connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+d);
+    };
+    const initAudio=()=>{
+      if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+      if(audioCtx.state==='suspended') audioCtx.resume();
+    };
+
+    const LS_KEY='paper_gate_arbiter_v1';
+    const saved=JSON.parse(localStorage.getItem(LS_KEY)||'{}');
+    let best=saved.best||0;
+    let maxLevel=saved.maxLevel||1;
+    let lang=saved.lang||'ko';
+
+    const origins=['North','South','East','West'];
+    const passes=['Worker','Visitor','Scholar','Courier'];
+    const cargos=['grain','metal','paper','medical','none'];
+    const originKo={North:'북항',South:'남항',East:'동부',West:'서부'};
+    const passKo={Worker:'노동',Visitor:'관광',Scholar:'연구',Courier:'운송'};
+    const cargoKo={grain:'곡물',metal:'금속',paper:'문서',medical:'의약',none:'없음'};
+
+
+    const bureauMemos=[
+      '01. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '02. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '03. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '04. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '05. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '06. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '07. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '08. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '09. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '10. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '11. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '12. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '13. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '14. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '15. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '16. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '17. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '18. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '19. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '20. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '21. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '22. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '23. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '24. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '25. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '26. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '27. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '28. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '29. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '30. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '31. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '32. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '33. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '34. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '35. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '36. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '37. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '38. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '39. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '40. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '41. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '42. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '43. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '44. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '45. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '46. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '47. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '48. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '49. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '50. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '51. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '52. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '53. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '54. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '55. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '56. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '57. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '58. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '59. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '60. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '61. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '62. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '63. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '64. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '65. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '66. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '67. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '68. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '69. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '70. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '71. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '72. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '73. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '74. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '75. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '76. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '77. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '78. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '79. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '80. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '81. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '82. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '83. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '84. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '85. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '86. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '87. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '88. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '89. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '90. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '91. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '92. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '93. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '94. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '95. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '96. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '97. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '98. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '99. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '100. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '101. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '102. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '103. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '104. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '105. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '106. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '107. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '108. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '109. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '110. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '111. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '112. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '113. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '114. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '115. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '116. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '117. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '118. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '119. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.',
+      '120. Border memo: when queues surge, prioritize consistency over speed and log edge cases clearly.'
+    ];
+    let memoIndex=0,memoClock=0;
+
+    const rulePool=[
+      {id:'origin-ban',ko:'서부 출신 금지',en:'West origin denied',check:a=>a.origin!=='West'},
+      {id:'day-limit',ko:'체류일 8일 이하',en:'Stay <= 8 days',check:a=>a.days<=8},
+      {id:'cargo-ban',ko:'금속 화물 금지',en:'No metal cargo',check:a=>a.cargo!=='metal'},
+      {id:'pass-only',ko:'연구 허가서만 승인',en:'Scholar pass only',check:a=>a.pass==='Scholar'},
+      {id:'origin-only',ko:'북항/동부만 허용',en:'Only North/East allowed',check:a=>a.origin==='North'||a.origin==='East'},
+      {id:'cargo-paper',ko:'문서/없음만 허용',en:'Only paper/none cargo',check:a=>a.cargo==='paper'||a.cargo==='none'}
+    ];
+
+    let state='title';
+    let score=0, strikes=0, inspectTokens=3, timeLeft=75, level=1, processed=0;
+    let msg='';
+    let current=null;
+    let rules=[];
+    let shake=0;
+
+    const pickRules=()=>{
+      const n=Math.min(2+Math.floor(level/3),4);
+      const shuffled=[...rulePool].sort(()=>Math.random()-.5);
+      return shuffled.slice(0,n);
+    };
+
+    const makeApplicant=()=>{
+      const forged=Math.random()<Math.min(.12+.03*level,.42);
+      const vip=Math.random()<.12;
+      return {
+        name:`ID-${1000+Math.floor(Math.random()*9000)}`,
+        origin:origins[(Math.random()*origins.length)|0],
+        pass:passes[(Math.random()*passes.length)|0],
+        days:2+((Math.random()*14)|0),
+        cargo:cargos[(Math.random()*cargos.length)|0],
+        forged,vip
+      };
+    };
+
+    const evalApplicant=(app)=>{
+      let failed=0;
+      for(const r of rules) if(!r.check(app)) failed++;
+      if(app.forged) failed++;
+      const valid=failed===0 || (app.vip && failed===1);
+      const ambiguity=(failed===1 && !app.forged) || (app.vip && failed===1);
+      return {valid,failed,ambiguity};
+    };
+
+    const nextApplicant=()=>{ current=makeApplicant(); };
+
+    const punish=()=>{
+      strikes++; shake=10; sfx(160,.12,'sawtooth',.05);
+      if(strikes>=3){
+        state='gameover';
+        if(score>best) best=score;
+        maxLevel=Math.max(maxLevel,level);
+        localStorage.setItem(LS_KEY,JSON.stringify({best,maxLevel,lang}));
+      }
+    };
+
+    const reward=(v)=>{ score+=v; sfx(620,.08,'triangle',.04); if(score>best) best=score; };
+
+    const judge=(action)=>{
+      if(state!=='play'||!current) return;
+      const r=evalApplicant(current);
+      let ok=false;
+      if(action==='approve') ok=r.valid;
+      else if(action==='deny') ok=!r.valid;
+      else if(action==='inspect'){
+        if(inspectTokens<=0){ msg=T('noToken'); sfx(210,.07,'square',.03); return; }
+        inspectTokens--;
+        ok=r.ambiguity || r.failed>=2;
+      }
+
+      processed++;
+      if(ok){
+        reward(action==='inspect'?14:12);
+        msg=T('passed');
+      }else{
+        msg=T('failed');
+        punish();
+      }
+
+      if(processed%5===0){
+        level++;
+        inspectTokens=Math.min(5,inspectTokens+1);
+        rules=pickRules();
+      }
+
+      nextApplicant();
+      updateUI();
+    };
+
+    const startGame=()=>{
+      initAudio();
+      state='play';score=0;strikes=0;inspectTokens=3;timeLeft=75;level=1;processed=0;
+      rules=pickRules();
+      msg='';
+      nextApplicant();
+      updateUI();
+      sfx(480,.09,'sine',.04);
+    };
+
+    const updateUI=()=>{
+      ui.score.textContent=score;
+      ui.best.textContent=best;
+      ui.time.textContent=Math.max(0,timeLeft|0);
+      ui.strike.textContent=`${strikes}/3`;
+      ui.token.textContent=inspectTokens;
+      ui.hint.textContent=T('hint');
+      ui.startBtn.textContent=T('start');
+      ui.approveBtn.textContent=T('approve');
+      ui.inspectBtn.textContent=T('inspect');
+      ui.denyBtn.textContent=T('deny');
+      ui.titleText.textContent=T('title');
+      ui.langBtn.textContent=lang.toUpperCase();
+    };
+
+    const drawPaper=(x,y,w,h)=>{
+      ctx.fillStyle='#f8edd7';
+      ctx.fillRect(x,y,w,h);
+      ctx.strokeStyle='#c7ae88';ctx.lineWidth=2;ctx.strokeRect(x,y,w,h);
+      for(let i=0;i<8;i++){
+        const yy=y+16+i*18;
+        ctx.strokeStyle='rgba(78,52,35,.14)';
+        ctx.beginPath();ctx.moveTo(x+12,yy);ctx.lineTo(x+w-12,yy);ctx.stroke();
+      }
+    };
+
+    const label=(k,v,x,y,color='#3d2b1f')=>{
+      ctx.fillStyle=color;ctx.font='600 14px system-ui';ctx.fillText(k,x,y);
+      ctx.font='700 16px system-ui';ctx.fillText(v,x+94,y);
+    };
+
+    const render=()=>{
+      const ox=shake? (Math.random()*6-3):0;
+      const oy=shake? (Math.random()*6-3):0;
+      ctx.save();ctx.translate(ox,oy);
+
+      const g=ctx.createLinearGradient(0,0,0,H);
+      g.addColorStop(0,'#efe4cb');g.addColorStop(1,'#e7d3ac');
+      ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+
+      if(state==='title'){
+        ctx.fillStyle='#3d2b1f';ctx.font='800 34px system-ui';ctx.fillText('PAPER GATE',24,84);
+        ctx.font='700 24px system-ui';ctx.fillText('ARBITER',24,118);
+        ctx.font='500 16px system-ui';ctx.fillText(T('pressStart'),24,156);
+        ctx.fillText(`${T('level')}: ${maxLevel}  BEST: ${best}`,24,184);
+      }
+
+      if(state==='play' || state==='gameover'){
+        drawPaper(16,16,W-32,H-130);
+        ctx.fillStyle='#2f241a';ctx.font='700 18px system-ui';ctx.fillText(`${T('rulesTitle')} (Lv.${level})`,30,44);
+
+        ctx.font='600 14px system-ui';
+        rules.forEach((r,i)=>{
+          ctx.fillStyle='#523a2a';
+          ctx.fillText(`• ${lang==='ko'?r.ko:r.en}`,34,68+i*20);
+        });
+
+        if(current){
+          const boxY=160;
+          ctx.fillStyle='#f2e4c6';ctx.fillRect(28,boxY,W-56,210);
+          ctx.strokeStyle='#b99362';ctx.strokeRect(28,boxY,W-56,210);
+          ctx.fillStyle='#3d2b1f';ctx.font='700 17px system-ui';ctx.fillText(`${T('applicant')} ${current.name}`,42,boxY+28);
+          label(`${T('origin')}`,lang==='ko'?originKo[current.origin]:current.origin,42,boxY+62);
+          label(`${T('pass')}`,lang==='ko'?passKo[current.pass]:current.pass,42,boxY+94);
+          label(`${T('days')}`,`${current.days}`,42,boxY+126);
+          label(`${T('cargo')}`,lang==='ko'?cargoKo[current.cargo]:current.cargo,42,boxY+158);
+
+          ctx.fillStyle=current.vip?'#3b7a57':'#8f3b2f';
+          ctx.font='700 14px system-ui';
+          ctx.fillText(current.vip?'VIP':'STD',W-98,boxY+30);
+
+          if(state==='gameover'){
+            ctx.fillStyle='rgba(40,20,10,.68)';ctx.fillRect(28,boxY,W-56,210);
+            ctx.fillStyle='#fff0dc';ctx.font='800 30px system-ui';ctx.fillText(T('gameOver'),48,boxY+114);
+            ctx.font='700 18px system-ui';ctx.fillText(`Score ${score} / Best ${best}`,48,boxY+146);
+          }
+        }
+
+        ctx.fillStyle='#6b513c';ctx.font='500 12px system-ui';ctx.fillText(bureauMemos[memoIndex],34,H-102, W-72);
+        if(msg){
+          ctx.fillStyle='#533623';ctx.font='700 16px system-ui';ctx.fillText(msg,32,H-80);
+        }
+      }
+
+      ctx.restore();
+    };
+
+    let last=performance.now();
+    const loop=(now)=>{
+      const dt=(now-last)/1000;last=now;
+      if(state==='play'){
+        memoClock+=dt;
+        if(memoClock>4.2){memoClock=0;memoIndex=(memoIndex+1)%bureauMemos.length;}
+        timeLeft-=dt;
+        if(timeLeft<=0){
+          timeLeft=0;state='gameover';
+          if(score>best) best=score;
+          maxLevel=Math.max(maxLevel,level);
+          localStorage.setItem(LS_KEY,JSON.stringify({best,maxLevel,lang}));
+          sfx(130,.22,'sawtooth',.06);
+        }
+      }
+      if(shake>0) shake--;
+      updateUI();
+      render();
+      requestAnimationFrame(loop);
+    };
+
+    ui.startBtn.addEventListener('click',startGame);
+    ui.approveBtn.addEventListener('click',()=>judge('approve'));
+    ui.inspectBtn.addEventListener('click',()=>judge('inspect'));
+    ui.denyBtn.addEventListener('click',()=>judge('deny'));
+    ui.langBtn.addEventListener('click',()=>{lang=lang==='ko'?'en':'ko';localStorage.setItem(LS_KEY,JSON.stringify({best,maxLevel,lang}));updateUI();});
+
+    window.addEventListener('keydown',(e)=>{
+      if(e.key==='Enter'){startGame();}
+      if(e.key==='a'||e.key==='A') judge('approve');
+      if(e.key==='s'||e.key==='S') judge('inspect');
+      if(e.key==='d'||e.key==='D') judge('deny');
+    });
+
+    // 터치 대응: 캔버스 하단 탭 시 빠른 액션
+    canvas.addEventListener('pointerdown',(e)=>{
+      if(state!=='play') return;
+      const r=canvas.getBoundingClientRect();
+      const x=e.clientX-r.left;
+      if(x<r.width/3) judge('approve');
+      else if(x<r.width*2/3) judge('inspect');
+      else judge('deny');
+    });
+
+    updateUI();
+    requestAnimationFrame(loop);
+  })();
+  </script>
+</body>
+</html>

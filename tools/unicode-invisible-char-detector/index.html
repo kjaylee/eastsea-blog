@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>숨은 유니코드 문자 탐지기 | Unicode Invisible Character Detector</title>
+  <meta name="description" content="Zero-width, NBSP, BOM, Bidirectional marks 같은 숨은 유니코드 문자를 탐지·정리하고 히스토리를 저장하는 도구입니다." />
+  <meta name="theme-color" content="#0a0a1a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <style>
+    :root {
+      --bg: #0a0a1a;
+      --bg-soft: #14142d;
+      --panel: #12122a;
+      --panel-2: #1a1a38;
+      --line: #2d2d61;
+      --text: #eef1ff;
+      --muted: #9ca5cb;
+      --cyan: #2bd9ff;
+      --violet: #ba7bff;
+      --green: #39f8c3;
+      --yellow: #ffd36b;
+      --red: #ff6f92;
+      --shadow: 0 0 0 1px rgba(43, 217, 255, .16), 0 0 26px rgba(43, 217, 255, .12);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+      background: radial-gradient(circle at 0% 0%, #18183b 0%, var(--bg) 46%), var(--bg);
+      color: var(--text);
+      min-height: 100dvh;
+      padding: 16px 14px 36px;
+      line-height: 1.45;
+    }
+
+    .wrap { max-width: 980px; margin: 0 auto; }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .chip-link {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 7px 12px;
+      background: rgba(18, 18, 42, .86);
+      color: var(--muted);
+      text-decoration: none;
+      font-size: .78rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    h1 {
+      margin: 6px 0 8px;
+      font-size: clamp(1.36rem, 4.1vw, 2rem);
+      text-shadow: 0 0 14px rgba(43, 217, 255, .36);
+      letter-spacing: .01em;
+    }
+
+    .subtitle {
+      margin: 0 0 14px;
+      color: var(--muted);
+      font-size: .94rem;
+    }
+
+    .card {
+      background: linear-gradient(180deg, rgba(18, 18, 42, .95), rgba(10, 10, 26, .94));
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 14px;
+      box-shadow: var(--shadow);
+      margin-bottom: 11px;
+    }
+
+    .card h2 {
+      margin: 0 0 10px;
+      font-size: 1rem;
+      color: #dffaff;
+    }
+
+    textarea, button, input {
+      width: 100%;
+      min-height: 44px;
+      border-radius: 11px;
+      border: 1px solid var(--line);
+      background: var(--panel-2);
+      color: var(--text);
+      padding: 10px 12px;
+      font-size: .95rem;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 148px;
+      line-height: 1.5;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    textarea:focus, button:focus, input:focus {
+      outline: 2px solid var(--cyan);
+      outline-offset: 1px;
+      border-color: var(--cyan);
+    }
+
+    .actions {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 9px;
+    }
+
+    button {
+      cursor: pointer;
+      font-weight: 700;
+    }
+
+    .btn-primary {
+      border: none;
+      color: #050511;
+      background: linear-gradient(135deg, rgba(43, 217, 255, .98), rgba(186, 123, 255, .95));
+    }
+
+    .btn-secondary {
+      background: rgba(186, 123, 255, .17);
+      border-color: rgba(186, 123, 255, .55);
+      color: #f0e4ff;
+    }
+
+    .btn-ghost {
+      background: rgba(156, 165, 203, .08);
+      color: var(--muted);
+    }
+
+    .msg {
+      min-height: 1.2em;
+      margin-top: 8px;
+      font-size: .84rem;
+      color: var(--red);
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 11px;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px;
+      background: rgba(24, 24, 52, .73);
+      min-height: 74px;
+    }
+
+    .metric .k {
+      display: block;
+      color: var(--muted);
+      font-size: .76rem;
+      margin-bottom: 5px;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+    }
+
+    .metric .v {
+      font-size: clamp(1rem, 3.2vw, 1.22rem);
+      font-weight: 800;
+      color: var(--cyan);
+    }
+
+    .toggles {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: rgba(20, 20, 46, .82);
+      padding: 9px 10px;
+      font-size: .84rem;
+      color: var(--muted);
+      user-select: none;
+    }
+
+    .toggle input {
+      width: 20px;
+      min-height: 20px;
+      margin: 0;
+      accent-color: var(--cyan);
+    }
+
+    .mono-box {
+      margin-top: 8px;
+      min-height: 96px;
+      max-height: 240px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #0f1030;
+      padding: 10px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: .86rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .mark {
+      border: 1px solid rgba(255, 211, 107, .45);
+      background: rgba(255, 211, 107, .16);
+      border-radius: 6px;
+      padding: 0 4px;
+      color: #ffe8ad;
+      font-weight: 700;
+    }
+
+    .table-wrap {
+      margin-top: 8px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      overflow: auto;
+      max-height: 240px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 520px;
+      font-size: .83rem;
+    }
+
+    th, td {
+      border-bottom: 1px solid rgba(45, 45, 97, .65);
+      padding: 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--muted);
+      font-weight: 700;
+      position: sticky;
+      top: 0;
+      background: #111233;
+    }
+
+    .badge {
+      display: inline-block;
+      border: 1px solid rgba(43, 217, 255, .35);
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: .75rem;
+      color: #bcf2ff;
+      margin-right: 6px;
+      margin-bottom: 6px;
+      background: rgba(43, 217, 255, .08);
+    }
+
+    .history-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .history-item {
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: rgba(20, 20, 46, .8);
+      padding: 9px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .history-item button {
+      width: auto;
+      min-height: 36px;
+      padding: 8px 10px;
+      border-radius: 9px;
+      font-size: .78rem;
+    }
+
+    .history-meta {
+      color: var(--muted);
+      font-size: .76rem;
+      margin-bottom: 2px;
+    }
+
+    .history-preview {
+      font-size: .82rem;
+      color: #dfe5ff;
+      word-break: break-word;
+    }
+
+    .shortcuts {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: .79rem;
+      line-height: 1.55;
+    }
+
+    .empty {
+      border: 1px dashed rgba(156, 165, 203, .42);
+      border-radius: 10px;
+      padding: 12px;
+      color: var(--muted);
+      text-align: center;
+      font-size: .86rem;
+    }
+
+    .good { color: var(--green); }
+    .warn { color: var(--yellow); }
+
+    @media (max-width: 900px) {
+      .actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .row { grid-template-columns: 1fr; }
+      .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .toggles { grid-template-columns: 1fr; }
+    }
+  </style>
+  <!-- Analytics: GA4 + Clarity -->
+  <script src="/assets/analytics.js"></script>
+</head>
+<body>
+  <main class="wrap">
+    <div class="topbar">
+      <a class="chip-link" href="../">← 도구 목록</a>
+      <span class="chip-link">Invisible Char Lab</span>
+    </div>
+
+    <h1>숨은 유니코드 문자 탐지기</h1>
+    <p class="subtitle">Zero-width / NBSP / BOM / BiDi 제어문자를 찾아 위치와 종류를 보여주고 안전하게 정리합니다.</p>
+
+    <section class="card">
+      <h2>입력 텍스트</h2>
+      <textarea id="inputText" spellcheck="false" placeholder="텍스트를 붙여넣고 스캔하세요."></textarea>
+      <div class="actions">
+        <button id="scanBtn" class="btn-primary" type="button">스캔</button>
+        <button id="cleanBtn" class="btn-secondary" type="button">정리</button>
+        <button id="copyBtn" class="btn-ghost" type="button">정리본 복사</button>
+        <button id="sampleBtn" class="btn-ghost" type="button">샘플</button>
+        <button id="clearBtn" class="btn-ghost" type="button">비우기</button>
+      </div>
+
+      <div class="toggles">
+        <label class="toggle"><input id="removeZero" type="checkbox" checked> Zero-width 계열 제거 (ZWSP/ZWNJ/ZWJ/WORD JOINER)</label>
+        <label class="toggle"><input id="removeNbsp" type="checkbox" checked> NBSP 제거 (U+00A0)</label>
+        <label class="toggle"><input id="removeBidi" type="checkbox" checked> BiDi 제어문자 제거 (LRM/RLM/LRE/RLE/PDF/FSI 등)</label>
+        <label class="toggle"><input id="removeBomSoft" type="checkbox" checked> BOM/Soft Hyphen 제거 (U+FEFF/U+00AD)</label>
+        <label class="toggle"><input id="soundToggle" type="checkbox" checked> Web Audio 효과음</label>
+      </div>
+
+      <div id="msg" class="msg"></div>
+      <div class="shortcuts">단축키: <b>Ctrl/Cmd + Enter</b> 스캔 · <b>Ctrl/Cmd + Shift + X</b> 정리 · <b>Ctrl/Cmd + L</b> 비우기 · <b>/</b> 입력 포커스</div>
+    </section>
+
+    <section class="card">
+      <h2>요약</h2>
+      <div class="metrics">
+        <div class="metric"><span class="k">문자 수</span><div id="mChars" class="v">0</div></div>
+        <div class="metric"><span class="k">숨은 문자</span><div id="mHidden" class="v">0</div></div>
+        <div class="metric"><span class="k">탐지 종류</span><div id="mTypes" class="v">0</div></div>
+        <div class="metric"><span class="k">정리 후 문자</span><div id="mClean" class="v">0</div></div>
+      </div>
+      <div id="typeBadges" style="margin-top:8px;"></div>
+    </section>
+
+    <section class="row">
+      <article class="card">
+        <h2>탐지 결과</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>문자</th><th>코드</th><th>이름</th><th>개수</th><th>위치</th></tr>
+            </thead>
+            <tbody id="resultBody"></tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="card">
+        <h2>정리된 텍스트</h2>
+        <textarea id="cleanText" spellcheck="false" placeholder="정리 결과가 여기에 표시됩니다."></textarea>
+        <div id="cleanView" class="mono-box"></div>
+      </article>
+    </section>
+
+    <section class="card">
+      <h2>가시화 미리보기 (숨은 문자 마킹)</h2>
+      <div id="visibleView" class="mono-box empty">스캔하면 ⟦ZWSP⟧ 같은 마킹으로 숨은 문자를 보여드립니다.</div>
+    </section>
+
+    <section class="card">
+      <h2>최근 스캔 히스토리</h2>
+      <div style="display:flex; gap:8px; margin-bottom:8px;">
+        <button id="clearHistoryBtn" class="btn-ghost" type="button" style="width:auto; min-height:36px;">히스토리 비우기</button>
+      </div>
+      <div id="historyList" class="history-list"></div>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const STORAGE = {
+        draft: "esInvisibleDraftV1",
+        prefs: "esInvisiblePrefsV1",
+        history: "esInvisibleHistoryV1"
+      };
+
+      const CHAR_MAP = {
+        0x00A0: { name: "NO-BREAK SPACE", label: "NBSP", group: "nbsp" },
+        0x00AD: { name: "SOFT HYPHEN", label: "SHY", group: "bomsoft" },
+        0x180E: { name: "MONGOLIAN VOWEL SEPARATOR", label: "MVS", group: "zero" },
+        0x200B: { name: "ZERO WIDTH SPACE", label: "ZWSP", group: "zero" },
+        0x200C: { name: "ZERO WIDTH NON-JOINER", label: "ZWNJ", group: "zero" },
+        0x200D: { name: "ZERO WIDTH JOINER", label: "ZWJ", group: "zero" },
+        0x200E: { name: "LEFT-TO-RIGHT MARK", label: "LRM", group: "bidi" },
+        0x200F: { name: "RIGHT-TO-LEFT MARK", label: "RLM", group: "bidi" },
+        0x202A: { name: "LEFT-TO-RIGHT EMBEDDING", label: "LRE", group: "bidi" },
+        0x202B: { name: "RIGHT-TO-LEFT EMBEDDING", label: "RLE", group: "bidi" },
+        0x202C: { name: "POP DIRECTIONAL FORMATTING", label: "PDF", group: "bidi" },
+        0x202D: { name: "LEFT-TO-RIGHT OVERRIDE", label: "LRO", group: "bidi" },
+        0x202E: { name: "RIGHT-TO-LEFT OVERRIDE", label: "RLO", group: "bidi" },
+        0x2060: { name: "WORD JOINER", label: "WJ", group: "zero" },
+        0x2066: { name: "LEFT-TO-RIGHT ISOLATE", label: "LRI", group: "bidi" },
+        0x2067: { name: "RIGHT-TO-LEFT ISOLATE", label: "RLI", group: "bidi" },
+        0x2068: { name: "FIRST STRONG ISOLATE", label: "FSI", group: "bidi" },
+        0x2069: { name: "POP DIRECTIONAL ISOLATE", label: "PDI", group: "bidi" },
+        0xFEFF: { name: "ZERO WIDTH NO-BREAK SPACE / BOM", label: "BOM", group: "bomsoft" }
+      };
+
+      const SAMPLE = "정상 공백 + NBSP:\u00A0여기\nZero Width:\u200B숨김\u200D연결\nBiDi:\u202Eabc\u202C\nBOM:\uFEFF앞";
+
+      const el = {
+        inputText: document.getElementById("inputText"),
+        cleanText: document.getElementById("cleanText"),
+        scanBtn: document.getElementById("scanBtn"),
+        cleanBtn: document.getElementById("cleanBtn"),
+        copyBtn: document.getElementById("copyBtn"),
+        sampleBtn: document.getElementById("sampleBtn"),
+        clearBtn: document.getElementById("clearBtn"),
+        clearHistoryBtn: document.getElementById("clearHistoryBtn"),
+        removeZero: document.getElementById("removeZero"),
+        removeNbsp: document.getElementById("removeNbsp"),
+        removeBidi: document.getElementById("removeBidi"),
+        removeBomSoft: document.getElementById("removeBomSoft"),
+        soundToggle: document.getElementById("soundToggle"),
+        msg: document.getElementById("msg"),
+        mChars: document.getElementById("mChars"),
+        mHidden: document.getElementById("mHidden"),
+        mTypes: document.getElementById("mTypes"),
+        mClean: document.getElementById("mClean"),
+        typeBadges: document.getElementById("typeBadges"),
+        resultBody: document.getElementById("resultBody"),
+        visibleView: document.getElementById("visibleView"),
+        cleanView: document.getElementById("cleanView"),
+        historyList: document.getElementById("historyList")
+      };
+
+      let audioCtx = null;
+      let lastScan = null;
+      let history = loadJSON(STORAGE.history, []);
+      let prefs = Object.assign({
+        removeZero: true,
+        removeNbsp: true,
+        removeBidi: true,
+        removeBomSoft: true,
+        sound: true
+      }, loadJSON(STORAGE.prefs, {}));
+
+      init();
+      attachManifest();
+
+      function init() {
+        el.inputText.value = loadText(STORAGE.draft, "");
+        el.removeZero.checked = !!prefs.removeZero;
+        el.removeNbsp.checked = !!prefs.removeNbsp;
+        el.removeBidi.checked = !!prefs.removeBidi;
+        el.removeBomSoft.checked = !!prefs.removeBomSoft;
+        el.soundToggle.checked = prefs.sound !== false;
+
+        bindEvents();
+        if (!el.inputText.value.trim()) el.inputText.value = SAMPLE;
+        scan();
+        renderHistory();
+      }
+
+      function bindEvents() {
+        el.scanBtn.addEventListener("click", () => {
+          scan();
+          tone("ok");
+        });
+
+        el.cleanBtn.addEventListener("click", () => {
+          clean();
+        });
+
+        el.copyBtn.addEventListener("click", copyCleanText);
+
+        el.sampleBtn.addEventListener("click", () => {
+          el.inputText.value = SAMPLE;
+          persistDraft();
+          scan();
+          setMessage("샘플 텍스트를 불러왔습니다.", true);
+          tone("soft");
+        });
+
+        el.clearBtn.addEventListener("click", () => {
+          el.inputText.value = "";
+          el.cleanText.value = "";
+          persistDraft();
+          scan();
+          setMessage("입력 텍스트를 비웠습니다.", true);
+          tone("soft");
+          el.inputText.focus();
+        });
+
+        el.clearHistoryBtn.addEventListener("click", () => {
+          if (!confirm("히스토리를 모두 삭제할까요?")) return;
+          history = [];
+          saveJSON(STORAGE.history, history);
+          renderHistory();
+          setMessage("히스토리를 삭제했습니다.", true);
+          tone("soft");
+        });
+
+        el.inputText.addEventListener("input", () => {
+          persistDraft();
+          scan(false);
+        });
+
+        [el.removeZero, el.removeNbsp, el.removeBidi, el.removeBomSoft, el.soundToggle].forEach(node => {
+          node.addEventListener("change", () => {
+            persistPrefs();
+            scan(false);
+          });
+        });
+
+        ["pointerdown", "keydown", "touchstart"].forEach(eventName => {
+          window.addEventListener(eventName, ensureAudio, { once: true, passive: true });
+        });
+
+        window.addEventListener("keydown", (event) => {
+          const key = event.key.toLowerCase();
+          const mod = event.ctrlKey || event.metaKey;
+
+          if (mod && event.shiftKey && key === "x") {
+            event.preventDefault();
+            clean();
+            return;
+          }
+          if (mod && key === "enter") {
+            event.preventDefault();
+            scan();
+            tone("ok");
+            return;
+          }
+          if (mod && key === "l") {
+            event.preventDefault();
+            el.inputText.value = "";
+            persistDraft();
+            scan();
+            setMessage("입력을 비웠습니다.", true);
+            tone("soft");
+            return;
+          }
+          if (key === "/" && document.activeElement !== el.inputText) {
+            event.preventDefault();
+            el.inputText.focus();
+            el.inputText.select();
+            tone("soft");
+          }
+        });
+      }
+
+      function scan(showMessage = true) {
+        const text = el.inputText.value || "";
+        const chars = Array.from(text);
+        const hits = new Map();
+
+        chars.forEach((ch, idx) => {
+          const cp = ch.codePointAt(0);
+          const meta = CHAR_MAP[cp];
+          if (!meta) return;
+          const key = `U+${cp.toString(16).toUpperCase().padStart(4, "0")}`;
+          if (!hits.has(key)) {
+            hits.set(key, {
+              code: key,
+              cp,
+              label: meta.label,
+              name: meta.name,
+              group: meta.group,
+              count: 0,
+              positions: []
+            });
+          }
+          const row = hits.get(key);
+          row.count += 1;
+          row.positions.push(idx + 1);
+        });
+
+        const list = Array.from(hits.values()).sort((a, b) => b.count - a.count || a.cp - b.cp);
+        const hiddenCount = list.reduce((acc, item) => acc + item.count, 0);
+        const cleaned = cleanByPrefs(text);
+
+        lastScan = {
+          text,
+          list,
+          hiddenCount,
+          chars: chars.length,
+          cleanText: cleaned
+        };
+
+        renderScan(lastScan);
+
+        if (showMessage) {
+          if (hiddenCount > 0) {
+            setMessage(`숨은 문자 ${hiddenCount}개를 탐지했습니다.`, false, "warn");
+          } else {
+            setMessage("숨은 문자가 발견되지 않았습니다.", true);
+          }
+        }
+      }
+
+      function clean() {
+        if (!lastScan) scan(false);
+        const text = el.inputText.value || "";
+        const cleaned = cleanByPrefs(text);
+        el.cleanText.value = cleaned;
+        el.cleanView.textContent = cleaned || "(결과 없음)";
+
+        scan(false);
+        saveHistory({
+          text,
+          cleaned,
+          hiddenCount: lastScan ? lastScan.hiddenCount : 0,
+          types: lastScan ? lastScan.list.length : 0,
+          at: new Date().toISOString()
+        });
+
+        setMessage(`정리 완료: ${Math.max(0, Array.from(text).length - Array.from(cleaned).length)}자 제거`, true);
+        tone("ok");
+      }
+
+      function cleanByPrefs(text) {
+        const removeGroup = {
+          zero: !!el.removeZero.checked,
+          nbsp: !!el.removeNbsp.checked,
+          bidi: !!el.removeBidi.checked,
+          bomsoft: !!el.removeBomSoft.checked
+        };
+
+        const out = [];
+        for (const ch of Array.from(text)) {
+          const cp = ch.codePointAt(0);
+          const meta = CHAR_MAP[cp];
+          if (meta && removeGroup[meta.group]) continue;
+          out.push(ch);
+        }
+        return out.join("");
+      }
+
+      function renderScan(payload) {
+        const { text, list, hiddenCount, chars, cleanText } = payload;
+        el.mChars.textContent = String(chars);
+        el.mHidden.textContent = String(hiddenCount);
+        el.mTypes.textContent = String(list.length);
+        el.mClean.textContent = String(Array.from(cleanText).length);
+
+        el.cleanText.value = cleanText;
+        el.cleanView.textContent = cleanText || "(결과 없음)";
+
+        if (!list.length) {
+          el.resultBody.innerHTML = '<tr><td colspan="5" class="good">탐지된 숨은 문자가 없습니다.</td></tr>';
+          el.typeBadges.innerHTML = '<span class="badge">클린 텍스트</span>';
+        } else {
+          el.resultBody.innerHTML = list.map(item => {
+            const positions = item.positions.length > 8
+              ? `${item.positions.slice(0, 8).join(", ")} ...`
+              : item.positions.join(", ");
+            return `
+              <tr>
+                <td><code>${escapeHTML(item.label)}</code></td>
+                <td><code>${item.code}</code></td>
+                <td>${escapeHTML(item.name)}</td>
+                <td>${item.count}</td>
+                <td>${escapeHTML(positions)}</td>
+              </tr>
+            `;
+          }).join("");
+
+          el.typeBadges.innerHTML = list.map(item => {
+            return `<span class="badge">${escapeHTML(item.label)} × ${item.count}</span>`;
+          }).join("");
+        }
+
+        el.visibleView.classList.remove("empty");
+        el.visibleView.innerHTML = visibleMarkup(text);
+      }
+
+      function visibleMarkup(text) {
+        if (!text) return "(입력이 비어 있습니다)";
+        let out = "";
+        for (const ch of Array.from(text)) {
+          const cp = ch.codePointAt(0);
+          const meta = CHAR_MAP[cp];
+          if (meta) {
+            out += `<span class="mark">⟦${escapeHTML(meta.label)}⟧</span>`;
+            continue;
+          }
+          if (ch === " ") {
+            out += "·";
+            continue;
+          }
+          if (ch === "\n") {
+            out += "\n";
+            continue;
+          }
+          out += escapeHTML(ch);
+        }
+        return out;
+      }
+
+      async function copyCleanText() {
+        const text = el.cleanText.value || "";
+        if (!text) {
+          setMessage("복사할 정리본이 없습니다.");
+          tone("error");
+          return;
+        }
+
+        try {
+          await navigator.clipboard.writeText(text);
+          setMessage("정리본을 클립보드에 복사했습니다.", true);
+          tone("ok");
+        } catch (_) {
+          setMessage("복사 권한이 없어서 실패했습니다. 수동 복사해 주세요.");
+          tone("error");
+        }
+      }
+
+      function saveHistory(item) {
+        if (!item.text.trim()) return;
+        history.unshift({
+          id: uid(),
+          at: item.at,
+          hiddenCount: item.hiddenCount,
+          types: item.types,
+          text: item.text.slice(0, 4000),
+          cleaned: item.cleaned.slice(0, 4000)
+        });
+        history = history.slice(0, 20);
+        saveJSON(STORAGE.history, history);
+        renderHistory();
+      }
+
+      function renderHistory() {
+        if (!history.length) {
+          el.historyList.innerHTML = '<div class="empty">아직 저장된 히스토리가 없습니다.</div>';
+          return;
+        }
+
+        el.historyList.innerHTML = history.map(item => {
+          const preview = compactVisible(item.text, 84);
+          return `
+            <article class="history-item" data-id="${item.id}">
+              <div>
+                <div class="history-meta">${formatDateTime(item.at)} · 숨은문자 ${item.hiddenCount} · 타입 ${item.types}</div>
+                <div class="history-preview">${escapeHTML(preview)}</div>
+              </div>
+              <div style="display:flex; gap:6px;">
+                <button type="button" data-action="load" data-id="${item.id}" class="btn-secondary">불러오기</button>
+                <button type="button" data-action="del" data-id="${item.id}" class="btn-ghost">삭제</button>
+              </div>
+            </article>
+          `;
+        }).join("");
+
+        el.historyList.querySelectorAll("button[data-action]").forEach(btn => {
+          btn.addEventListener("click", () => {
+            const action = btn.dataset.action;
+            const id = btn.dataset.id;
+            const item = history.find(x => x.id === id);
+            if (!item) return;
+
+            if (action === "load") {
+              el.inputText.value = item.text;
+              persistDraft();
+              scan();
+              setMessage("히스토리 항목을 불러왔습니다.", true);
+              tone("soft");
+            } else if (action === "del") {
+              history = history.filter(x => x.id !== id);
+              saveJSON(STORAGE.history, history);
+              renderHistory();
+              setMessage("히스토리 항목을 삭제했습니다.", true);
+              tone("soft");
+            }
+          });
+        });
+      }
+
+      function compactVisible(text, maxLen) {
+        const normalized = Array.from(text).map(ch => {
+          const cp = ch.codePointAt(0);
+          const meta = CHAR_MAP[cp];
+          if (meta) return `⟦${meta.label}⟧`;
+          if (ch === "\n") return "↵";
+          return ch;
+        }).join("");
+
+        return normalized.length > maxLen ? `${normalized.slice(0, maxLen)}…` : normalized;
+      }
+
+      function persistDraft() {
+        try {
+          localStorage.setItem(STORAGE.draft, el.inputText.value);
+        } catch (_) {}
+      }
+
+      function persistPrefs() {
+        prefs = {
+          removeZero: !!el.removeZero.checked,
+          removeNbsp: !!el.removeNbsp.checked,
+          removeBidi: !!el.removeBidi.checked,
+          removeBomSoft: !!el.removeBomSoft.checked,
+          sound: !!el.soundToggle.checked
+        };
+        saveJSON(STORAGE.prefs, prefs);
+      }
+
+      function setMessage(message, ok = false, toneClass = "") {
+        el.msg.textContent = message || "";
+        el.msg.className = `msg ${ok ? "good" : ""} ${toneClass}`.trim();
+      }
+
+      function ensureAudio() {
+        if (audioCtx) return;
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) return;
+        audioCtx = new Ctx();
+      }
+
+      function tone(kind) {
+        if (!el.soundToggle.checked) return;
+        ensureAudio();
+        if (!audioCtx) return;
+
+        const cfg = {
+          ok: { f: 680, t: 0.06, type: "sine", gain: 0.045 },
+          soft: { f: 520, t: 0.045, type: "triangle", gain: 0.035 },
+          error: { f: 220, t: 0.08, type: "sawtooth", gain: 0.04 }
+        }[kind] || { f: 480, t: 0.05, type: "sine", gain: 0.03 };
+
+        const now = audioCtx.currentTime;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = cfg.type;
+        osc.frequency.setValueAtTime(cfg.f, now);
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(cfg.gain, now + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + cfg.t);
+        osc.connect(gain).connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + cfg.t + 0.01);
+      }
+
+      function loadText(key, fallback = "") {
+        try {
+          const raw = localStorage.getItem(key);
+          return raw == null ? fallback : String(raw);
+        } catch (_) {
+          return fallback;
+        }
+      }
+
+      function loadJSON(key, fallback) {
+        try {
+          const raw = localStorage.getItem(key);
+          if (!raw) return fallback;
+          return JSON.parse(raw);
+        } catch (_) {
+          return fallback;
+        }
+      }
+
+      function saveJSON(key, value) {
+        try {
+          localStorage.setItem(key, JSON.stringify(value));
+        } catch (_) {}
+      }
+
+      function uid() {
+        return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+      }
+
+      function formatDateTime(iso) {
+        const d = new Date(iso);
+        if (Number.isNaN(d.getTime())) return "-";
+        return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+      }
+
+      function escapeHTML(value) {
+        return String(value)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/\"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      function attachManifest() {
+        try {
+          const iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="110" fill="#0a0a1a"/><rect x="90" y="96" width="332" height="320" rx="34" fill="#12122a" stroke="#2bd9ff" stroke-width="14"/><text x="256" y="228" text-anchor="middle" font-size="74" fill="#2bd9ff" font-family="Arial, sans-serif">U+</text><text x="256" y="314" text-anchor="middle" font-size="62" fill="#ba7bff" font-family="Arial, sans-serif">⟦ZWSP⟧</text></svg>`;
+          const icon = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(iconSvg)))}`;
+          const manifest = {
+            name: "Unicode Invisible Character Detector",
+            short_name: "InvisibleChar",
+            start_url: "./",
+            display: "standalone",
+            background_color: "#0a0a1a",
+            theme_color: "#0a0a1a",
+            icons: [
+              { src: icon, sizes: "192x192", type: "image/svg+xml", purpose: "any" },
+              { src: icon, sizes: "512x512", type: "image/svg+xml", purpose: "any maskable" }
+            ]
+          };
+          const blob = new Blob([JSON.stringify(manifest)], { type: "application/manifest+json" });
+          const link = document.createElement("link");
+          link.rel = "manifest";
+          link.href = URL.createObjectURL(blob);
+          document.head.appendChild(link);
+        } catch (_) {
+          // ignore silently
+        }
+      }
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Neon Pinball | 무료 HTML5 게임 Free HTML5 Game</title>
+    <meta name="description" content="Neon Pinball은 브라우저에서 바로 즐기는 무료 아케이드 핀볼 게임입니다. 플리퍼로 네온 볼을 조종해 범퍼를 맞추고 최고 점수를 노리세요! Neon Pinball is a free HTML5 arcade pinball game — control the flippers, hit the glowing bumpers, and chase the high score.">
+    <meta name="keywords" content="pinball, 핀볼, neon, arcade, HTML5 game, free game, 무료 게임, 브라우저 게임, flipper, bumper">
+    <meta name="author" content="J&amp;J Games">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Neon Pinball">
+    <meta property="og:description" content="Neon Pinball은 브라우저에서 바로 즐기는 무료 아케이드 핀볼 게임입니다. 플리퍼로 네온 볼을 조종해 범퍼를 맞추고 최고 점수를 노리세요!">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://games.eastsea.xyz/neon-pinball/">
+    <meta property="og:image" content="https://games.eastsea.xyz/neon-pinball/og-image.png">
+    <meta property="og:site_name" content="J&amp;J Games">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Neon Pinball">
+    <meta name="twitter:description" content="Neon Pinball — free HTML5 pinball game with neon glow aesthetics. Hit bumpers and beat the high score!">
+
+    <!-- Structured Data -->
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "VideoGame",
+  "name": "Neon Pinball",
+  "description": "Neon Pinball is a free HTML5 browser arcade pinball game. Use flippers to keep the glowing ball in play and score points by hitting neon bumpers.",
+  "genre": "Arcade",
+  "gamePlatform": "Web Browser",
+  "applicationCategory": "Game",
+  "operatingSystem": "Any",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  },
+  "author": {
+    "@type": "Organization",
+    "name": "J&J Games"
+  },
+  "url": "https://games.eastsea.xyz/neon-pinball/"
+}
+    </script>
+
+    <!-- Canonical -->
+    <link rel="canonical" href="https://games.eastsea.xyz/neon-pinball/">
+    <script src="https://cdn.jsdelivr.net/npm/littlejs/dist/littlejs.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0a0a1a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Courier New', monospace;
+            color: #0ff;
+            overflow: hidden;
+            touch-action: none;
+            user-select: none;
+        }
+        #gameContainer {
+            position: relative;
+            display: inline-block;
+        }
+        canvas {
+            display: block;
+            background: #0a0a1a;
+            box-shadow: 0 0 40px rgba(0,255,255,0.25);
+        }
+        #touchControls {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            display: flex;
+            pointer-events: none;
+        }
+        .flipBtn {
+            flex: 1;
+            height: 60px;
+            pointer-events: all;
+            -webkit-tap-highlight-color: transparent;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+<div id="gameContainer">
+    <canvas id="c"></canvas>
+    <div id="touchControls">
+        <div class="flipBtn" id="lBtn"></div>
+        <div class="flipBtn" id="rBtn"></div>
+    </div>
+</div>
+<script>
+(function(){
+'use strict';
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const W = 400, H = 700;
+canvas.width = W; canvas.height = H;
+
+function resize() {
+    const s = Math.min(window.innerWidth / W, window.innerHeight / H);
+    canvas.style.width  = (W * s) + 'px';
+    canvas.style.height = (H * s) + 'px';
+    document.getElementById('gameContainer').style.width  = (W * s) + 'px';
+    document.getElementById('gameContainer').style.height = (H * s) + 'px';
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ─── Audio ─────────────────────────────────────────────────────────────────
+let AC = null;
+function getAC() {
+    if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)();
+    return AC;
+}
+function beep(freq, type, dur, vol) {
+    try {
+        const ac = getAC();
+        const o = ac.createOscillator(), g = ac.createGain();
+        o.connect(g); g.connect(ac.destination);
+        o.type = type || 'square';
+        o.frequency.setValueAtTime(freq, ac.currentTime);
+        o.frequency.exponentialRampToValueAtTime(freq * 0.4, ac.currentTime + dur);
+        g.gain.setValueAtTime(vol || 0.25, ac.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+        o.start(); o.stop(ac.currentTime + dur);
+    } catch(e) {}
+}
+const sfxBumper   = () => beep(900, 'square',    0.12, 0.3);
+const sfxFlipper  = () => beep(180, 'triangle',  0.06, 0.2);
+const sfxDrain    = () => beep(120, 'sawtooth',  0.4,  0.35);
+const sfxMile     = () => [440,550,660,880].forEach((f,i)=>setTimeout(()=>beep(f,'sine',0.15,0.3),i*90));
+const sfxLaunch   = () => beep(260, 'sine',      0.15, 0.3);
+const sfxWall     = () => beep(320, 'triangle',  0.05, 0.15);
+
+// ─── Constants ─────────────────────────────────────────────────────────────
+const WL = 22, WR = 378, WT = 65, DRAIN_Y = 688;
+const LPX = 110, RPX = 290, PY = 638, FL = 78;
+const BALL_R = 9, GRAV = 0.28;
+const LR_REST = 0.32, LR_ACT = -0.32;
+const RR_REST = Math.PI - 0.32, RR_ACT = Math.PI + 0.32;
+const LANE_X = 356; // launch lane left wall
+
+// ─── Bumper data ────────────────────────────────────────────────────────────
+const BUMPERS = [
+    { x:200, y:185, r:22, pts:100, col:'#f0f' },
+    { x:130, y:248, r:19, pts:75,  col:'#0ff' },
+    { x:270, y:248, r:19, pts:75,  col:'#0ff' },
+    { x:165, y:318, r:17, pts:50,  col:'#ff0' },
+    { x:235, y:318, r:17, pts:50,  col:'#ff0' },
+    { x:200, y:378, r:15, pts:50,  col:'#0f0' },
+];
+// flash timers
+const bFlash = new Array(BUMPERS.length).fill(0);
+
+// Slingshots (triangular side targets)
+const SLINGS = [
+    { ax:WL+18, ay:520, bx:WL+18, by:568, col:'#f80', pts:20, flash:0 },
+    { ax:WR-18, ay:520, bx:WR-18, by:568, col:'#f80', pts:20, flash:0 },
+];
+
+// ─── Game State ────────────────────────────────────────────────────────────
+let score = 0;
+let hi = parseInt(localStorage.getItem('np-hi') || '0');
+let lives = 3;
+let phase = 'idle'; // idle | playing | over
+let frameN = 0;
+let mileMark = 500; // next milestone
+
+// Ball
+let bx, by, bvx, bvy, ballLive = false;
+let launchTimer = 0;
+let prevScore = 0;
+
+// Flippers
+let lDown = false, rDown = false;
+let lAng = LR_REST, rAng = RR_REST;
+
+function resetBall() {
+    bx = 366; by = 530; bvx = 0; bvy = 0;
+    ballLive = false;
+    launchTimer = 0;
+}
+
+function launchBall() {
+    if (ballLive) return;
+    bvy = -12.5;
+    bvx = -0.3;
+    ballLive = true;
+    sfxLaunch();
+    if (phase === 'idle') phase = 'playing';
+}
+
+// ─── Input ──────────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+    if (e.code==='ArrowLeft'  || e.code==='KeyA' || e.code==='KeyZ') { lDown=true; sfxFlipper(); }
+    if (e.code==='ArrowRight' || e.code==='KeyD' || e.code==='Slash') { rDown=true; sfxFlipper(); }
+    if (e.code==='Space' || e.code==='Enter') {
+        if (!ballLive && phase !== 'over') launchBall();
+        else if (phase==='over') startGame();
+        e.preventDefault();
+    }
+    getAC().resume();
+});
+document.addEventListener('keyup', e => {
+    if (e.code==='ArrowLeft'  || e.code==='KeyA' || e.code==='KeyZ') lDown=false;
+    if (e.code==='ArrowRight' || e.code==='KeyD' || e.code==='Slash') rDown=false;
+});
+
+function setupFlipBtn(id, setDown) {
+    const el = document.getElementById(id);
+    el.addEventListener('touchstart', e => { e.preventDefault(); setDown(true);  sfxFlipper(); getAC().resume(); }, {passive:false});
+    el.addEventListener('touchend',   e => { e.preventDefault(); setDown(false); }, {passive:false});
+    el.addEventListener('mousedown',  () => { setDown(true);  sfxFlipper(); getAC().resume(); });
+    el.addEventListener('mouseup',    () => { setDown(false); });
+}
+setupFlipBtn('lBtn', v => lDown = v);
+setupFlipBtn('rBtn', v => rDown = v);
+
+canvas.addEventListener('touchstart', e => { e.preventDefault(); getAC().resume(); if (!ballLive && phase!=='over') launchBall(); else if (phase==='over') startGame(); }, {passive:false});
+canvas.addEventListener('mousedown',  () => { getAC().resume(); if (!ballLive && phase!=='over') launchBall(); else if (phase==='over') startGame(); });
+
+// ─── Geometry ───────────────────────────────────────────────────────────────
+function flipEnd(px, ang) {
+    return { x: px + Math.cos(ang)*FL, y: PY + Math.sin(ang)*FL };
+}
+
+function ptSegDist(px,py, ax,ay, bx,by) {
+    const dx=bx-ax, dy=by-ay, lenSq=dx*dx+dy*dy;
+    const t = Math.max(0, Math.min(1, lenSq<1e-9?0:((px-ax)*dx+(py-ay)*dy)/lenSq));
+    const cx=ax+t*dx, cy=ay+t*dy;
+    const nx=px-cx, ny=py-cy;
+    return { d:Math.hypot(nx,ny), cx, cy, nx, ny };
+}
+
+// ─── Collision ───────────────────────────────────────────────────────────────
+function collideFlipper(px, ang, active) {
+    const e = flipEnd(px, ang);
+    const r = ptSegDist(bx,by, px,PY, e.x,e.y);
+    const threshold = BALL_R + 6;
+    if (r.d < threshold) {
+        const nx = r.nx / (r.d||1);
+        const ny = r.ny / (r.d||1);
+        bx = r.cx + nx * (threshold+1);
+        by = r.cy + ny * (threshold+1);
+        const dot = bvx*nx + bvy*ny;
+        if (dot < 0) {
+            bvx -= 2*dot*nx*0.82;
+            bvy -= 2*dot*ny*0.82;
+            if (active) {
+                bvy -= 7.5;
+                bvx += (px === LPX ? 1.8 : -1.8);
+            }
+        }
+        return true;
+    }
+    return false;
+}
+
+function collideBumpers() {
+    for (let i=0; i<BUMPERS.length; i++) {
+        const b = BUMPERS[i];
+        const dx=bx-b.x, dy=by-b.y, d=Math.hypot(dx,dy);
+        if (d < BALL_R + b.r) {
+            const nx=dx/(d||1), ny=dy/(d||1);
+            bx = b.x + nx*(BALL_R+b.r+1);
+            by = b.y + ny*(BALL_R+b.r+1);
+            const dot=bvx*nx+bvy*ny;
+            bvx -= 2*dot*nx;
+            bvy -= 2*dot*ny;
+            const sp=Math.hypot(bvx,bvy);
+            if (sp<6) { bvx=bvx/sp*6; bvy=bvy/sp*6; }
+            if (sp>15){ bvx=bvx/sp*15; bvy=bvy/sp*15; }
+            score += b.pts;
+            bFlash[i] = 10;
+            sfxBumper();
+            checkMile();
+            updateHi();
+        }
+    }
+}
+
+function collideSlings() {
+    for (const s of SLINGS) {
+        const r = ptSegDist(bx,by, s.ax,s.ay, s.bx,s.by);
+        if (r.d < BALL_R + 5) {
+            const nx=r.nx/(r.d||1), ny=r.ny/(r.d||1);
+            bx=r.cx+nx*(BALL_R+6);
+            by=r.cy+ny*(BALL_R+6);
+            const dot=bvx*nx+bvy*ny;
+            if (dot<0) { bvx-=2*dot*nx*0.9; bvy-=2*dot*ny*0.9; }
+            score += s.pts; s.flash=8;
+            sfxWall(); updateHi();
+        }
+        if (s.flash>0) s.flash--;
+    }
+}
+
+// Guide slopes near flipper area
+const GUIDES = [
+    { ax:WL, ay:PY-82, bx:LPX-14, by:PY+8 },
+    { ax:LANE_X, ay:PY-82, bx:RPX+14, by:PY+8 },
+];
+
+function collideGuides() {
+    for (const g of GUIDES) {
+        const r = ptSegDist(bx,by, g.ax,g.ay, g.bx,g.by);
+        if (r.d < BALL_R+3) {
+            const nx=r.nx/(r.d||1), ny=r.ny/(r.d||1);
+            bx=r.cx+nx*(BALL_R+4); by=r.cy+ny*(BALL_R+4);
+            const dot=bvx*nx+bvy*ny;
+            if (dot<0) { bvx-=2*dot*nx*0.75; bvy-=2*dot*ny*0.75; }
+        }
+    }
+}
+
+// ─── Score helpers ──────────────────────────────────────────────────────────
+function updateHi() {
+    if (score > hi) { hi = score; localStorage.setItem('np-hi', hi); }
+}
+function checkMile() {
+    if (score >= mileMark) { sfxMile(); mileMark = score + 500; }
+}
+
+// ─── Update ─────────────────────────────────────────────────────────────────
+function update() {
+    frameN++;
+    // Flipper angle spring
+    lAng += (( lDown ? LR_ACT : LR_REST ) - lAng) * 0.38;
+    rAng += (( rDown ? RR_ACT : RR_REST ) - rAng) * 0.38;
+    // Sling flash
+    for (const s of SLINGS) if (s.flash>0) s.flash--;
+    for (let i=0;i<bFlash.length;i++) if(bFlash[i]>0) bFlash[i]--;
+
+    // Launch timer (auto-launch hint pulsing)
+    launchTimer++;
+
+    if (!ballLive) return;
+
+    // Physics
+    bvy += GRAV;
+    const sp = Math.hypot(bvx,bvy);
+    if (sp>15) { bvx=bvx/sp*15; bvy=bvy/sp*15; }
+    bx+=bvx; by+=bvy;
+
+    // Wall collisions
+    if (bx-BALL_R < WL) { bx=WL+BALL_R; bvx=Math.abs(bvx)*0.82; sfxWall(); }
+    if (bx+BALL_R > WR && bx < LANE_X+BALL_R) {
+        // Not in launch lane
+        bx=WR-BALL_R; bvx=-Math.abs(bvx)*0.82; sfxWall();
+    }
+    // Launch lane right wall
+    if (bx+BALL_R > WR) { bx=WR-BALL_R; bvx=-Math.abs(bvx)*0.82; }
+    // Launch lane left wall (only in upper portion of lane)
+    if (bx >= LANE_X-BALL_R && bx < LANE_X+BALL_R && by < PY-60) {
+        bx = LANE_X-BALL_R; bvx=-Math.abs(bvx)*0.7;
+    }
+    // Top wall
+    if (by-BALL_R < WT) { by=WT+BALL_R; bvy=Math.abs(bvy)*0.8; sfxWall(); }
+
+    collideGuides();
+    collideBumpers();
+    collideSlings();
+    collideFlipper(LPX, lAng, lDown);
+    collideFlipper(RPX, rAng, rDown);
+
+    // Drain
+    if (by > DRAIN_Y) {
+        lives--;
+        sfxDrain();
+        if (lives <= 0) {
+            lives = 0;
+            phase = 'over';
+            ballLive = false;
+            updateHi();
+        } else {
+            resetBall();
+        }
+    }
+}
+
+// ─── Draw helpers ───────────────────────────────────────────────────────────
+function neonLine(x1,y1,x2,y2,col,w) {
+    ctx.save();
+    ctx.shadowBlur=16; ctx.shadowColor=col;
+    ctx.strokeStyle=col; ctx.lineWidth=w||3; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+    ctx.restore();
+}
+function neonCirc(x,y,r,fill,glow) {
+    ctx.save();
+    ctx.shadowBlur=20; ctx.shadowColor=glow||fill;
+    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
+    ctx.fillStyle=fill; ctx.fill();
+    ctx.strokeStyle=glow||fill; ctx.lineWidth=2; ctx.stroke();
+    ctx.restore();
+}
+function drawFlipper(px, ang, active) {
+    const e = flipEnd(px, ang);
+    ctx.save();
+    ctx.shadowBlur=active?28:18; ctx.shadowColor=active?'#ff0':'#0cf';
+    ctx.strokeStyle=active?'#ff0':'#0cf'; ctx.lineWidth=11; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(px,PY); ctx.lineTo(e.x,e.y); ctx.stroke();
+    ctx.shadowBlur=4; ctx.strokeStyle='rgba(255,255,255,0.6)'; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.moveTo(px,PY); ctx.lineTo(e.x,e.y); ctx.stroke();
+    ctx.restore();
+    neonCirc(px, PY, 5, active?'#ff0':'#0cf', active?'#ff0':'#0cf');
+}
+
+// ─── Render ──────────────────────────────────────────────────────────────────
+function render() {
+    // Background
+    ctx.fillStyle = '#0a0a1a';
+    ctx.fillRect(0,0,W,H);
+
+    // Scanlines
+    ctx.fillStyle='rgba(0,0,0,0.04)';
+    for (let y=0;y<H;y+=4) ctx.fillRect(0,y,W,2);
+
+    // Walls
+    neonLine(WL,WT, WL,PY-85, '#0af', 2);
+    neonLine(WR,WT, WR,WT, '#0af', 2);
+    neonLine(WR,WT, WR,DRAIN_Y-100, '#0af', 2);
+    neonLine(WL,WT, WR,WT, '#0af', 2);
+    // Launch lane divider
+    neonLine(LANE_X,WT, LANE_X,PY-85, '#025', 2);
+
+    // Guide slopes
+    neonLine(WL, PY-85, LPX-14, PY+8, '#06a', 3);
+    neonLine(LANE_X, PY-85, RPX+14, PY+8, '#06a', 3);
+
+    // Drain gap indicator
+    ctx.save();
+    ctx.strokeStyle='#300'; ctx.lineWidth=1; ctx.setLineDash([4,4]);
+    ctx.beginPath(); ctx.moveTo(LPX,PY+22); ctx.lineTo(RPX,PY+22); ctx.stroke();
+    ctx.setLineDash([]); ctx.restore();
+
+    // Slingshots
+    for (const s of SLINGS) {
+        neonLine(s.ax,s.ay, s.bx,s.by, s.flash>0?'#fff':s.col, 5);
+    }
+
+    // Bumpers
+    for (let i=0; i<BUMPERS.length; i++) {
+        const b = BUMPERS[i], fl = bFlash[i]>0;
+        ctx.save();
+        ctx.shadowBlur = fl?40:16; ctx.shadowColor = fl?'#fff':b.col;
+        ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,Math.PI*2);
+        ctx.fillStyle = fl ? b.col : 'rgba(10,10,26,0.9)';
+        ctx.fill();
+        ctx.strokeStyle = fl?'#fff':b.col; ctx.lineWidth=3; ctx.stroke();
+        ctx.restore();
+        ctx.save();
+        ctx.fillStyle = fl?'#fff':b.col;
+        ctx.shadowBlur=6; ctx.shadowColor=b.col;
+        ctx.font=`bold ${b.r>18?10:8}px Courier New`;
+        ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.fillText(b.pts, b.x, b.y);
+        ctx.restore();
+    }
+
+    // Flippers
+    drawFlipper(LPX, lAng, lDown);
+    drawFlipper(RPX, rAng, rDown);
+
+    // Ball
+    if (ballLive) {
+        ctx.save();
+        ctx.shadowBlur=30; ctx.shadowColor='#0ff';
+        ctx.beginPath(); ctx.arc(bx,by,BALL_R*1.8,0,Math.PI*2);
+        ctx.fillStyle='rgba(0,255,255,0.08)'; ctx.fill();
+        ctx.restore();
+        neonCirc(bx,by,BALL_R,'#0cf','#0ff');
+        // Specular
+        ctx.save();
+        ctx.beginPath(); ctx.arc(bx-3,by-3,3,0,Math.PI*2);
+        ctx.fillStyle='rgba(255,255,255,0.55)'; ctx.fill();
+        ctx.restore();
+    } else if (phase!=='over') {
+        // Ball waiting in lane
+        neonCirc(bx,by,BALL_R,'#044','#0ff');
+        // Pulsing launch hint
+        const pulse = 0.55 + 0.45*Math.sin(frameN*0.07);
+        ctx.save();
+        ctx.globalAlpha = pulse;
+        ctx.shadowBlur=12; ctx.shadowColor='#0ff';
+        ctx.fillStyle='#0ff'; ctx.font='11px Courier New';
+        ctx.textAlign='center';
+        ctx.fillText('SPACE / TAP', W/2, H-46);
+        ctx.fillText('TO LAUNCH', W/2, H-30);
+        ctx.globalAlpha=1; ctx.restore();
+        // Power bar
+        ctx.save();
+        ctx.fillStyle=`hsl(${(Math.sin(frameN*0.06)+1)*60},100%,55%)`;
+        ctx.shadowBlur=10; ctx.shadowColor='#ff0';
+        const barH = 60*(0.5+0.5*Math.sin(frameN*0.06));
+        ctx.fillRect(WR+2, PY-barH, 8, barH);
+        ctx.restore();
+    }
+
+    // HUD overlay
+    ctx.save();
+    ctx.fillStyle='rgba(0,0,0,0.55)';
+    ctx.fillRect(0,0,W,62);
+    // Score
+    ctx.shadowBlur=12; ctx.shadowColor='#0ff';
+    ctx.fillStyle='#0ff'; ctx.font='bold 20px Courier New';
+    ctx.textAlign='left'; ctx.fillText(score.toLocaleString(), 10, 28);
+    ctx.shadowBlur=5; ctx.fillStyle='#088'; ctx.font='11px Courier New';
+    ctx.fillText('BEST '+hi.toLocaleString(), 10, 48);
+    // Title
+    ctx.shadowBlur=14; ctx.shadowColor='#f0f';
+    ctx.fillStyle='#f0f'; ctx.font='bold 15px Courier New';
+    ctx.textAlign='center'; ctx.fillText('NEON PINBALL', W/2, 28);
+    // Lives
+    ctx.shadowBlur=10; ctx.shadowColor='#f55';
+    ctx.fillStyle='#f55'; ctx.font='bold 18px Courier New';
+    ctx.textAlign='right'; ctx.fillText('♥'.repeat(lives)+'♡'.repeat(Math.max(0,3-lives)), W-8, 32);
+    ctx.restore();
+
+    // Game over
+    if (phase === 'over') {
+        ctx.save();
+        ctx.fillStyle='rgba(0,0,16,0.85)'; ctx.fillRect(0,0,W,H);
+        const cx=W/2, cy=H/2;
+        ctx.shadowBlur=35; ctx.shadowColor='#f0f';
+        ctx.fillStyle='#f0f'; ctx.font='bold 52px Courier New';
+        ctx.textAlign='center'; ctx.fillText('GAME', cx, cy-55);
+        ctx.fillText('OVER', cx, cy-5);
+        ctx.shadowBlur=16; ctx.shadowColor='#0ff';
+        ctx.fillStyle='#0ff'; ctx.font='22px Courier New';
+        ctx.fillText('SCORE: '+score.toLocaleString(), cx, cy+42);
+        ctx.fillStyle='#ff0'; ctx.shadowColor='#ff0';
+        ctx.fillText('BEST:  '+hi.toLocaleString(), cx, cy+72);
+        const p2=0.55+0.45*Math.sin(frameN*0.07);
+        ctx.globalAlpha=p2;
+        ctx.shadowBlur=10; ctx.shadowColor='#0f0';
+        ctx.fillStyle='#0f0'; ctx.font='15px Courier New';
+        ctx.fillText('TAP / PRESS SPACE TO PLAY AGAIN', cx, cy+116);
+        ctx.restore();
+    }
+}
+
+// ─── Game init ───────────────────────────────────────────────────────────────
+function startGame() {
+    score=0; lives=3; phase='idle'; mileMark=500;
+    resetBall();
+}
+
+function loop() {
+    update();
+    render();
+    requestAnimationFrame(loop);
+}
+
+startGame();
+loop();
+})();
+</script>
+</body>
+</html>

@@ -3,17 +3,25 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
-<title>Rune Forge — 로그라이크 덱빌더 프로토타입</title>
+<title>Rune Forge — Reforged</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-  html, body { width: 100%; height: 100%; overflow: hidden; background: #2a1f14; }
-  body { font-family: "Georgia", "Times New Roman", serif; color: #f4e8d1; }
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #2a1f14;
+  }
+  body {
+    font-family: "Georgia", "Times New Roman", serif;
+    color: #2a1f14;
+    position: relative;
+  }
   #game {
-    width: 100vw;
-    height: 100vh;
     display: block;
     touch-action: none;
-    background: radial-gradient(circle at 50% 35%, #7f6748 0%, #3c2c1e 55%, #2a1f14 100%);
+    background: radial-gradient(circle at 50% 30%, #a08262 0%, #6f553a 40%, #3f2f21 75%, #2a1f14 100%);
+    box-shadow: 0 0 0 2px #8b7355, 0 18px 50px rgba(0, 0, 0, 0.42);
   }
   #boot {
     position: fixed;
@@ -21,2845 +29,1718 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #f4e8d1;
+    color: #f0e6d2;
     background: #2a1f14;
+    font-size: 18px;
     letter-spacing: 1px;
     pointer-events: none;
-    font-size: 16px;
   }
 </style>
 </head>
 <body>
 <canvas id="game"></canvas>
-<div id="boot">Rune Forge 로딩 중...</div>
+<div id="boot">Rune Forge 재구축 중...</div>
+
 <script>
 (() => {
   'use strict';
+
+  const GAME_W = 1280;
+  const GAME_H = 720;
 
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
   const boot = document.getElementById('boot');
 
-  const STORAGE_KEY = 'runeForgeProfileV1';
-  const SAVE_KEY = 'runeForgeSaveV1';
-
   const PALETTE = {
-    bgDark: '#2a1f14',
-    bgMid: '#5a432b',
-    parchment: '#f4e8d1',
-    cardBg: '#f0e6d2',
-    cardEdge: '#8b7355',
-    ink: '#2f251a',
-    uiDark: '#3d2d1f',
-    uiLine: '#9f8665',
-    hp: '#b0342f',
-    block: '#5b84b8',
+    parchment: '#f0e6d2',
+    ink: '#2a1f14',
+    line: '#8b7355',
+    panel: '#e3d6be',
+    panelDark: '#d0bfa0',
+    disabled: '#7f7770',
+    hpBg: '#6d2a21',
+    hpFill: '#c9513f',
+    block: '#5f7ea7',
     energy: '#f5c542',
     good: '#5eb85e',
-    warn: '#d79841',
-    bad: '#b64b43',
+    bad: '#b84f43',
     runes: {
       fire: '#e85d3a',
       water: '#4a9bd9',
       lightning: '#f5c542',
       nature: '#5eb85e',
-      stone: '#9b8574'
+      earth: '#9b8574'
     }
   };
 
-  const RUNES = ['fire', 'water', 'lightning', 'nature', 'stone'];
-
-  const RUNE_LABEL = {
-    fire: '화염',
-    water: '물',
-    lightning: '번개',
-    nature: '자연',
-    stone: '대지'
+  const RUNE_ICON = {
+    fire: '🔥',
+    water: '💧',
+    lightning: '⚡',
+    nature: '🌿',
+    earth: '🪨'
   };
 
-  const INTENT_LABEL = {
-    attack: '공격',
-    guard: '방어',
-    curse: '약화',
-    buff: '강화',
-    drain: '흡수'
+  const NODE_INFO = {
+    combat: { icon: '⚔️', label: '전투' },
+    elite: { icon: '🗡️', label: '엘리트' },
+    boss: { icon: '👑', label: '보스' },
+    event: { icon: '❓', label: '이벤트' },
+    shop: { icon: '🏪', label: '상점' },
+    rest: { icon: '🔥', label: '휴식' }
   };
 
-  const CARD_TYPES = {
-    attack: '공격',
-    skill: '기술',
-    power: '비전'
+  const INTENT_ICON = {
+    attack: '⚔️',
+    guard: '🛡️',
+    buff: '↗'
   };
 
-  let V = { w: 1280, h: 720, dpr: 1, portrait: false };
+  const CARD_LIBRARY = [
+    { id: 'ember_strike', name: '엠버 스트라이크', rune: 'fire', cost: 1, text: '적에게 8 피해', effect: { attack: 8 } },
+    { id: 'flame_arc', name: '화염 호', rune: 'fire', cost: 2, text: '적에게 13 피해', effect: { attack: 13 } },
+    { id: 'tidal_cut', name: '조류 베기', rune: 'water', cost: 1, text: '적에게 7 피해, 카드 1장 뽑기', effect: { attack: 7, draw: 1 } },
+    { id: 'mist_guard', name: '안개 수호', rune: 'water', cost: 1, text: '블록 8 획득', effect: { block: 8 } },
+    { id: 'spark_shot', name: '스파크 샷', rune: 'lightning', cost: 1, text: '적에게 6 피해 x2', effect: { multiAttack: [6, 6] } },
+    { id: 'charge', name: '축전', rune: 'lightning', cost: 0, text: '에너지 1 획득, 카드 1장 뽑기', effect: { energy: 1, draw: 1 } },
+    { id: 'vine_bind', name: '덩굴 속박', rune: 'nature', cost: 1, text: '적에게 6 피해, 취약 1', effect: { attack: 6, vulnerable: 1 } },
+    { id: 'green_touch', name: '초록의 손길', rune: 'nature', cost: 1, text: '체력 5 회복, 블록 4', effect: { heal: 5, block: 4 } },
+    { id: 'stone_skin', name: '석피', rune: 'earth', cost: 1, text: '블록 11 획득', effect: { block: 11 } },
+    { id: 'quarry_blow', name: '채석 타격', rune: 'earth', cost: 1, text: '적에게 9 피해', effect: { attack: 9 } },
+    { id: 'prism_edge', name: '프리즘 엣지', rune: 'lightning', cost: 2, text: '적에게 15 피해', effect: { attack: 15 } },
+    { id: 'aqua_barrier', name: '수막 방벽', rune: 'water', cost: 1, text: '블록 6, 카드 1장 뽑기', effect: { block: 6, draw: 1 } },
+    { id: 'lava_pulse', name: '용암 맥동', rune: 'fire', cost: 1, text: '적에게 10 피해, 본인도 1 피해', effect: { attack: 10, selfDamage: 1 } },
+    { id: 'root_wall', name: '뿌리 장벽', rune: 'nature', cost: 1, text: '블록 9, 약화 해제', effect: { block: 9 } },
+    { id: 'bedrock_echo', name: '기반암 메아리', rune: 'earth', cost: 2, text: '적에게 11 피해, 블록 8', effect: { attack: 11, block: 8 } }
+  ];
+
+  const CARD_BY_ID = Object.fromEntries(CARD_LIBRARY.map((c) => [c.id, c]));
+
+  const COMBO_EFFECTS = {
+    'earth+fire': {
+      name: '마그마 분출',
+      text: '적에게 13 피해, 블록 6',
+      apply: () => { damageEnemy(13); gainBlock(6); }
+    },
+    'earth+lightning': {
+      name: '결정 공명',
+      text: '블록 8, 카드 2장',
+      apply: () => { gainBlock(8); drawCards(2); }
+    },
+    'earth+nature': {
+      name: '가시 성벽',
+      text: '적에게 8 피해, 블록 9',
+      apply: () => { damageEnemy(8); gainBlock(9); }
+    },
+    'earth+water': {
+      name: '진흙 쇄도',
+      text: '적에게 7 피해, 약화 1',
+      apply: () => { damageEnemy(7); applyEnemyStatus('weak', 1); }
+    },
+    'fire+lightning': {
+      name: '플라즈마 폭주',
+      text: '적에게 16 피해',
+      apply: () => { damageEnemy(16); }
+    },
+    'fire+nature': {
+      name: '잿불 순환',
+      text: '적에게 9 피해, 카드 1장',
+      apply: () => { damageEnemy(9); drawCards(1); }
+    },
+    'fire+water': {
+      name: '스팀 폭발',
+      text: '적에게 11 피해, 취약 1',
+      apply: () => { damageEnemy(11); applyEnemyStatus('vulnerable', 1); }
+    },
+    'lightning+nature': {
+      name: '폭풍 생장',
+      text: '적에게 8 피해 x2',
+      apply: () => { damageEnemy(8); damageEnemy(8); }
+    },
+    'lightning+water': {
+      name: '폭풍 전류',
+      text: '적에게 10 피해, 카드 1장',
+      apply: () => { damageEnemy(10); drawCards(1); }
+    },
+    'nature+water': {
+      name: '만개 회복',
+      text: '체력 9 회복, 블록 6',
+      apply: () => { healPlayer(9); gainBlock(6); }
+    }
+  };
+
   const state = {
     screen: 'title',
-    fade: 1,
-    profile: null,
     run: null,
     combat: null,
     reward: null,
     event: null,
     shop: null,
     rest: null,
-    hoverText: '',
-    notice: '',
-    noticeTimer: 0,
-    uiButtons: [],
-    pointer: { x: 0, y: 0, down: false, moved: false },
+    buttons: [],
+    mapHitNodes: [],
     drag: null,
-    cardRects: [],
-    zones: {},
-    frame: 0,
-    dt: 0,
-    now: 0,
-    then: 0
+    pointerDown: false,
+    toast: '',
+    toastTimer: 0,
+    lastTs: 0,
+    cardUid: 1
   };
 
-  const AUDIO = {
-    ctx: null,
-    enabled: false,
-    bossTimer: null,
-    bossSeq: 0,
-    resume() {
-      if (!this.ctx) {
-        const A = window.AudioContext || window.webkitAudioContext;
-        if (!A) return;
-        this.ctx = new A();
-      }
-      if (this.ctx.state === 'suspended') this.ctx.resume();
-      this.enabled = true;
-    },
-    tone(freq = 440, dur = 0.12, type = 'triangle', gain = 0.06, when = 0) {
-      if (!this.ctx || !this.enabled) return;
-      const t0 = this.ctx.currentTime + when;
-      const osc = this.ctx.createOscillator();
-      const g = this.ctx.createGain();
-      osc.type = type;
-      osc.frequency.value = freq;
-      g.gain.setValueAtTime(0.0001, t0);
-      g.gain.exponentialRampToValueAtTime(gain, t0 + 0.01);
-      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-      osc.connect(g).connect(this.ctx.destination);
-      osc.start(t0);
-      osc.stop(t0 + dur + 0.01);
-    },
-    hit() {
-      this.tone(120, 0.09, 'square', 0.05);
-      this.tone(72, 0.11, 'square', 0.03, 0.02);
-    },
-    playCard(rune) {
-      const f = { fire: 320, water: 270, lightning: 430, nature: 240, stone: 190 }[rune] || 300;
-      this.tone(f, 0.08, 'triangle', 0.04);
-      this.tone(f * 1.45, 0.06, 'sine', 0.025, 0.03);
-    },
-    fusion() {
-      this.tone(480, 0.08, 'sawtooth', 0.04);
-      this.tone(620, 0.08, 'sawtooth', 0.04, 0.06);
-      this.tone(760, 0.12, 'triangle', 0.05, 0.13);
-    },
-    heal() {
-      this.tone(350, 0.05, 'sine', 0.03);
-      this.tone(440, 0.08, 'sine', 0.03, 0.04);
-      this.tone(530, 0.12, 'sine', 0.03, 0.1);
-    },
-    bossLoop(start) {
-      if (start) {
-        this.stopBoss();
-        if (!this.ctx || !this.enabled) return;
-        this.bossTimer = setInterval(() => {
-          const seq = [110, 165, 98, 147, 131, 175];
-          const f = seq[this.bossSeq % seq.length];
-          this.bossSeq++;
-          this.tone(f, 0.45, 'triangle', 0.022);
-          this.tone(f * 1.5, 0.2, 'sine', 0.012, 0.06);
-        }, 420);
-      } else {
-        this.stopBoss();
-      }
-    },
-    stopBoss() {
-      if (this.bossTimer) {
-        clearInterval(this.bossTimer);
-        this.bossTimer = null;
-      }
+  function resize() {
+    const scale = Math.min(window.innerWidth / GAME_W, window.innerHeight / GAME_H);
+    canvas.style.width = Math.floor(GAME_W * scale) + 'px';
+    canvas.style.height = Math.floor(GAME_H * scale) + 'px';
+    canvas.style.position = 'absolute';
+    canvas.style.left = Math.floor((window.innerWidth - GAME_W * scale) / 2) + 'px';
+    canvas.style.top = Math.floor((window.innerHeight - GAME_H * scale) / 2) + 'px';
+
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    canvas.width = GAME_W * dpr;
+    canvas.height = GAME_H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function rand(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+  }
+
+  function pick(arr) {
+    return arr[Math.floor(Math.random() * arr.length)];
+  }
+
+  function shuffle(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
     }
-  };
+    return arr;
+  }
 
-  function mulberry32(a) {
-    return function() {
-      let t = a += 0x6D2B79F5;
-      t = Math.imul(t ^ t >>> 15, t | 1);
-      t ^= t + Math.imul(t ^ t >>> 7, t | 61);
-      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  function cloneCard(templateId) {
+    const t = CARD_BY_ID[templateId];
+    return {
+      uid: state.cardUid++,
+      templateId: t.id,
+      name: t.name,
+      rune: t.rune,
+      cost: t.cost,
+      text: t.text,
+      effect: { ...t.effect }
     };
   }
 
-  function xmur3(str) {
-    let h = 1779033703 ^ str.length;
-    for (let i = 0; i < str.length; i++) {
-      h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
-      h = h << 13 | h >>> 19;
-    }
-    return function() {
-      h = Math.imul(h ^ h >>> 16, 2246822507);
-      h = Math.imul(h ^ h >>> 13, 3266489909);
-      return (h ^= h >>> 16) >>> 0;
-    };
-  }
-
-  class RNG {
-    constructor(seed) {
-      this.seed = String(seed);
-      const h = xmur3(this.seed);
-      this.rand = mulberry32(h());
-    }
-    next() { return this.rand(); }
-    int(min, max) { return Math.floor(this.next() * (max - min + 1)) + min; }
-    pick(arr) { return arr[Math.floor(this.next() * arr.length)]; }
-    shuffle(arr) {
-      for (let i = arr.length - 1; i > 0; i--) {
-        const j = Math.floor(this.next() * (i + 1));
-        [arr[i], arr[j]] = [arr[j], arr[i]];
-      }
-      return arr;
-    }
-  }
-
-  const CARD_LIBRARY = [];
-  const CARD_BY_ID = {};
-  let nextCardUid = 1;
-
-  function card(id, name, rune, cost, type, effect, desc) {
-    const c = { id, name, rune, cost, type, effect, desc };
-    CARD_LIBRARY.push(c);
-    CARD_BY_ID[id] = c;
-  }
-
-  card('strike', '룬 스트라이크', 'stone', 1, 'attack', { damage: 6 }, '단일 6 피해.');
-  card('defend', '연금 방호', 'water', 1, 'skill', { block: 6 }, '방어도 6 획득.');
-  card('quick_draw', '빠른 드로우', 'lightning', 1, 'skill', { draw: 2 }, '카드 2장 뽑기.');
-  card('meditate', '명상 호흡', 'nature', 1, 'skill', { block: 4, heal: 3 }, '방어 4, 체력 3 회복.');
-  card('sacrifice', '피의 제물', 'fire', 0, 'power', { selfDamage: 4, energy: 2, draw: 1 }, '체력 4 소모, 에너지 2 및 1드로우.');
-
-  card('fire_ember_jab', '불씨 찌르기', 'fire', 1, 'attack', { damage: 8 }, '단일 8 피해.');
-  card('fire_ignition', '점화', 'fire', 1, 'attack', { damage: 6, poison: 2 }, '6 피해 + 화상 2(독).');
-  card('fire_flame_shield', '화염 방패', 'fire', 1, 'skill', { block: 8, reflect: 2 }, '방어 8, 반사 2.');
-  card('fire_blazing_rush', '작열 돌격', 'fire', 1, 'attack', { damage: 11, energy: 1 }, '11 피해, 에너지 1 회복.');
-  card('fire_cauterize', '지혈 소각', 'fire', 1, 'skill', { heal: 7, weakSelf: 1 }, '체력 7 회복, 약화 1.');
-  card('fire_inferno_slash', '인페르노 참격', 'fire', 2, 'attack', { damage: 16 }, '단일 16 피해.');
-  card('fire_phoenix_guard', '불사조 수호', 'fire', 2, 'skill', { block: 12, regen: 2 }, '방어 12, 재생 2.');
-  card('fire_volcanic_lance', '화산 창', 'fire', 3, 'attack', { damage: 21, vulnerable: 1 }, '21 피해 + 취약 1.');
-
-  card('water_ripple_cut', '물결 절단', 'water', 1, 'attack', { damage: 7, draw: 1 }, '7 피해 + 1 드로우.');
-  card('water_tidal_guard', '조류 수호', 'water', 1, 'skill', { block: 9 }, '방어 9.');
-  card('water_purify', '정화의 물방울', 'water', 1, 'skill', { heal: 8, cleanse: true }, '체력 8 회복, 해로운 상태 일부 제거.');
-  card('water_deep_current', '심해의 흐름', 'water', 1, 'skill', { block: 5, damage: 8 }, '방어 5, 피해 8.');
-  card('water_frost_bind', '빙결 속박', 'water', 2, 'attack', { damage: 10, stun: 1 }, '10 피해 + 기절 1.');
-  card('water_mist_step', '안개 걸음', 'water', 1, 'skill', { block: 6, energy: 1 }, '방어 6, 에너지 1 회복.');
-  card('water_glacier_surge', '빙하 쇄도', 'water', 2, 'skill', { block: 15, draw: 1 }, '방어 15 + 1 드로우.');
-  card('water_maelstrom', '소용돌이 파열', 'water', 3, 'attack', { damage: 18, weak: 1 }, '18 피해 + 약화 1.');
-
-  card('light_spark', '스파크', 'lightning', 1, 'attack', { damage: 8 }, '단일 8 피해.');
-  card('light_charge_up', '충전', 'lightning', 1, 'skill', { energy: 1, draw: 1 }, '에너지 1 + 1 드로우.');
-  card('light_arc_flash', '아크 플래시', 'lightning', 1, 'attack', { damage: 11, weak: 1 }, '11 피해 + 약화 1.');
-  card('light_overload', '과부하', 'lightning', 1, 'attack', { damage: 16, selfDamage: 2 }, '16 피해, 체력 2 소모.');
-  card('light_storm_barrier', '폭풍 장막', 'lightning', 1, 'skill', { block: 10, thorns: 2 }, '방어 10, 가시 2.');
-  card('light_static_field', '정전기장', 'lightning', 2, 'skill', { block: 8, vulnerable: 1 }, '방어 8 + 취약 1.');
-  card('light_thunder_lance', '천둥 창', 'lightning', 3, 'attack', { damage: 23 }, '단일 23 피해.');
-  card('light_capacitor', '축전기', 'lightning', 2, 'power', { maxEnergyBattle: 1 }, '이번 전투 최대 에너지 +1.');
-
-  card('nature_vine_strike', '덩굴 강타', 'nature', 1, 'attack', { damage: 7, poison: 2 }, '7 피해 + 독 2.');
-  card('nature_root_wall', '뿌리 장벽', 'nature', 1, 'skill', { block: 10 }, '방어 10.');
-  card('nature_regrowth', '재생', 'nature', 1, 'skill', { heal: 7, regen: 2 }, '체력 7 회복 + 재생 2.');
-  card('nature_toxin_dart', '독침', 'nature', 1, 'attack', { damage: 5, poison: 4 }, '5 피해 + 독 4.');
-  card('nature_bloom_shield', '개화의 보호', 'nature', 1, 'skill', { block: 8, draw: 1 }, '방어 8 + 1 드로우.');
-  card('nature_entangle', '속박의 덩굴', 'nature', 2, 'skill', { weak: 2, stun: 1 }, '약화 2 + 기절 1.');
-  card('nature_wild_hunt', '야성의 추격', 'nature', 2, 'attack', { damage: 14, bonusPoison: 6 }, '14 피해. 대상이 독이면 추가 6.');
-  card('nature_verdant_aegis', '푸른 수호', 'nature', 3, 'skill', { block: 17, heal: 4 }, '방어 17 + 체력 4 회복.');
-
-  card('stone_rock_throw', '암석 투척', 'stone', 1, 'attack', { damage: 8 }, '단일 8 피해.');
-  card('stone_fortify', '요새화', 'stone', 1, 'skill', { block: 9 }, '방어 9.');
-  card('stone_gemhide', '보석피', 'stone', 1, 'skill', { block: 12, regen: 1 }, '방어 12 + 재생 1.');
-  card('stone_quake', '지진파', 'stone', 2, 'attack', { damage: 10, weak: 1 }, '10 피해 + 약화 1.');
-  card('stone_bastion', '바스티온', 'stone', 2, 'skill', { block: 18 }, '방어 18.');
-  card('stone_shard_burst', '쇄석 폭발', 'stone', 2, 'attack', { damage: 14, block: 6 }, '14 피해 + 방어 6.');
-  card('stone_obsidian_edge', '흑요석 검', 'stone', 3, 'attack', { damage: 22, vulnerable: 1 }, '22 피해 + 취약 1.');
-  card('stone_monolith_stance', '거석 자세', 'stone', 1, 'skill', { block: 7, thorns: 2 }, '방어 7 + 가시 2.');
-
-  const RELICS = [
-    { id: 'catalyst', name: '룬 촉매', desc: '합성 시 추가 5 피해.' },
-    { id: 'lens', name: '연금술사의 돋보기', desc: '합성 후 카드 1장 드로우.' },
-    { id: 'amber_seal', name: '호박 봉인', desc: '전투 시작 시 방어 8.' },
-    { id: 'silver_prayer', name: '은빛 기도문', desc: '턴 시작 시 재생 1.' },
-    { id: 'steel_mortar', name: '강철 절구', desc: '첫 공격 카드 피해 +4.' },
-    { id: 'glass_phial', name: '유리 약병', desc: '전투 시작 시 에너지 +1(1턴).' },
-    { id: 'thorn_tiara', name: '가시 관', desc: '가시 +2.' },
-    { id: 'echo_bell', name: '메아리 방울', desc: '턴당 첫 스킬 카드 비용 -1.' },
-    { id: 'deep_core', name: '심핵 결정', desc: '휴식 노드 회복량 +10.' },
-    { id: 'dawn_coin', name: '새벽 주화', desc: '전투 승리 골드 +20%.' },
-    { id: 'night_lantern', name: '밤의 등불', desc: '엘리트 전투 시작 시 카드 1장 추가 드로우.' },
-    { id: 'sable_ink', name: '흑먹 잉크', desc: '적에게 취약 부여 시 2 피해.' },
-    { id: 'river_shell', name: '강의 조개', desc: '회복 시 방어 4 추가.' },
-    { id: 'magnet', name: '자성 코어', desc: '번개 카드 플레이 시 30% 확률 에너지 +1.' },
-    { id: 'warden_ring', name: '수호자 반지', desc: '보스 전투에서 받는 피해 -2.' }
-  ];
-
-  const EVENTS = [
-    {
-      id: 'refinery',
-      name: '룬 정제소',
-      text: '오래된 정제 장치가 아직 살아있다. 덱을 날카롭게 벼릴 수 있다.',
-      options: [
-        { label: '카드 1장 제거', apply: run => removeRandomCard(run, ['strike', 'defend']) },
-        { label: '임의 카드 강화(피해/방어 +2)', apply: run => boostRandomCard(run, 2) },
-        { label: '건너뛴다', apply: () => {} }
-      ]
-    },
-    {
-      id: 'merchant_ghost',
-      name: '떠돌이 상인',
-      text: '장막 속 상인이 낮은 목소리로 거래를 제안한다.',
-      options: [
-        { label: '골드 60 지불 후 유물', apply: run => buyEventRelic(run, 60) },
-        { label: '골드 35 받고 저주 카드 추가', apply: run => { run.gold += 35; run.deck.push('curse_fragile'); } },
-        { label: '거절', apply: () => {} }
-      ]
-    },
-    {
-      id: 'fountain',
-      name: '신비한 샘',
-      text: '은은한 빛의 샘. 마시면 살지만 대가를 요구할 수도 있다.',
-      options: [
-        { label: '체력 18 회복', apply: run => healRun(run, 18) },
-        { label: '최대체력 +6, 즉시 피해 8', apply: run => { run.maxHp += 6; run.hp = Math.max(1, run.hp - 8); } },
-        { label: '마시지 않는다', apply: () => {} }
-      ]
-    },
-    {
-      id: 'lab',
-      name: '연금술 실험실',
-      text: '카드의 룬 속성을 비틀 수 있는 장치가 있다.',
-      options: [
-        { label: '랜덤 카드 1장 변환', apply: run => transformCard(run) },
-        { label: '체력 10 지불, 희귀 카드 획득', apply: run => { run.hp = Math.max(1, run.hp - 10); run.deck.push(randomHighCard(run.rng)); } },
-        { label: '그대로 떠난다', apply: () => {} }
-      ]
-    },
-    {
-      id: 'archive',
-      name: '봉인된 서고',
-      text: '낡은 기록에는 금지된 전술이 적혀있다.',
-      options: [
-        { label: '카드 2장 뽑기 유물 획득', apply: run => addRelicToRun(run, 'lens') },
-        { label: '골드 70 획득, 약화 시작 디버프', apply: run => { run.gold += 70; run.flags.weakStartNext = 2; } },
-        { label: '책장을 닫는다', apply: () => {} }
-      ]
-    },
-    {
-      id: 'blacksmith',
-      name: '깨진 대장간',
-      text: '무너진 화로지만 마지막 불씨가 남아 있다.',
-      options: [
-        { label: '공격 카드 강화', apply: run => boostRandomTypeCard(run, 'attack', 3) },
-        { label: '방어 카드 강화', apply: run => boostRandomTypeCard(run, 'skill', 3) },
-        { label: '골드 40 획득, 체력 6 손실', apply: run => { run.gold += 40; run.hp = Math.max(1, run.hp - 6); } }
-      ]
-    },
-    {
-      id: 'trial',
-      name: '시련의 문양',
-      text: '강력한 문양이 능력을 시험한다.',
-      options: [
-        { label: '체력 12 지불, 유물 획득', apply: run => { run.hp = Math.max(1, run.hp - 12); addRelicToRun(run, randomRelic(run)); } },
-        { label: '미니 전투(엘리트) 골드 90', apply: run => { run.flags.forceEliteReward = true; run.flags.extraGoldNext = 90; } },
-        { label: '도망친다', apply: () => {} }
-      ]
-    },
-    {
-      id: 'mirror',
-      name: '잔영의 거울',
-      text: '거울 속 또 다른 당신이 덱을 복제해 주겠다고 속삭인다.',
-      options: [
-        { label: '랜덤 카드 복제 1장', apply: run => duplicateRandomCard(run) },
-        { label: '강한 카드 1장 받고 저주 1장', apply: run => { run.deck.push(randomHighCard(run.rng)); run.deck.push('curse_fog'); } },
-        { label: '거울을 깨뜨린다(골드 +30)', apply: run => { run.gold += 30; } }
-      ]
-    }
-  ];
-
-  card('curse_fragile', '금간 룬', 'stone', 1, 'power', { selfDamage: 5 }, '쓸모없는 저주. 체력 5 감소.');
-  card('curse_fog', '혼탁한 안개', 'water', 1, 'power', { weakSelf: 2 }, '약화 2를 얻는다.');
-
-  const ENEMIES = {
-    floor1: [
-      { id: 'slime', name: '점액 골렘', hp: 44, intents: [
-        { kind: 'attack', v: 8 }, { kind: 'guard', block: 9 }, { kind: 'attack', v: 10 }
-      ], style: { hue: '#6a8f52', horn: false, wings: false } },
-      { id: 'goblin', name: '고블린 칼잡이', hp: 48, intents: [
-        { kind: 'attack', v: 9 }, { kind: 'attack', v: 6, hits: 2 }, { kind: 'curse', weak: 1 }
-      ], style: { hue: '#807046', horn: true, wings: false } },
-      { id: 'skeleton', name: '해골 병사', hp: 50, intents: [
-        { kind: 'guard', block: 10 }, { kind: 'attack', v: 12 }, { kind: 'buff', str: 2 }
-      ], style: { hue: '#8f8975', horn: false, wings: false } },
-      { id: 'ratpack', name: '쥐떼 군주', hp: 46, intents: [
-        { kind: 'attack', v: 5, hits: 2 }, { kind: 'attack', v: 12 }, { kind: 'curse', weak: 1 }
-      ], style: { hue: '#7a6554', horn: false, wings: false } },
-      { id: 'bandit', name: '황혼 도적', hp: 54, intents: [
-        { kind: 'attack', v: 11 }, { kind: 'drain', v: 7 }, { kind: 'guard', block: 8 }
-      ], style: { hue: '#744f5a', horn: true, wings: false } }
-    ],
-    floor2: [
-      { id: 'gargoyle', name: '가고일', hp: 70, intents: [
-        { kind: 'guard', block: 14 }, { kind: 'attack', v: 14 }, { kind: 'attack', v: 9, hits: 2 }
-      ], style: { hue: '#7b7b7f', horn: true, wings: true } },
-      { id: 'witch', name: '수정 마녀', hp: 62, intents: [
-        { kind: 'curse', weak: 2 }, { kind: 'attack', v: 16 }, { kind: 'buff', str: 2 }
-      ], style: { hue: '#6f4e7a', horn: false, wings: false } },
-      { id: 'knight', name: '낡은 기사', hp: 76, intents: [
-        { kind: 'attack', v: 15 }, { kind: 'guard', block: 16 }, { kind: 'attack', v: 18 }
-      ], style: { hue: '#5f6774', horn: false, wings: false } },
-      { id: 'elemental', name: '원소 정령', hp: 68, intents: [
-        { kind: 'attack', v: 13 }, { kind: 'buff', str: 3 }, { kind: 'curse', weak: 1, vuln: 1 }
-      ], style: { hue: '#5c8292', horn: false, wings: true } },
-      { id: 'shadow', name: '어둠 그림자', hp: 64, intents: [
-        { kind: 'attack', v: 8, hits: 2 }, { kind: 'drain', v: 9 }, { kind: 'curse', weak: 2 }
-      ], style: { hue: '#5b4f62', horn: true, wings: false } }
-    ],
-    floor3: [
-      { id: 'chimera', name: '키메라 파수꾼', hp: 96, intents: [
-        { kind: 'attack', v: 18 }, { kind: 'attack', v: 11, hits: 2 }, { kind: 'buff', str: 3 }
-      ], style: { hue: '#8a6f4d', horn: true, wings: true } },
-      { id: 'stone_golem', name: '골렘 수호체', hp: 112, intents: [
-        { kind: 'guard', block: 20 }, { kind: 'attack', v: 22 }, { kind: 'curse', weak: 2 }
-      ], style: { hue: '#7b6a64', horn: false, wings: false } },
-      { id: 'drake', name: '새끼 용', hp: 98, intents: [
-        { kind: 'attack', v: 16, hits: 2 }, { kind: 'buff', str: 2 }, { kind: 'attack', v: 25 }
-      ], style: { hue: '#7e5d53', horn: true, wings: true } },
-      { id: 'lich_shard', name: '리치 파편', hp: 90, intents: [
-        { kind: 'curse', weak: 1, vuln: 1 }, { kind: 'attack', v: 20 }, { kind: 'drain', v: 12 }
-      ], style: { hue: '#56647f', horn: false, wings: false } },
-      { id: 'dark_priest', name: '암흑 사제', hp: 94, intents: [
-        { kind: 'buff', str: 3 }, { kind: 'attack', v: 21 }, { kind: 'curse', weak: 2 }
-      ], style: { hue: '#644949', horn: false, wings: false } }
-    ],
-    bosses: [
-      { id: 'alchemist', name: '연금술사', hp: 180, boss: true, intents: [
-        { kind: 'curse', weak: 2, note: '원소 혼란' },
-        { kind: 'attack', v: 24 },
-        { kind: 'buff', str: 3 },
-        { kind: 'attack', v: 14, hits: 2 }
-      ], style: { hue: '#8c5c40', horn: false, wings: false } },
-      { id: 'rune_golem', name: '룬 골렘', hp: 230, boss: true, intents: [
-        { kind: 'guard', block: 28, note: '합성 봉쇄 1턴' },
-        { kind: 'attack', v: 32 },
-        { kind: 'attack', v: 18, hits: 2 },
-        { kind: 'curse', weak: 2 }
-      ], style: { hue: '#6a6669', horn: true, wings: false } },
-      { id: 'abyss_dragon', name: '심연의 용', hp: 280, boss: true, intents: [
-        { kind: 'attack', v: 20, hits: 2, note: '그림자 숨결' },
-        { kind: 'buff', str: 4 },
-        { kind: 'attack', v: 38 },
-        { kind: 'curse', weak: 2, vuln: 1 }
-      ], style: { hue: '#5f4a76', horn: true, wings: true } }
-    ]
-  };
-
-  const FUSIONS = {
-    'fire+water': {
-      name: '증기폭발',
-      cost: 2,
-      desc: '전체 12 피해',
-      run(c) { enemyDamage(c, 12, true); }
-    },
-    'fire+lightning': {
-      name: '플라즈마 볼트',
-      cost: 2,
-      desc: '단일 25 피해',
-      run(c) { enemyDamage(c, 25, false); }
-    },
-    'fire+nature': {
-      name: '재생 불꽃',
-      cost: 2,
-      desc: '회복 10 + 재생 3',
-      run(c) { healPlayer(c, 10); addStatus(c.player, 'regen', 3); }
-    },
-    'fire+stone': {
-      name: '용암 방벽',
-      cost: 2,
-      desc: '방어 20 + 반사 5',
-      run(c) { gainBlock(c.player, 20); addStatus(c.player, 'reflect', 5); }
-    },
-    'water+lightning': {
-      name: '감전 쇄도',
-      cost: 2,
-      desc: '15 피해 + 기절 1',
-      run(c) { enemyDamage(c, 15, false); addStatus(c.enemy, 'stun', 1); }
-    },
-    'water+nature': {
-      name: '생명의 샘',
-      cost: 2,
-      desc: '회복 20 + 2 드로우',
-      run(c) { healPlayer(c, 20); drawCards(c, 2); }
-    },
-    'water+stone': {
-      name: '빙결 갑옷',
-      cost: 2,
-      desc: '방어 30',
-      run(c) { gainBlock(c.player, 30); }
-    },
-    'lightning+nature': {
-      name: '마비독',
-      cost: 2,
-      desc: '8 피해 + 독 3 + 약화 2',
-      run(c) { enemyDamage(c, 8, false); addStatus(c.enemy, 'poison', 3); addStatus(c.enemy, 'weak', 2); }
-    },
-    'lightning+stone': {
-      name: '자기장',
-      cost: 2,
-      desc: '방어 12 + 에너지 +1',
-      run(c) { gainBlock(c.player, 12); c.player.energy += 1; }
-    },
-    'nature+stone': {
-      name: '대지의 축복',
-      cost: 2,
-      desc: '방어 15 + 재생 2 + 가시 3',
-      run(c) { gainBlock(c.player, 15); addStatus(c.player, 'regen', 2); addStatus(c.player, 'thorns', 3); }
-    }
-  };
-
-  const texture = makeParchmentTexture();
-
-  function makeParchmentTexture() {
-    const t = document.createElement('canvas');
-    t.width = 256;
-    t.height = 256;
-    const c = t.getContext('2d');
-    const g = c.createLinearGradient(0, 0, 256, 256);
-    g.addColorStop(0, '#f3e3c7');
-    g.addColorStop(1, '#e2cfad');
-    c.fillStyle = g;
-    c.fillRect(0, 0, 256, 256);
-    const img = c.getImageData(0, 0, 256, 256);
-    for (let i = 0; i < img.data.length; i += 4) {
-      const n = (Math.random() * 20 - 10) | 0;
-      img.data[i] = Math.max(0, Math.min(255, img.data[i] + n));
-      img.data[i + 1] = Math.max(0, Math.min(255, img.data[i + 1] + n));
-      img.data[i + 2] = Math.max(0, Math.min(255, img.data[i + 2] + n));
-    }
-    c.putImageData(img, 0, 0);
-    c.globalAlpha = 0.12;
-    c.strokeStyle = '#6b4d31';
-    for (let y = 10; y < 256; y += 14) {
-      c.beginPath();
-      c.moveTo(0, y + Math.random() * 3);
-      for (let x = 0; x <= 256; x += 16) {
-        c.lineTo(x, y + Math.sin((x + y) * 0.04) * 2);
-      }
-      c.stroke();
-    }
-    return ctx.createPattern(t, 'repeat');
-  }
-
-  function todaySeedKST() {
-    const parts = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Asia/Seoul',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit'
-    }).formatToParts(new Date());
-    const map = {};
-    parts.forEach(p => { if (p.type !== 'literal') map[p.type] = p.value; });
-    return `${map.year}${map.month}${map.day}`;
-  }
-
-  function clone(o) {
-    return JSON.parse(JSON.stringify(o));
-  }
-
-  function cap(v, min, max) {
-    return Math.max(min, Math.min(max, v));
-  }
-
-  function rectHit(x, y, r) {
-    return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
-  }
-
-  function rrect(c, x, y, w, h, r, fill, stroke, lw = 1) {
-    c.beginPath();
-    c.moveTo(x + r, y);
-    c.lineTo(x + w - r, y);
-    c.quadraticCurveTo(x + w, y, x + w, y + r);
-    c.lineTo(x + w, y + h - r);
-    c.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-    c.lineTo(x + r, y + h);
-    c.quadraticCurveTo(x, y + h, x, y + h - r);
-    c.lineTo(x, y + r);
-    c.quadraticCurveTo(x, y, x + r, y);
-    if (fill) {
-      c.fillStyle = fill;
-      c.fill();
-    }
-    if (stroke) {
-      c.strokeStyle = stroke;
-      c.lineWidth = lw;
-      c.stroke();
-    }
-  }
-
-  function shadowText(c, text, x, y, color, size, align = 'left', alpha = 1) {
-    c.save();
-    c.globalAlpha = alpha;
-    c.font = `700 ${size}px Georgia, serif`;
-    c.textAlign = align;
-    c.fillStyle = 'rgba(0,0,0,.35)';
-    c.fillText(text, x + 2, y + 2);
-    c.fillStyle = color;
-    c.fillText(text, x, y);
-    c.restore();
-  }
-
-  function wrapText(c, txt, x, y, w, lh, maxLines = 3, color = PALETTE.ink, size = 16) {
-    c.save();
-    c.font = `600 ${size}px Georgia, serif`;
-    c.fillStyle = color;
-    const words = txt.split(' ');
-    let line = '';
-    let lineCount = 0;
-    for (let i = 0; i < words.length; i++) {
-      const test = line + words[i] + ' ';
-      if (c.measureText(test).width > w && i > 0) {
-        c.fillText(line.trim(), x, y + lineCount * lh);
-        line = words[i] + ' ';
-        lineCount++;
-        if (lineCount >= maxLines) break;
-      } else {
-        line = test;
-      }
-    }
-    if (lineCount < maxLines) c.fillText(line.trim(), x, y + lineCount * lh);
-    c.restore();
-  }
-
-  function drawRune(c, rune, x, y, size) {
-    const col = PALETTE.runes[rune] || '#fff';
-    c.save();
-    c.translate(x, y);
-    c.strokeStyle = col;
-    c.fillStyle = col;
-    c.lineWidth = Math.max(2, size * 0.08);
-
-    if (rune === 'fire') {
-      c.beginPath();
-      c.moveTo(0, -size * 0.52);
-      c.bezierCurveTo(size * 0.4, -size * 0.3, size * 0.3, size * 0.2, 0, size * 0.48);
-      c.bezierCurveTo(-size * 0.35, size * 0.18, -size * 0.45, -size * 0.22, 0, -size * 0.52);
-      c.fill();
-      c.globalAlpha = 0.4;
-      c.beginPath();
-      c.moveTo(0, -size * 0.2);
-      c.bezierCurveTo(size * 0.18, -size * 0.08, size * 0.15, size * 0.1, 0, size * 0.26);
-      c.bezierCurveTo(-size * 0.14, size * 0.08, -size * 0.22, -size * 0.05, 0, -size * 0.2);
-      c.fill();
-    } else if (rune === 'water') {
-      c.beginPath();
-      c.moveTo(0, -size * 0.55);
-      c.quadraticCurveTo(size * 0.35, -size * 0.1, size * 0.18, size * 0.35);
-      c.quadraticCurveTo(0, size * 0.58, -size * 0.18, size * 0.35);
-      c.quadraticCurveTo(-size * 0.35, -size * 0.1, 0, -size * 0.55);
-      c.fill();
-      c.globalAlpha = 0.3;
-      c.beginPath();
-      c.arc(0, size * 0.12, size * 0.16, 0, Math.PI * 2);
-      c.fill();
-    } else if (rune === 'lightning') {
-      c.beginPath();
-      c.moveTo(-size * 0.24, -size * 0.5);
-      c.lineTo(size * 0.08, -size * 0.5);
-      c.lineTo(-size * 0.03, -size * 0.1);
-      c.lineTo(size * 0.22, -size * 0.1);
-      c.lineTo(-size * 0.14, size * 0.5);
-      c.lineTo(-size * 0.02, size * 0.08);
-      c.lineTo(-size * 0.27, size * 0.08);
-      c.closePath();
-      c.fill();
-    } else if (rune === 'nature') {
-      c.beginPath();
-      c.ellipse(0, 0, size * 0.36, size * 0.5, -0.55, 0, Math.PI * 2);
-      c.fill();
-      c.globalCompositeOperation = 'destination-out';
-      c.beginPath();
-      c.ellipse(size * 0.08, -size * 0.05, size * 0.18, size * 0.24, -0.55, 0, Math.PI * 2);
-      c.fill();
-      c.globalCompositeOperation = 'source-over';
-      c.strokeStyle = '#355f35';
-      c.lineWidth = Math.max(1.2, size * 0.05);
-      c.beginPath();
-      c.moveTo(-size * 0.2, size * 0.28);
-      c.lineTo(size * 0.12, -size * 0.22);
-      c.stroke();
-    } else if (rune === 'stone') {
-      const r = size * 0.45;
-      c.beginPath();
-      for (let i = 0; i < 6; i++) {
-        const a = -Math.PI / 2 + i * Math.PI / 3;
-        const px = Math.cos(a) * r;
-        const py = Math.sin(a) * r;
-        if (i === 0) c.moveTo(px, py); else c.lineTo(px, py);
-      }
-      c.closePath();
-      c.fillStyle = PALETTE.runes.stone;
-      c.fill();
-      c.strokeStyle = '#6f5f52';
-      c.stroke();
-      c.globalAlpha = 0.35;
-      c.beginPath();
-      c.moveTo(-r * 0.5, 0);
-      c.lineTo(r * 0.4, -r * 0.2);
-      c.lineTo(r * 0.1, r * 0.45);
-      c.closePath();
-      c.fill();
-    }
-    c.restore();
-  }
-
-  function loadProfile() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) {
-        return {
-          bestFloor: 0,
-          wins: 0,
-          bestScore: 0,
-          unlockedRelics: 8,
-          dailyWins: {},
-          runs: 0
-        };
-      }
-      const p = JSON.parse(raw);
-      p.dailyWins = p.dailyWins || {};
-      return p;
-    } catch (e) {
-      return {
-        bestFloor: 0,
-        wins: 0,
-        bestScore: 0,
-        unlockedRelics: 8,
-        dailyWins: {},
-        runs: 0
-      };
-    }
-  }
-
-  function saveProfile() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state.profile));
-  }
-
-  function saveRun() {
-    if (!state.run) {
-      localStorage.removeItem(SAVE_KEY);
-      return;
-    }
-    const payload = {
-      floor: state.run.floor,
-      hp: state.run.hp,
-      maxHp: state.run.maxHp,
-      gold: state.run.gold,
-      deck: state.run.deck,
-      relics: state.run.relics,
-      map: state.run.map,
-      pos: state.run.pos,
-      seed: state.run.seed,
-      score: state.run.score,
-      mods: state.run.mods,
-      flags: state.run.flags
-    };
-    localStorage.setItem(SAVE_KEY, JSON.stringify(payload));
-  }
-
-  function loadRun() {
-    try {
-      const raw = localStorage.getItem(SAVE_KEY);
-      if (!raw) return null;
-      const s = JSON.parse(raw);
-      if (!s || !s.deck || !s.map || !s.pos || !s.seed) return null;
-      const rng = new RNG(s.seed);
-      return {
-        floor: s.floor,
-        hp: s.hp,
-        maxHp: s.maxHp,
-        gold: s.gold,
-        deck: s.deck,
-        relics: s.relics || [],
-        map: s.map,
-        pos: s.pos,
-        seed: s.seed,
-        rng,
-        score: s.score || 0,
-        mods: s.mods || {},
-        flags: s.flags || {},
-        currentNode: null
-      };
-    } catch (e) {
-      return null;
-    }
-  }
-
-  function makeRun(seed, isDaily) {
-    const rng = new RNG(seed);
-    const startDeck = ['strike', 'strike', 'strike', 'strike', 'defend', 'defend', 'defend', 'defend', 'quick_draw', randomStarterRuneCard(rng)];
-    const run = {
-      seed,
-      daily: !!isDaily,
-      floor: 1,
-      hp: 86,
-      maxHp: 86,
-      gold: 110,
-      deck: startDeck,
-      relics: ['amber_seal'],
-      rng,
-      map: generateMap(1, rng),
-      pos: { depth: -1, lane: 1 },
-      score: 0,
-      mods: {},
-      flags: {},
-      currentNode: null
-    };
-    state.run = run;
-    saveRun();
-    state.screen = 'map';
-    flash(`새 런 시작 (Seed ${seed})`);
-  }
-
-  function randomStarterRuneCard(rng) {
-    const picks = [
-      'fire_ember_jab', 'water_ripple_cut', 'light_spark', 'nature_vine_strike', 'stone_rock_throw'
+  function starterDeck() {
+    return [
+      cloneCard('ember_strike'), cloneCard('ember_strike'),
+      cloneCard('tidal_cut'), cloneCard('tidal_cut'),
+      cloneCard('mist_guard'), cloneCard('stone_skin'),
+      cloneCard('vine_bind'), cloneCard('quarry_blow'),
+      cloneCard('spark_shot'), cloneCard('charge')
     ];
-    return rng.pick(picks);
   }
 
-  function generateMap(floor, rng) {
-    const steps = rng.int(7, 10);
-    const rows = [];
-    for (let d = 0; d < steps; d++) {
-      const row = [];
-      for (let lane = 0; lane < 3; lane++) {
-        let t = weightedNodeType(d, steps, floor, rng);
-        if (d < 2 && t === 'elite') t = 'battle';
-        row.push({ id: `${floor}-${d}-${lane}`, floor, depth: d, lane, type: t, cleared: false });
-      }
-      rows.push(row);
-    }
-    rows.push([
-      null,
-      { id: `${floor}-boss`, floor, depth: steps, lane: 1, type: 'boss', cleared: false },
-      null
-    ]);
-
-    const links = {};
-    for (let d = 0; d < rows.length - 1; d++) {
-      for (let lane = 0; lane < 3; lane++) {
-        const n = rows[d][lane];
-        if (!n) continue;
-        const key = `${d}-${lane}`;
-        links[key] = [];
-        if (d === rows.length - 2) {
-          links[key].push(1);
-          continue;
-        }
-        const options = [];
-        for (let t = lane - 1; t <= lane + 1; t++) {
-          if (t >= 0 && t <= 2 && rows[d + 1][t]) options.push(t);
-        }
-        while (options.length > 0) {
-          const pick = options.splice(rng.int(0, options.length - 1), 1)[0];
-          links[key].push(pick);
-          if (links[key].length >= rng.int(1, 2)) break;
-        }
-        if (links[key].length === 0) links[key].push(lane);
-      }
-    }
-
-    return { rows, links, steps };
+  function showToast(msg, sec = 1.6) {
+    state.toast = msg;
+    state.toastTimer = sec;
   }
 
-  function weightedNodeType(depth, steps, floor, rng) {
-    if (depth === steps - 1) {
-      const r = rng.next();
-      if (r < 0.45) return 'rest';
-      if (r < 0.75) return 'shop';
-      return 'elite';
-    }
-    const r = rng.next();
-    if (r < 0.54) return 'battle';
-    if (r < 0.69) return 'event';
+  function createRun() {
+    state.run = {
+      floor: 1,
+      maxFloor: 3,
+      hp: 72,
+      maxHp: 72,
+      maxEnergy: 3,
+      gold: 90,
+      deck: starterDeck(),
+      battlesWon: 0,
+      map: null,
+      route: []
+    };
+    buildFloorMap();
+    state.screen = 'map';
+    showToast('아래에서 출발하세요. 첫 줄 3개 노드 중 하나를 선택합니다.');
+  }
+
+  function pickNodeType(row, rows) {
+    if (row === rows - 1) return 'boss';
+    if (row === 0) return pick(['combat', 'event', 'rest']);
+    if (row === rows - 2) return Math.random() < 0.52 ? 'elite' : 'combat';
+    const r = Math.random();
+    if (r < 0.50) return 'combat';
+    if (r < 0.68) return 'event';
     if (r < 0.80) return 'rest';
-    if (r < 0.91) return 'shop';
+    if (r < 0.92) return 'shop';
     return 'elite';
   }
 
-  function startBattle(nodeType) {
-    const run = state.run;
-    const enemyDef = pickEnemy(run.floor, nodeType, run.rng);
-    const player = {
-      hp: run.hp,
-      maxHp: run.maxHp,
-      block: 0,
-      energy: 3,
-      maxEnergy: 3,
-      status: {
-        poison: 0,
-        regen: 0,
-        weak: 0,
-        vulnerable: 0,
-        thorns: 0,
-        reflect: 0,
-        stun: 0
-      },
-      firstAttackBuff: 0,
-      firstSkillDiscount: false
-    };
-    const enemy = {
-      id: enemyDef.id,
-      name: enemyDef.name,
-      hp: enemyDef.hp,
-      maxHp: enemyDef.hp,
-      baseIntents: clone(enemyDef.intents),
-      intents: clone(enemyDef.intents),
-      intentIndex: 0,
-      intent: clone(enemyDef.intents[0]),
-      block: 0,
-      str: 0,
-      boss: !!enemyDef.boss,
-      style: enemyDef.style,
-      status: {
-        poison: 0,
-        regen: 0,
-        weak: 0,
-        vulnerable: 0,
-        thorns: 0,
-        reflect: 0,
-        stun: 0
-      }
-    };
+  function buildFloorMap() {
+    const rows = 8;
+    const nodesByRow = [];
+    const nodes = [];
+    let nid = 1;
 
-    const deck = run.deck.map(id => createCardInstance(id, run));
-    run.rng.shuffle(deck);
+    for (let row = 0; row < rows; row++) {
+      const count = row === 0 ? 3 : row === rows - 1 ? 1 : rand(3, 5);
+      const y = GAME_H - 100 - row * 80;
+      const rowNodes = [];
+      const startTypes = ['combat', 'event', 'rest'];
+      for (let i = 0; i < count; i++) {
+        const spread = count === 1 ? 0.5 : i / (count - 1);
+        const x = 190 + spread * (GAME_W - 380) + rand(-24, 24);
+        const type = row === 0 ? startTypes[i % 3] : pickNodeType(row, rows);
+        const node = {
+          id: nid++,
+          row,
+          x,
+          y,
+          type,
+          visited: false,
+          available: row === 0,
+          children: [],
+          parents: []
+        };
+        rowNodes.push(node);
+        nodes.push(node);
+      }
+      if (row === rows - 1) rowNodes[0].type = 'boss';
+      nodesByRow.push(rowNodes);
+    }
+
+    function connect(a, b) {
+      if (!a.children.includes(b.id)) a.children.push(b.id);
+      if (!b.parents.includes(a.id)) b.parents.push(a.id);
+    }
+
+    for (let row = 0; row < rows - 1; row++) {
+      const current = nodesByRow[row];
+      const next = nodesByRow[row + 1];
+
+      for (const n of current) {
+        const sorted = [...next].sort((p, q) => Math.abs(p.x - n.x) - Math.abs(q.x - n.x));
+        connect(n, sorted[0]);
+        if (sorted[1] && Math.random() < 0.42) connect(n, sorted[1]);
+      }
+
+      for (const m of next) {
+        if (m.parents.length) continue;
+        const nearest = [...current].sort((p, q) => Math.abs(p.x - m.x) - Math.abs(q.x - m.x))[0];
+        connect(nearest, m);
+      }
+    }
+
+    state.run.map = {
+      floor: state.run.floor,
+      rows,
+      nodes,
+      nodesByRow,
+      currentNodeId: null,
+      currentRow: -1
+    };
+  }
+
+  function getNodeById(id) {
+    return state.run.map.nodes.find((n) => n.id === id) || null;
+  }
+
+  function moveToNode(node) {
+    const map = state.run.map;
+    if (!node.available || node.visited) return;
+
+    node.visited = true;
+    map.currentNodeId = node.id;
+    map.currentRow = node.row;
+    state.run.route.push({ floor: state.run.floor, row: node.row, type: node.type, id: node.id });
+
+    for (const n of map.nodes) n.available = false;
+    for (const cid of node.children) {
+      const child = getNodeById(cid);
+      if (child && !child.visited) child.available = true;
+    }
+
+    if (node.type === 'combat' || node.type === 'elite' || node.type === 'boss') {
+      beginCombat(node);
+      return;
+    }
+    if (node.type === 'event') {
+      beginEvent(node);
+      return;
+    }
+    if (node.type === 'shop') {
+      beginShop(node);
+      return;
+    }
+    if (node.type === 'rest') {
+      beginRest(node);
+      return;
+    }
+  }
+
+  function createEnemy(type) {
+    const f = state.run.floor;
+    if (type === 'boss') {
+      const bosses = [
+        {
+          name: '재의 군주',
+          hp: 165 + f * 18,
+          cycle: [
+            { kind: 'attack', value: 14 + f * 2 },
+            { kind: 'guard', value: 16 + f * 2 },
+            { kind: 'buff', value: 2 },
+            { kind: 'attack', value: 20 + f * 2 }
+          ]
+        },
+        {
+          name: '폭풍 군주',
+          hp: 155 + f * 20,
+          cycle: [
+            { kind: 'attack', value: 12 + f * 2 },
+            { kind: 'attack', value: 12 + f * 2 },
+            { kind: 'guard', value: 18 + f * 2 },
+            { kind: 'buff', value: 3 }
+          ]
+        }
+      ];
+      const b = pick(bosses);
+      return {
+        name: b.name,
+        maxHp: b.hp,
+        hp: b.hp,
+        block: 0,
+        strength: 0,
+        weak: 0,
+        vulnerable: 0,
+        cycle: b.cycle,
+        idx: 0,
+        intent: null
+      };
+    }
+
+    if (type === 'elite') {
+      const elites = [
+        {
+          name: '균열 감시자',
+          hp: 96 + f * 14,
+          cycle: [
+            { kind: 'attack', value: 12 + f * 2 },
+            { kind: 'guard', value: 10 + f * 2 },
+            { kind: 'attack', value: 15 + f * 2 },
+            { kind: 'buff', value: 2 }
+          ]
+        },
+        {
+          name: '검은 주술사',
+          hp: 90 + f * 15,
+          cycle: [
+            { kind: 'buff', value: 2 },
+            { kind: 'attack', value: 10 + f * 2 },
+            { kind: 'attack', value: 13 + f * 2 },
+            { kind: 'guard', value: 12 + f * 2 }
+          ]
+        }
+      ];
+      const e = pick(elites);
+      return {
+        name: e.name,
+        maxHp: e.hp,
+        hp: e.hp,
+        block: 0,
+        strength: 0,
+        weak: 0,
+        vulnerable: 0,
+        cycle: e.cycle,
+        idx: 0,
+        intent: null
+      };
+    }
+
+    const normals = [
+      {
+        name: '흉터 야수',
+        hp: 62 + f * 11,
+        cycle: [
+          { kind: 'attack', value: 8 + f * 2 },
+          { kind: 'guard', value: 6 + f * 2 },
+          { kind: 'attack', value: 9 + f * 2 }
+        ]
+      },
+      {
+        name: '떠도는 기계',
+        hp: 58 + f * 10,
+        cycle: [
+          { kind: 'guard', value: 7 + f * 2 },
+          { kind: 'attack', value: 10 + f * 2 },
+          { kind: 'attack', value: 8 + f * 2 }
+        ]
+      },
+      {
+        name: '황혼 망령',
+        hp: 54 + f * 12,
+        cycle: [
+          { kind: 'buff', value: 1 },
+          { kind: 'attack', value: 9 + f * 2 },
+          { kind: 'attack', value: 11 + f * 2 }
+        ]
+      }
+    ];
+
+    const n = pick(normals);
+    return {
+      name: n.name,
+      maxHp: n.hp,
+      hp: n.hp,
+      block: 0,
+      strength: 0,
+      weak: 0,
+      vulnerable: 0,
+      cycle: n.cycle,
+      idx: 0,
+      intent: null
+    };
+  }
+
+  function beginCombat(node) {
+    const enemy = createEnemy(node.type);
+    const drawPile = shuffle(state.run.deck.map((c) => ({ ...c, uid: state.cardUid++ })));
 
     state.combat = {
-      floor: run.floor,
-      nodeType,
+      nodeId: node.id,
+      nodeType: node.type,
       turn: 1,
       phase: 'player',
-      player,
       enemy,
-      drawPile: deck,
+      hand: [],
+      drawPile,
       discardPile: [],
       exhaustPile: [],
-      hand: [],
-      fusion: [null, null],
-      log: [`${enemy.name} 전투 시작`],
-      fx: [],
-      attackCounter: 0,
-      fusionLock: 0,
-      resultReady: false,
-      reward: null
+      playerBlock: 0,
+      playerStrength: 0,
+      energy: state.run.maxEnergy,
+      maxEnergy: state.run.maxEnergy,
+      synth: [null, null],
+      zones: {},
+      handRects: [],
+      deckOverlay: false,
+      rewardGold: node.type === 'boss' ? 90 : node.type === 'elite' ? 50 : 30,
+      battleIndex: state.run.battlesWon + 1
     };
 
-    run.flags.currentNodeType = nodeType;
-    triggerRelics('battleStart', state.combat);
-
-    if (run.flags.weakStartNext) {
-      addStatus(player, 'weak', run.flags.weakStartNext);
-      run.flags.weakStartNext = 0;
-    }
-
-    if (enemy.boss) AUDIO.bossLoop(true);
-    else AUDIO.bossLoop(false);
-
-    startPlayerTurn();
-    state.screen = 'battle';
+    drawCards(5);
+    queueEnemyIntent();
+    state.screen = 'combat';
+    showToast(`${enemy.name} 등장`);
   }
 
-  function pickEnemy(floor, nodeType, rng) {
-    if (nodeType === 'boss') {
-      return clone(ENEMIES.bosses[floor - 1]);
-    }
-    const pool = floor === 1 ? ENEMIES.floor1 : floor === 2 ? ENEMIES.floor2 : ENEMIES.floor3;
-    const base = clone(rng.pick(pool));
-    if (nodeType === 'elite') {
-      base.hp = Math.floor(base.hp * 1.45);
-      base.intents.forEach(i => {
-        if (i.v) i.v = Math.floor(i.v * 1.35);
-        if (i.block) i.block = Math.floor(i.block * 1.3);
-      });
-      base.name += ' (엘리트)';
-    }
-    return base;
-  }
-
-  function createCardInstance(id, run) {
-    const base = CARD_BY_ID[id] || CARD_BY_ID.strike;
-    const c = clone(base);
-    c.uid = nextCardUid++;
-    const mod = run.mods[id];
-    if (mod) {
-      c.cost = cap(c.cost - (mod.costDown || 0), 0, 4);
-      if (c.effect.damage) c.effect.damage += mod.boost || 0;
-      if (c.effect.block) c.effect.block += mod.boost || 0;
-      if (c.effect.heal) c.effect.heal += Math.floor((mod.boost || 0) / 2);
-    }
-    return c;
-  }
-
-  function cloneEnemyIntent(enemy) {
-    enemy.intent = clone(enemy.intents[enemy.intentIndex % enemy.intents.length]);
-  }
-
-  function advanceEnemyIntent(enemy) {
-    enemy.intentIndex = (enemy.intentIndex + 1) % enemy.intents.length;
-    cloneEnemyIntent(enemy);
-  }
-
-  function startPlayerTurn() {
+  function drawCards(n) {
     const c = state.combat;
     if (!c) return;
 
-    c.player.block = 0;
-    c.player.firstAttackBuff = 0;
-    c.player.firstSkillDiscount = false;
-    c.attackCounter = 0;
-
-    triggerRelics('turnStart', c);
-    tickStartStatus(c.player, c, true);
-    tickStartStatus(c.enemy, c, false);
-
-    if (c.enemy.hp <= 0 || c.player.hp <= 0) {
-      checkBattleEnd();
-      return;
-    }
-
-    c.player.energy = c.player.maxEnergy;
-    if (c.player.tempEnergy) {
-      c.player.energy += c.player.tempEnergy;
-      c.player.tempEnergy = 0;
-    }
-
-    drawCards(c, 5);
-    pushLog(`턴 ${c.turn} 시작. 에너지 ${c.player.energy}.`);
-    if (c.fusionLock > 0) pushLog('이 턴은 합성 슬롯이 봉쇄됨');
-  }
-
-  function endPlayerTurn() {
-    const c = state.combat;
-    if (!c || c.phase !== 'player') return;
-    if (c.fusionLock > 0) c.fusionLock--;
-    c.phase = 'enemy';
-    moveAllHandToDiscard(c);
-    runEnemyTurn();
-  }
-
-  function runEnemyTurn() {
-    const c = state.combat;
-    if (!c) return;
-    const enemy = c.enemy;
-    const player = c.player;
-
-    if (enemy.hp <= 0 || player.hp <= 0) {
-      checkBattleEnd();
-      return;
-    }
-
-    if (enemy.status.stun > 0) {
-      enemy.status.stun--;
-      pushLog(`${enemy.name}이(가) 기절로 행동하지 못했다.`);
-    } else {
-      executeIntent(c, enemy.intent);
-    }
-
-    tickEndStatus(player);
-    tickEndStatus(enemy);
-
-    if (player.hp <= 0 || enemy.hp <= 0) {
-      checkBattleEnd();
-      return;
-    }
-
-    advanceEnemyIntent(enemy);
-    c.turn++;
-    c.phase = 'player';
-    startPlayerTurn();
-  }
-
-  function executeIntent(c, intent) {
-    const enemy = c.enemy;
-    const player = c.player;
-
-    if (intent.kind === 'attack') {
-      const hits = intent.hits || 1;
-      for (let i = 0; i < hits; i++) {
-        let dmg = intent.v + enemy.str;
-        if (enemy.status.weak > 0) dmg = Math.floor(dmg * 0.75);
-        if (hasRelic('warden_ring') && enemy.boss) dmg = Math.max(0, dmg - 2);
-        playerDamage(c, dmg);
-      }
-      pushLog(`${enemy.name} ${INTENT_LABEL.attack} ${intent.v}${intent.hits ? 'x' + intent.hits : ''}`);
-    } else if (intent.kind === 'guard') {
-      gainBlock(enemy, intent.block || 8);
-      if (enemy.id === 'rune_golem') c.fusionLock = 1;
-      pushLog(`${enemy.name} 방어 ${intent.block || 8}`);
-    } else if (intent.kind === 'curse') {
-      if (intent.weak) addStatus(player, 'weak', intent.weak);
-      if (intent.vuln) addStatus(player, 'vulnerable', intent.vuln);
-      pushLog(`${enemy.name} 약화 효과 부여`);
-    } else if (intent.kind === 'buff') {
-      enemy.str += intent.str || 2;
-      pushLog(`${enemy.name} 공격력 +${intent.str || 2}`);
-    } else if (intent.kind === 'drain') {
-      const dealt = playerDamage(c, intent.v || 8);
-      enemy.hp = cap(enemy.hp + dealt, 0, enemy.maxHp);
-      pushLog(`${enemy.name} 흡수 ${dealt}`);
-    }
-  }
-
-  function tickStartStatus(t, c, isPlayer) {
-    if (t.status.poison > 0) {
-      const p = t.status.poison;
-      if (isPlayer) playerDamage(c, p, true); else enemyDamage(c, p, false, true);
-      t.status.poison = Math.max(0, t.status.poison - 1);
-      pushLog(`${isPlayer ? '플레이어' : '적'} 독 ${p}`);
-    }
-    if (t.status.regen > 0) {
-      const heal = t.status.regen;
-      t.hp = cap(t.hp + heal, 0, t.maxHp);
-      t.status.regen = Math.max(0, t.status.regen - 1);
-      if (isPlayer) AUDIO.heal();
-      pushLog(`${isPlayer ? '플레이어' : '적'} 재생 +${heal}`);
-    }
-  }
-
-  function tickEndStatus(t) {
-    if (t.status.weak > 0) t.status.weak--;
-    if (t.status.vulnerable > 0) t.status.vulnerable--;
-  }
-
-  function addStatus(target, key, v) {
-    target.status[key] = (target.status[key] || 0) + v;
-  }
-
-  function gainBlock(target, amount) {
-    target.block += Math.max(0, amount);
-  }
-
-  function healPlayer(c, amount) {
-    const p = c.player;
-    const old = p.hp;
-    p.hp = cap(p.hp + amount, 0, p.maxHp);
-    const healed = p.hp - old;
-    if (healed > 0) {
-      AUDIO.heal();
-      pushLog(`체력 +${healed}`);
-      if (hasRelic('river_shell')) gainBlock(p, 4);
-    }
-  }
-
-  function playerDamage(c, amount, pure = false) {
-    const p = c.player;
-    let dmg = Math.max(0, amount);
-    if (p.status.vulnerable > 0) dmg = Math.ceil(dmg * 1.5);
-    if (!pure && p.block > 0) {
-      const b = Math.min(p.block, dmg);
-      p.block -= b;
-      dmg -= b;
-    }
-    if (dmg > 0) {
-      p.hp -= dmg;
-      AUDIO.hit();
-      spawnFx('hitPlayer');
-      if (p.status.reflect > 0) {
-        const ref = Math.min(p.status.reflect, dmg);
-        enemyDamage(c, ref, false);
-      }
-    }
-    return dmg;
-  }
-
-  function enemyDamage(c, amount, aoe = false, pure = false) {
-    const e = c.enemy;
-    let dmg = Math.max(0, amount);
-    if (c.player.status.weak > 0 && !pure) dmg = Math.floor(dmg * 0.75);
-    if (e.status.vulnerable > 0 && !pure) dmg = Math.ceil(dmg * 1.5);
-
-    if (!pure && e.block > 0) {
-      const b = Math.min(e.block, dmg);
-      e.block -= b;
-      dmg -= b;
-    }
-    if (dmg > 0) {
-      e.hp -= dmg;
-      AUDIO.hit();
-      spawnFx('hitEnemy');
-      if (e.status.thorns > 0) playerDamage(c, e.status.thorns, true);
-    }
-    return dmg;
-  }
-
-  function drawCards(c, n) {
     for (let i = 0; i < n; i++) {
-      if (c.hand.length >= 10) return;
-      if (c.drawPile.length === 0) {
-        if (c.discardPile.length === 0) return;
-        c.drawPile = c.discardPile;
-        c.discardPile = [];
-        state.run.rng.shuffle(c.drawPile);
+      if (c.hand.length >= 7) break;
+
+      if (!c.drawPile.length) {
+        if (!c.discardPile.length) break;
+        c.drawPile = shuffle(c.discardPile.splice(0));
       }
+
       const card = c.drawPile.pop();
       if (card) c.hand.push(card);
     }
   }
 
-  function moveAllHandToDiscard(c) {
-    while (c.hand.length) c.discardPile.push(c.hand.pop());
-  }
-
-  function removeHandCard(uid) {
+  function queueEnemyIntent() {
     const c = state.combat;
-    const idx = c.hand.findIndex(k => k.uid === uid);
-    if (idx < 0) return null;
-    return c.hand.splice(idx, 1)[0];
-  }
+    const e = c.enemy;
+    const plan = e.cycle[e.idx % e.cycle.length];
+    e.idx += 1;
 
-  function cardCostNow(card) {
-    const c = state.combat;
-    if (!c) return card.cost;
-    let cost = card.cost;
-    if (hasRelic('echo_bell') && card.type === 'skill' && !c.player.firstSkillDiscount) {
-      cost = Math.max(0, cost - 1);
-    }
-    return cost;
-  }
-
-  function playCardByUid(uid, weakMode = false) {
-    const c = state.combat;
-    if (!c || c.phase !== 'player') return;
-    const card = removeHandCard(uid);
-    if (!card) return;
-
-    let cost = cardCostNow(card);
-    if (weakMode) cost = Math.max(0, cost - 1);
-    if (c.player.energy < cost) {
-      c.hand.push(card);
-      flash('에너지가 부족합니다.');
-      return;
+    let value = plan.value || 0;
+    if (plan.kind === 'attack') {
+      value += e.strength;
+      if (e.weak > 0) value = Math.max(1, Math.floor(value * 0.75));
     }
 
-    c.player.energy -= cost;
-    if (hasRelic('echo_bell') && card.type === 'skill') c.player.firstSkillDiscount = true;
-
-    AUDIO.playCard(card.rune);
-    resolveCard(c, card, weakMode ? 0.6 : 1);
-    triggerRelics('cardPlay', c, card);
-    c.discardPile.push(card);
-
-    if (c.enemy.hp <= 0) checkBattleEnd();
+    e.intent = { kind: plan.kind, value };
   }
 
-  function resolveCard(c, card, mul = 1) {
+  function applyEnemyStatus(key, amount) {
+    const e = state.combat.enemy;
+    e[key] = (e[key] || 0) + amount;
+  }
+
+  function gainBlock(amount) {
+    state.combat.playerBlock += amount;
+  }
+
+  function healPlayer(amount) {
+    state.run.hp = Math.min(state.run.maxHp, state.run.hp + amount);
+  }
+
+  function damageEnemy(base) {
+    const c = state.combat;
+    const e = c.enemy;
+    if (!e || e.hp <= 0) return;
+
+    let dmg = Math.max(0, Math.round(base + c.playerStrength));
+    if (e.vulnerable > 0) dmg = Math.round(dmg * 1.5);
+
+    const absorbed = Math.min(e.block, dmg);
+    e.block -= absorbed;
+    dmg -= absorbed;
+    e.hp -= dmg;
+
+    if (e.hp <= 0) {
+      e.hp = 0;
+      winCombat();
+    }
+  }
+
+  function damagePlayer(base) {
+    if (state.screen !== 'combat') return;
+    const c = state.combat;
+    let dmg = Math.max(0, Math.round(base));
+
+    const absorbed = Math.min(c.playerBlock, dmg);
+    c.playerBlock -= absorbed;
+    dmg -= absorbed;
+
+    state.run.hp -= dmg;
+    if (state.run.hp <= 0) {
+      state.run.hp = 0;
+      state.screen = 'gameover';
+      showToast('룬이 흩어졌습니다...');
+    }
+  }
+
+  function resolveCardEffect(card) {
     const e = card.effect;
-    const player = c.player;
+    if (!e) return;
 
+    if (e.attack) damageEnemy(e.attack);
+    if (e.multiAttack) e.multiAttack.forEach((v) => damageEnemy(v));
+    if (e.block) gainBlock(e.block);
+    if (e.draw) drawCards(e.draw);
+    if (e.heal) healPlayer(e.heal);
+    if (e.energy) state.combat.energy = Math.min(state.combat.maxEnergy, state.combat.energy + e.energy);
+    if (e.vulnerable) applyEnemyStatus('vulnerable', e.vulnerable);
+    if (e.weak) applyEnemyStatus('weak', e.weak);
     if (e.selfDamage) {
-      playerDamage(c, Math.floor(e.selfDamage * mul), true);
+      state.run.hp = Math.max(1, state.run.hp - e.selfDamage);
     }
-    if (e.damage) {
-      let d = Math.floor(e.damage * mul);
-      if (card.type === 'attack' && c.attackCounter === 0 && hasRelic('steel_mortar')) d += 4;
-      if (e.bonusPoison && c.enemy.status.poison > 0) d += e.bonusPoison;
-      enemyDamage(c, d, false);
-      c.attackCounter++;
-    }
-    if (e.block) gainBlock(player, Math.floor(e.block * mul));
-    if (e.heal) healPlayer(c, Math.floor(e.heal * mul));
-    if (e.draw) drawCards(c, Math.floor(e.draw * mul));
-    if (e.energy) player.energy += Math.floor(e.energy * mul);
-    if (e.poison) addStatus(c.enemy, 'poison', Math.max(1, Math.floor(e.poison * mul)));
-    if (e.regen) addStatus(player, 'regen', Math.max(1, Math.floor(e.regen * mul)));
-    if (e.weak) addStatus(c.enemy, 'weak', Math.max(1, Math.floor(e.weak * mul)));
-    if (e.vulnerable) {
-      addStatus(c.enemy, 'vulnerable', Math.max(1, Math.floor(e.vulnerable * mul)));
-      if (hasRelic('sable_ink')) enemyDamage(c, 2, false, true);
-    }
-    if (e.stun && !c.enemy.boss) addStatus(c.enemy, 'stun', Math.max(1, Math.floor(e.stun * mul)));
-    if (e.thorns) addStatus(player, 'thorns', Math.max(1, Math.floor(e.thorns * mul)));
-    if (e.reflect) addStatus(player, 'reflect', Math.max(1, Math.floor(e.reflect * mul)));
-    if (e.maxEnergyBattle) player.maxEnergy += e.maxEnergyBattle;
-    if (e.cleanse) {
-      player.status.poison = 0;
-      player.status.weak = Math.max(0, player.status.weak - 1);
-      player.status.vulnerable = Math.max(0, player.status.vulnerable - 1);
-    }
-    if (e.weakSelf) addStatus(player, 'weak', e.weakSelf);
-    pushLog(`${card.name} 사용`);
   }
 
-  function placeCardFusion(uid, slot) {
+  function consumeCardFromSource(source) {
+    const c = state.combat;
+    if (source.type === 'hand') {
+      return c.hand.splice(source.index, 1)[0] || null;
+    }
+    if (source.type === 'slot') {
+      const card = c.synth[source.index];
+      c.synth[source.index] = null;
+      return card;
+    }
+    return null;
+  }
+
+  function playCard(source) {
     const c = state.combat;
     if (!c || c.phase !== 'player') return;
-    if (c.fusionLock > 0) {
-      flash('룬 골렘의 봉쇄로 이번 턴은 합성 불가!');
-      return;
-    }
-    const card = removeHandCard(uid);
+
+    const card = source.card || consumeCardFromSource(source);
     if (!card) return;
 
-    if (c.fusion[slot]) {
-      c.hand.push(c.fusion[slot]);
-    }
-    c.fusion[slot] = card;
-    AUDIO.playCard(card.rune);
-
-    if (c.fusion[0] && c.fusion[1]) {
-      castFusion();
-    }
-  }
-
-  function castSingleFromFusion(slot) {
-    const c = state.combat;
-    if (!c || c.phase !== 'player') return;
-    if (c.fusionLock > 0) {
-      flash('합성 슬롯이 잠겨 있다.');
+    if (c.energy < card.cost) {
+      showToast('에너지가 부족합니다');
+      if (!source.card) {
+        if (source.type === 'hand') c.hand.splice(source.index, 0, card);
+        if (source.type === 'slot') c.synth[source.index] = card;
+      }
       return;
     }
-    const card = c.fusion[slot];
-    if (!card) {
-      flash('빈 슬롯입니다.');
-      return;
-    }
-    if (c.player.energy < 1) {
-      flash('에너지가 부족합니다.');
-      return;
-    }
-    c.player.energy -= 1;
-    c.fusion[slot] = null;
 
-    const weak = {
-      fire: { damage: 8 },
-      water: { block: 8, draw: 1 },
-      lightning: { damage: 7, energy: 1 },
-      nature: { heal: 5, poison: 2 },
-      stone: { block: 10 }
-    }[card.rune];
-
-    const temp = { ...card, effect: weak, name: `${card.name}(단일)` };
-    resolveCard(c, temp, 1);
+    c.energy -= card.cost;
+    resolveCardEffect(card);
     c.discardPile.push(card);
-    pushLog(`단일 룬 발동 (${RUNE_LABEL[card.rune]})`);
-    if (c.enemy.hp <= 0) checkBattleEnd();
+
+    if (state.screen === 'combat' && c.enemy.hp > 0) {
+      showToast(`${card.name} 사용`);
+    }
   }
 
-  function castFusion() {
+  function comboKey(a, b) {
+    return [a, b].sort().join('+');
+  }
+
+  function activateSynthesis() {
     const c = state.combat;
     if (!c || c.phase !== 'player') return;
-    if (c.fusionLock > 0) {
-      flash('룬 봉쇄 상태에서는 합성할 수 없습니다.');
-      return;
-    }
-    if (!(c.fusion[0] && c.fusion[1])) {
-      flash('합성 슬롯 2칸이 필요합니다.');
-      return;
-    }
-    const r0 = c.fusion[0].rune;
-    const r1 = c.fusion[1].rune;
-    const key = [r0, r1].sort().join('+');
-    const f = FUSIONS[key];
-    if (!f) {
-      flash('알 수 없는 조합');
-      return;
-    }
-    if (c.player.energy < f.cost) {
-      flash(`에너지 ${f.cost} 필요`);
-      return;
-    }
+    if (!c.synth[0] || !c.synth[1]) return;
 
-    c.player.energy -= f.cost;
-    const usedA = c.fusion[0];
-    const usedB = c.fusion[1];
-    c.fusion[0] = null;
-    c.fusion[1] = null;
-    c.discardPile.push(usedA, usedB);
+    const a = c.synth[0];
+    const b = c.synth[1];
+    c.synth = [null, null];
 
-    AUDIO.fusion();
-    pushLog(`합성 ${f.name} 발동!`);
-    f.run(c);
-    triggerRelics('fusion', c, key);
+    const key = comboKey(a.rune, b.rune);
+    const combo = COMBO_EFFECTS[key];
 
-    if (c.enemy.hp <= 0) checkBattleEnd();
-  }
+    c.discardPile.push(a, b);
 
-  function checkBattleEnd() {
-    const c = state.combat;
-    if (!c || c.resultReady) return;
-    if (c.player.hp <= 0) {
-      c.resultReady = true;
-      AUDIO.bossLoop(false);
-      loseRun();
-      return;
-    }
-    if (c.enemy.hp <= 0) {
-      c.resultReady = true;
-      AUDIO.bossLoop(false);
-      winBattle();
+    if (combo) {
+      combo.apply();
+      showToast(`합성: ${combo.name}`);
+    } else {
+      damageEnemy(8);
+      gainBlock(4);
+      showToast('기본 공명 발동');
     }
   }
 
-  function winBattle() {
+  function endTurn() {
     const c = state.combat;
-    const run = state.run;
-    run.hp = cap(c.player.hp, 0, run.maxHp);
-    run.score += 55 + (c.nodeType === 'elite' ? 35 : 0) + (c.nodeType === 'boss' ? 120 : 0);
+    if (!c || c.phase !== 'player') return;
 
-    let gold = c.nodeType === 'elite' ? 55 : 34;
-    if (c.nodeType === 'boss') gold = 120;
-    if (hasRelic('dawn_coin')) gold = Math.floor(gold * 1.2);
-    if (run.flags.extraGoldNext) {
-      gold += run.flags.extraGoldNext;
-      run.flags.extraGoldNext = 0;
+    c.discardPile.push(...c.hand.splice(0));
+    c.phase = 'enemy';
+
+    const e = c.enemy;
+    e.block = 0;
+
+    const intent = e.intent;
+    if (intent.kind === 'attack') {
+      damagePlayer(intent.value);
+      showToast(`적 공격 ${intent.value}`);
+    } else if (intent.kind === 'guard') {
+      e.block += intent.value;
+      showToast(`적 방어 ${intent.value}`);
+    } else if (intent.kind === 'buff') {
+      e.strength += intent.value;
+      showToast(`적 강화 +${intent.value}`);
     }
-    run.gold += gold;
 
-    const rewards = {
-      title: c.nodeType === 'boss' ? '보스 격파' : '전투 승리',
-      gold,
-      cards: randomRewardCards(run),
-      relic: null,
-      nodeType: c.nodeType
+    if (state.screen !== 'combat') return;
+    if (e.hp <= 0) return;
+
+    if (e.vulnerable > 0) e.vulnerable -= 1;
+    if (e.weak > 0) e.weak -= 1;
+
+    c.turn += 1;
+    c.phase = 'player';
+    c.energy = c.maxEnergy;
+    c.playerBlock = 0;
+
+    drawCards(5);
+    queueEnemyIntent();
+  }
+
+  function offerRewardCards() {
+    return [
+      cloneCard(pick(CARD_LIBRARY).id),
+      cloneCard(pick(CARD_LIBRARY).id),
+      cloneCard(pick(CARD_LIBRARY).id)
+    ];
+  }
+
+  function winCombat() {
+    const c = state.combat;
+    if (!c) return;
+
+    state.run.gold += c.rewardGold;
+    state.run.battlesWon += 1;
+
+    state.reward = {
+      fromBoss: c.nodeType === 'boss',
+      gold: c.rewardGold,
+      cards: offerRewardCards(),
+      chosen: false
     };
 
-    if (c.nodeType === 'elite' || c.nodeType === 'boss' || run.flags.forceEliteReward) {
-      rewards.relic = randomRelic(run);
-      run.flags.forceEliteReward = false;
-    }
-
-    if (run.currentNode) run.currentNode.cleared = true;
-    state.reward = rewards;
+    state.combat = null;
     state.screen = 'reward';
-    saveRun();
   }
 
-  function loseRun() {
-    const run = state.run;
-    const p = state.profile;
-    p.bestFloor = Math.max(p.bestFloor, run.floor);
-    p.bestScore = Math.max(p.bestScore, run.score);
-    p.runs += 1;
-    saveProfile();
-    localStorage.removeItem(SAVE_KEY);
-    state.screen = 'gameover';
-    state.combat = null;
-  }
-
-  function completeNodeAndBackMap() {
-    const run = state.run;
-    if (!run) return;
-    if (run.currentNode) run.currentNode.cleared = true;
-    run.currentNode = null;
-    state.screen = 'map';
-    saveRun();
-  }
-
-  function afterBossClear() {
-    const run = state.run;
-    if (run.floor >= 3) {
-      run.score += 300;
-      victoryRun();
-      return;
-    }
-    run.floor += 1;
-    run.hp = cap(run.hp + 18, 0, run.maxHp);
-    run.map = generateMap(run.floor, run.rng);
-    run.pos = { depth: -1, lane: 1 };
-    run.currentNode = null;
-    flash(`층 ${run.floor} 진입`);
-    state.screen = 'map';
-    saveRun();
-  }
-
-  function victoryRun() {
-    const run = state.run;
-    const p = state.profile;
-    p.wins += 1;
-    p.runs += 1;
-    p.bestFloor = Math.max(p.bestFloor, 3);
-    p.bestScore = Math.max(p.bestScore, run.score);
-    p.unlockedRelics = Math.min(RELICS.length, p.unlockedRelics + 2);
-    if (run.daily) p.dailyWins[todaySeedKST()] = true;
-    saveProfile();
-    localStorage.removeItem(SAVE_KEY);
-    state.screen = 'victory';
-    state.combat = null;
-    state.reward = null;
-  }
-
-  function randomRewardCards(run) {
-    const pool = CARD_LIBRARY.filter(c => !c.id.startsWith('curse_'));
-    const arr = [];
-    for (let i = 0; i < 3; i++) {
-      arr.push(run.rng.pick(pool).id);
-    }
-    return arr;
-  }
-
-  function randomRelic(run) {
-    const available = RELICS.slice(0, state.profile.unlockedRelics).filter(r => !run.relics.includes(r.id));
-    if (available.length === 0) return run.rng.pick(RELICS).id;
-    return run.rng.pick(available).id;
-  }
-
-  function addRelicToRun(run, relicId) {
-    if (!relicId) return;
-    if (!run.relics.includes(relicId)) {
-      run.relics.push(relicId);
-      flash(`유물 획득: ${relicName(relicId)}`);
-    }
-  }
-
-  function relicName(id) {
-    const r = RELICS.find(k => k.id === id);
-    return r ? r.name : id;
-  }
-
-  function hasRelic(id) {
-    return !!(state.run && state.run.relics.includes(id));
-  }
-
-  function triggerRelics(hook, c, payload) {
-    const run = state.run;
-    if (!run) return;
-    for (const id of run.relics) {
-      switch (id) {
-        case 'catalyst':
-          if (hook === 'fusion') enemyDamage(c, 5, false, true);
-          break;
-        case 'lens':
-          if (hook === 'fusion') drawCards(c, 1);
-          break;
-        case 'amber_seal':
-          if (hook === 'battleStart') gainBlock(c.player, 8);
-          break;
-        case 'silver_prayer':
-          if (hook === 'turnStart') addStatus(c.player, 'regen', 1);
-          break;
-        case 'steel_mortar':
-          if (hook === 'turnStart') c.attackCounter = 0;
-          break;
-        case 'glass_phial':
-          if (hook === 'battleStart') c.player.tempEnergy = (c.player.tempEnergy || 0) + 1;
-          break;
-        case 'thorn_tiara':
-          if (hook === 'battleStart') addStatus(c.player, 'thorns', 2);
-          break;
-        case 'echo_bell':
-          if (hook === 'turnStart') c.player.firstSkillDiscount = false;
-          break;
-        case 'night_lantern':
-          if (hook === 'battleStart' && c.nodeType === 'elite') drawCards(c, 1);
-          break;
-        case 'magnet':
-          if (hook === 'cardPlay' && payload && payload.rune === 'lightning' && state.run.rng.next() < 0.30) {
-            c.player.energy += 1;
-            pushLog('자성 코어 발동: 에너지 +1');
+  function beginEvent() {
+    const events = [
+      {
+        title: '속삭이는 제단',
+        text: '핏빛 제단이 룬을 원합니다.',
+        options: [
+          {
+            label: 'HP 8 지불, 카드 1장 획득',
+            apply: () => {
+              state.run.hp = Math.max(1, state.run.hp - 8);
+              state.run.deck.push(cloneCard(pick(CARD_LIBRARY).id));
+              showToast('희생으로 힘을 얻었습니다');
+            }
+          },
+          {
+            label: '기도하고 회복 10',
+            apply: () => {
+              healPlayer(10);
+              showToast('정화의 바람이 감쌉니다');
+            }
           }
-          break;
+        ]
+      },
+      {
+        title: '떠돌이 연금술사',
+        text: '골드를 주면 시약을 건네줍니다.',
+        options: [
+          {
+            label: '30G 지불, 최대 에너지 +1',
+            apply: () => {
+              if (state.run.gold < 30) {
+                showToast('골드가 부족합니다');
+                return false;
+              }
+              state.run.gold -= 30;
+              state.run.maxEnergy = Math.min(6, state.run.maxEnergy + 1);
+              showToast('맥동이 빨라졌습니다');
+              return true;
+            }
+          },
+          {
+            label: '거절하고 20G 획득',
+            apply: () => {
+              state.run.gold += 20;
+              showToast('가벼운 거래 완료');
+            }
+          }
+        ]
       }
-    }
-  }
+    ];
 
-  function spawnFx(type) {
-    const c = state.combat;
-    if (!c) return;
-    c.fx.push({ type, t: 0, life: 0.35 + Math.random() * 0.25 });
-  }
-
-  function pushLog(msg) {
-    const c = state.combat;
-    if (!c) return;
-    c.log.unshift(msg);
-    if (c.log.length > 8) c.log.length = 8;
-  }
-
-  function flash(msg) {
-    state.notice = msg;
-    state.noticeTimer = 2.2;
-  }
-
-  function randomHighCard(rng) {
-    const picks = CARD_LIBRARY.filter(c => c.cost >= 2 && !c.id.startsWith('curse_'));
-    return rng.pick(picks).id;
-  }
-
-  function removeRandomCard(run, preferred = []) {
-    const idx = run.deck.findIndex(id => preferred.includes(id));
-    if (idx >= 0) {
-      const removed = run.deck.splice(idx, 1)[0];
-      flash(`카드 제거: ${CARD_BY_ID[removed].name}`);
-      return;
-    }
-    if (run.deck.length <= 5) return;
-    const i = run.rng.int(0, run.deck.length - 1);
-    const removed = run.deck.splice(i, 1)[0];
-    flash(`카드 제거: ${CARD_BY_ID[removed].name}`);
-  }
-
-  function boostRandomCard(run, amount) {
-    const id = run.rng.pick(run.deck);
-    if (!id) return;
-    run.mods[id] = run.mods[id] || { boost: 0, costDown: 0 };
-    run.mods[id].boost += amount;
-    flash(`${CARD_BY_ID[id].name} 강화 +${amount}`);
-  }
-
-  function boostRandomTypeCard(run, type, amount) {
-    const pool = run.deck.filter(id => CARD_BY_ID[id] && CARD_BY_ID[id].type === type);
-    if (pool.length === 0) return boostRandomCard(run, amount);
-    const id = run.rng.pick(pool);
-    run.mods[id] = run.mods[id] || { boost: 0, costDown: 0 };
-    run.mods[id].boost += amount;
-    flash(`${CARD_BY_ID[id].name} 강화 +${amount}`);
-  }
-
-  function transformCard(run) {
-    if (run.deck.length === 0) return;
-    const i = run.rng.int(0, run.deck.length - 1);
-    const old = run.deck[i];
-    const targetRune = run.rng.pick(RUNES);
-    const pool = CARD_LIBRARY.filter(c => c.rune === targetRune && !c.id.startsWith('curse_'));
-    const next = run.rng.pick(pool);
-    run.deck[i] = next.id;
-    flash(`${CARD_BY_ID[old].name} → ${next.name}`);
-  }
-
-  function buyEventRelic(run, price) {
-    if (run.gold < price) {
-      flash('골드가 부족합니다.');
-      return;
-    }
-    run.gold -= price;
-    addRelicToRun(run, randomRelic(run));
-  }
-
-  function duplicateRandomCard(run) {
-    const id = run.rng.pick(run.deck);
-    if (!id) return;
-    run.deck.push(id);
-    flash(`${CARD_BY_ID[id].name} 복제됨`);
-  }
-
-  function healRun(run, amount) {
-    const extra = hasRelic('deep_core') ? 10 : 0;
-    run.hp = cap(run.hp + amount + extra, 0, run.maxHp);
-  }
-
-  function openEvent() {
-    const ev = clone(state.run.rng.pick(EVENTS));
-    state.event = ev;
+    const ev = pick(events);
+    state.event = { ...ev, resolved: false };
     state.screen = 'event';
   }
 
-  function openShop() {
-    const run = state.run;
-    const cardPool = CARD_LIBRARY.filter(c => !c.id.startsWith('curse_'));
+  function beginShop() {
     state.shop = {
-      cards: [
-        { id: run.rng.pick(cardPool).id, cost: 52 },
-        { id: run.rng.pick(cardPool).id, cost: 58 },
-        { id: run.rng.pick(cardPool).id, cost: 64 }
-      ],
-      relics: [
-        { id: randomRelic(run), cost: 128 },
-        { id: randomRelic(run), cost: 142 }
-      ],
-      removeCost: 75
+      offers: [cloneCard(pick(CARD_LIBRARY).id), cloneCard(pick(CARD_LIBRARY).id), cloneCard(pick(CARD_LIBRARY).id)],
+      sold: [false, false, false],
+      cardPrice: 45,
+      healPrice: 30
     };
     state.screen = 'shop';
   }
 
-  function openRest() {
+  function beginRest() {
     state.rest = { used: false };
     state.screen = 'rest';
   }
 
-  function chooseMapNode(node) {
-    const run = state.run;
-    if (!run) return;
-    const nextDepth = run.pos.depth + 1;
-    if (node.depth !== nextDepth) return;
+  function proceedAfterReward() {
+    if (!state.reward) return;
 
-    if (run.pos.depth >= 0) {
-      const links = run.map.links[`${run.pos.depth}-${run.pos.lane}`] || [];
-      if (!links.includes(node.lane)) return;
-    }
-
-    run.pos = { depth: node.depth, lane: node.lane };
-    run.currentNode = node;
-
-    if (node.type === 'battle' || node.type === 'elite' || node.type === 'boss') {
-      startBattle(node.type);
-      return;
-    }
-    if (node.type === 'event') {
-      openEvent();
-      return;
-    }
-    if (node.type === 'shop') {
-      openShop();
-      return;
-    }
-    if (node.type === 'rest') {
-      openRest();
-      return;
-    }
-  }
-
-  function update(dt) {
-    state.frame++;
-    if (state.noticeTimer > 0) {
-      state.noticeTimer -= dt;
-      if (state.noticeTimer <= 0) state.notice = '';
-    }
-
-    if (state.combat && state.combat.fx.length) {
-      state.combat.fx = state.combat.fx.filter(f => {
-        f.t += dt;
-        return f.t < f.life;
-      });
-    }
-  }
-
-  function draw() {
-    ctx.clearRect(0, 0, V.w, V.h);
-    drawBackground();
-    state.uiButtons = [];
-    state.cardRects = [];
-
-    switch (state.screen) {
-      case 'title': drawTitle(); break;
-      case 'map': drawMap(); break;
-      case 'battle': drawBattle(); break;
-      case 'reward': drawReward(); break;
-      case 'event': drawEvent(); break;
-      case 'shop': drawShop(); break;
-      case 'rest': drawRest(); break;
-      case 'gameover': drawGameOver(); break;
-      case 'victory': drawVictory(); break;
-    }
-
-    drawNotice();
-  }
-
-  function drawBackground() {
-    const g = ctx.createLinearGradient(0, 0, 0, V.h);
-    g.addColorStop(0, '#6f583f');
-    g.addColorStop(0.5, '#4a3725');
-    g.addColorStop(1, PALETTE.bgDark);
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, V.w, V.h);
-
-    ctx.save();
-    ctx.globalAlpha = 0.22;
-    ctx.fillStyle = texture;
-    ctx.fillRect(0, 0, V.w, V.h);
-    ctx.restore();
-
-    for (let i = 0; i < 7; i++) {
-      const y = (i / 6) * V.h;
-      ctx.strokeStyle = `rgba(245,232,209,${0.04 + i * 0.005})`;
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(0, y + Math.sin((state.frame + i * 12) * 0.01) * 4);
-      ctx.bezierCurveTo(V.w * 0.3, y + 20, V.w * 0.7, y - 12, V.w, y + 6);
-      ctx.stroke();
-    }
-  }
-
-  function drawPanel(x, y, w, h, title) {
-    const g = ctx.createLinearGradient(x, y, x + w, y + h);
-    g.addColorStop(0, 'rgba(242,229,204,.93)');
-    g.addColorStop(1, 'rgba(228,209,177,.88)');
-    rrect(ctx, x, y, w, h, 14, g, PALETTE.uiLine, 2);
-    if (title) {
-      shadowText(ctx, title, x + 18, y + 30, PALETTE.ink, 24, 'left');
-      ctx.strokeStyle = 'rgba(79,59,39,.35)';
-      ctx.beginPath();
-      ctx.moveTo(x + 16, y + 40);
-      ctx.lineTo(x + w - 16, y + 40);
-      ctx.stroke();
-    }
-  }
-
-  function addButton(x, y, w, h, label, enabled, onClick, style = 'dark') {
-    const st = {
-      dark: { fill: 'rgba(63,45,30,.95)', stroke: '#bfa175', text: '#f4e8d1' },
-      light: { fill: 'rgba(235,214,181,.95)', stroke: '#8b7355', text: '#2f251a' },
-      warn: { fill: 'rgba(168,94,43,.95)', stroke: '#f2c48e', text: '#fff3df' },
-      good: { fill: 'rgba(66,122,68,.95)', stroke: '#b7dfb8', text: '#f2ffe9' }
-    }[style] || { fill: '#333', stroke: '#666', text: '#fff' };
-
-    const alpha = enabled ? 1 : 0.45;
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    rrect(ctx, x, y, w, h, 10, st.fill, st.stroke, 2);
-    shadowText(ctx, label, x + w / 2, y + h / 2 + 7, st.text, Math.max(14, Math.min(24, h * 0.35)), 'center');
-    ctx.restore();
-
-    state.uiButtons.push({ x, y, w, h, enabled, onClick });
-  }
-
-  function drawNotice() {
-    if (!state.notice) return;
-    const alpha = Math.min(1, state.noticeTimer / 0.3, state.noticeTimer);
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    const w = Math.min(V.w * 0.74, 700);
-    const x = (V.w - w) / 2;
-    const y = V.h - 58;
-    rrect(ctx, x, y, w, 42, 12, 'rgba(36,26,18,.88)', '#d0b38c', 2);
-    shadowText(ctx, state.notice, x + w / 2, y + 27, '#f9edd9', 20, 'center');
-    ctx.restore();
-  }
-
-  function drawTitle() {
-    const centerX = V.w / 2;
-    const panelW = Math.min(V.w * 0.86, 980);
-    const panelH = Math.min(V.h * 0.82, 620);
-    const px = centerX - panelW / 2;
-    const py = V.h * 0.08;
-
-    drawPanel(px, py, panelW, panelH, 'Rune Forge');
-
-    shadowText(ctx, '로그라이크 룬 합성 덱빌더', centerX, py + 90, '#50381f', 30, 'center');
-    shadowText(ctx, '합성 슬롯 2칸으로 10가지 원소 조합을 발동하세요.', centerX, py + 128, '#5f4b33', 22, 'center');
-
-    const seed = todaySeedKST();
-    const profile = state.profile;
-
-    const statY = py + 172;
-    const colW = panelW * 0.28;
-    const gap = panelW * 0.04;
-    const sx = px + panelW * 0.18;
-
-    drawMiniStat(sx, statY, colW, 76, '최고 층', `${profile.bestFloor}층`);
-    drawMiniStat(sx + colW + gap, statY, colW, 76, '최고 점수', `${profile.bestScore}`);
-    drawMiniStat(sx + (colW + gap) * 2, statY, colW, 76, '총 승리', `${profile.wins}`);
-
-    const btnW = Math.min(390, panelW * 0.56);
-    const btnX = centerX - btnW / 2;
-    const baseY = py + panelH - 250;
-
-    const hasSave = !!loadRun();
-    addButton(btnX, baseY, btnW, 56, '새 런 시작 (랜덤 시드)', true, () => {
-      AUDIO.resume();
-      makeRun(String(Date.now()), false);
-    }, 'dark');
-
-    addButton(btnX, baseY + 70, btnW, 56, `데일리 시드 시작 (${seed})`, true, () => {
-      AUDIO.resume();
-      makeRun(seed, true);
-    }, 'warn');
-
-    addButton(btnX, baseY + 140, btnW, 56, hasSave ? '중단된 런 이어하기' : '이어할 런 없음', hasSave, () => {
-      AUDIO.resume();
-      const loaded = loadRun();
-      if (!loaded) return;
-      loaded.rng = new RNG(loaded.seed);
-      state.run = loaded;
+    if (state.reward.fromBoss) {
+      if (state.run.floor >= state.run.maxFloor) {
+        state.screen = 'victory';
+        state.reward = null;
+        return;
+      }
+      state.run.floor += 1;
+      buildFloorMap();
       state.screen = 'map';
-      flash('런을 불러왔습니다.');
-    }, 'good');
-
-    const lore = [
-      '규칙: 카드 드래그 → 플레이 영역 또는 합성 슬롯',
-      '단축키: 1~9 카드, F 합성, G 단일 룬, E 턴 종료',
-      '3개 층을 돌파해 심연의 용을 쓰러뜨리세요.'
-    ];
-    lore.forEach((line, i) => {
-      shadowText(ctx, line, centerX, py + panelH - 18 - (2 - i) * 26, '#58442f', 20, 'center', 0.9);
-    });
-
-    drawRune(ctx, 'fire', px + 66, py + 76, 30);
-    drawRune(ctx, 'water', px + 112, py + 76, 30);
-    drawRune(ctx, 'lightning', px + panelW - 160, py + 76, 30);
-    drawRune(ctx, 'nature', px + panelW - 114, py + 76, 30);
-    drawRune(ctx, 'stone', px + panelW - 68, py + 76, 30);
-  }
-
-  function drawMiniStat(x, y, w, h, label, value) {
-    rrect(ctx, x, y, w, h, 10, 'rgba(76,54,34,.86)', '#c7a87c', 2);
-    shadowText(ctx, label, x + w / 2, y + 25, '#e6d2b3', 17, 'center');
-    shadowText(ctx, value, x + w / 2, y + 56, '#fff5e1', 27, 'center');
-  }
-
-  function drawMap() {
-    const run = state.run;
-    const panelW = Math.min(V.w * 0.96, 1160);
-    const panelH = Math.min(V.h * 0.94, 780);
-    const px = (V.w - panelW) / 2;
-    const py = (V.h - panelH) / 2;
-
-    drawPanel(px, py, panelW, panelH, `층 ${run.floor} 지도`);
-
-    drawRunHeader(px + 18, py + 54, panelW - 36, 56, run);
-
-    const mapX = px + 70;
-    const mapY = py + 132;
-    const mapW = panelW - 140;
-    const mapH = panelH - 240;
-
-    const rows = run.map.rows;
-    const depthCount = rows.length;
-
-    const nodePos = [];
-    for (let d = 0; d < depthCount; d++) {
-      nodePos[d] = [];
-      for (let lane = 0; lane < 3; lane++) {
-        const node = rows[d][lane];
-        if (!node) continue;
-        const x = mapX + lane * (mapW / 2);
-        const y = mapY + (d / (depthCount - 1)) * mapH;
-        nodePos[d][lane] = { x, y, node };
-      }
-    }
-
-    for (let d = 0; d < depthCount - 1; d++) {
-      for (let lane = 0; lane < 3; lane++) {
-        const cur = nodePos[d][lane];
-        if (!cur) continue;
-        const links = run.map.links[`${d}-${lane}`] || [];
-        for (const tLane of links) {
-          const nxt = nodePos[d + 1][tLane];
-          if (!nxt) continue;
-          ctx.strokeStyle = 'rgba(220,196,159,.35)';
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.moveTo(cur.x, cur.y);
-          ctx.bezierCurveTo(cur.x, (cur.y + nxt.y) * 0.5, nxt.x, (cur.y + nxt.y) * 0.5, nxt.x, nxt.y);
-          ctx.stroke();
-        }
-      }
-    }
-
-    const nextDepth = run.pos.depth + 1;
-    const allowed = new Set();
-    if (run.pos.depth < 0) {
-      for (let l = 0; l < 3; l++) {
-        if (rows[0][l]) allowed.add(`0-${l}`);
-      }
-    } else {
-      (run.map.links[`${run.pos.depth}-${run.pos.lane}`] || []).forEach(l => allowed.add(`${nextDepth}-${l}`));
-    }
-
-    for (let d = 0; d < depthCount; d++) {
-      for (let lane = 0; lane < 3; lane++) {
-        const p = nodePos[d][lane];
-        if (!p) continue;
-        const node = p.node;
-        const isAllowed = allowed.has(`${d}-${lane}`);
-        const isPassed = d < run.pos.depth || (d === run.pos.depth && lane === run.pos.lane);
-        drawNode(p.x, p.y, node, isAllowed, isPassed);
-        if (isAllowed) {
-          state.uiButtons.push({ x: p.x - 26, y: p.y - 26, w: 52, h: 52, enabled: true, onClick: () => chooseMapNode(node) });
-        }
-      }
-    }
-
-    const markerY = run.pos.depth < 0 ? mapY - 28 : mapY + (run.pos.depth / (depthCount - 1)) * mapH;
-    const markerX = mapX + run.pos.lane * (mapW / 2);
-    ctx.fillStyle = 'rgba(248,226,192,.9)';
-    ctx.beginPath();
-    ctx.moveTo(markerX, markerY - 10);
-    ctx.lineTo(markerX - 10, markerY + 8);
-    ctx.lineTo(markerX + 10, markerY + 8);
-    ctx.closePath();
-    ctx.fill();
-
-    addButton(px + 22, py + panelH - 84, 220, 48, '런 포기', true, () => {
-      localStorage.removeItem(SAVE_KEY);
-      state.run = null;
-      state.screen = 'title';
-      flash('런을 종료했습니다.');
-    }, 'warn');
-
-    addButton(px + panelW - 242, py + panelH - 84, 220, 48, '덱 보기', true, () => {
-      flash(`덱 ${run.deck.length}장 | 유물 ${run.relics.length}개`);
-    }, 'light');
-  }
-
-  function drawRunHeader(x, y, w, h, run) {
-    rrect(ctx, x, y, w, h, 10, 'rgba(68,49,33,.88)', '#bb9c70', 2);
-    const cols = [
-      `체력 ${run.hp}/${run.maxHp}`,
-      `골드 ${run.gold}`,
-      `덱 ${run.deck.length}`,
-      `유물 ${run.relics.length}`,
-      `시드 ${run.seed}`
-    ];
-    cols.forEach((t, i) => {
-      shadowText(ctx, t, x + 24 + i * (w - 48) / 5, y + 35, '#f4e8d1', 18, 'left');
-    });
-  }
-
-  function nodeColor(type) {
-    return {
-      battle: '#915f3b',
-      elite: '#aa6f47',
-      event: '#6e6287',
-      shop: '#5f7b51',
-      rest: '#4b7c79',
-      boss: '#9c3d3d'
-    }[type] || '#888';
-  }
-
-  function nodeLabel(type) {
-    return {
-      battle: '전투',
-      elite: '엘리트',
-      event: '이벤트',
-      shop: '상점',
-      rest: '휴식',
-      boss: '보스'
-    }[type] || type;
-  }
-
-  function drawNode(x, y, node, active, passed) {
-    const r = node.type === 'boss' ? 26 : 20;
-    const base = nodeColor(node.type);
-    const alpha = passed ? 0.45 : 1;
-    ctx.save();
-    ctx.globalAlpha = alpha;
-
-    const g = ctx.createRadialGradient(x - 4, y - 6, 2, x, y, r + 10);
-    g.addColorStop(0, '#f8e8ca');
-    g.addColorStop(1, base);
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.strokeStyle = active ? '#ffe7b8' : '#3d2a1d';
-    ctx.lineWidth = active ? 3 : 2;
-    ctx.stroke();
-
-    if (node.type === 'battle' || node.type === 'elite') {
-      ctx.strokeStyle = 'rgba(50,25,15,.7)';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(x - 8, y - 8);
-      ctx.lineTo(x + 8, y + 8);
-      ctx.moveTo(x + 8, y - 8);
-      ctx.lineTo(x - 8, y + 8);
-      ctx.stroke();
-    } else if (node.type === 'shop') {
-      ctx.fillStyle = 'rgba(255,245,216,.9)';
-      ctx.fillRect(x - 8, y - 5, 16, 10);
-      ctx.strokeRect(x - 8, y - 5, 16, 10);
-    } else if (node.type === 'rest') {
-      drawRune(ctx, 'nature', x, y, 16);
-    } else if (node.type === 'event') {
-      ctx.strokeStyle = 'rgba(255,243,219,.85)';
-      ctx.beginPath();
-      ctx.arc(x, y, 8, 0, Math.PI * 1.9);
-      ctx.stroke();
-      ctx.fillStyle = 'rgba(255,243,219,.85)';
-      ctx.fillRect(x - 1, y + 10, 2, 2);
-    } else if (node.type === 'boss') {
-      ctx.strokeStyle = 'rgba(255,233,210,.95)';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(x - 11, y + 8);
-      ctx.lineTo(x - 6, y - 12);
-      ctx.lineTo(x, y - 4);
-      ctx.lineTo(x + 6, y - 12);
-      ctx.lineTo(x + 11, y + 8);
-      ctx.stroke();
-    }
-    ctx.restore();
-
-    shadowText(ctx, nodeLabel(node.type), x, y + r + 20, '#f2ddba', 14, 'center', passed ? 0.5 : 0.9);
-  }
-
-  function drawBattle() {
-    const c = state.combat;
-    if (!c) return;
-    const run = state.run;
-
-    const panelPad = V.portrait ? 10 : 14;
-    const leftW = V.portrait ? V.w - panelPad * 2 : V.w * 0.36;
-    const rightW = V.w - leftW - panelPad * 3;
-    const topY = panelPad;
-
-    const leftX = panelPad;
-    const rightX = leftX + leftW + panelPad;
-
-    drawPanel(leftX, topY, leftW, V.h * 0.52, '연금술사');
-    drawPanel(rightX, topY, rightW, V.h * 0.52, c.enemy.name);
-
-    drawCombatPlayer(leftX + 14, topY + 54, leftW - 28, V.h * 0.52 - 70, c);
-    drawCombatEnemy(rightX + 14, topY + 54, rightW - 28, V.h * 0.52 - 70, c);
-
-    const midY = V.h * 0.54;
-    drawFusionArea(panelPad, midY, V.w - panelPad * 2, V.h * 0.17, c);
-
-    const handY = V.h * 0.72;
-    drawHandArea(panelPad, handY, V.w - panelPad * 2, V.h - handY - panelPad, c);
-
-    drawBattleHud(c, run);
-    drawCombatFx(c);
-
-    if (state.drag && state.drag.card) drawDraggingCard();
-  }
-
-  function drawBattleHud(c, run) {
-    const x = 14;
-    const y = 10;
-    const w = V.w - 28;
-    rrect(ctx, x, y, w, 44, 8, 'rgba(49,34,23,.82)', '#c0a178', 2);
-
-    const txt = [
-      `층 ${run.floor}`,
-      `턴 ${c.turn}`,
-      `에너지 ${c.player.energy}/${c.player.maxEnergy}`,
-      `덱 ${c.drawPile.length}`,
-      `버림 ${c.discardPile.length}`,
-      `골드 ${run.gold}`
-    ];
-    txt.forEach((t, i) => shadowText(ctx, t, x + 18 + i * 170, y + 28, '#f5e8ce', 18, 'left'));
-
-    const endW = 150;
-    addButton(V.w - endW - 24, y + 4, endW, 34, '턴 종료 [E]', c.phase === 'player', () => endPlayerTurn(), 'warn');
-  }
-
-  function drawCombatPlayer(x, y, w, h, c) {
-    const p = c.player;
-    shadowText(ctx, `HP ${p.hp}/${p.maxHp}`, x + 8, y + 24, '#3b2617', 26, 'left');
-    drawBar(x + 8, y + 32, w - 16, 16, p.hp / p.maxHp, PALETTE.hp);
-    shadowText(ctx, `방어 ${p.block}`, x + 8, y + 70, '#3b2617', 20, 'left');
-    drawBar(x + 8, y + 78, w - 16, 12, cap(p.block / 45, 0, 1), PALETTE.block);
-
-    drawStatusStack(x + 8, y + 102, p.status, true);
-
-    const portraitX = x + w * 0.5;
-    const portraitY = y + h * 0.68;
-    drawPlayerPortrait(portraitX, portraitY, Math.min(w, h) * 0.36);
-  }
-
-  function drawCombatEnemy(x, y, w, h, c) {
-    const e = c.enemy;
-    shadowText(ctx, `HP ${e.hp}/${e.maxHp}`, x + 8, y + 24, '#3b2617', 26, 'left');
-    drawBar(x + 8, y + 32, w - 16, 16, e.hp / e.maxHp, PALETTE.hp);
-    shadowText(ctx, `방어 ${e.block}`, x + 8, y + 70, '#3b2617', 20, 'left');
-    drawBar(x + 8, y + 78, w - 16, 12, cap(e.block / 55, 0, 1), PALETTE.block);
-
-    drawStatusStack(x + 8, y + 102, e.status, false);
-
-    const portraitX = x + w * 0.52;
-    const portraitY = y + h * 0.67;
-    drawEnemyPortrait(e, portraitX, portraitY, Math.min(w, h) * 0.34);
-
-    drawIntentBadge(e, x + w - 180, y + 8);
-  }
-
-  function drawBar(x, y, w, h, ratio, color) {
-    rrect(ctx, x, y, w, h, h / 2, 'rgba(36,26,19,.75)', '#3a2b1d', 1);
-    const fill = cap(ratio, 0, 1);
-    const g = ctx.createLinearGradient(x, y, x + w, y + h);
-    g.addColorStop(0, color);
-    g.addColorStop(1, '#f0dfc2');
-    rrect(ctx, x + 1.5, y + 1.5, (w - 3) * fill, h - 3, (h - 3) / 2, g, null, 0);
-  }
-
-  function drawStatusStack(x, y, status, isPlayer) {
-    const entries = [];
-    ['poison', 'regen', 'weak', 'vulnerable', 'stun', 'thorns', 'reflect'].forEach(k => {
-      const v = status[k] || 0;
-      if (v > 0) entries.push({ k, v });
-    });
-
-    if (entries.length === 0) {
-      shadowText(ctx, '상태 이상 없음', x, y + 18, '#6a563e', 15, 'left');
+      state.reward = null;
+      showToast(`Floor ${state.run.floor} 시작`);
       return;
     }
 
-    entries.forEach((e, i) => {
-      const bx = x + (i % 4) * 92;
-      const by = y + Math.floor(i / 4) * 24;
-      rrect(ctx, bx, by, 86, 20, 6, 'rgba(60,42,27,.85)', '#b89e74', 1);
-      shadowText(ctx, `${statusName(e.k)} ${e.v}`, bx + 8, by + 15, isPlayer ? '#ecdfc8' : '#ffe5cd', 14, 'left');
-    });
-  }
-
-  function statusName(k) {
-    return {
-      poison: '독', regen: '재생', weak: '약화', vulnerable: '취약', stun: '기절',
-      thorns: '가시', reflect: '반사'
-    }[k] || k;
-  }
-
-  function drawIntentBadge(e, x, y) {
-    rrect(ctx, x, y, 168, 52, 10, 'rgba(58,40,26,.9)', '#d2b58f', 2);
-    const intent = e.intent;
-    shadowText(ctx, `의도: ${INTENT_LABEL[intent.kind] || intent.kind}`, x + 10, y + 22, '#f8e8cb', 16, 'left');
-    let detail = '';
-    if (intent.v) detail += `${intent.v}${intent.hits ? 'x' + intent.hits : ''}`;
-    if (intent.block) detail += `방어 ${intent.block}`;
-    if (intent.str) detail += `힘+${intent.str}`;
-    if (intent.weak) detail += `약화${intent.weak}`;
-    if (intent.vuln) detail += ` 취약${intent.vuln}`;
-    if (intent.note) detail += ` ${intent.note}`;
-    shadowText(ctx, detail.trim(), x + 10, y + 42, '#f2d7b3', 14, 'left');
-  }
-
-  function drawPlayerPortrait(cx, cy, size) {
-    ctx.save();
-    const grad = ctx.createRadialGradient(cx - size * 0.2, cy - size * 0.3, 4, cx, cy, size * 1.1);
-    grad.addColorStop(0, '#f0d9b7');
-    grad.addColorStop(1, '#8f6f4c');
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(cx, cy, size * 0.54, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = '#3a2a1b';
-    ctx.beginPath();
-    ctx.arc(cx - size * 0.16, cy - size * 0.08, size * 0.06, 0, Math.PI * 2);
-    ctx.arc(cx + size * 0.16, cy - size * 0.08, size * 0.06, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.strokeStyle = '#3a2a1b';
-    ctx.lineWidth = size * 0.05;
-    ctx.beginPath();
-    ctx.arc(cx, cy + size * 0.08, size * 0.2, 0.15, Math.PI - 0.15);
-    ctx.stroke();
-
-    drawRune(ctx, 'fire', cx - size * 0.7, cy - size * 0.4, size * 0.25);
-    drawRune(ctx, 'water', cx + size * 0.7, cy - size * 0.4, size * 0.25);
-    drawRune(ctx, 'stone', cx, cy + size * 0.75, size * 0.22);
-    ctx.restore();
-  }
-
-  function drawEnemyPortrait(enemy, cx, cy, size) {
-    ctx.save();
-    const hue = enemy.style?.hue || '#7e5f49';
-    const g = ctx.createRadialGradient(cx - size * 0.15, cy - size * 0.15, 2, cx, cy, size * 0.95);
-    g.addColorStop(0, '#f0dcc0');
-    g.addColorStop(1, hue);
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.ellipse(cx, cy, size * 0.65, size * 0.55, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    if (enemy.style?.horn) {
-      ctx.fillStyle = '#5b3d2b';
-      ctx.beginPath();
-      ctx.moveTo(cx - size * 0.42, cy - size * 0.38);
-      ctx.lineTo(cx - size * 0.25, cy - size * 0.74);
-      ctx.lineTo(cx - size * 0.12, cy - size * 0.33);
-      ctx.closePath();
-      ctx.fill();
-      ctx.beginPath();
-      ctx.moveTo(cx + size * 0.42, cy - size * 0.38);
-      ctx.lineTo(cx + size * 0.25, cy - size * 0.74);
-      ctx.lineTo(cx + size * 0.12, cy - size * 0.33);
-      ctx.closePath();
-      ctx.fill();
-    }
-
-    if (enemy.style?.wings) {
-      ctx.fillStyle = 'rgba(82,61,44,.65)';
-      ctx.beginPath();
-      ctx.ellipse(cx - size * 0.75, cy - size * 0.05, size * 0.28, size * 0.42, -0.5, 0, Math.PI * 2);
-      ctx.ellipse(cx + size * 0.75, cy - size * 0.05, size * 0.28, size * 0.42, 0.5, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    ctx.fillStyle = '#2e2015';
-    ctx.beginPath();
-    ctx.arc(cx - size * 0.18, cy - size * 0.08, size * 0.07, 0, Math.PI * 2);
-    ctx.arc(cx + size * 0.18, cy - size * 0.08, size * 0.07, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.strokeStyle = '#2e2015';
-    ctx.lineWidth = size * 0.05;
-    ctx.beginPath();
-    ctx.moveTo(cx - size * 0.18, cy + size * 0.2);
-    ctx.lineTo(cx + size * 0.18, cy + size * 0.2);
-    ctx.stroke();
-
-    ctx.restore();
-  }
-
-  function drawFusionArea(x, y, w, h, c) {
-    drawPanel(x, y, w, h, '룬 합성 그리드');
-
-    const slotW = Math.min(180, w * 0.18);
-    const slotH = h - 54;
-    const gap = Math.min(38, w * 0.03);
-    const s1x = x + w * 0.5 - slotW - gap * 0.5;
-    const s2x = x + w * 0.5 + gap * 0.5;
-    const sy = y + 40;
-
-    state.zones.fusion1 = { x: s1x, y: sy, w: slotW, h: slotH };
-    state.zones.fusion2 = { x: s2x, y: sy, w: slotW, h: slotH };
-
-    drawFusionSlot(state.zones.fusion1, c.fusion[0], 1);
-    drawFusionSlot(state.zones.fusion2, c.fusion[1], 2);
-
-    const playW = Math.min(220, w * 0.22);
-    const playX = x + 24;
-    const playY = sy;
-    state.zones.play = { x: playX, y: playY, w: playW, h: slotH };
-    drawPlayZone(state.zones.play);
-
-    const infoX = x + w - 300;
-    const infoW = 280;
-    const infoY = sy;
-    rrect(ctx, infoX, infoY, infoW, slotH, 10, 'rgba(64,46,30,.86)', '#c0a178', 2);
-
-    const ready = c.fusion[0] && c.fusion[1];
-    const locked = c.fusionLock > 0;
-    let txt = locked ? '룬 골렘 봉쇄: 이번 턴 합성 불가' : '두 장을 넣어 합성하세요';
-    if (ready) {
-      const key = [c.fusion[0].rune, c.fusion[1].rune].sort().join('+');
-      const f = FUSIONS[key];
-      txt = f ? `${f.name}\n${f.desc}\n비용 ${f.cost}` : '정의되지 않은 조합';
-      if (locked) txt = `봉쇄 중\n${txt}`;
-    }
-    wrapText(ctx, txt.replace(/\n/g, ' '), infoX + 12, infoY + 24, infoW - 24, 19, 4, '#f3e5cd', 16);
-
-    addButton(infoX + 12, infoY + slotH - 48, 124, 36, '합성 [F]', ready && c.phase === 'player' && !locked, () => castFusion(), 'warn');
-    const hasSingle = !!(c.fusion[0] || c.fusion[1]);
-    addButton(infoX + 146, infoY + slotH - 48, 122, 36, '단일 [G]', hasSingle && c.phase === 'player' && !locked, () => {
-      if (c.fusion[0]) castSingleFromFusion(0);
-      else if (c.fusion[1]) castSingleFromFusion(1);
-    }, 'light');
-  }
-
-  function drawPlayZone(z) {
-    const g = ctx.createLinearGradient(z.x, z.y, z.x, z.y + z.h);
-    g.addColorStop(0, 'rgba(102,67,45,.9)');
-    g.addColorStop(1, 'rgba(63,42,27,.9)');
-    rrect(ctx, z.x, z.y, z.w, z.h, 10, g, '#c9ab82', 2);
-    shadowText(ctx, '플레이 영역', z.x + z.w / 2, z.y + z.h / 2 + 7, '#f5e8ce', 18, 'center');
-  }
-
-  function drawFusionSlot(slot, card, index) {
-    const g = ctx.createLinearGradient(slot.x, slot.y, slot.x + slot.w, slot.y + slot.h);
-    g.addColorStop(0, 'rgba(230,214,185,.9)');
-    g.addColorStop(1, 'rgba(210,189,156,.9)');
-    rrect(ctx, slot.x, slot.y, slot.w, slot.h, 10, g, '#8f7457', 2);
-    shadowText(ctx, `슬롯 ${index}`, slot.x + 10, slot.y + 24, '#4a3522', 16, 'left');
-
-    if (card) {
-      drawCardMini(card, slot.x + slot.w / 2 - 58, slot.y + 28, 116, slot.h - 34, 1);
-    } else {
-      ctx.save();
-      ctx.globalAlpha = 0.38;
-      drawRune(ctx, RUNES[index - 1], slot.x + slot.w / 2, slot.y + slot.h / 2 + 6, 24);
-      ctx.restore();
-    }
-  }
-
-  function drawHandArea(x, y, w, h, c) {
-    drawPanel(x, y, w, h, `손패 ${c.hand.length}`);
-
-    const hand = c.hand;
-    const count = hand.length;
-    const cw = V.portrait ? 95 : 118;
-    const ch = V.portrait ? 134 : 168;
-    const spread = count > 1 ? Math.min(cw * 0.92, (w - 40 - cw) / (count - 1)) : 0;
-    const baseX = x + (w - (cw + spread * Math.max(0, count - 1))) / 2;
-    const cardY = y + h - ch - 12;
-
-    for (let i = 0; i < count; i++) {
-      const card = hand[i];
-      if (state.drag && state.drag.uid === card.uid) continue;
-      const cx = baseX + i * spread;
-      drawCardMini(card, cx, cardY, cw, ch, 1);
-      state.cardRects.push({ uid: card.uid, x: cx, y: cardY, w: cw, h: ch });
-    }
-
-    const deckX = x + 18;
-    const stackY = y + 46;
-    drawDeckStack(deckX, stackY, 80, 110, '뽑기', c.drawPile.length);
-    drawDeckStack(deckX + 92, stackY, 80, 110, '버림', c.discardPile.length);
-  }
-
-  function drawDeckStack(x, y, w, h, label, n) {
-    for (let i = 3; i >= 0; i--) {
-      rrect(ctx, x + i * 2, y + i * 2, w, h, 8, 'rgba(180,160,131,.85)', '#79624b', 1);
-    }
-    shadowText(ctx, label, x + w / 2 + 3, y + h + 20, '#f0e0c7', 16, 'center');
-    shadowText(ctx, String(n), x + w / 2 + 3, y + h + 40, '#ffeecf', 20, 'center');
-  }
-
-  function drawCardMini(card, x, y, w, h, alpha = 1) {
-    ctx.save();
-    ctx.globalAlpha = alpha;
-
-    const g = ctx.createLinearGradient(x, y, x + w, y + h);
-    g.addColorStop(0, PALETTE.cardBg);
-    g.addColorStop(1, '#e1d2b7');
-    rrect(ctx, x, y, w, h, 10, g, PALETTE.cardEdge, 2);
-
-    const runeCol = PALETTE.runes[card.rune] || '#bbb';
-    ctx.fillStyle = runeCol;
-    ctx.fillRect(x + 4, y + 4, w - 8, 5);
-
-    rrect(ctx, x + w - 34, y + 8, 26, 26, 8, 'rgba(75,54,37,.92)', '#e6d1af', 1.5);
-    shadowText(ctx, String(card.cost), x + w - 21, y + 28, '#f9efdb', 18, 'center');
-
-    drawRune(ctx, card.rune, x + 20, y + 21, 13);
-
-    shadowText(ctx, card.name, x + w / 2, y + 52, '#2f251a', Math.max(12, Math.min(20, w * 0.12)), 'center');
-    shadowText(ctx, CARD_TYPES[card.type], x + 10, y + 74, '#4a3a29', Math.max(10, Math.min(14, w * 0.1)), 'left');
-    wrapText(ctx, card.desc, x + 10, y + 94, w - 20, 14, 5, '#312719', Math.max(10, Math.min(13, w * 0.1)));
-
-    ctx.restore();
-  }
-
-  function drawDraggingCard() {
-    const d = state.drag;
-    const w = d.w;
-    const h = d.h;
-    drawCardMini(d.card, d.x - w / 2, d.y - h / 2, w, h, 0.96);
-  }
-
-  function drawCombatFx(c) {
-    if (!c.fx.length) return;
-
-    const enemyZone = { x: V.w * 0.66, y: V.h * 0.22 };
-    const playerZone = { x: V.w * 0.19, y: V.h * 0.25 };
-
-    c.fx.forEach(f => {
-      const t = f.t / f.life;
-      const alpha = 1 - t;
-      ctx.save();
-      ctx.globalAlpha = alpha;
-
-      if (f.type === 'hitEnemy') {
-        for (let i = 0; i < 8; i++) {
-          const a = i / 8 * Math.PI * 2 + t * 5;
-          const r = 10 + t * 90;
-          const x = enemyZone.x + Math.cos(a) * r;
-          const y = enemyZone.y + Math.sin(a) * r;
-          ctx.strokeStyle = `rgba(232,93,58,${alpha})`;
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.moveTo(x - 5, y - 5);
-          ctx.lineTo(x + 5, y + 5);
-          ctx.stroke();
-        }
-      }
-      if (f.type === 'hitPlayer') {
-        for (let i = 0; i < 6; i++) {
-          const a = i / 6 * Math.PI * 2 + t * 4;
-          const r = 8 + t * 70;
-          const x = playerZone.x + Math.cos(a) * r;
-          const y = playerZone.y + Math.sin(a) * r;
-          ctx.fillStyle = `rgba(245,197,66,${alpha})`;
-          ctx.beginPath();
-          ctx.arc(x, y, 2 + t * 4, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
-
-      ctx.restore();
-    });
-  }
-
-  function drawReward() {
-    const run = state.run;
-    const r = state.reward;
-    const pw = Math.min(V.w * 0.9, 1080);
-    const ph = Math.min(V.h * 0.9, 700);
-    const px = (V.w - pw) / 2;
-    const py = (V.h - ph) / 2;
-    drawPanel(px, py, pw, ph, r.title);
-
-    shadowText(ctx, `골드 +${r.gold}`, px + 24, py + 88, '#4a361f', 30, 'left');
-    shadowText(ctx, `현재 골드 ${run.gold}`, px + 24, py + 124, '#5d472f', 21, 'left');
-
-    shadowText(ctx, '카드 1장 선택', px + 24, py + 172, '#4f3925', 24, 'left');
-
-    const cw = 180;
-    const ch = 250;
-    const gap = 28;
-    const total = cw * 3 + gap * 2;
-    const startX = px + (pw - total) / 2;
-    const y = py + 198;
-
-    r.cards.forEach((id, i) => {
-      const card = createCardInstance(id, run);
-      const x = startX + i * (cw + gap);
-      drawCardMini(card, x, y, cw, ch);
-      state.uiButtons.push({ x, y, w: cw, h: ch, enabled: true, onClick: () => {
-        run.deck.push(id);
-        flash(`카드 획득: ${CARD_BY_ID[id].name}`);
-        finishReward();
-      }});
-    });
-
-    if (r.relic) {
-      const relic = RELICS.find(k => k.id === r.relic);
-      rrect(ctx, px + 24, py + ph - 132, 460, 98, 10, 'rgba(68,49,33,.86)', '#c5a67c', 2);
-      shadowText(ctx, `유물: ${relic.name}`, px + 40, py + ph - 92, '#f8e7cb', 22, 'left');
-      shadowText(ctx, relic.desc, px + 40, py + ph - 62, '#e5cfad', 16, 'left');
-      addButton(px + 500, py + ph - 110, 200, 56, '유물 획득', true, () => {
-        addRelicToRun(run, r.relic);
-        r.relic = null;
-        finishReward();
-      }, 'good');
-    }
-
-    addButton(px + pw - 222, py + ph - 74, 200, 48, '보상 건너뛰기', true, () => finishReward(), 'light');
-  }
-
-  function finishReward() {
-    const run = state.run;
-    const r = state.reward;
-
-    if (r.relic) {
-      addRelicToRun(run, r.relic);
-      r.relic = null;
-    }
-
+    state.screen = 'map';
     state.reward = null;
-    state.combat = null;
+  }
 
-    if (run.currentNode && run.currentNode.type === 'boss') {
-      afterBossClear();
-    } else {
-      completeNodeAndBackMap();
+  function currentPosFromEvent(ev) {
+    const rect = canvas.getBoundingClientRect();
+    const x = (ev.clientX - rect.left) * (GAME_W / rect.width);
+    const y = (ev.clientY - rect.top) * (GAME_H / rect.height);
+    if (x < 0 || y < 0 || x > GAME_W || y > GAME_H) return null;
+    return { x, y };
+  }
+
+  function inRect(p, r) {
+    return p.x >= r.x && p.y >= r.y && p.x <= r.x + r.w && p.y <= r.y + r.h;
+  }
+
+  function addButton(x, y, w, h, label, action, enabled = true, payload = null) {
+    state.buttons.push({ x, y, w, h, label, action, enabled, payload });
+  }
+
+  function hitButton(pos) {
+    for (let i = state.buttons.length - 1; i >= 0; i--) {
+      const b = state.buttons[i];
+      if (!b.enabled) continue;
+      if (inRect(pos, b)) return b;
+    }
+    return null;
+  }
+
+  function tryStartDrag(pos) {
+    const c = state.combat;
+    if (!c || c.phase !== 'player' || c.deckOverlay) return false;
+
+    for (let i = c.handRects.length - 1; i >= 0; i--) {
+      const hr = c.handRects[i];
+      if (inRect(pos, hr.hit)) {
+        state.drag = {
+          source: 'hand',
+          index: hr.index,
+          card: c.hand[hr.index],
+          x: pos.x,
+          y: pos.y,
+          ox: pos.x - hr.hit.x,
+          oy: pos.y - hr.hit.y
+        };
+        return true;
+      }
+    }
+
+    const slots = [c.zones.slotA, c.zones.slotB];
+    for (let i = 0; i < 2; i++) {
+      if (!c.synth[i]) continue;
+      const s = slots[i];
+      if (s && inRect(pos, s)) {
+        state.drag = {
+          source: 'slot',
+          index: i,
+          card: c.synth[i],
+          x: pos.x,
+          y: pos.y,
+          ox: 60,
+          oy: 80
+        };
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  function finishDrag(pos) {
+    const c = state.combat;
+    const d = state.drag;
+    state.drag = null;
+    if (!c || !d || c.phase !== 'player') return;
+
+    const slotA = c.zones.slotA;
+    const slotB = c.zones.slotB;
+    const playZone = c.zones.play;
+
+    const removeFromOrigin = () => {
+      if (d.source === 'hand') c.hand.splice(d.index, 1);
+      if (d.source === 'slot') c.synth[d.index] = null;
+    };
+
+    const placeInSlot = (slotIndex) => {
+      if (c.synth[slotIndex]) return false;
+      removeFromOrigin();
+      c.synth[slotIndex] = d.card;
+      showToast('합성 슬롯에 배치');
+      return true;
+    };
+
+    if (slotA && inRect(pos, slotA)) {
+      if (d.source === 'slot' && d.index === 0) return;
+      if (placeInSlot(0)) return;
+    }
+
+    if (slotB && inRect(pos, slotB)) {
+      if (d.source === 'slot' && d.index === 1) return;
+      if (placeInSlot(1)) return;
+    }
+
+    if (playZone && inRect(pos, playZone)) {
+      playCard({ type: d.source, index: d.index });
+      return;
+    }
+
+    if (d.source === 'slot') {
+      c.synth[d.index] = d.card;
     }
   }
 
-  function drawEvent() {
-    const run = state.run;
-    const ev = state.event;
-    const pw = Math.min(V.w * 0.88, 980);
-    const ph = Math.min(V.h * 0.86, 620);
-    const px = (V.w - pw) / 2;
-    const py = (V.h - ph) / 2;
-    drawPanel(px, py, pw, ph, ev.name);
+  function handleAction(btn) {
+    const { action, payload } = btn;
 
-    wrapText(ctx, ev.text, px + 30, py + 90, pw - 60, 30, 4, '#4a3522', 28);
+    if (action === 'start_run') {
+      createRun();
+      return;
+    }
 
-    const bx = px + 50;
-    const bw = pw - 100;
-    ev.options.forEach((op, i) => {
-      addButton(bx, py + 190 + i * 94, bw, 70, op.label, true, () => {
-        op.apply(run);
-        if (run.currentNode) run.currentNode.cleared = true;
-        state.event = null;
-        state.screen = 'map';
-        saveRun();
-      }, i === 1 ? 'warn' : i === 0 ? 'good' : 'light');
-    });
-  }
+    if (action === 'restart') {
+      state.screen = 'title';
+      state.run = null;
+      state.combat = null;
+      state.reward = null;
+      state.event = null;
+      state.shop = null;
+      state.rest = null;
+      state.drag = null;
+      return;
+    }
 
-  function drawShop() {
-    const run = state.run;
-    const shop = state.shop;
-    const pw = Math.min(V.w * 0.94, 1120);
-    const ph = Math.min(V.h * 0.92, 760);
-    const px = (V.w - pw) / 2;
-    const py = (V.h - ph) / 2;
-    drawPanel(px, py, pw, ph, '떠돌이 상점');
+    if (action === 'end_turn') {
+      endTurn();
+      return;
+    }
 
-    shadowText(ctx, `보유 골드: ${run.gold}`, px + 26, py + 82, '#4a3522', 30, 'left');
+    if (action === 'toggle_deck') {
+      if (state.combat) state.combat.deckOverlay = !state.combat.deckOverlay;
+      return;
+    }
 
-    shadowText(ctx, '카드', px + 26, py + 126, '#4b3722', 24, 'left');
-    const cw = 160;
-    const ch = 220;
-    const cardY = py + 146;
-    shop.cards.forEach((item, i) => {
-      const x = px + 30 + i * (cw + 24);
-      const card = createCardInstance(item.id, run);
-      drawCardMini(card, x, cardY, cw, ch);
-      addButton(x, cardY + ch + 8, cw, 40, `${item.cost}G 구매`, run.gold >= item.cost, () => {
-        run.gold -= item.cost;
-        run.deck.push(item.id);
-        flash(`${CARD_BY_ID[item.id].name} 획득`);
-        item.cost = 9999;
-      }, 'good');
-    });
+    if (action === 'close_deck') {
+      if (state.combat) state.combat.deckOverlay = false;
+      return;
+    }
 
-    shadowText(ctx, '유물', px + 620, py + 126, '#4b3722', 24, 'left');
-    shop.relics.forEach((item, i) => {
-      const y = py + 150 + i * 124;
-      rrect(ctx, px + 620, y, 450, 104, 10, 'rgba(69,50,34,.88)', '#bfa279', 2);
-      shadowText(ctx, relicName(item.id), px + 640, y + 38, '#f6e6cb', 24, 'left');
-      const desc = (RELICS.find(k => k.id === item.id) || { desc: '' }).desc;
-      shadowText(ctx, desc, px + 640, y + 64, '#e2cbab', 16, 'left');
-      addButton(px + 910, y + 30, 140, 42, `${item.cost}G`, run.gold >= item.cost, () => {
-        run.gold -= item.cost;
-        addRelicToRun(run, item.id);
-        item.cost = 9999;
-      }, 'warn');
-    });
+    if (action === 'synth') {
+      activateSynthesis();
+      return;
+    }
 
-    addButton(px + 620, py + ph - 132, 210, 56, `카드 제거 ${shop.removeCost}G`, run.gold >= shop.removeCost && run.deck.length > 6, () => {
-      run.gold -= shop.removeCost;
-      removeRandomCard(run);
-    }, 'light');
+    if (action === 'reward_pick') {
+      if (!state.reward || state.reward.chosen) return;
+      state.run.deck.push(payload.card);
+      state.reward.chosen = true;
+      showToast(`${payload.card.name} 획득`);
+      return;
+    }
 
-    addButton(px + pw - 240, py + ph - 72, 210, 48, '상점 나가기', true, () => {
-      if (run.currentNode) run.currentNode.cleared = true;
+    if (action === 'reward_skip') {
+      if (!state.reward) return;
+      state.reward.chosen = true;
+      showToast('보상을 건너뛰었습니다');
+      return;
+    }
+
+    if (action === 'reward_continue') {
+      if (!state.reward || !state.reward.chosen) return;
+      proceedAfterReward();
+      return;
+    }
+
+    if (action === 'event_choice') {
+      if (!state.event || state.event.resolved) return;
+      const ok = payload.apply();
+      if (ok === false) return;
+      state.event.resolved = true;
+      return;
+    }
+
+    if (action === 'event_continue') {
+      state.event = null;
+      state.screen = 'map';
+      return;
+    }
+
+    if (action === 'shop_buy') {
+      const s = state.shop;
+      if (!s || s.sold[payload.index]) return;
+      if (state.run.gold < s.cardPrice) {
+        showToast('골드가 부족합니다');
+        return;
+      }
+      state.run.gold -= s.cardPrice;
+      s.sold[payload.index] = true;
+      state.run.deck.push(payload.card);
+      showToast(`${payload.card.name} 구매`);
+      return;
+    }
+
+    if (action === 'shop_heal') {
+      const s = state.shop;
+      if (!s) return;
+      if (state.run.gold < s.healPrice) {
+        showToast('골드가 부족합니다');
+        return;
+      }
+      state.run.gold -= s.healPrice;
+      healPlayer(16);
+      showToast('체력 회복');
+      return;
+    }
+
+    if (action === 'shop_leave') {
       state.shop = null;
       state.screen = 'map';
-      saveRun();
-    }, 'dark');
-  }
+      return;
+    }
 
-  function drawRest() {
-    const run = state.run;
-    const pw = Math.min(V.w * 0.84, 920);
-    const ph = Math.min(V.h * 0.8, 540);
-    const px = (V.w - pw) / 2;
-    const py = (V.h - ph) / 2;
-    drawPanel(px, py, pw, ph, '휴식의 화로');
-
-    shadowText(ctx, `현재 체력 ${run.hp}/${run.maxHp}`, px + 34, py + 84, '#4a3522', 28, 'left');
-    shadowText(ctx, '불씨가 약하게 타오른다. 잠시 호흡을 고를 수 있다.', px + 34, py + 122, '#5d472f', 20, 'left');
-
-    const canUse = !state.rest.used;
-
-    addButton(px + 50, py + 180, pw - 100, 64, '체력 30 회복', canUse, () => {
-      healRun(run, 30);
+    if (action === 'rest_heal') {
+      if (!state.rest || state.rest.used) return;
+      healPlayer(Math.floor(state.run.maxHp * 0.30));
       state.rest.used = true;
-      flash('휴식으로 체력을 회복했습니다.');
-    }, 'good');
+      showToast('모닥불로 회복했습니다');
+      return;
+    }
 
-    addButton(px + 50, py + 262, pw - 100, 64, '최대 체력 +5', canUse, () => {
-      run.maxHp += 5;
-      run.hp += 5;
+    if (action === 'rest_forge') {
+      if (!state.rest || state.rest.used) return;
+      state.run.maxHp += 6;
+      state.run.hp = Math.min(state.run.maxHp, state.run.hp + 6);
       state.rest.used = true;
-      flash('신체가 단련되었습니다.');
-    }, 'light');
+      showToast('룬 그릇을 강화했습니다');
+      return;
+    }
 
-    addButton(px + pw - 250, py + ph - 68, 220, 46, '휴식 종료', true, () => {
-      if (run.currentNode) run.currentNode.cleared = true;
+    if (action === 'rest_leave') {
       state.rest = null;
       state.screen = 'map';
-      saveRun();
-    }, 'dark');
-  }
+      return;
+    }
 
-  function drawGameOver() {
-    const p = state.profile;
-    const pw = Math.min(V.w * 0.7, 760);
-    const ph = Math.min(V.h * 0.74, 520);
-    const px = (V.w - pw) / 2;
-    const py = (V.h - ph) / 2;
-    drawPanel(px, py, pw, ph, '실험 실패');
-
-    shadowText(ctx, '룬 용광로가 폭주했습니다.', px + pw / 2, py + 120, '#4f3926', 34, 'center');
-    shadowText(ctx, `최고 층: ${p.bestFloor}  |  최고 점수: ${p.bestScore}`, px + pw / 2, py + 182, '#5f4930', 23, 'center');
-
-    addButton(px + pw / 2 - 170, py + ph - 170, 340, 58, '다시 시작', true, () => {
-      state.run = null;
+    if (action === 'victory_title') {
       state.screen = 'title';
-    }, 'warn');
-
-    addButton(px + pw / 2 - 170, py + ph - 96, 340, 54, '타이틀로', true, () => {
       state.run = null;
-      state.screen = 'title';
-    }, 'dark');
-  }
-
-  function drawVictory() {
-    const run = state.run;
-    const p = state.profile;
-    const pw = Math.min(V.w * 0.74, 840);
-    const ph = Math.min(V.h * 0.78, 560);
-    const px = (V.w - pw) / 2;
-    const py = (V.h - ph) / 2;
-    drawPanel(px, py, pw, ph, '룬 포지 정복');
-
-    shadowText(ctx, '심연의 용을 봉인했습니다.', px + pw / 2, py + 116, '#4a3522', 34, 'center');
-    shadowText(ctx, `점수 ${run.score} | 승리 ${p.wins}회`, px + pw / 2, py + 164, '#5d472f', 24, 'center');
-    shadowText(ctx, `언락 유물 ${p.unlockedRelics}/${RELICS.length}`, px + pw / 2, py + 198, '#5d472f', 20, 'center');
-
-    drawRune(ctx, 'fire', px + 120, py + 110, 30);
-    drawRune(ctx, 'water', px + 170, py + 110, 30);
-    drawRune(ctx, 'lightning', px + pw - 220, py + 110, 30);
-    drawRune(ctx, 'nature', px + pw - 170, py + 110, 30);
-    drawRune(ctx, 'stone', px + pw - 120, py + 110, 30);
-
-    addButton(px + pw / 2 - 190, py + ph - 164, 380, 62, '새 런 시작', true, () => {
-      state.run = null;
-      makeRun(String(Date.now()), false);
-    }, 'good');
-
-    addButton(px + pw / 2 - 190, py + ph - 88, 380, 56, '타이틀로', true, () => {
-      state.run = null;
-      state.screen = 'title';
-    }, 'dark');
-  }
-
-  function onPointerDown(e) {
-    AUDIO.resume();
-    const p = getPointerPos(e);
-    state.pointer.x = p.x;
-    state.pointer.y = p.y;
-    state.pointer.down = true;
-    state.pointer.moved = false;
-
-    if (state.screen === 'battle') {
-      for (let i = state.cardRects.length - 1; i >= 0; i--) {
-        const r = state.cardRects[i];
-        if (rectHit(p.x, p.y, r)) {
-          const c = state.combat;
-          const card = c.hand.find(k => k.uid === r.uid);
-          if (!card) return;
-          state.drag = {
-            uid: card.uid,
-            card,
-            x: p.x,
-            y: p.y,
-            w: r.w,
-            h: r.h
-          };
-          return;
-        }
-      }
+      return;
     }
   }
 
-  function onPointerMove(e) {
-    const p = getPointerPos(e);
-    state.pointer.x = p.x;
-    state.pointer.y = p.y;
-    if (state.pointer.down) state.pointer.moved = true;
+  function onPointerDown(ev) {
+    const p = currentPosFromEvent(ev);
+    if (!p) return;
+
+    state.pointerDown = true;
+    if (canvas.setPointerCapture) {
+      try { canvas.setPointerCapture(ev.pointerId); } catch (e) {}
+    }
+
+    if (state.screen === 'combat') {
+      tryStartDrag(p);
+    }
+  }
+
+  function onPointerMove(ev) {
+    const p = currentPosFromEvent(ev);
+    if (!p) return;
+
     if (state.drag) {
       state.drag.x = p.x;
       state.drag.y = p.y;
     }
   }
 
-  function onPointerUp(e) {
-    const p = getPointerPos(e);
-    state.pointer.x = p.x;
-    state.pointer.y = p.y;
+  function onPointerUp(ev) {
+    const p = currentPosFromEvent(ev);
+    if (!state.pointerDown) return;
+    state.pointerDown = false;
 
-    if (state.drag) {
-      const uid = state.drag.uid;
-      const zones = state.zones;
-      if (zones.fusion1 && rectHit(p.x, p.y, zones.fusion1)) {
-        placeCardFusion(uid, 0);
-      } else if (zones.fusion2 && rectHit(p.x, p.y, zones.fusion2)) {
-        placeCardFusion(uid, 1);
-      } else if (zones.play && rectHit(p.x, p.y, zones.play)) {
-        playCardByUid(uid, false);
-      }
+    if (canvas.releasePointerCapture) {
+      try { canvas.releasePointerCapture(ev.pointerId); } catch (e) {}
+    }
+
+    if (!p) {
       state.drag = null;
-      state.pointer.down = false;
       return;
     }
 
-    const clicked = !state.pointer.moved;
-    if (clicked) {
-      for (let i = state.uiButtons.length - 1; i >= 0; i--) {
-        const b = state.uiButtons[i];
-        if (!b.enabled) continue;
-        if (rectHit(p.x, p.y, b)) {
-          b.onClick();
-          break;
+    if (state.drag) {
+      finishDrag(p);
+      return;
+    }
+
+    if (state.screen === 'map') {
+      for (let i = state.mapHitNodes.length - 1; i >= 0; i--) {
+        const n = state.mapHitNodes[i];
+        const dx = p.x - n.x;
+        const dy = p.y - n.y;
+        if (dx * dx + dy * dy <= n.r * n.r) {
+          if (!n.node.available || n.node.visited) {
+            showToast('아직 갈 수 없는 노드입니다');
+            return;
+          }
+          moveToNode(n.node);
+          return;
         }
       }
     }
 
-    state.pointer.down = false;
+    const btn = hitButton(p);
+    if (btn) handleAction(btn);
   }
 
-  function onKey(e) {
-    if (state.screen === 'battle') {
-      const c = state.combat;
-      if (!c || c.phase !== 'player') return;
-      if (/^[1-9]$/.test(e.key)) {
-        const idx = Number(e.key) - 1;
-        if (c.hand[idx]) playCardByUid(c.hand[idx].uid, false);
+  function roundedRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  }
+
+  function drawPanel(x, y, w, h, alpha = 1) {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = PALETTE.panel;
+    roundedRect(x, y, w, h, 12);
+    ctx.fill();
+    ctx.strokeStyle = PALETTE.line;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawButton(btn) {
+    const fill = btn.enabled ? '#d9c8aa' : '#b8ad9a';
+    const text = btn.enabled ? PALETTE.ink : '#5e5a54';
+    ctx.fillStyle = fill;
+    roundedRect(btn.x, btn.y, btn.w, btn.h, 10);
+    ctx.fill();
+    ctx.strokeStyle = PALETTE.line;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.fillStyle = text;
+    ctx.font = 'bold 24px Georgia';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(btn.label, btn.x + btn.w / 2, btn.y + btn.h / 2 + 1);
+  }
+
+  function drawWrappedText(text, x, y, maxWidth, lineHeight, color = PALETTE.ink, font = '20px Georgia') {
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.font = font;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+
+    const words = text.split(' ');
+    let line = '';
+    let yy = y;
+
+    for (let i = 0; i < words.length; i++) {
+      const test = line + words[i] + ' ';
+      if (ctx.measureText(test).width > maxWidth && i > 0) {
+        ctx.fillText(line, x, yy);
+        line = words[i] + ' ';
+        yy += lineHeight;
+      } else {
+        line = test;
       }
-      if (e.key === 'f' || e.key === 'F') castFusion();
-      if (e.key === 'g' || e.key === 'G') {
-        if (c.fusion[0]) castSingleFromFusion(0);
-        else if (c.fusion[1]) castSingleFromFusion(1);
+    }
+    if (line) ctx.fillText(line, x, yy);
+    ctx.restore();
+  }
+
+  function drawHpBar(x, y, w, h, hp, maxHp) {
+    const ratio = Math.max(0, Math.min(1, hp / Math.max(1, maxHp)));
+    let fill = '#5eb85e';
+    if (ratio < 0.66) fill = '#d09032';
+    if (ratio < 0.33) fill = '#c9493f';
+
+    ctx.fillStyle = '#5c4432';
+    roundedRect(x, y, w, h, 9);
+    ctx.fill();
+
+    ctx.fillStyle = fill;
+    roundedRect(x + 3, y + 3, (w - 6) * ratio, h - 6, 7);
+    ctx.fill();
+
+    ctx.strokeStyle = PALETTE.line;
+    ctx.lineWidth = 2;
+    roundedRect(x, y, w, h, 9);
+    ctx.stroke();
+  }
+
+  function renderTitle() {
+    drawPanel(280, 120, 720, 460);
+
+    ctx.fillStyle = PALETTE.ink;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    ctx.font = 'bold 72px Georgia';
+    ctx.fillText('Rune Forge', GAME_W / 2, 220);
+
+    ctx.font = '28px Georgia';
+    ctx.fillText('룬 합성 로그라이크 덱빌더', GAME_W / 2, 285);
+
+    ctx.font = '22px Georgia';
+    ctx.fillText('아래에서 위로 오르는 맵, 전투와 합성으로 보스를 돌파하세요.', GAME_W / 2, 350);
+
+    addButton(500, 430, 280, 72, '새 원정 시작', 'start_run', true);
+  }
+
+  function renderMap() {
+    const run = state.run;
+    const map = run.map;
+
+    drawPanel(24, 20, 1232, 84);
+    ctx.fillStyle = PALETTE.ink;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.font = 'bold 28px Georgia';
+    ctx.fillText(`Floor ${run.floor} / ${run.maxFloor}`, 44, 62);
+
+    ctx.font = '22px Georgia';
+    ctx.fillText(`HP ${run.hp}/${run.maxHp}   Gold ${run.gold}   Deck ${run.deck.length}`, 270, 62);
+
+    ctx.textAlign = 'right';
+    ctx.fillText('진행 방향: 아래 → 위', 1230, 62);
+
+    state.mapHitNodes = [];
+
+    for (const node of map.nodes) {
+      for (const cid of node.children) {
+        const child = getNodeById(cid);
+        if (!child) continue;
+
+        const highlight = node.visited && child.available;
+        ctx.strokeStyle = highlight ? '#f0e6d2' : '#6a5847';
+        ctx.lineWidth = highlight ? 5 : 3;
+        ctx.beginPath();
+        ctx.moveTo(node.x, node.y);
+        ctx.lineTo(child.x, child.y);
+        ctx.stroke();
       }
-      if (e.key === 'e' || e.key === 'E' || e.key === 'Enter') endPlayerTurn();
+    }
+
+    for (const node of map.nodes) {
+      const r = node.type === 'boss' ? 33 : 28;
+      let fill = '#7b6e60';
+      let text = '#3e362f';
+      let stroke = '#5e5245';
+
+      if (node.visited) {
+        fill = '#9f8d73';
+        stroke = '#f0e6d2';
+        text = '#2a1f14';
+      } else if (node.available) {
+        fill = '#f0e6d2';
+        stroke = '#f5c542';
+        text = '#2a1f14';
+      }
+
+      ctx.fillStyle = fill;
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = node.available ? 4 : 2;
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = text;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = node.type === 'boss' ? '28px Georgia' : '24px Georgia';
+      ctx.fillText(NODE_INFO[node.type].icon, node.x, node.y + 1);
+
+      if (node.available && !node.visited) {
+        ctx.font = '16px Georgia';
+        ctx.fillStyle = '#2a1f14';
+        ctx.fillText(NODE_INFO[node.type].label, node.x, node.y + 44);
+      }
+
+      state.mapHitNodes.push({ node, x: node.x, y: node.y, r });
+    }
+
+    ctx.fillStyle = '#f0e6d2';
+    ctx.font = '20px Georgia';
+    ctx.textAlign = 'center';
+    ctx.fillText('도달 가능한 노드만 밝게 표시됩니다. 첫 줄 3개 중 하나를 선택해 출발하세요.', GAME_W / 2, 698);
+  }
+
+  function drawCard(card, x, y, w, h, opts = {}) {
+    const runeColor = PALETTE.runes[card.rune] || PALETTE.line;
+
+    ctx.save();
+    if (opts.angle) {
+      ctx.translate(x + w / 2, y + h / 2);
+      ctx.rotate(opts.angle);
+      ctx.translate(-w / 2, -h / 2);
+      x = 0;
+      y = 0;
+    }
+
+    ctx.fillStyle = '#f0e6d2';
+    roundedRect(x, y, w, h, 12);
+    ctx.fill();
+
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = opts.cantPlay ? '#c9493f' : runeColor;
+    roundedRect(x, y, w, h, 12);
+    ctx.stroke();
+
+    ctx.fillStyle = runeColor;
+    ctx.beginPath();
+    ctx.arc(x + 24, y + 24, 16, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#2a1f14';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = '16px Georgia';
+    ctx.fillText(String(card.cost), x + 24, y + 25);
+
+    ctx.font = '18px Georgia';
+    ctx.fillText(RUNE_ICON[card.rune], x + w - 24, y + 25);
+
+    ctx.fillStyle = '#2a1f14';
+    ctx.textAlign = 'left';
+    ctx.font = 'bold 18px Georgia';
+    ctx.fillText(card.name, x + 14, y + 54);
+
+    drawWrappedText(card.text, x + 14, y + 80, w - 28, 22, '#2a1f14', '17px Georgia');
+
+    ctx.restore();
+  }
+
+  function renderCombat() {
+    const c = state.combat;
+    if (!c) return;
+
+    drawPanel(20, 16, 1240, 94);
+
+    drawHpBar(42, 36, 300, 28, state.run.hp, state.run.maxHp);
+    ctx.fillStyle = PALETTE.ink;
+    ctx.font = 'bold 20px Georgia';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`HP ${state.run.hp}/${state.run.maxHp}`, 52, 50);
+
+    drawPanel(360, 30, 140, 40);
+    ctx.fillStyle = PALETTE.ink;
+    ctx.textAlign = 'center';
+    ctx.fillText(`블록 ${c.playerBlock}`, 430, 51);
+
+    drawPanel(516, 30, 150, 40);
+    ctx.fillText(`에너지 ${c.energy}`, 591, 51);
+
+    drawPanel(680, 30, 220, 40);
+    ctx.fillText(`Floor ${state.run.floor} · 전투 ${c.battleIndex}`, 790, 51);
+
+    drawPanel(918, 30, 320, 40);
+    ctx.textAlign = 'left';
+    ctx.fillText(`적 의도: ${INTENT_ICON[c.enemy.intent.kind]} ${c.enemy.intent.value}`, 936, 51);
+
+    drawPanel(680, 140, 520, 270);
+    ctx.fillStyle = '#2a1f14';
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 36px Georgia';
+    ctx.fillText(c.enemy.name, 940, 182);
+
+    drawHpBar(740, 205, 400, 26, c.enemy.hp, c.enemy.maxHp);
+    ctx.font = '21px Georgia';
+    ctx.fillText(`HP ${c.enemy.hp}/${c.enemy.maxHp}`, 940, 218);
+    ctx.fillText(`블록 ${c.enemy.block}   힘 ${c.enemy.strength}`, 940, 252);
+
+    if (c.enemy.vulnerable > 0 || c.enemy.weak > 0) {
+      ctx.font = '18px Georgia';
+      const tags = [];
+      if (c.enemy.vulnerable > 0) tags.push(`취약 ${c.enemy.vulnerable}`);
+      if (c.enemy.weak > 0) tags.push(`약화 ${c.enemy.weak}`);
+      ctx.fillText(tags.join(' / '), 940, 280);
+    }
+
+    drawPanel(92, 190, 380, 180);
+    ctx.font = 'bold 30px Georgia';
+    ctx.fillStyle = '#2a1f14';
+    ctx.fillText('플레이어', 282, 234);
+    ctx.font = '22px Georgia';
+    ctx.fillText(`블록 ${c.playerBlock}`, 282, 268);
+    ctx.fillText(`힘 ${c.playerStrength}`, 282, 298);
+
+    const playZone = { x: 380, y: 260, w: 520, h: 210 };
+    c.zones.play = playZone;
+    ctx.strokeStyle = '#8b7355';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([10, 8]);
+    roundedRect(playZone.x, playZone.y, playZone.w, playZone.h, 16);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.font = '22px Georgia';
+    ctx.fillStyle = '#2a1f14';
+    ctx.fillText('카드를 여기로 드롭하면 사용됩니다', playZone.x + playZone.w / 2, playZone.y + 105);
+
+    const slotA = { x: 450, y: 132, w: 120, h: 160 };
+    const slotB = { x: 640, y: 132, w: 120, h: 160 };
+    c.zones.slotA = slotA;
+    c.zones.slotB = slotB;
+
+    drawPanel(slotA.x, slotA.y, slotA.w, slotA.h, 0.95);
+    drawPanel(slotB.x, slotB.y, slotB.w, slotB.h, 0.95);
+
+    ctx.fillStyle = '#2a1f14';
+    ctx.font = '18px Georgia';
+    ctx.fillText('+', 605, 210);
+
+    if (c.synth[0]) drawCard(c.synth[0], slotA.x, slotA.y, slotA.w, slotA.h);
+    else {
+      ctx.fillStyle = '#8b7355';
+      ctx.font = '16px Georgia';
+      ctx.fillText('슬롯 1', slotA.x + 60, slotA.y + 80);
+    }
+
+    if (c.synth[1]) drawCard(c.synth[1], slotB.x, slotB.y, slotB.w, slotB.h);
+    else {
+      ctx.fillStyle = '#8b7355';
+      ctx.font = '16px Georgia';
+      ctx.fillText('슬롯 2', slotB.x + 60, slotB.y + 80);
+    }
+
+    const synthReady = !!(c.synth[0] && c.synth[1]);
+    addButton(792, 188, 160, 56, '합성 발동', 'synth', synthReady);
+
+    addButton(1080, 622, 160, 60, '턴 종료', 'end_turn', c.phase === 'player');
+    addButton(900, 622, 160, 60, '덱 보기', 'toggle_deck', true);
+
+    const cards = c.hand;
+    const n = cards.length;
+    const cardW = 130;
+    const cardH = 170;
+    c.handRects = [];
+
+    const spacing = n <= 1 ? 0 : Math.min(140, 770 / (n - 1));
+    const total = spacing * (n - 1);
+    const startX = GAME_W / 2 - total / 2 - cardW / 2;
+
+    for (let i = 0; i < n; i++) {
+      const card = cards[i];
+      if (!card) continue;
+
+      if (state.drag && state.drag.source === 'hand' && state.drag.index === i) continue;
+
+      const t = n === 1 ? 0 : i / (n - 1) - 0.5;
+      const x = startX + i * spacing;
+      const y = 535 + Math.abs(t) * 30;
+      const angle = t * 0.22;
+      const cantPlay = c.energy < card.cost;
+
+      drawCard(card, x, y, cardW, cardH, { angle, cantPlay });
+      c.handRects.push({ index: i, hit: { x, y, w: cardW, h: cardH } });
+    }
+
+    if (state.drag) {
+      const d = state.drag;
+      const x = d.x - d.ox;
+      const y = d.y - d.oy;
+      drawCard(d.card, x, y, cardW, cardH, { cantPlay: c.energy < d.card.cost });
+    }
+
+    if (c.deckOverlay) {
+      drawPanel(240, 90, 800, 530, 0.97);
+      ctx.fillStyle = PALETTE.ink;
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 34px Georgia';
+      ctx.fillText('덱 뷰', 640, 130);
+
+      ctx.font = '20px Georgia';
+      ctx.fillText(`덱 ${state.run.deck.length}장 | 드로우 ${c.drawPile.length} | 버림 ${c.discardPile.length}`, 640, 165);
+
+      const grouped = new Map();
+      state.run.deck.forEach((card) => {
+        grouped.set(card.name, (grouped.get(card.name) || 0) + 1);
+      });
+
+      let yy = 210;
+      ctx.textAlign = 'left';
+      ctx.font = '18px Georgia';
+      for (const [name, count] of grouped.entries()) {
+        ctx.fillText(`${name} x${count}`, 300, yy);
+        yy += 26;
+        if (yy > 560) break;
+      }
+
+      addButton(870, 105, 140, 46, '닫기', 'close_deck', true);
     }
   }
 
-  function getPointerPos(e) {
-    const rect = canvas.getBoundingClientRect();
-    const pt = e.touches ? e.touches[0] || e.changedTouches[0] : e;
-    const x = (pt.clientX - rect.left) * (V.w / rect.width);
-    const y = (pt.clientY - rect.top) * (V.h / rect.height);
-    return { x, y };
+  function renderReward() {
+    const r = state.reward;
+    drawPanel(120, 70, 1040, 580);
+
+    ctx.fillStyle = PALETTE.ink;
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 44px Georgia';
+    ctx.fillText('전투 승리', 640, 130);
+    ctx.font = '24px Georgia';
+    ctx.fillText(`보상: +${r.gold}G`, 640, 170);
+
+    const cardW = 190;
+    const cardH = 250;
+    const startX = 640 - (cardW * 3 + 40 * 2) / 2;
+
+    for (let i = 0; i < 3; i++) {
+      const card = r.cards[i];
+      const x = startX + i * (cardW + 40);
+      const y = 220;
+      drawCard(card, x, y, cardW, cardH);
+      addButton(x, y, cardW, cardH, '', 'reward_pick', !r.chosen, { card });
+    }
+
+    addButton(430, 520, 190, 58, '건너뛰기', 'reward_skip', !r.chosen);
+    addButton(660, 520, 190, 58, r.fromBoss ? '다음 층' : '맵으로', 'reward_continue', r.chosen);
   }
 
-  function resize() {
-    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-    V.dpr = dpr;
-    const cssW = window.innerWidth;
-    const cssH = window.innerHeight;
-    V.portrait = cssH > cssW;
+  function renderEvent() {
+    const e = state.event;
+    drawPanel(180, 100, 920, 520);
 
-    V.w = V.portrait ? 390 : 1280;
-    V.h = V.portrait ? 844 : 720;
+    ctx.fillStyle = PALETTE.ink;
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 42px Georgia';
+    ctx.fillText(e.title, 640, 170);
 
-    canvas.width = Math.floor(V.w * dpr);
-    canvas.height = Math.floor(V.h * dpr);
-    canvas.style.width = cssW + 'px';
-    canvas.style.height = cssH + 'px';
+    drawWrappedText(e.text, 270, 230, 740, 34, '#2a1f14', '26px Georgia');
 
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
+    if (!e.resolved) {
+      addButton(300, 390, 680, 64, e.options[0].label, 'event_choice', true, { apply: e.options[0].apply });
+      addButton(300, 470, 680, 64, e.options[1].label, 'event_choice', true, { apply: e.options[1].apply });
+    } else {
+      addButton(520, 500, 240, 62, '맵으로', 'event_continue', true);
+    }
+  }
+
+  function renderShop() {
+    const s = state.shop;
+    drawPanel(90, 60, 1100, 600);
+
+    ctx.fillStyle = PALETTE.ink;
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 40px Georgia';
+    ctx.fillText('상점', 640, 120);
+    ctx.font = '24px Georgia';
+    ctx.fillText(`보유 골드: ${state.run.gold}`, 640, 160);
+
+    const cardW = 180;
+    const cardH = 230;
+    const startX = 220;
+
+    for (let i = 0; i < 3; i++) {
+      const card = s.offers[i];
+      const x = startX + i * 280;
+      const y = 210;
+      drawCard(card, x, y, cardW, cardH);
+      addButton(x, y + 244, cardW, 50, s.sold[i] ? '판매 완료' : `${s.cardPrice}G 구매`, 'shop_buy', !s.sold[i], { index: i, card });
+    }
+
+    addButton(930, 230, 210, 64, `${s.healPrice}G 회복`, 'shop_heal', true);
+    addButton(930, 320, 210, 64, '상점 나가기', 'shop_leave', true);
+  }
+
+  function renderRest() {
+    const r = state.rest;
+    drawPanel(230, 110, 820, 500);
+
+    ctx.fillStyle = PALETTE.ink;
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 40px Georgia';
+    ctx.fillText('휴식 모닥불', 640, 180);
+
+    ctx.font = '24px Georgia';
+    ctx.fillText('몸을 회복하거나 룬 그릇을 단련하세요.', 640, 230);
+
+    addButton(360, 320, 560, 72, '회복 (최대 HP의 30%)', 'rest_heal', !r.used);
+    addButton(360, 410, 560, 72, '단련 (최대 HP +6)', 'rest_forge', !r.used);
+    addButton(520, 510, 240, 58, '맵으로', 'rest_leave', true);
+  }
+
+  function renderVictory() {
+    drawPanel(220, 120, 840, 480);
+
+    ctx.fillStyle = PALETTE.ink;
+    ctx.textAlign = 'center';
+
+    ctx.font = 'bold 58px Georgia';
+    ctx.fillText('Victory', 640, 240);
+
+    ctx.font = '30px Georgia';
+    ctx.fillText('세 번째 보스를 쓰러뜨렸습니다.', 640, 300);
+
+    ctx.font = '22px Georgia';
+    ctx.fillText(`전투 승리 ${state.run.battlesWon}회 · 덱 ${state.run.deck.length}장`, 640, 350);
+
+    addButton(520, 430, 240, 68, '타이틀로', 'victory_title', true);
+  }
+
+  function renderGameOver() {
+    drawPanel(280, 150, 720, 420);
+
+    ctx.fillStyle = PALETTE.ink;
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 54px Georgia';
+    ctx.fillText('패배', 640, 270);
+
+    ctx.font = '24px Georgia';
+    ctx.fillText('룬의 불꽃이 꺼졌습니다.', 640, 320);
+
+    addButton(500, 400, 280, 70, '다시 시작', 'restart', true);
+  }
+
+  function renderToast() {
+    if (state.toastTimer <= 0 || !state.toast) return;
+    drawPanel(360, 16, 560, 44, 0.94);
+    ctx.fillStyle = PALETTE.ink;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = '20px Georgia';
+    ctx.fillText(state.toast, 640, 38);
+  }
+
+  function update(dt) {
+    if (state.toastTimer > 0) {
+      state.toastTimer -= dt;
+      if (state.toastTimer <= 0) {
+        state.toastTimer = 0;
+        state.toast = '';
+      }
+    }
+  }
+
+  function render() {
+    ctx.clearRect(0, 0, GAME_W, GAME_H);
+
+    state.buttons = [];
+    ctx.fillStyle = '#2f2418';
+    ctx.fillRect(0, 0, GAME_W, GAME_H);
+
+    if (state.screen === 'title') renderTitle();
+    else if (state.screen === 'map') renderMap();
+    else if (state.screen === 'combat') renderCombat();
+    else if (state.screen === 'reward') renderReward();
+    else if (state.screen === 'event') renderEvent();
+    else if (state.screen === 'shop') renderShop();
+    else if (state.screen === 'rest') renderRest();
+    else if (state.screen === 'victory') renderVictory();
+    else if (state.screen === 'gameover') renderGameOver();
+
+    for (const b of state.buttons) {
+      if (!b.label) continue;
+      drawButton(b);
+    }
+
+    renderToast();
   }
 
   function loop(ts) {
-    if (!state.then) state.then = ts;
-    state.now = ts;
-    state.dt = Math.min(0.05, (ts - state.then) / 1000);
-    state.then = ts;
+    if (!state.lastTs) state.lastTs = ts;
+    const dt = Math.min(0.033, (ts - state.lastTs) / 1000);
+    state.lastTs = ts;
 
-    update(state.dt);
-    draw();
-
+    update(dt);
+    render();
     requestAnimationFrame(loop);
   }
 
   function init() {
-    state.profile = loadProfile();
-
-    window.addEventListener('resize', resize);
-    canvas.addEventListener('mousedown', onPointerDown);
-    window.addEventListener('mousemove', onPointerMove);
-    window.addEventListener('mouseup', onPointerUp);
-
-    canvas.addEventListener('touchstart', onPointerDown, { passive: true });
-    canvas.addEventListener('touchmove', onPointerMove, { passive: true });
-    canvas.addEventListener('touchend', onPointerUp, { passive: true });
-
-    window.addEventListener('keydown', onKey);
-
     resize();
+    window.addEventListener('resize', resize);
 
-    // 데이터 검증
-    if (CARD_LIBRARY.length !== 47) {
-      // 45 + 저주 2 = 47
-      flash(`카드 수 검증: ${CARD_LIBRARY.length}`);
-    }
+    canvas.addEventListener('pointerdown', onPointerDown);
+    canvas.addEventListener('pointermove', onPointerMove);
+    canvas.addEventListener('pointerup', onPointerUp);
+    canvas.addEventListener('pointercancel', () => { state.drag = null; state.pointerDown = false; });
 
-    boot.style.display = 'none';
+    if (boot) boot.style.display = 'none';
     requestAnimationFrame(loop);
   }
 

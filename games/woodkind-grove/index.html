@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<title>Woodkind Grove — 목재 숲 경영</title>
+<script src="https://killedbyapixel.github.io/LittleJS/dist/littlejs.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;overflow:hidden;background:#2d5a27}
+body{font-family:'Segoe UI',Arial,sans-serif}
+#c{display:block;touch-action:none;position:absolute}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+// WOODKIND GROVE — 목재 숲 경영
+// Cartoon palette. Core mechanic: Ecosystem Balance Management
+// grow/harvest/treat trees to fulfill timed lumber orders
+// No engineInit() — pure Canvas 2D
+(()=>{
+'use strict';
+
+const W=800,H=560;
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+let scale=1,ox=0,oy=0;
+
+function resize(){
+  const sw=window.innerWidth,sh=window.innerHeight;
+  scale=Math.min(sw/W,sh/H);
+  canvas.width=W*scale;canvas.height=H*scale;
+  ox=(sw-canvas.width)/2;oy=(sh-canvas.height)/2;
+  canvas.style.left=ox+'px';canvas.style.top=oy+'px';
+}
+window.addEventListener('resize',resize);resize();
+
+// Palette (cartoon wood tones)
+const P={
+  sky:'#c8e8f0',ground:'#4a7a3a',
+  cell0:'#6aaa50',cell1:'#9ad870',cell2:'#50a830',cell3:'#287018',cell4:'#604828',cell5:'#a07830',cell6:'#7a5030',
+  trunk:'#8b5a22',bark:'#6b3e12',
+  leaf3:'#228822',leaf4:'#a05022',leaf5:'#c88030',
+  ui:'#3a200a',panel:'rgba(40,20,5,0.82)',border:'#a07040',
+  gold:'#f0b020',lumber:'#c87030',danger:'#e03020',good:'#30b040',
+  btn:'#b06820',btnHov:'#d08030',btnSel:'#f0a030',
+  orderBg:'rgba(20,10,0,0.7)',timerFull:'#40b050',timerLow:'#d04020',
+};
+
+// Tree stages: 0=empty 1=sapling 2=young 3=mature 4=old 5=diseased 6=stump
+const COLS=5,ROWS=5;
+const CELL=72,GX=16,GY=72;
+
+let grid=[],orders=[],msgs=[];
+let lumber=0,gold=80,score=0,reputation=100;
+let round=1,completedOrders=0;
+let growTimer=0,diseaseTimer=0,orderTimer=0;
+let action='harvest'; // harvest|plant|treat
+let hover=null,btnHov=-1;
+let phase='play'; // play|over|win
+let totalRounds=12;
+let lastT=0;
+
+const ORDER_TYPES=[
+  {name:'판자 1묶음',need:3,reward:45},
+  {name:'통나무 2개',need:2,reward:30},
+  {name:'목재 5단',need:5,reward:80},
+  {name:'원목 3개',need:3,reward:50},
+  {name:'대형 목재 4개',need:4,reward:65},
+];
+
+function initGrid(){
+  grid=[];
+  for(let r=0;r<ROWS;r++){
+    grid[r]=[];
+    for(let c=0;c<COLS;c++){
+      const v=Math.random();
+      let s=v<0.15?1:v<0.35?2:v<0.55?3:0;
+      grid[r][c]={s,age:0,fert:false};
+    }
+  }
+}
+
+function addOrder(){
+  if(orders.length>=4)return;
+  const t=ORDER_TYPES[Math.floor(Math.random()*ORDER_TYPES.length)];
+  const diff=Math.min(round-1,5);
+  orders.push({name:t.name,need:t.need+Math.floor(diff/2),reward:t.reward+diff*8,
+    deadline:35+Math.random()*20,elapsed:0});
+}
+
+function msg(text,col){msgs.push({text,col:col||P.gold,life:2.5,y:250+Math.random()*80});}
+
+function neighbors(r,c){
+  let n=0;
+  [[-1,0],[1,0],[0,-1],[0,1]].forEach(([dr,dc])=>{
+    const cell=grid[r+dr]&&grid[r+dr][c+dc];
+    if(cell&&cell.s>=2&&cell.s<=4)n++;
+  });return n;
+}
+
+function growTick(){
+  for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
+    const cell=grid[r][c];
+    if(cell.s===0){if(neighbors(r,c)>=1&&Math.random()<0.35){cell.s=1;cell.age=0;}}
+    else if(cell.s===6){if(Math.random()<0.45){cell.s=0;cell.age=0;}}
+    else if(cell.s!==5){
+      cell.age++;
+      const gs=cell.fert?2:1;
+      if(cell.s===1&&cell.age>=2*gs){cell.s=2;cell.age=0;cell.fert=false;}
+      else if(cell.s===2&&cell.age>=3*gs){cell.s=3;cell.age=0;cell.fert=false;}
+      else if(cell.s===3&&cell.age>=5){cell.s=4;cell.age=0;}
+    }
+  }
+}
+
+function diseaseTick(){
+  let trees=0;
+  for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
+    const s=grid[r][c].s;if(s>=1&&s<=4)trees++;
+  }
+  if(trees>ROWS*COLS*0.65){
+    for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
+      if(grid[r][c].s===4&&Math.random()<0.18){
+        grid[r][c].s=5;msg('🦠 병충해 발생!',P.danger);
+      }
+      if(grid[r][c].s===5){
+        [[-1,0],[1,0],[0,-1],[0,1]].forEach(([dr,dc])=>{
+          const n=grid[r+dr]&&grid[r+dr][c+dc];
+          if(n&&n.s>=2&&n.s<=3&&Math.random()<0.22)n.s=5;
+        });
+        if(Math.random()<0.3){grid[r][c].s=0;grid[r][c].age=0;}
+      }
+    }
+  }
+}
+
+function doHarvest(r,c){
+  const cell=grid[r][c];
+  if(cell.s===3||cell.s===4){
+    const gain=cell.s===4?3:2;lumber+=gain;gold+=5;cell.s=6;cell.age=0;
+    msg(`🪵 +${gain} 목재`,'#c8f080');return true;
+  }
+  if(cell.s<3)msg('아직 수확할 수 없어요','#e0c060');
+  return false;
+}
+
+function doPlant(r,c){
+  const cell=grid[r][c];
+  if(cell.s===0||cell.s===6){
+    if(gold>=15){gold-=15;cell.s=1;cell.age=0;msg('🌱 묘목 심기!',P.good);return true;}
+    else msg('금화 부족!',P.danger);
+  }
+  return false;
+}
+
+function doTreat(r,c){
+  const cell=grid[r][c];
+  if(cell.s===5){
+    if(gold>=25){gold-=25;cell.s=2;msg('💊 치료 완료!',P.good);return true;}
+    else msg('금화 부족!',P.danger);
+  }
+  return false;
+}
+
+function clickCell(r,c){
+  if(action==='harvest')doHarvest(r,c);
+  else if(action==='plant')doPlant(r,c);
+  else if(action==='treat')doTreat(r,c);
+  checkOrders();
+}
+
+function checkOrders(){
+  orders=orders.filter(o=>{
+    if(lumber>=o.need){
+      lumber-=o.need;gold+=o.reward;score+=o.reward;completedOrders++;
+      msg(`✓ 주문 완료! +${o.reward}금`,P.good);
+      if(completedOrders>=round*2){
+        round++;
+        if(round>totalRounds)phase='win';
+        else msg(`🎉 라운드 ${round} 시작!`,'#f0a020');
+      }
+      return false;
+    }
+    return true;
+  });
+}
+
+// Drawing helpers
+function rr(x,y,w,h,r,fill,stroke,lw){
+  ctx.beginPath();ctx.roundRect(x,y,w,h,r||0);
+  if(fill){ctx.fillStyle=fill;ctx.fill();}
+  if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=lw||2;ctx.stroke();}
+}
+
+function drawTree(x,y,s,fert){
+  ctx.save();ctx.translate(x,y);
+  switch(s){
+    case 1: // sapling
+      ctx.fillStyle='#90e060';
+      ctx.beginPath();ctx.moveTo(0,-14);ctx.lineTo(9,4);ctx.lineTo(-9,4);ctx.closePath();ctx.fill();
+      ctx.fillStyle=P.trunk;ctx.fillRect(-2,4,4,7);break;
+    case 2: // young
+      ctx.fillStyle='#58c030';
+      ctx.beginPath();ctx.moveTo(0,-22);ctx.lineTo(13,6);ctx.lineTo(-13,6);ctx.closePath();ctx.fill();
+      ctx.fillStyle='#70d040';
+      ctx.beginPath();ctx.moveTo(0,-28);ctx.lineTo(9,2);ctx.lineTo(-9,2);ctx.closePath();ctx.fill();
+      ctx.fillStyle=P.trunk;ctx.fillRect(-3,6,6,9);break;
+    case 3: // mature
+      ctx.fillStyle='#207818';
+      ctx.beginPath();ctx.arc(0,-16,19,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='#30a020';
+      ctx.beginPath();ctx.arc(-7,-22,13,0,Math.PI*2);ctx.fill();
+      ctx.beginPath();ctx.arc(7,-22,13,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle=P.bark;ctx.fillRect(-4,0,8,12);break;
+    case 4: // old
+      ctx.fillStyle='#806020';ctx.fillRect(-3,-10,6,18);
+      ctx.fillStyle='#486830';
+      ctx.beginPath();ctx.arc(-8,-17,11,0,Math.PI*2);ctx.fill();
+      ctx.beginPath();ctx.arc(8,-17,9,0,Math.PI*2);ctx.fill();
+      ctx.beginPath();ctx.arc(0,-24,10,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle=P.bark;ctx.fillRect(-3,-2,6,10);break;
+    case 5: // diseased
+      ctx.fillStyle='#907025';
+      ctx.beginPath();ctx.arc(0,-14,16,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='#c09030';
+      ctx.beginPath();ctx.arc(-5,-21,10,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='#803510';
+      ctx.beginPath();ctx.arc(-3,-12,4,0,Math.PI*2);ctx.fill();
+      ctx.beginPath();ctx.arc(6,-19,3,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle=P.bark;ctx.fillRect(-3,0,6,10);break;
+    case 6: // stump
+      ctx.fillStyle='#9a6525';
+      ctx.beginPath();ctx.ellipse(0,3,13,7,0,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='#b8844a';
+      ctx.beginPath();ctx.ellipse(0,0,11,5.5,0,0,Math.PI*2);ctx.fill();
+      ctx.strokeStyle='#9a6525';ctx.lineWidth=1;
+      ctx.beginPath();ctx.ellipse(0,0,7,3.5,0,0,Math.PI*2);ctx.stroke();
+      ctx.beginPath();ctx.ellipse(0,0,3,1.5,0,0,Math.PI*2);ctx.stroke();break;
+  }
+  if(fert&&s>=1&&s<=2){
+    ctx.fillStyle='#50f090';ctx.font='10px sans-serif';ctx.textAlign='center';
+    ctx.fillText('💧',18,8);
+  }
+  ctx.restore();
+}
+
+function drawCloud(x,y,w,h){
+  ctx.fillStyle='rgba(255,255,255,0.75)';
+  ctx.beginPath();ctx.ellipse(x,y,w,h,0,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.ellipse(x+w*0.5,y-h*0.3,w*0.7,h*0.75,0,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.ellipse(x-w*0.45,y-h*0.15,w*0.6,h*0.65,0,0,Math.PI*2);ctx.fill();
+}
+
+function text(t,x,y,font,col,align){
+  ctx.font=font||'14px Arial';ctx.fillStyle=col||'#fff';ctx.textAlign=align||'center';
+  ctx.fillText(t,x,y);
+}
+
+function update(ts){
+  if(phase!=='play'){render();requestAnimationFrame(update);return;}
+  const dt=Math.min((ts-lastT)/1000,0.12);lastT=ts;
+
+  growTimer+=dt;
+  if(growTimer>=5){growTimer=0;growTick();}
+  diseaseTimer+=dt;
+  if(diseaseTimer>=14){diseaseTimer=0;diseaseTick();}
+  orderTimer+=dt;
+  if(orderTimer>=9){orderTimer=0;addOrder();}
+
+  orders.forEach(o=>{
+    o.elapsed+=dt;
+    if(o.elapsed>=o.deadline){
+      reputation-=12;msg('⏰ 주문 기한 초과! 평판-12',P.danger);
+      if(reputation<=0)phase='over';
+    }
+  });
+  orders=orders.filter(o=>o.elapsed<o.deadline);
+
+  msgs.forEach(m=>{m.life-=dt;m.y-=28*dt;});
+  msgs=msgs.filter(m=>m.life>0);
+
+  render();requestAnimationFrame(update);
+}
+
+function render(){
+  ctx.save();ctx.scale(scale,scale);
+
+  // Sky
+  ctx.fillStyle=P.sky;ctx.fillRect(0,0,W,H);
+  // Clouds
+  drawCloud(90,38,48,20);drawCloud(260,28,55,22);
+  drawCloud(530,42,42,18);drawCloud(720,32,50,21);
+  // Ground strip
+  ctx.fillStyle=P.ground;ctx.fillRect(0,H-36,W,36);
+
+  // Top bar
+  rr(0,0,W,54,0,P.panel,null);
+  text('🌲 Woodkind Grove',100,33,'bold 18px Arial','#f0e0b0','center');
+  text(`💰 ${gold}금`,240,33,'bold 14px Arial',P.gold,'center');
+  text(`🪵 ${lumber}`,340,33,'bold 14px Arial','#d0a060','center');
+  text(`평판 ${reputation}%`,440,33,'bold 14px Arial',reputation>50?P.good:P.danger,'center');
+  text(`라운드 ${round}/${totalRounds}`,580,33,'bold 14px Arial','#c0d8f0','center');
+  text(`완료 ${completedOrders}`,700,33,'bold 14px Arial','#c0f0a0','center');
+
+  // Grid background
+  rr(GX-8,GY-8,COLS*CELL+16,ROWS*CELL+16,12,'rgba(30,60,15,0.7)',P.border,3);
+
+  // Cells
+  const stageCols=[P.cell0,'#b8e090','#78c848','#2a7818','#7a5028','#c09030','#8a6030'];
+  for(let r=0;r<ROWS;r++){
+    for(let c=0;c<COLS;c++){
+      const cell=grid[r][c];
+      const cx=GX+c*CELL,cy=GY+r*CELL;
+      const isHov=hover&&hover[0]===r&&hover[1]===c;
+      rr(cx+2,cy+2,CELL-4,CELL-4,7,stageCols[cell.s]||P.cell0,
+        isHov?'#ffff60':'rgba(0,0,0,0.1)',isHov?2.5:1);
+      if(isHov)rr(cx+2,cy+2,CELL-4,CELL-4,7,'rgba(255,255,80,0.18)',null);
+      drawTree(cx+CELL/2,cy+CELL/2+8,cell.s,cell.fert);
+    }
+  }
+
+  // Action panel
+  const PX=GX+COLS*CELL+22,PY=GY;
+  rr(PX-10,PY-10,192,ROWS*CELL+20,10,P.panel,P.border,2);
+  text('액션 선택',PX+76,PY+14,'bold 13px Arial','#f0e0b0','center');
+
+  const acts=[
+    {id:'harvest',lab:'🪓 수확',cost:'무료',desc:'성목·고목 베기',col:'#906020'},
+    {id:'plant',lab:'🌱 심기',cost:'15금',desc:'빈땅 묘목 심기',col:'#406020'},
+    {id:'treat',lab:'💊 치료',cost:'25금',desc:'병충해 제거',col:'#804010'},
+  ];
+  acts.forEach((a,i)=>{
+    const bx=PX,by=PY+28+i*68;
+    const sel=action===a.id,hov=btnHov===i;
+    rr(bx,by,160,58,8,sel?P.btnSel:hov?P.btnHov:a.col,sel?'#f8d070':P.border,sel?3:1.5);
+    text(a.lab,bx+80,by+20,'bold 13px Arial','#fff','center');
+    text(a.cost,bx+80,by+35,'11px Arial','#f0d880','center');
+    text(a.desc,bx+80,by+50,'10px Arial','#d0c090','center');
+  });
+
+  // Growth timer bar
+  const growPct=growTimer/5;
+  text('🌱 성장 타이머',PX+76,PY+238,'11px Arial','#a0d070','center');
+  rr(PX,PY+244,160,12,4,'rgba(0,0,0,0.3)',null);
+  rr(PX,PY+244,160*growPct,12,4,'#50c040',null);
+
+  // Legend
+  const legendY=PY+270;
+  text('범례',PX+76,legendY,'bold 12px Arial','#f0e0b0','center');
+  const leg=[[1,'🌱 묘목'],[2,'🌿 어린나무'],[3,'🌲 성목 (수확 가능)'],[4,'🌳 고목 (수확↑)'],[5,'🦠 병충해 (치료필요)'],[6,'🪵 그루터기']];
+  leg.forEach(([s,la],i)=>{
+    text(la,PX+80,legendY+16+i*16,'10px Arial','#d0c090','center');
+  });
+
+  // Orders panel
+  const OX=GX+COLS*CELL+22,OY=H-198;
+  rr(OX-10,OY-10,192,200,10,P.panel,P.border,2);
+  text('📋 주문서',OX+76,OY+14,'bold 13px Arial','#f0e0b0','center');
+  if(orders.length===0){
+    text('주문 없음',OX+76,OY+60,'12px Arial','#a09070','center');
+  }
+  orders.slice(0,4).forEach((o,i)=>{
+    const oy2=OY+28+i*40;
+    const pct=o.elapsed/o.deadline;
+    rr(OX,oy2,160,34,5,pct>0.7?'rgba(140,30,20,0.7)':'rgba(40,70,30,0.7)',pct>0.7?'#e05030':'#60a040',1.5);
+    text(o.name,OX+80,oy2+13,'11px Arial','#f0e0b0','center');
+    text(`목재 ${o.need}개 → +${o.reward}금`,OX+80,oy2+26,'10px Arial','#d0c070','center');
+    const tw=160*(1-pct);
+    ctx.fillStyle=pct>0.7?P.timerLow:P.timerFull;
+    ctx.fillRect(OX,oy2+30,tw,4);
+  });
+
+  // Messages
+  msgs.forEach(m=>{
+    ctx.save();ctx.globalAlpha=Math.min(1,m.life);
+    ctx.font='bold 15px Arial';ctx.textAlign='center';
+    ctx.strokeStyle='rgba(0,0,0,0.6)';ctx.lineWidth=3;
+    ctx.strokeText(m.text,W/2-100,m.y);
+    ctx.fillStyle=m.col;ctx.fillText(m.text,W/2-100,m.y);
+    ctx.restore();
+  });
+
+  // Overlay
+  if(phase!=='play'){
+    ctx.fillStyle='rgba(0,0,0,0.62)';ctx.fillRect(0,0,W,H);
+    rr(180,160,440,230,18,'#f5e8c8',P.border,4);
+    text(phase==='win'?'🎉 목재 왕국 완성!':'💔 평판 손실 — 게임 오버',W/2,220,'bold 24px Arial',P.ui,'center');
+    text(`완료 주문: ${completedOrders}개`,W/2,258,'16px Arial',P.ui,'center');
+    text(`최종 금화: ${gold}`,W/2,283,'16px Arial',P.ui,'center');
+    text(`점수: ${score}`,W/2,308,'16px Arial',P.ui,'center');
+    rr(280,340,240,46,10,P.btn,P.border,2);
+    text('다시 시작',W/2,368,'bold 17px Arial','#fff','center');
+  }
+
+  ctx.restore();
+}
+
+// Input
+function gp(cx,cy){return[(cx-ox)/scale,(cy-oy)/scale];}
+function cellAt(gx,gy){
+  const rx=gx-GX,ry=gy-GY,c=Math.floor(rx/CELL),r=Math.floor(ry/CELL);
+  return(r>=0&&r<ROWS&&c>=0&&c<COLS)?[r,c]:null;
+}
+function actAt(gx,gy){
+  const PX=GX+COLS*CELL+22,PY=GY;
+  for(let i=0;i<3;i++){
+    const by=PY+28+i*68;
+    if(gx>=PX&&gx<=PX+160&&gy>=by&&gy<=by+58)return i;
+  }
+  return -1;
+}
+
+canvas.addEventListener('click',e=>{
+  const[gx,gy]=gp(e.clientX,e.clientY);
+  if(phase!=='play'){
+    if(gx>=280&&gx<=520&&gy>=340&&gy<=386){
+      initGrid();orders=[];lumber=0;gold=80;score=0;reputation=100;
+      round=1;completedOrders=0;growTimer=0;diseaseTimer=0;orderTimer=0;
+      msgs=[];action='harvest';phase='play';lastT=performance.now();
+      for(let i=0;i<2;i++)addOrder();
+    }
+    return;
+  }
+  const cell=cellAt(gx,gy);if(cell){clickCell(cell[0],cell[1]);return;}
+  const ai=actAt(gx,gy);
+  if(ai>=0)action=['harvest','plant','treat'][ai];
+});
+canvas.addEventListener('mousemove',e=>{
+  const[gx,gy]=gp(e.clientX,e.clientY);
+  hover=cellAt(gx,gy);btnHov=actAt(gx,gy);
+});
+canvas.addEventListener('touchstart',e=>{
+  e.preventDefault();
+  const t=e.touches[0];const[gx,gy]=gp(t.clientX,t.clientY);
+  if(phase!=='play'){
+    if(gx>=280&&gx<=520&&gy>=340&&gy<=386){
+      initGrid();orders=[];lumber=0;gold=80;score=0;reputation=100;
+      round=1;completedOrders=0;growTimer=0;diseaseTimer=0;orderTimer=0;
+      msgs=[];action='harvest';phase='play';lastT=performance.now();
+      for(let i=0;i<2;i++)addOrder();
+    }
+    return;
+  }
+  const cell=cellAt(gx,gy);if(cell){clickCell(cell[0],cell[1]);return;}
+  const ai=actAt(gx,gy);if(ai>=0)action=['harvest','plant','treat'][ai];
+},{passive:false});
+
+// Init
+initGrid();
+for(let i=0;i<2;i++)addOrder();
+lastT=performance.now();
+requestAnimationFrame(update);
+})();
+</script>
+</body>
+</html>

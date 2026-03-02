@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<title>Neon Pendulum — 네온 펜듈럼 | Free HTML5 Swing Game</title>
+<meta name="description" content="Neon Pendulum: Swing on glowing tethers to collect vanishing orbs. Unique pendulum physics mechanic with real momentum. Dark neon theme. Free browser game."/>
+<meta name="keywords" content="pendulum,swing,neon,physics,html5,free game,browser,펜듈럼,스윙,물리"/>
+<meta property="og:title" content="Neon Pendulum — 네온 펜듈럼"/>
+<meta property="og:description" content="테더를 타고 스윙하며 사라지기 전에 오브를 수집하라! 진자 물리 메카닉의 네온 스윙 게임."/>
+<meta property="og:type" content="website"/>
+<meta property="og:url" content="https://games.eastsea.xyz/neon-pendulum/"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"VideoGame","name":"Neon Pendulum — 네온 펜듈럼","genre":"Action","applicationCategory":"Game","operatingSystem":"Any","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"author":{"@type":"Organization","name":"J&J Games"},"url":"https://games.eastsea.xyz/neon-pendulum/"}
+</script>
+<link rel="canonical" href="https://games.eastsea.xyz/neon-pendulum/"/>
+<script src="https://cdn.jsdelivr.net/npm/littlejs@latest/dist/littlejs.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;overflow:hidden;background:#0a0a1a;font-family:'Courier New',monospace}
+canvas{display:block;touch-action:none}
+</style>
+</head>
+<body>
+<canvas id="gc"></canvas>
+<script>
+'use strict';
+// LittleJS included per CDN requirement; using custom canvas loop
+const C = document.getElementById('gc');
+const X = C.getContext('2d');
+const BW = 480, BH = 720;
+let sc = 1, ox = 0, oy = 0;
+function resize() {
+  const w = innerWidth, h = innerHeight;
+  sc = Math.min(w / BW, h / BH);
+  C.width = w; C.height = h;
+  ox = (w - BW * sc) / 2; oy = (h - BH * sc) / 2;
+}
+addEventListener('resize', resize); resize();
+
+// ─── AUDIO ───────────────────────────────────────────────────
+let AC;
+function getAC() { return AC || (AC = new (window.AudioContext || window.webkitAudioContext)()); }
+
+function sfxSwing() {
+  const a = getAC(), o = a.createOscillator(), g = a.createGain();
+  o.connect(g); g.connect(a.destination);
+  o.type = 'sine';
+  o.frequency.setValueAtTime(280, a.currentTime);
+  o.frequency.linearRampToValueAtTime(660, a.currentTime + 0.12);
+  g.gain.setValueAtTime(0.22, a.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + 0.22);
+  o.start(); o.stop(a.currentTime + 0.22);
+}
+
+function sfxCollect() {
+  const a = getAC(), o = a.createOscillator(), g = a.createGain();
+  o.connect(g); g.connect(a.destination);
+  o.type = 'triangle';
+  o.frequency.setValueAtTime(880, a.currentTime);
+  o.frequency.exponentialRampToValueAtTime(1760, a.currentTime + 0.16);
+  g.gain.setValueAtTime(0.3, a.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + 0.2);
+  o.start(); o.stop(a.currentTime + 0.2);
+}
+
+function sfxMiss() {
+  const a = getAC();
+  const buf = a.createBuffer(1, a.sampleRate * 0.3, a.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (a.sampleRate * 0.05));
+  const s = a.createBufferSource(), gn = a.createGain();
+  s.buffer = buf; s.connect(gn); gn.connect(a.destination);
+  gn.gain.value = 0.35; s.start();
+}
+
+// BGM: electronic pulse beat
+let bgmTimer = null;
+function startBGM() {
+  if (bgmTimer) return;
+  let beat = 0;
+  bgmTimer = setInterval(() => {
+    const a = getAC(); beat++;
+    // Kick drum
+    const o = a.createOscillator(), g = a.createGain();
+    o.connect(g); g.connect(a.destination);
+    o.type = 'sine';
+    o.frequency.setValueAtTime(90, a.currentTime);
+    o.frequency.exponentialRampToValueAtTime(38, a.currentTime + 0.09);
+    g.gain.setValueAtTime(0.26, a.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + 0.16);
+    o.start(); o.stop(a.currentTime + 0.16);
+    // Hi-hat on even beats
+    if (beat % 2 === 0) {
+      const buf = a.createBuffer(1, a.sampleRate * 0.05, a.sampleRate);
+      const dta = buf.getChannelData(0);
+      for (let i = 0; i < dta.length; i++) dta[i] = (Math.random() * 2 - 1) * Math.exp(-i / (a.sampleRate * 0.007));
+      const s = a.createBufferSource(), g2 = a.createGain();
+      s.buffer = buf; s.connect(g2); g2.connect(a.destination); g2.gain.value = 0.07; s.start();
+    }
+    // Synth arp every 4 beats
+    if (beat % 4 === 1) {
+      const notes = [220, 261.6, 329.6, 440, 329.6, 261.6];
+      const o2 = a.createOscillator(), g3 = a.createGain();
+      o2.connect(g3); g3.connect(a.destination);
+      o2.type = 'square'; o2.frequency.value = notes[(Math.floor(beat / 4)) % notes.length];
+      g3.gain.setValueAtTime(0.05, a.currentTime);
+      g3.gain.exponentialRampToValueAtTime(0.001, a.currentTime + 0.2);
+      o2.start(); o2.stop(a.currentTime + 0.2);
+    }
+  }, 240); // 250BPM
+}
+function stopBGM() { clearInterval(bgmTimer); bgmTimer = null; }
+
+// ─── CONSTANTS ───────────────────────────────────────────────
+const GRAV = 520;   // gravity px/s²
+const MAX_TETHER = 140;  // max tether length px
+// Fixed anchor positions (x, y) within 480×720 canvas
+const ANCHOR_POS = [
+  [115, 135], [240, 85], [365, 135],
+  [70, 310],  [410, 310],
+  [160, 460], [320, 460],
+  [240, 590]
+];
+
+// ─── STATE ───────────────────────────────────────────────────
+let gs = 'menu'; // menu | playing | gameover
+let score = 0, missed = 0;
+let best = parseInt(localStorage.getItem('np-best') || '0');
+
+let player;
+let anchors, orbs, parts;
+let orbTimer, orbSpawnRate, gameTime;
+
+function makePlayer() {
+  return { x: 240, y: 660, vx: 200, vy: -120, r: 11, attached: false, aid: -1, tl: MAX_TETHER };
+}
+
+function initGame() {
+  score = 0; missed = 0; gameTime = 0;
+  orbTimer = 0; orbSpawnRate = 2.6;
+  player = makePlayer();
+  anchors = ANCHOR_POS.map(([x, y]) => ({ x, y }));
+  orbs = []; parts = [];
+  gs = 'playing';
+  startBGM();
+}
+
+// ─── ORB SYSTEM ──────────────────────────────────────────────
+const ORB_COLORS = ['#00ffff', '#ff00ff', '#ffff00', '#00ff88', '#ff6644'];
+function spawnOrb() {
+  // Place orb away from player
+  let px, py, tries = 0;
+  do {
+    px = 50 + Math.random() * (BW - 100);
+    py = 70 + Math.random() * (BH - 200);
+    tries++;
+  } while (Math.hypot(px - player.x, py - player.y) < 90 && tries < 20);
+  const c = ORB_COLORS[Math.floor(Math.random() * ORB_COLORS.length)];
+  orbs.push({ x: px, y: py, r: 10, c, life: 6.0, maxLife: 6.0, pulse: Math.random() * Math.PI * 2 });
+}
+
+// ─── PARTICLES ───────────────────────────────────────────────
+function spawnParticles(x, y, c, n) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, sp = 60 + Math.random() * 160;
+    parts.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, r: 2 + Math.random() * 3, c, life: 1, decay: 1.5 + Math.random() * 2 });
+  }
+}
+
+// ─── INPUT ───────────────────────────────────────────────────
+const keys = {};
+addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (e.code === 'Space') { e.preventDefault(); onAction(); }
+});
+addEventListener('keyup', e => { keys[e.code] = false; });
+
+C.addEventListener('touchstart', e => { e.preventDefault(); onAction(); }, { passive: false });
+C.addEventListener('mousedown', () => onAction());
+
+function onAction() {
+  if (!AC) getAC(); // unlock audio
+  if (gs === 'menu')     { initGame(); return; }
+  if (gs === 'gameover') { initGame(); return; }
+  if (gs !== 'playing') return;
+
+  if (player.attached) {
+    // Release: fly off tangentially
+    player.attached = false; player.aid = -1;
+    sfxSwing();
+  } else {
+    // Find nearest anchor within range
+    let bi = -1, bd = 9999;
+    for (let i = 0; i < anchors.length; i++) {
+      const d = Math.hypot(player.x - anchors[i].x, player.y - anchors[i].y);
+      if (d < MAX_TETHER * 1.5 && d < bd) { bd = d; bi = i; }
+    }
+    if (bi >= 0) {
+      player.attached = true; player.aid = bi;
+      player.tl = Math.min(bd, MAX_TETHER);
+      sfxSwing();
+    }
+  }
+}
+
+// ─── UPDATE ──────────────────────────────────────────────────
+let lt = 0;
+function update(ts) {
+  const dt = Math.min((ts - lt) / 1000, 0.05); lt = ts;
+  if (gs !== 'playing') return;
+
+  gameTime += dt;
+  orbSpawnRate = Math.max(1.1, 2.6 - gameTime * 0.018);
+
+  // Spawn orbs
+  orbTimer += dt;
+  if (orbTimer >= orbSpawnRate) { orbTimer = 0; spawnOrb(); }
+
+  // ── Player physics ──
+  if (player.attached) {
+    const an = anchors[player.aid];
+    // Gravity
+    player.vy += GRAV * dt;
+    // Move
+    player.x += player.vx * dt;
+    player.y += player.vy * dt;
+    // Tether constraint
+    const dx = player.x - an.x, dy = player.y - an.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist > player.tl) {
+      const nx = dx / dist, ny = dy / dist;
+      player.x = an.x + nx * player.tl;
+      player.y = an.y + ny * player.tl;
+      // Remove outward radial velocity
+      const rv = player.vx * nx + player.vy * ny;
+      if (rv > 0) { player.vx -= rv * nx; player.vy -= rv * ny; }
+    }
+  } else {
+    player.vy += GRAV * dt;
+    player.x += player.vx * dt;
+    player.y += player.vy * dt;
+  }
+
+  // Wall/floor/ceiling bounce
+  if (player.x < player.r)      { player.x = player.r;      player.vx =  Math.abs(player.vx) * 0.75; }
+  if (player.x > BW - player.r) { player.x = BW - player.r; player.vx = -Math.abs(player.vx) * 0.75; }
+  if (player.y < player.r)      { player.y = player.r;      player.vy =  Math.abs(player.vy) * 0.75; }
+  if (player.y > BH - player.r) {
+    player.y = BH - player.r;
+    player.vy = -Math.abs(player.vy) * 0.65;
+    player.vx *= 0.88;
+    if (player.attached) { player.attached = false; player.aid = -1; }
+  }
+
+  // ── Orb update ──
+  for (const o of orbs) {
+    o.pulse += dt * 3.5;
+    o.life -= dt;
+    if (o.life <= 0) { o.alive = false; missed++; sfxMiss(); continue; }
+    o.alive = true;
+    const d = Math.hypot(player.x - o.x, player.y - o.y);
+    if (d < player.r + o.r + 5) {
+      o.alive = false;
+      score += 10 + Math.floor(o.life * 3);
+      sfxCollect();
+      spawnParticles(o.x, o.y, o.c, 10);
+    }
+  }
+  orbs = orbs.filter(o => o.alive !== false);
+  if (missed >= 5) gameOver();
+
+  // ── Particles ──
+  for (const p of parts) {
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    p.vy += GRAV * 0.25 * dt;
+    p.life -= p.decay * dt;
+  }
+  parts = parts.filter(p => p.life > 0);
+}
+
+function gameOver() {
+  gs = 'gameover'; stopBGM();
+  if (score > best) { best = score; localStorage.setItem('np-best', String(best)); }
+}
+
+// ─── RENDER ──────────────────────────────────────────────────
+function render(ts) {
+  X.fillStyle = '#0a0a1a';
+  X.fillRect(0, 0, C.width, C.height);
+
+  X.save();
+  X.translate(ox, oy);
+  X.scale(sc, sc);
+
+  // ── Background grid ──
+  X.strokeStyle = 'rgba(0,255,255,0.04)';
+  X.lineWidth = 1;
+  for (let x = 0; x <= BW; x += 60) { X.beginPath(); X.moveTo(x, 0); X.lineTo(x, BH); X.stroke(); }
+  for (let y = 0; y <= BH; y += 60) { X.beginPath(); X.moveTo(0, y); X.lineTo(BW, y); X.stroke(); }
+
+  // ── Orbs ──
+  for (const o of orbs) {
+    if (!o.alive && o.alive !== undefined) continue;
+    const fade = Math.min(1, o.life / 1.2);
+    const ps = 0.82 + Math.sin(o.pulse) * 0.18;
+    const decayFrac = o.life / o.maxLife;
+
+    X.save();
+    X.globalAlpha = fade;
+    X.shadowBlur = 18; X.shadowColor = o.c;
+    X.fillStyle = o.c;
+    X.beginPath(); X.arc(o.x, o.y, o.r * ps, 0, Math.PI * 2); X.fill();
+
+    // Countdown arc (shows remaining life)
+    X.strokeStyle = o.c; X.lineWidth = 2.5;
+    X.globalAlpha = fade * 0.55;
+    const endAngle = -Math.PI / 2 + decayFrac * Math.PI * 2;
+    X.beginPath(); X.arc(o.x, o.y, o.r + 7, -Math.PI / 2, endAngle, false); X.stroke();
+    X.restore();
+  }
+
+  // ── Anchors ──
+  for (let i = 0; i < anchors.length; i++) {
+    const a = anchors[i];
+    const inRange = gs === 'playing' && !player.attached &&
+      Math.hypot(player.x - a.x, player.y - a.y) < MAX_TETHER * 1.5;
+    const isActive = gs === 'playing' && player.attached && player.aid === i;
+
+    X.save();
+    X.shadowBlur = isActive ? 35 : (inRange ? 22 : 10);
+    X.shadowColor = isActive ? '#ff00ff' : (inRange ? '#00ffff' : '#004455');
+    X.strokeStyle = isActive ? '#ff00ff' : (inRange ? '#00ffff' : '#003344');
+    X.lineWidth = 2;
+    X.beginPath(); X.arc(a.x, a.y, 13, 0, Math.PI * 2); X.stroke();
+    X.fillStyle = isActive ? 'rgba(255,0,255,0.15)' : (inRange ? 'rgba(0,255,255,0.12)' : 'rgba(0,50,70,0.08)');
+    X.fill();
+    // Crosshair
+    X.beginPath();
+    X.moveTo(a.x - 6, a.y); X.lineTo(a.x + 6, a.y);
+    X.moveTo(a.x, a.y - 6); X.lineTo(a.x, a.y + 6);
+    X.stroke();
+    X.restore();
+  }
+
+  // ── Tether ──
+  if (gs === 'playing' && player.attached) {
+    const an = anchors[player.aid];
+    X.save();
+    X.shadowBlur = 12; X.shadowColor = '#ff00ff';
+    X.strokeStyle = '#ff00ff'; X.lineWidth = 2.5;
+    X.setLineDash([7, 4]);
+    X.beginPath(); X.moveTo(an.x, an.y); X.lineTo(player.x, player.y); X.stroke();
+    X.setLineDash([]);
+    X.restore();
+  }
+
+  // ── Particles ──
+  for (const p of parts) {
+    X.save();
+    X.globalAlpha = p.life;
+    X.fillStyle = p.c; X.shadowBlur = 5; X.shadowColor = p.c;
+    X.beginPath(); X.arc(p.x, p.y, p.r, 0, Math.PI * 2); X.fill();
+    X.restore();
+  }
+
+  // ── Player ──
+  if (gs === 'playing' || gs === 'gameover') {
+    // Velocity trail
+    if (gs === 'playing') {
+      const spd = Math.hypot(player.vx, player.vy);
+      if (spd > 60) {
+        for (let t = 1; t <= 3; t++) {
+          X.save();
+          X.globalAlpha = 0.12 * (4 - t);
+          X.fillStyle = '#00ffff';
+          X.beginPath();
+          X.arc(player.x - player.vx * 0.02 * t, player.y - player.vy * 0.02 * t, player.r * (1 - t * 0.2), 0, Math.PI * 2);
+          X.fill();
+          X.restore();
+        }
+      }
+    }
+    X.save();
+    // Outer glow
+    const pg = X.createRadialGradient(player.x, player.y, 0, player.x, player.y, 24);
+    pg.addColorStop(0, '#ffffff');
+    pg.addColorStop(0.35, '#88ddff');
+    pg.addColorStop(1, 'rgba(0,200,255,0)');
+    X.fillStyle = pg;
+    X.beginPath(); X.arc(player.x, player.y, 24, 0, Math.PI * 2); X.fill();
+    // Core
+    X.shadowBlur = 28; X.shadowColor = '#00ffff';
+    X.fillStyle = '#ffffff';
+    X.beginPath(); X.arc(player.x, player.y, player.r, 0, Math.PI * 2); X.fill();
+    X.restore();
+  }
+
+  // ── HUD ──
+  if (gs === 'playing') {
+    // Score
+    X.textAlign = 'center';
+    X.shadowBlur = 12; X.shadowColor = '#00ffff';
+    X.fillStyle = '#00ffff'; X.font = 'bold 30px "Courier New"';
+    X.fillText(score, BW / 2, 36);
+    X.shadowBlur = 0; X.fillStyle = '#334455'; X.font = '11px "Courier New"';
+    X.fillText('SCORE', BW / 2, 50);
+
+    // Miss counter
+    X.textAlign = 'left';
+    X.fillStyle = '#ff4488'; X.font = '15px "Courier New"';
+    X.fillText('●'.repeat(missed) + '○'.repeat(Math.max(0, 5 - missed)), 18, 36);
+    X.fillStyle = '#334455'; X.font = '10px "Courier New"';
+    X.fillText('MISS', 18, 50);
+
+    // Best
+    X.textAlign = 'right'; X.fillStyle = '#334455'; X.font = '13px "Courier New"';
+    X.fillText('BEST:' + best, BW - 18, 36);
+
+    // Hint text early game
+    if (gameTime < 5) {
+      X.textAlign = 'center';
+      X.fillStyle = 'rgba(200,220,255,0.4)';
+      X.font = '13px "Courier New"';
+      X.fillText('SPACE / TAP → Grab anchor   again → Release', BW / 2, BH - 18);
+    }
+  }
+
+  // ── MENU ──
+  if (gs === 'menu') {
+    X.fillStyle = 'rgba(0,0,0,0.78)';
+    X.fillRect(0, 0, BW, BH);
+    X.textAlign = 'center';
+
+    X.shadowBlur = 32; X.shadowColor = '#00ffff';
+    X.fillStyle = '#00ffff'; X.font = 'bold 50px "Courier New"';
+    X.fillText('NEON', BW / 2, BH / 2 - 95);
+    X.fillText('PENDULUM', BW / 2, BH / 2 - 38);
+    X.shadowBlur = 0;
+
+    X.fillStyle = 'rgba(255,255,255,0.62)'; X.font = '14px "Courier New"';
+    X.fillText('테더로 스윙 • 사라지기 전에 오브 수집', BW / 2, BH / 2 + 22);
+    X.fillText('5개 소멸 → Game Over', BW / 2, BH / 2 + 44);
+    X.fillStyle = '#888'; X.font = '13px "Courier New"';
+    X.fillText('Best: ' + best, BW / 2, BH / 2 + 72);
+
+    X.shadowBlur = 14; X.shadowColor = '#ffff00';
+    X.fillStyle = '#ffff00'; X.font = 'bold 17px "Courier New"';
+    X.fillText('▶  TAP or SPACE  to Start', BW / 2, BH / 2 + 108);
+    X.shadowBlur = 0;
+  }
+
+  // ── GAME OVER ──
+  if (gs === 'gameover') {
+    X.fillStyle = 'rgba(0,0,0,0.83)';
+    X.fillRect(0, 0, BW, BH);
+    X.textAlign = 'center';
+
+    X.shadowBlur = 26; X.shadowColor = '#ff0055';
+    X.fillStyle = '#ff0055'; X.font = 'bold 38px "Courier New"';
+    X.fillText('GAME OVER', BW / 2, BH / 2 - 72);
+    X.shadowBlur = 0;
+
+    X.shadowBlur = 12; X.shadowColor = '#00ffff';
+    X.fillStyle = '#00ffff'; X.font = 'bold 36px "Courier New"';
+    X.fillText(score, BW / 2, BH / 2);
+    X.shadowBlur = 0;
+    X.fillStyle = '#446688'; X.font = '13px "Courier New"';
+    X.fillText('SCORE', BW / 2, BH / 2 + 24);
+
+    if (score >= best && score > 0) {
+      X.shadowBlur = 14; X.shadowColor = '#ffff00';
+      X.fillStyle = '#ffff00'; X.font = 'bold 19px "Courier New"';
+      X.fillText('★  NEW BEST!  ★', BW / 2, BH / 2 + 62);
+      X.shadowBlur = 0;
+    }
+
+    X.fillStyle = 'rgba(200,220,255,0.6)'; X.font = '15px "Courier New"';
+    X.fillText('TAP or SPACE to Retry', BW / 2, BH / 2 + 104);
+  }
+
+  X.restore();
+  requestAnimationFrame(loop);
+}
+
+function loop(ts) { update(ts); render(ts); }
+requestAnimationFrame(ts => { lt = ts; requestAnimationFrame(loop); });
+</script>
+</body>
+</html>

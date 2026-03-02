@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<title>Polarity Shift — 폴라리티 시프트 | Free HTML5 Action Game</title>
+<meta name="description" content="Polarity Shift: Switch between cyan and magenta polarity to absorb matching neon bullets. Miss-match means damage. Unique dual-polarity mechanic. Free neon browser game."/>
+<meta name="keywords" content="polarity,bullet,neon,action,html5,free game,browser,폴라리티,탄막,아케이드"/>
+<meta property="og:title" content="Polarity Shift — 폴라리티 시프트"/>
+<meta property="og:description" content="극성을 전환하며 같은 색 탄막을 흡수하라! 틀린 색상이 닿으면 피해. 네온 탄막 흡수 게임."/>
+<meta property="og:type" content="website"/>
+<meta property="og:url" content="https://games.eastsea.xyz/polarity-shift/"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"VideoGame","name":"Polarity Shift — 폴라리티 시프트","genre":"Action","applicationCategory":"Game","operatingSystem":"Any","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"author":{"@type":"Organization","name":"J&J Games"},"url":"https://games.eastsea.xyz/polarity-shift/"}
+</script>
+<link rel="canonical" href="https://games.eastsea.xyz/polarity-shift/"/>
+<script src="https://cdn.jsdelivr.net/npm/littlejs@latest/dist/littlejs.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;overflow:hidden;background:#0a0a1a;font-family:'Courier New',monospace}
+canvas{display:block;touch-action:none}
+</style>
+</head>
+<body>
+<canvas id="gc"></canvas>
+<script>
+'use strict';
+// LittleJS included per CDN requirement; using custom canvas loop
+const C = document.getElementById('gc');
+const X = C.getContext('2d');
+const BW = 480, BH = 720;
+let sc = 1, ox = 0, oy = 0;
+function resize() {
+  const w = innerWidth, h = innerHeight;
+  sc = Math.min(w / BW, h / BH);
+  C.width = w; C.height = h;
+  ox = (w - BW * sc) / 2; oy = (h - BH * sc) / 2;
+}
+addEventListener('resize', resize); resize();
+
+// ─── AUDIO ───────────────────────────────────────────────────
+let AC;
+function getAC() { return AC || (AC = new (window.AudioContext || window.webkitAudioContext)()); }
+
+function sfxAbsorb(isCyan) {
+  const a = getAC(), o = a.createOscillator(), g = a.createGain();
+  const f = a.createBiquadFilter();
+  o.connect(f); f.connect(g); g.connect(a.destination);
+  f.type = 'bandpass'; f.frequency.value = 1200; f.Q.value = 2;
+  o.type = 'sine';
+  const freq = isCyan ? 880 : 660;
+  o.frequency.setValueAtTime(freq, a.currentTime);
+  o.frequency.exponentialRampToValueAtTime(freq * 2.2, a.currentTime + 0.14);
+  g.gain.setValueAtTime(0.3, a.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + 0.18);
+  o.start(); o.stop(a.currentTime + 0.18);
+}
+
+function sfxSwitch() {
+  const a = getAC(), o = a.createOscillator(), g = a.createGain();
+  o.connect(g); g.connect(a.destination);
+  o.type = 'square';
+  o.frequency.setValueAtTime(330, a.currentTime);
+  o.frequency.setValueAtTime(550, a.currentTime + 0.04);
+  o.frequency.setValueAtTime(440, a.currentTime + 0.08);
+  g.gain.setValueAtTime(0.18, a.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + 0.18);
+  o.start(); o.stop(a.currentTime + 0.18);
+}
+
+function sfxHit() {
+  const a = getAC();
+  const buf = a.createBuffer(1, a.sampleRate * 0.4, a.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (a.sampleRate * 0.055));
+  const s = a.createBufferSource(), gn = a.createGain();
+  s.buffer = buf; s.connect(gn); gn.connect(a.destination);
+  gn.gain.value = 0.42; s.start();
+}
+
+// BGM: pulsing techno groove
+let bgmTimer = null;
+function startBGM() {
+  if (bgmTimer) return;
+  let beat = 0;
+  bgmTimer = setInterval(() => {
+    const a = getAC(); beat++;
+    // Kick
+    const o = a.createOscillator(), g = a.createGain();
+    o.connect(g); g.connect(a.destination);
+    o.type = 'sine';
+    o.frequency.setValueAtTime(105, a.currentTime);
+    o.frequency.exponentialRampToValueAtTime(40, a.currentTime + 0.08);
+    g.gain.setValueAtTime(0.28, a.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + 0.14);
+    o.start(); o.stop(a.currentTime + 0.14);
+    // Snare on 3,7
+    if (beat % 8 === 3 || beat % 8 === 7) {
+      const buf = a.createBuffer(1, a.sampleRate * 0.12, a.sampleRate);
+      const dt = buf.getChannelData(0);
+      for (let i = 0; i < dt.length; i++) dt[i] = (Math.random() * 2 - 1) * (1 - i / dt.length);
+      const s = a.createBufferSource(), g2 = a.createGain();
+      s.buffer = buf; s.connect(g2); g2.connect(a.destination); g2.gain.value = 0.11; s.start();
+    }
+    // Hi-hat every 2 beats
+    if (beat % 2 === 0) {
+      const buf2 = a.createBuffer(1, a.sampleRate * 0.04, a.sampleRate);
+      const dt2 = buf2.getChannelData(0);
+      for (let i = 0; i < dt2.length; i++) dt2[i] = (Math.random() * 2 - 1) * Math.exp(-i / (a.sampleRate * 0.006));
+      const s2 = a.createBufferSource(), g3 = a.createGain();
+      s2.buffer = buf2; s2.connect(g3); g3.connect(a.destination); g3.gain.value = 0.06; s2.start();
+    }
+    // Bass synth arp every 4 beats
+    if (beat % 4 === 1) {
+      const bassNotes = [55, 73.4, 55, 61.7, 55, 82.4, 55, 65.4];
+      const o2 = a.createOscillator(), g4 = a.createGain();
+      o2.connect(g4); g4.connect(a.destination);
+      o2.type = 'sawtooth'; o2.frequency.value = bassNotes[(Math.floor(beat / 4)) % bassNotes.length];
+      g4.gain.setValueAtTime(0.07, a.currentTime);
+      g4.gain.exponentialRampToValueAtTime(0.001, a.currentTime + 0.38);
+      o2.start(); o2.stop(a.currentTime + 0.38);
+    }
+  }, 150); // 400 BPM-ish
+}
+function stopBGM() { clearInterval(bgmTimer); bgmTimer = null; }
+
+// ─── CONSTANTS ───────────────────────────────────────────────
+const CYAN    = '#00ffff';
+const MAGENTA = '#ff00ff';
+const PLAYER_SPEED = 145;
+
+// ─── STATE ───────────────────────────────────────────────────
+let gs = 'menu'; // menu | playing | gameover
+let score = 0, lives = 3, combo = 0, wave = 1, waveTimer = 0;
+let best = parseInt(localStorage.getItem('ps-best') || '0');
+let totalTime = 0;
+let bulletTimer = 0, bulletInterval = 1.3, bulletSpeed = 115;
+
+let player;
+let bullets, parts, rings;
+
+// Touch input
+let touch = { active: false, id: -1, sx: 0, sy: 0, dx: 0, dy: 0 };
+
+function makePlayer() {
+  return { x: BW / 2, y: BH / 2, r: 19, polarity: CYAN, invincible: 0, switchFlash: 0 };
+}
+
+function initGame() {
+  score = 0; lives = 3; combo = 0; wave = 1; waveTimer = 0;
+  bulletTimer = 0; bulletInterval = 1.3; bulletSpeed = 115; totalTime = 0;
+  player = makePlayer();
+  bullets = []; parts = []; rings = [];
+  gs = 'playing';
+  startBGM();
+}
+
+// ─── BULLET SYSTEM ───────────────────────────────────────────
+function spawnBullet() {
+  // Choose random edge
+  const side = Math.floor(Math.random() * 4);
+  let x, y;
+  if      (side === 0) { x = -12; y = Math.random() * BH; }
+  else if (side === 1) { x = BW + 12; y = Math.random() * BH; }
+  else if (side === 2) { y = -12; x = Math.random() * BW; }
+  else                 { y = BH + 12; x = Math.random() * BW; }
+
+  const spread = 55 * (Math.PI / 180);
+  const baseAng = Math.atan2(player.y - y, player.x - x);
+  const ang = baseAng + (Math.random() - 0.5) * spread;
+  const spd = bulletSpeed * (0.8 + Math.random() * 0.4);
+  const polarity = Math.random() < 0.5 ? CYAN : MAGENTA;
+  bullets.push({ x, y, vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd, r: 9, polarity, age: 0 });
+}
+
+// ─── PARTICLES & RINGS ───────────────────────────────────────
+function spawnParticles(x, y, c, n) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, sp = 80 + Math.random() * 200;
+    parts.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, r: 2 + Math.random() * 4, c, life: 1, decay: 2 + Math.random() * 2.5 });
+  }
+}
+
+function spawnRing(x, y, c, startR) {
+  rings.push({ x, y, c, r: startR, life: 1 });
+}
+
+// ─── INPUT ───────────────────────────────────────────────────
+const keys = {};
+addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (e.code === 'Space' || e.code === 'KeyZ') {
+    e.preventDefault();
+    if (gs === 'menu')     { getAC(); initGame(); return; }
+    if (gs === 'gameover') { initGame(); return; }
+    if (gs === 'playing')  doSwitch();
+  }
+});
+addEventListener('keyup', e => { keys[e.code] = false; });
+
+// Touch: left half = joystick movement, right half = polarity switch
+C.addEventListener('touchstart', e => {
+  e.preventDefault();
+  if (!AC) getAC();
+  if (gs === 'menu')     { initGame(); return; }
+  if (gs === 'gameover') { initGame(); return; }
+  for (let i = 0; i < e.changedTouches.length; i++) {
+    const t = e.changedTouches[i];
+    const cx = (t.clientX - ox) / sc;
+    if (cx > BW / 2) {
+      // Right half → switch polarity
+      if (gs === 'playing') doSwitch();
+    } else {
+      // Left half → joystick
+      if (!touch.active) {
+        touch.active = true; touch.id = t.identifier;
+        touch.sx = cx; touch.sy = (t.clientY - oy) / sc;
+        touch.dx = 0; touch.dy = 0;
+      }
+    }
+  }
+}, { passive: false });
+
+C.addEventListener('touchmove', e => {
+  e.preventDefault();
+  for (let i = 0; i < e.changedTouches.length; i++) {
+    const t = e.changedTouches[i];
+    if (t.identifier === touch.id) {
+      touch.dx = (t.clientX - ox) / sc - touch.sx;
+      touch.dy = (t.clientY - oy) / sc - touch.sy;
+    }
+  }
+}, { passive: false });
+
+C.addEventListener('touchend', e => {
+  e.preventDefault();
+  for (let i = 0; i < e.changedTouches.length; i++) {
+    if (e.changedTouches[i].identifier === touch.id) {
+      touch.active = false; touch.dx = 0; touch.dy = 0; touch.id = -1;
+    }
+  }
+}, { passive: false });
+
+function doSwitch() {
+  player.polarity = player.polarity === CYAN ? MAGENTA : CYAN;
+  player.switchFlash = 0.3;
+  sfxSwitch();
+  spawnRing(player.x, player.y, player.polarity, player.r * 1.5);
+}
+
+// ─── UPDATE ──────────────────────────────────────────────────
+let lt = 0;
+function update(ts) {
+  const dt = Math.min((ts - lt) / 1000, 0.05); lt = ts;
+  if (gs !== 'playing') return;
+
+  totalTime += dt; waveTimer += dt;
+
+  // Wave escalation every 18s
+  if (waveTimer >= 18) {
+    waveTimer = 0; wave++;
+    bulletInterval = Math.max(0.28, 1.3 - wave * 0.1);
+    bulletSpeed    = Math.min(320, 115 + wave * 22);
+  }
+
+  // Spawn bullets
+  bulletTimer += dt;
+  const burstCount = Math.min(3, 1 + Math.floor(wave / 3));
+  if (bulletTimer >= bulletInterval) {
+    bulletTimer = 0;
+    for (let b = 0; b < burstCount; b++) spawnBullet();
+  }
+
+  // ── Player movement ──
+  let mvx = 0, mvy = 0;
+  if (keys['KeyW'] || keys['ArrowUp'])    mvy -= PLAYER_SPEED;
+  if (keys['KeyS'] || keys['ArrowDown'])  mvy += PLAYER_SPEED;
+  if (keys['KeyA'] || keys['ArrowLeft'])  mvx -= PLAYER_SPEED;
+  if (keys['KeyD'] || keys['ArrowRight']) mvx += PLAYER_SPEED;
+
+  // Diagonal normalization
+  if (mvx !== 0 && mvy !== 0) { mvx *= 0.707; mvy *= 0.707; }
+
+  // Touch joystick
+  if (touch.active && (touch.dx !== 0 || touch.dy !== 0)) {
+    const dm = Math.hypot(touch.dx, touch.dy);
+    if (dm > 8) {
+      const ratio = Math.min(dm, 60) / 60;
+      mvx = (touch.dx / dm) * PLAYER_SPEED * ratio;
+      mvy = (touch.dy / dm) * PLAYER_SPEED * ratio;
+    }
+  }
+
+  player.x = Math.max(player.r, Math.min(BW - player.r, player.x + mvx * dt));
+  player.y = Math.max(player.r, Math.min(BH - player.r, player.y + mvy * dt));
+
+  // Timers
+  if (player.invincible > 0) player.invincible -= dt;
+  if (player.switchFlash > 0) player.switchFlash -= dt;
+
+  // ── Bullet update & collision ──
+  for (let bi = bullets.length - 1; bi >= 0; bi--) {
+    const b = bullets[bi];
+    b.x += b.vx * dt; b.y += b.vy * dt; b.age += dt;
+
+    // Off-screen cull
+    if (b.x < -30 || b.x > BW + 30 || b.y < -30 || b.y > BH + 30) {
+      bullets.splice(bi, 1); continue;
+    }
+
+    // Collision with player
+    const d = Math.hypot(b.x - player.x, b.y - player.y);
+    if (d < player.r + b.r) {
+      bullets.splice(bi, 1);
+      if (b.polarity === player.polarity) {
+        // Absorb!
+        combo++;
+        const pts = 10 * Math.min(4, combo);
+        score += pts;
+        sfxAbsorb(b.polarity === CYAN);
+        spawnParticles(b.x, b.y, b.polarity, 9);
+        spawnRing(b.x, b.y, b.polarity, b.r * 1.8);
+      } else {
+        // Hit (wrong polarity)
+        if (player.invincible <= 0) {
+          lives--; combo = 0;
+          player.invincible = 1.8;
+          sfxHit();
+          spawnParticles(player.x, player.y, '#ff3300', 18);
+          spawnRing(player.x, player.y, '#ff3300', player.r * 2);
+          if (lives <= 0) { gameOver(); return; }
+        }
+      }
+    }
+  }
+
+  // ── Particles ──
+  for (const p of parts) {
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    p.life -= p.decay * dt;
+  }
+  parts = parts.filter(p => p.life > 0);
+
+  // ── Rings ──
+  for (const r of rings) {
+    r.r += 220 * dt;
+    r.life -= 2.5 * dt;
+  }
+  rings = rings.filter(r => r.life > 0);
+}
+
+function gameOver() {
+  gs = 'gameover'; stopBGM();
+  if (score > best) { best = score; localStorage.setItem('ps-best', String(best)); }
+}
+
+// ─── RENDER ──────────────────────────────────────────────────
+let rt = 0; // render time for animations
+function render(ts) {
+  rt = ts / 1000;
+  X.fillStyle = '#0a0a1a';
+  X.fillRect(0, 0, C.width, C.height);
+
+  X.save();
+  X.translate(ox, oy);
+  X.scale(sc, sc);
+
+  // ── Background grid ──
+  X.strokeStyle = 'rgba(0,255,255,0.035)';
+  X.lineWidth = 1;
+  for (let x = 0; x <= BW; x += 60) { X.beginPath(); X.moveTo(x, 0); X.lineTo(x, BH); X.stroke(); }
+  for (let y = 0; y <= BH; y += 60) { X.beginPath(); X.moveTo(0, y); X.lineTo(BW, y); X.stroke(); }
+
+  // Arena border glow
+  if (gs === 'playing') {
+    const pc = player.polarity;
+    X.save();
+    X.shadowBlur = 22; X.shadowColor = pc;
+    X.strokeStyle = pc; X.lineWidth = 1.5; X.globalAlpha = 0.28;
+    X.strokeRect(6, 6, BW - 12, BH - 12);
+    X.restore();
+  }
+
+  // ── Rings ──
+  for (const r of rings) {
+    X.save();
+    X.globalAlpha = r.life * 0.6;
+    X.strokeStyle = r.c; X.lineWidth = 2;
+    X.shadowBlur = 8; X.shadowColor = r.c;
+    X.beginPath(); X.arc(r.x, r.y, r.r, 0, Math.PI * 2); X.stroke();
+    X.restore();
+  }
+
+  // ── Bullets ──
+  for (const b of bullets) {
+    X.save();
+    X.shadowBlur = 14; X.shadowColor = b.polarity;
+    X.fillStyle = b.polarity;
+    X.beginPath(); X.arc(b.x, b.y, b.r, 0, Math.PI * 2); X.fill();
+    // White core
+    X.shadowBlur = 0; X.fillStyle = 'rgba(255,255,255,0.9)';
+    X.beginPath(); X.arc(b.x, b.y, b.r * 0.38, 0, Math.PI * 2); X.fill();
+    X.restore();
+  }
+
+  // ── Particles ──
+  for (const p of parts) {
+    X.save();
+    X.globalAlpha = p.life;
+    X.fillStyle = p.c; X.shadowBlur = 5; X.shadowColor = p.c;
+    X.beginPath(); X.arc(p.x, p.y, p.r, 0, Math.PI * 2); X.fill();
+    X.restore();
+  }
+
+  // ── Player ──
+  if (gs === 'playing' || gs === 'gameover') {
+    const blink = player.invincible > 0 && Math.floor(player.invincible * 9) % 2 === 0;
+    if (!blink) {
+      const pc = player.polarity;
+      X.save();
+      // Flash ring on switch
+      if (player.switchFlash > 0) {
+        X.globalAlpha = player.switchFlash / 0.3;
+        X.strokeStyle = pc; X.lineWidth = 3;
+        X.shadowBlur = 30; X.shadowColor = pc;
+        X.beginPath(); X.arc(player.x, player.y, player.r * 2.5, 0, Math.PI * 2); X.stroke();
+        X.globalAlpha = 1;
+      }
+      // Outer glow ring (pulsing)
+      const glowR = player.r + 7 + Math.sin(rt * 4) * 2.5;
+      X.shadowBlur = 35; X.shadowColor = pc;
+      X.strokeStyle = pc; X.lineWidth = 2.5;
+      X.beginPath(); X.arc(player.x, player.y, glowR, 0, Math.PI * 2); X.stroke();
+      // Body gradient
+      const pg = X.createRadialGradient(player.x, player.y, 0, player.x, player.y, player.r);
+      pg.addColorStop(0, 'rgba(255,255,255,0.95)');
+      pg.addColorStop(0.5, pc);
+      pg.addColorStop(1, 'rgba(0,0,0,0.4)');
+      X.fillStyle = pg;
+      X.beginPath(); X.arc(player.x, player.y, player.r, 0, Math.PI * 2); X.fill();
+      // Polarity symbol
+      X.shadowBlur = 0; X.fillStyle = '#000'; X.font = 'bold 15px monospace';
+      X.textAlign = 'center'; X.textBaseline = 'middle';
+      X.fillText(pc === CYAN ? '◈' : '◉', player.x, player.y);
+      X.restore();
+    }
+  }
+
+  // ── Touch joystick ──
+  if (gs === 'playing' && touch.active) {
+    X.save();
+    X.globalAlpha = 0.22;
+    X.strokeStyle = '#ffffff'; X.lineWidth = 2;
+    X.beginPath(); X.arc(touch.sx, touch.sy, 48, 0, Math.PI * 2); X.stroke();
+    const dm = Math.hypot(touch.dx, touch.dy);
+    const kx = touch.sx + (dm > 0 ? touch.dx / dm : 0) * Math.min(dm, 40);
+    const ky = touch.sy + (dm > 0 ? touch.dy / dm : 0) * Math.min(dm, 40);
+    X.fillStyle = '#ffffff'; X.globalAlpha = 0.38;
+    X.beginPath(); X.arc(kx, ky, 22, 0, Math.PI * 2); X.fill();
+    X.restore();
+  }
+
+  // ── Touch divider hint ──
+  if (gs === 'playing' && totalTime < 5) {
+    X.save(); X.globalAlpha = 0.15;
+    X.strokeStyle = '#ffffff'; X.lineWidth = 1; X.setLineDash([4, 6]);
+    X.beginPath(); X.moveTo(BW / 2, 0); X.lineTo(BW / 2, BH); X.stroke();
+    X.setLineDash([]);
+    X.globalAlpha = 0.25; X.fillStyle = '#ffffff';
+    X.font = '10px "Courier New"'; X.textAlign = 'center';
+    X.fillText('◀ MOVE    SWITCH ▶', BW / 2, BH - 14);
+    X.restore();
+  }
+
+  // ── HUD ──
+  if (gs === 'playing') {
+    const pc = player.polarity;
+    X.textAlign = 'center';
+    X.shadowBlur = 12; X.shadowColor = pc;
+    X.fillStyle = pc; X.font = 'bold 30px "Courier New"';
+    X.fillText(score, BW / 2, 36);
+    X.shadowBlur = 0; X.fillStyle = '#334455'; X.font = '11px "Courier New"';
+    X.fillText('SCORE', BW / 2, 50);
+
+    // Lives
+    X.textAlign = 'left'; X.fillStyle = '#ff4444'; X.font = '18px "Courier New"';
+    X.fillText('♥'.repeat(lives) + '♡'.repeat(Math.max(0, 3 - lives)), 16, 36);
+
+    // Wave / Best
+    X.textAlign = 'right'; X.fillStyle = '#334455'; X.font = '13px "Courier New"';
+    X.fillText('WAVE ' + wave, BW - 16, 36);
+    X.fillText('BEST:' + best, BW - 16, 52);
+
+    // Combo
+    if (combo > 1) {
+      X.textAlign = 'center';
+      X.shadowBlur = 10; X.shadowColor = pc;
+      X.fillStyle = pc; X.font = 'bold 14px "Courier New"';
+      X.fillText('×' + Math.min(combo, 4) + ' COMBO!', BW / 2, 66);
+      X.shadowBlur = 0;
+    }
+
+    // Mode label
+    X.textAlign = 'left'; X.shadowBlur = 8; X.shadowColor = pc;
+    X.fillStyle = pc; X.font = '12px "Courier New"';
+    X.fillText('[' + (pc === CYAN ? 'CYAN' : 'MAGENTA') + '] MODE', 16, BH - 18);
+    X.shadowBlur = 0;
+
+    // SPACE hint early
+    if (totalTime < 6) {
+      X.textAlign = 'right'; X.fillStyle = 'rgba(200,220,255,0.35)';
+      X.font = '12px "Courier New"';
+      X.fillText('SPACE/Z to switch polarity', BW - 16, BH - 18);
+    }
+  }
+
+  // ── MENU ──
+  if (gs === 'menu') {
+    X.fillStyle = 'rgba(0,0,0,0.78)';
+    X.fillRect(0, 0, BW, BH);
+    X.textAlign = 'center';
+
+    X.shadowBlur = 32; X.shadowColor = MAGENTA;
+    X.fillStyle = MAGENTA; X.font = 'bold 46px "Courier New"';
+    X.fillText('POLARITY', BW / 2, BH / 2 - 90);
+    X.shadowColor = CYAN; X.fillStyle = CYAN;
+    X.fillText('SHIFT', BW / 2, BH / 2 - 38);
+    X.shadowBlur = 0;
+
+    X.fillStyle = 'rgba(255,255,255,0.62)'; X.font = '14px "Courier New"';
+    X.fillText('같은 색 탄막 → 흡수 (득점)', BW / 2, BH / 2 + 20);
+    X.fillText('다른 색 탄막 → 피해', BW / 2, BH / 2 + 42);
+    X.fillText('SPACE / 오른쪽 탭 → 극성 전환', BW / 2, BH / 2 + 64);
+    X.fillStyle = '#555'; X.font = '13px "Courier New"';
+    X.fillText('Best: ' + best, BW / 2, BH / 2 + 92);
+
+    X.shadowBlur = 14; X.shadowColor = '#ffff00';
+    X.fillStyle = '#ffff00'; X.font = 'bold 17px "Courier New"';
+    X.fillText('▶  TAP or SPACE  to Start', BW / 2, BH / 2 + 128);
+    X.shadowBlur = 0;
+  }
+
+  // ── GAME OVER ──
+  if (gs === 'gameover') {
+    X.fillStyle = 'rgba(0,0,0,0.83)';
+    X.fillRect(0, 0, BW, BH);
+    X.textAlign = 'center';
+
+    X.shadowBlur = 26; X.shadowColor = '#ff0055';
+    X.fillStyle = '#ff0055'; X.font = 'bold 38px "Courier New"';
+    X.fillText('GAME OVER', BW / 2, BH / 2 - 72);
+    X.shadowBlur = 0;
+
+    X.shadowBlur = 12; X.shadowColor = CYAN;
+    X.fillStyle = CYAN; X.font = 'bold 36px "Courier New"';
+    X.fillText(score, BW / 2, BH / 2);
+    X.shadowBlur = 0;
+    X.fillStyle = '#446688'; X.font = '13px "Courier New"';
+    X.fillText('SCORE', BW / 2, BH / 2 + 24);
+
+    if (score >= best && score > 0) {
+      X.shadowBlur = 14; X.shadowColor = '#ffff00';
+      X.fillStyle = '#ffff00'; X.font = 'bold 19px "Courier New"';
+      X.fillText('★  NEW BEST!  ★', BW / 2, BH / 2 + 62);
+      X.shadowBlur = 0;
+    }
+
+    X.fillStyle = 'rgba(200,220,255,0.6)'; X.font = '15px "Courier New"';
+    X.fillText('TAP or SPACE to Retry', BW / 2, BH / 2 + 104);
+  }
+
+  X.restore();
+  requestAnimationFrame(loop);
+}
+
+function loop(ts) { update(ts); render(ts); }
+requestAnimationFrame(ts => { lt = ts; requestAnimationFrame(loop); });
+</script>
+</body>
+</html>

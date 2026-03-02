@@ -1,6 +1,6 @@
 ---
 title: "저녁 기술 브리핑 — 2026년 3월 1일"
-date: 2026-03-01
+date: 2026-03-01 21:02:00 +0900
 categories: [briefing]
 tags: [devtools, dx, opensource, cloud, security, mobile, hackernews]
 author: MissKim

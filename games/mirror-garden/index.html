@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<title>Mirror Garden — 미러 가든 | Free HTML5 Puzzle Game</title>
+<meta name="description" content="Mirror Garden: Place colored tiles that simultaneously mirror across all 4 quadrants. Unique Mirror Plant mechanic — watercolor pastel puzzle. Match the target pattern in limited moves."/>
+<meta name="keywords" content="puzzle,mirror,symmetry,pastel,watercolor,html5,free game,퍼즐,대칭,브라우저게임"/>
+<meta property="og:title" content="Mirror Garden — 미러 가든"/>
+<meta property="og:description" content="타일 하나가 4방향 동시 반사! Mirror Plant 메카닉으로 완성하는 수채화 대칭 퍼즐."/>
+<meta property="og:type" content="website"/>
+<meta property="og:url" content="https://games.eastsea.xyz/mirror-garden/"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"VideoGame","name":"Mirror Garden — 미러 가든","genre":"Puzzle","applicationCategory":"Game","operatingSystem":"Any","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"author":{"@type":"Organization","name":"J&J Games"},"url":"https://games.eastsea.xyz/mirror-garden/"}
+</script>
+<link rel="canonical" href="https://games.eastsea.xyz/mirror-garden/"/>
+<script src="https://killedbyapixel.github.io/LittleJS/dist/littlejs.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;overflow:hidden;background:#f5eff5;font-family:'Segoe UI',Arial,sans-serif}
+canvas{display:block;touch-action:none}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<script>
+'use strict';
+const canvas = document.getElementById('game');
+const ctx    = canvas.getContext('2d');
+const BASE_W = 480, BASE_H = 700;
+let scale = 1, ox = 0, oy = 0;
+function resize(){
+  const sw=window.innerWidth,sh=window.innerHeight;
+  scale=Math.min(sw/BASE_W,sh/BASE_H);
+  canvas.width=sw;canvas.height=sh;
+  ox=(sw-BASE_W*scale)/2;oy=(sh-BASE_H*scale)/2;
+}
+window.addEventListener('resize',resize);resize();
+
+// Watercolor pastel palette
+const COLORS  = ['#f0ece6','#f2a0b8','#a4c8f0','#90d8a0','#f8d468'];
+const STROKES = ['#d8d0c8','#c87890','#6090c8','#60a870','#c8a430'];
+const NAMES   = ['Empty','Rose','Sky','Mint','Gold'];
+const NC = 5;
+
+// Grid: 6x6, editable zone = top-left 3x3
+const GN=6, CELL=60;
+const GRID_X=(BASE_W-GN*CELL)/2; // 60
+const GRID_Y=162;
+
+function canonical(r,c){return [r<3?r:5-r, c<3?c:5-c];}
+function mirrors(cr,cc){
+  const pos=[];
+  for(const r of[cr,5-cr]) for(const c of[cc,5-cc]) pos.push([r,c]);
+  return pos;
+}
+
+// 5 levels — target = 9-value array for top-left 3x3
+const LEVELS=[
+  {name:'Seedling', moves:8,  target:[1,0,1, 0,2,0, 1,0,1]},
+  {name:'Bloom',    moves:13, target:[2,1,2, 1,3,1, 2,1,2]},
+  {name:'Garden',   moves:18, target:[1,2,3, 2,4,2, 3,2,1]},
+  {name:'Petal',    moves:20, target:[4,1,2, 1,3,1, 2,1,4]},
+  {name:'Lotus',    moves:22, target:[2,3,1, 3,0,3, 1,3,2]},
+];
+
+// State
+let gs='title';
+let level=0, grid=[], movesLeft=0, matchCount=0;
+let totalScore=0, levelScore=0;
+let animT=0,lastTs=0;
+let flashes=[];
+let winStats={pts:0,matched:0,saved:0};
+let bestScore=+(localStorage.getItem('mg_best')||0);
+
+function g(r,c){return grid[r*GN+c];}
+function sg(r,c,v){grid[r*GN+c]=v;}
+
+function countMatch(){
+  let m=0;
+  for(let cr=0;cr<3;cr++) for(let cc=0;cc<3;cc++)
+    if(g(cr,cc)===LEVELS[level].target[cr*3+cc]) m++;
+  return m;
+}
+
+function initLevel(lv){
+  level=lv;grid=Array(GN*GN).fill(0);
+  movesLeft=LEVELS[lv].moves;
+  matchCount=0;flashes=[];gs='play';
+}
+
+function tapCell(r,c){
+  if(gs!=='play'||movesLeft<=0) return;
+  const [cr,cc]=canonical(r,c);
+  const nv=(g(cr,cc)+1)%NC;
+  for(const [mr,mc] of mirrors(cr,cc)){
+    sg(mr,mc,nv);
+    flashes.push({r:mr,c:mc,t:1});
+  }
+  movesLeft--;
+  matchCount=countMatch();
+  if(matchCount===9){
+    const pts=matchCount*15+movesLeft*8;
+    winStats={pts,matched:matchCount,saved:movesLeft};
+    levelScore=pts;
+    setTimeout(()=>{gs='win';},350);
+  } else if(movesLeft===0){
+    const pts=matchCount*10;
+    winStats={pts,matched:matchCount,saved:0};
+    levelScore=pts;
+    setTimeout(()=>{gs=matchCount>=7?'win':'lose';},250);
+  }
+}
+
+// -- draw helpers --
+function rrect(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);ctx.closePath();
+}
+
+function drawCell(r,c){
+  const val=g(r,c);
+  const x=GRID_X+c*CELL, y=GRID_Y+r*CELL;
+  const [cr,cc]=canonical(r,c);
+  const tgt=LEVELS[level].target[cr*3+cc];
+  const ok=(val===tgt);
+  const pad=3,sz=CELL-pad*2;
+
+  // shadow
+  ctx.save();ctx.shadowColor='rgba(0,0,0,0.1)';ctx.shadowBlur=4;ctx.shadowOffsetY=2;
+  rrect(x+pad,y+pad,sz,sz,9);ctx.fillStyle=COLORS[val];ctx.fill();
+  ctx.restore();
+
+  // stroke
+  rrect(x+pad,y+pad,sz,sz,9);
+  ctx.strokeStyle=ok&&val!==0?'#80d090':STROKES[val];
+  ctx.lineWidth=ok&&val!==0?2.5:1.5;ctx.stroke();
+
+  // checkmark
+  if(ok&&val!==0){
+    ctx.save();ctx.strokeStyle='rgba(80,190,80,0.8)';ctx.lineWidth=2;ctx.lineCap='round';
+    ctx.beginPath();
+    const cx=x+CELL/2,cy=y+CELL/2;
+    ctx.moveTo(cx-8,cy+1);ctx.lineTo(cx-2,cy+8);ctx.lineTo(cx+10,cy-7);
+    ctx.stroke();ctx.restore();
+  }
+
+  // hint dot (target color in corner)
+  if(!ok&&gs==='play'){
+    ctx.save();
+    ctx.beginPath();ctx.arc(x+CELL-pad-6,y+pad+6,4,0,Math.PI*2);
+    ctx.fillStyle=COLORS[tgt];ctx.fill();
+    ctx.strokeStyle=STROKES[tgt];ctx.lineWidth=1;ctx.stroke();
+    ctx.restore();
+  }
+
+  // mirror zone overlay (not editable, top-right, bottom-left, bottom-right)
+  if(!(r<3&&c<3)){
+    rrect(x+pad,y+pad,sz,sz,9);
+    ctx.fillStyle='rgba(160,100,200,0.08)';ctx.fill();
+  }
+}
+
+function drawGrid(){
+  // background card
+  ctx.save();ctx.shadowColor='rgba(0,0,0,0.06)';ctx.shadowBlur=8;
+  rrect(GRID_X-4,GRID_Y-4,GN*CELL+8,GN*CELL+8,14);
+  ctx.fillStyle='rgba(230,220,240,0.4)';ctx.fill();ctx.restore();
+
+  // axis lines (symmetry)
+  ctx.save();ctx.strokeStyle='rgba(160,100,200,0.4)';ctx.lineWidth=2;ctx.setLineDash([5,4]);
+  ctx.beginPath();ctx.moveTo(GRID_X+3*CELL,GRID_Y);ctx.lineTo(GRID_X+3*CELL,GRID_Y+GN*CELL);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(GRID_X,GRID_Y+3*CELL);ctx.lineTo(GRID_X+GN*CELL,GRID_Y+3*CELL);ctx.stroke();
+  ctx.restore();
+
+  for(let r=0;r<GN;r++) for(let c=0;c<GN;c++) drawCell(r,c);
+
+  // flash
+  flashes.forEach(f=>{
+    const x=GRID_X+f.c*CELL,y=GRID_Y+f.r*CELL;
+    ctx.save();rrect(x+3,y+3,CELL-6,CELL-6,9);
+    ctx.fillStyle=`rgba(255,255,255,${f.t*0.55})`;ctx.fill();ctx.restore();
+  });
+}
+
+function drawTargetPreview(ys){
+  const tgt=LEVELS[level].target;
+  const S=24,TX=BASE_W/2-(3*S)/2,TY=ys+18;
+  ctx.save();
+  ctx.font='bold 13px Arial';ctx.textAlign='center';
+  ctx.fillStyle='#a888c0';ctx.fillText('TARGET (mirrored 4x)',BASE_W/2,ys+6);
+  for(let r=0;r<3;r++) for(let c=0;c<3;c++){
+    const v=tgt[r*3+c];
+    ctx.fillStyle=COLORS[v];ctx.strokeStyle=STROKES[v];ctx.lineWidth=1.5;
+    rrect(TX+c*S+1,TY+r*S+1,S-2,S-2,4);ctx.fill();ctx.stroke();
+  }
+  // mini mirror preview
+  ctx.globalAlpha=0.5;
+  for(let r=0;r<3;r++) for(let c=0;c<3;c++){
+    const v=tgt[r*3+c];
+    ctx.fillStyle=COLORS[v];ctx.strokeStyle='rgba(0,0,0,0.1)';ctx.lineWidth=1;
+    // horizontal mirror
+    rrect(TX+(5-c)*S+4+3*S,TY+r*S+1,S-2,S-2,4);ctx.fill();ctx.stroke();
+  }
+  ctx.globalAlpha=1;
+  ctx.restore();
+}
+
+function drawProgressBar(by){
+  const bw=240,bh=10,bx=BASE_W/2-bw/2;
+  ctx.fillStyle='#e0d8ee';rrect(bx,by,bw,bh,5);ctx.fill();
+  const pct=matchCount/9;
+  ctx.fillStyle='#90d0a0';rrect(bx,by,bw*pct,bh,5);ctx.fill();
+}
+
+function bg(){
+  const gr=ctx.createLinearGradient(0,0,0,BASE_H);
+  gr.addColorStop(0,'#fdf8fb');gr.addColorStop(1,'#f0e8f8');
+  ctx.fillStyle=gr;ctx.fillRect(0,0,BASE_W,BASE_H);
+}
+
+function drawTitle(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.save();ctx.translate(ox,oy);ctx.scale(scale,scale);
+  bg();
+
+  // floating petals
+  for(let i=0;i<16;i++){
+    const a=(i/16)*Math.PI*2+animT*0.25;
+    const rr=180+Math.sin(animT*0.6+i)*20;
+    ctx.save();ctx.globalAlpha=0.18+0.06*Math.sin(animT+i);
+    ctx.fillStyle=COLORS[(i%4)+1];
+    ctx.beginPath();ctx.ellipse(BASE_W/2+Math.cos(a)*rr,230+Math.sin(a)*rr*0.45,9,6,a,0,Math.PI*2);
+    ctx.fill();ctx.restore();
+  }
+
+  ctx.textAlign='center';
+  ctx.font='56px Arial';ctx.fillStyle='#d87898';ctx.fillText('🌸',BASE_W/2,118);
+  ctx.font='bold 36px Arial';ctx.fillStyle='#905878';ctx.fillText('Mirror Garden',BASE_W/2,175);
+  ctx.font='16px Arial';ctx.fillStyle='#b090b0';ctx.fillText('미러 가든 — 대칭 퍼즐',BASE_W/2,200);
+
+  ctx.font='15px Arial';ctx.fillStyle='#907888';
+  ctx.fillText('Tap a tile → it mirrors across',BASE_W/2,255);
+  ctx.fillText('all 4 quadrants instantly!',BASE_W/2,275);
+
+  // color swatches
+  for(let i=1;i<5;i++){
+    const sx=BASE_W/2+(i-2.5)*52-16;
+    ctx.fillStyle=COLORS[i];ctx.strokeStyle=STROKES[i];ctx.lineWidth=2;
+    rrect(sx,300,36,36,8);ctx.fill();ctx.stroke();
+  }
+  ctx.font='13px Arial';ctx.fillStyle='#c0a8c0';ctx.fillText('4 colors × 5 levels',BASE_W/2,353);
+
+  // play button
+  const bw=210,bh=54,bx=BASE_W/2-bw/2,by=382;
+  const bg2=ctx.createLinearGradient(bx,by,bx,by+bh);
+  bg2.addColorStop(0,'#f4a0c0');bg2.addColorStop(1,'#d878a0');
+  ctx.fillStyle=bg2;rrect(bx,by,bw,bh,27);ctx.fill();
+  ctx.font='bold 22px Arial';ctx.fillStyle='white';ctx.fillText('▶  PLAY',BASE_W/2,by+35);
+
+  if(bestScore>0){ctx.font='14px Arial';ctx.fillStyle='#b898b8';ctx.fillText(`Best: ${bestScore} pts`,BASE_W/2,by+70);}
+
+  ctx.font='13px Arial';ctx.fillStyle='#c0b0d0';
+  ctx.fillText('Small dots show the target color',BASE_W/2,BASE_H-25);
+  ctx.restore();
+}
+
+function drawGame(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.save();ctx.translate(ox,oy);ctx.scale(scale,scale);
+  bg();
+
+  ctx.textAlign='center';
+  ctx.font='bold 20px Arial';ctx.fillStyle='#905878';ctx.fillText('🌸 Mirror Garden',BASE_W/2,30);
+  ctx.font='15px Arial';ctx.fillStyle='#a888a8';ctx.fillText(`Level ${level+1}: ${LEVELS[level].name}`,BASE_W/2,52);
+  ctx.font='bold 18px Arial';ctx.fillStyle=movesLeft<=3?'#e06060':'#806878';
+  ctx.fillText(`✦ ${movesLeft} moves left`,BASE_W/2,76);
+  ctx.font='13px Arial';ctx.fillStyle='#90b890';ctx.fillText(`${matchCount}/9 cells matched`,BASE_W/2,97);
+  drawProgressBar(108);
+  ctx.font='bold 13px Arial';ctx.fillStyle='#b0a0b8';ctx.textAlign='right';
+  ctx.fillText(`Score: ${totalScore}`,BASE_W-14,30);ctx.textAlign='center';
+
+  drawGrid();
+
+  // quadrant labels
+  ctx.save();ctx.globalAlpha=0.35;ctx.font='12px Arial';ctx.fillStyle='#806090';
+  ctx.fillText('✏️ edit',GRID_X+CELL*1.5,GRID_Y-8);
+  ctx.fillText('mirror →',GRID_X+CELL*4.5,GRID_Y-8);
+  ctx.restore();
+
+  drawTargetPreview(540);
+
+  ctx.font='12px Arial';ctx.fillStyle='#c0b0d0';ctx.textAlign='center';
+  ctx.fillText('Tap left-top area to edit · mirrors appear automatically',BASE_W/2,670);
+  ctx.fillText('Match all 9 canonical cells to win',BASE_W/2,686);
+  ctx.restore();
+}
+
+function drawOverlay(title,emoji,sub,btnText,btnColor1,btnColor2){
+  // semi-transparent overlay
+  ctx.save();ctx.translate(ox,oy);ctx.scale(scale,scale);
+  const gr=ctx.createLinearGradient(0,0,0,BASE_H);
+  gr.addColorStop(0,'rgba(253,248,251,0.96)');gr.addColorStop(1,'rgba(240,232,248,0.96)');
+  ctx.fillStyle=gr;ctx.fillRect(0,0,BASE_W,BASE_H);
+
+  ctx.textAlign='center';
+  ctx.font='64px Arial';ctx.fillText(emoji,BASE_W/2,160);
+  ctx.font='bold 32px Arial';ctx.fillStyle=btnColor1;ctx.fillText(title,BASE_W/2,230);
+  ctx.font='16px Arial';ctx.fillStyle='#908090';ctx.fillText(sub,BASE_W/2,262);
+
+  // stats
+  ctx.font='bold 22px Arial';ctx.fillStyle='#706878';
+  ctx.fillText(`+${winStats.pts} points`,BASE_W/2,310);
+  ctx.font='15px Arial';ctx.fillStyle='#a09098';
+  ctx.fillText(`Matched: ${winStats.matched}/9   Moves saved: ${winStats.saved}`,BASE_W/2,340);
+  if(totalScore>0){ctx.font='bold 14px Arial';ctx.fillStyle='#b0a0b8';ctx.fillText(`Total: ${totalScore} pts`,BASE_W/2,368);}
+
+  // button
+  const bw=220,bh=54,bx=BASE_W/2-bw/2,by=400;
+  const bg2=ctx.createLinearGradient(bx,by,bx,by+bh);
+  bg2.addColorStop(0,btnColor1);bg2.addColorStop(1,btnColor2);
+  ctx.fillStyle=bg2;rrect(bx,by,bw,bh,27);ctx.fill();
+  ctx.font='bold 20px Arial';ctx.fillStyle='white';ctx.fillText(btnText,BASE_W/2,by+35);
+
+  // confetti (win only)
+  if(gs==='win'||gs==='done'){
+    for(let i=0;i<18;i++){
+      const a=(i/18)*Math.PI*2+animT;
+      const rr=90+40*Math.sin(animT*1.2+i*0.8);
+      ctx.save();ctx.globalAlpha=0.45+0.25*Math.sin(animT*2+i);
+      ctx.fillStyle=COLORS[(i%4)+1];
+      ctx.beginPath();ctx.arc(BASE_W/2+Math.cos(a)*rr,290+Math.sin(a)*rr*0.35,5,0,Math.PI*2);
+      ctx.fill();ctx.restore();
+    }
+  }
+  ctx.restore();
+}
+
+// Input
+function toGame(ex,ey){return[(ex-ox)/scale,(ey-oy)/scale];}
+
+function handleTap(ex,ey){
+  const [gx,gy]=toGame(ex,ey);
+  if(gs==='title'){
+    const bx=BASE_W/2-105,by=382;
+    if(gx>=bx&&gx<=bx+210&&gy>=by&&gy<=by+54){totalScore=0;initLevel(0);}
+    return;
+  }
+  if(gs==='win'){
+    const by=400;
+    if(gy>=by&&gy<=by+54){
+      totalScore+=winStats.pts;
+      if(level+1<LEVELS.length){initLevel(level+1);}
+      else{gs='done';bestScore=Math.max(bestScore,totalScore);localStorage.setItem('mg_best',bestScore);}
+    }
+    return;
+  }
+  if(gs==='lose'){
+    const by=400;
+    if(gy>=by&&gy<=by+54){initLevel(level);}
+    return;
+  }
+  if(gs==='done'){gs='title';return;}
+  if(gs==='play'){
+    const c=Math.floor((gx-GRID_X)/CELL),r=Math.floor((gy-GRID_Y)/CELL);
+    if(r>=0&&r<GN&&c>=0&&c<GN) tapCell(r,c);
+  }
+}
+canvas.addEventListener('pointerdown',e=>handleTap(e.clientX,e.clientY));
+
+// Game loop
+function loop(ts){
+  const dt=Math.min((ts-lastTs)/1000,0.05);lastTs=ts;animT+=dt;
+  flashes.forEach(f=>{f.t=Math.max(0,f.t-dt*3);});
+  flashes=flashes.filter(f=>f.t>0);
+
+  if(gs==='title') drawTitle();
+  else if(gs==='play') drawGame();
+  else if(gs==='win'){
+    drawGame();
+    const isLast=level+1>=LEVELS.length;
+    drawOverlay('LEVEL CLEAR!','🎉',`Level ${level+1}: ${LEVELS[level].name}`,
+      isLast?'🌸 ALL DONE!':'→ NEXT LEVEL','#90d090','#60a860');
+  }
+  else if(gs==='lose'){
+    drawGame();
+    drawOverlay('Out of Moves','🌧️',`Matched: ${winStats.matched}/9 — try again!`,
+      '↺ RETRY LEVEL','#f4a0c0','#d87898');
+  }
+  else if(gs==='done'){
+    drawOverlay('GARDEN COMPLETE!','🌸🎉🌸','All 5 levels mastered!',
+      '▶ PLAY AGAIN','#f8d468','#c8a430');
+  }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(ts=>{lastTs=ts;loop(ts);});
+</script>
+</body>
+</html>

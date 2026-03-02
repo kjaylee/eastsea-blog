@@ -509,27 +509,30 @@ function detectCategory(post) {
   return 'other';
 }
 
-function formatPostDate(rawDate) {
+function formatPostDate(rawDate, createdAt) {
+  // created_at (UTC) 우선 사용 → KST (+9h) 변환
+  const utcSrc = String(createdAt || '').trim();
+  if (utcSrc) {
+    const utcParsed = new Date(utcSrc.replace(' ', 'T') + 'Z');
+    if (!Number.isNaN(utcParsed.getTime())) {
+      return new Intl.DateTimeFormat('ko-KR', {
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', hour12: false,
+        timeZone: 'Asia/Seoul'
+      }).format(utcParsed);
+    }
+  }
+  // fallback: date 필드
   const source = String(rawDate || '').trim();
   if (!source) return '';
-
   const match = source.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})/);
-  if (match) {
-    return `${match[1]} · ${match[2]}`;
-  }
-
+  if (match) return `${match[1]} · ${match[2]}`;
   const parsed = new Date(source.replace(' ', 'T').replace(/([+-]\d{2})(\d{2})$/, '$1:$2'));
-  if (Number.isNaN(parsed.getTime())) {
-    return source;
-  }
-
+  if (Number.isNaN(parsed.getTime())) return source;
   return new Intl.DateTimeFormat('ko-KR', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+    timeZone: 'Asia/Seoul'
   }).format(parsed);
 }
 
@@ -584,7 +587,11 @@ async function renderPosts(filter = 'all') {
     const posts = apiPosts
       .map(post => ({ ...post, category: detectCategory(post) }))
       .filter(post => normalizedFilter === 'all' || post.category === normalizedFilter)
-      .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+      .sort((a, b) => {
+        const ta = new Date((a.created_at || a.date || '').replace(' ', 'T') + (a.created_at ? 'Z' : '')).getTime() || 0;
+        const tb = new Date((b.created_at || b.date || '').replace(' ', 'T') + (b.created_at ? 'Z' : '')).getTime() || 0;
+        return tb - ta;
+      });
 
     if (posts.length === 0) {
       container.innerHTML = '<div class="empty-state">이 카테고리에 포스트가 없습니다.</div>';
@@ -592,7 +599,7 @@ async function renderPosts(filter = 'all') {
     }
 
     const postsHTML = posts.map(post => {
-      const postDate = escapeHtml(formatPostDate(post.date));
+      const postDate = escapeHtml(formatPostDate(post.date, post.created_at));
       const postExcerpt = escapeHtml(clampText(stripMarkdown(post.excerpt), 170));
       const postTitle = escapeHtml(post.title || '제목 없음');
       const postSlug = encodeURIComponent(String(post.slug || ''));

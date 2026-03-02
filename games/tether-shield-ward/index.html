@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+<title>Tether Shield Ward</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #bfe6ff;
+  }
+  body {
+    font-family: "Pretendard Variable", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    color: #1f2a44;
+  }
+  #game {
+    display: block;
+    position: absolute;
+    left: 0;
+    top: 0;
+    touch-action: none;
+    background: radial-gradient(circle at 50% 20%, #f3fbff 0%, #bfe6ff 45%, #88bce8 100%);
+    box-shadow: 0 16px 42px rgba(31, 42, 68, 0.2);
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<script src="https://cdn.jsdelivr.net/npm/littlejsengine/dist/littlejs.min.js"></script>
+<script>
+(() => {
+  'use strict';
+
+  const GAME_W = 1280;
+  const GAME_H = 720;
+
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+
+  const view = { scale: 1, dpr: 1 };
+  const pointer = { x: 0, y: 0, down: false, justDown: false, justUp: false };
+  const keys = {};
+
+  const COLORS = {
+    ink: '#1f2a44',
+    accent: '#ff8c42',
+    accent2: '#41d3bd',
+    warning: '#ff595e',
+    shield: '#5c7cff',
+    shieldGlow: 'rgba(92, 124, 255, 0.35)'
+  };
+
+  const center = { x: GAME_W / 2, y: GAME_H / 2 };
+  const shield = {
+    angle: -Math.PI / 2,
+    radius: 180,
+    arc: Math.PI / 2.2,
+    thickness: 18,
+    minR: 120,
+    maxR: 260
+  };
+
+  const state = {
+    screen: 'title',
+    score: 0,
+    best: 0,
+    hp: 5,
+    missiles: [],
+    spawnTimer: 0,
+    time: 0
+  };
+
+  function clamp(value, min, max) { return Math.max(min, Math.min(max, value)); }
+
+  function resize() {
+    const scale = Math.min(window.innerWidth / GAME_W, window.innerHeight / GAME_H);
+    canvas.style.width = Math.floor(GAME_W * scale) + 'px';
+    canvas.style.height = Math.floor(GAME_H * scale) + 'px';
+    canvas.style.left = Math.floor((window.innerWidth - GAME_W * scale) / 2) + 'px';
+    canvas.style.top = Math.floor((window.innerHeight - GAME_H * scale) / 2) + 'px';
+
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    canvas.width = GAME_W * dpr;
+    canvas.height = GAME_H * dpr;
+    view.scale = scale;
+    view.dpr = dpr;
+  }
+
+  function updatePointer(e) {
+    const rect = canvas.getBoundingClientRect();
+    pointer.x = (e.clientX - rect.left) / rect.width * GAME_W;
+    pointer.y = (e.clientY - rect.top) / rect.height * GAME_H;
+  }
+
+  function angleDiff(a, b) {
+    let diff = a - b;
+    while (diff > Math.PI) diff -= Math.PI * 2;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+    return Math.abs(diff);
+  }
+
+  function spawnMissile() {
+    const edge = Math.floor(Math.random() * 4);
+    const margin = 40;
+    let x = 0, y = 0;
+    if (edge === 0) { x = -margin; y = Math.random() * GAME_H; }
+    if (edge === 1) { x = GAME_W + margin; y = Math.random() * GAME_H; }
+    if (edge === 2) { x = Math.random() * GAME_W; y = -margin; }
+    if (edge === 3) { x = Math.random() * GAME_W; y = GAME_H + margin; }
+
+    const dx = center.x - x;
+    const dy = center.y - y;
+    const dist = Math.hypot(dx, dy) || 1;
+    const speed = 140 + Math.min(180, state.score * 2);
+    const vx = (dx / dist) * speed;
+    const vy = (dy / dist) * speed;
+
+    state.missiles.push({ x, y, vx, vy, r: 10, deflected: false });
+  }
+
+  function resetGame() {
+    state.screen = 'play';
+    state.score = 0;
+    state.hp = 5;
+    state.missiles = [];
+    state.spawnTimer = 0.6;
+    state.time = 0;
+    shield.angle = -Math.PI / 2;
+    shield.radius = 180;
+  }
+
+  function update(dt) {
+    if (state.screen === 'play') {
+      state.time += dt;
+
+      if (pointer.down) {
+        const dx = pointer.x - center.x;
+        const dy = pointer.y - center.y;
+        shield.angle = Math.atan2(dy, dx);
+        const dist = Math.hypot(dx, dy);
+        shield.radius = clamp(dist, shield.minR, shield.maxR);
+      }
+
+      const turnSpeed = 2.2;
+      if (keys.ArrowLeft) shield.angle -= turnSpeed * dt;
+      if (keys.ArrowRight) shield.angle += turnSpeed * dt;
+      if (keys.ArrowUp) shield.radius = clamp(shield.radius + 200 * dt, shield.minR, shield.maxR);
+      if (keys.ArrowDown) shield.radius = clamp(shield.radius - 200 * dt, shield.minR, shield.maxR);
+
+      state.spawnTimer -= dt;
+      if (state.spawnTimer <= 0) {
+        spawnMissile();
+        const base = Math.max(0.35, 1.25 - state.score * 0.01);
+        state.spawnTimer = base + Math.random() * 0.4;
+      }
+
+      for (let i = state.missiles.length - 1; i >= 0; i--) {
+        const m = state.missiles[i];
+        m.x += m.vx * dt;
+        m.y += m.vy * dt;
+
+        const dx = m.x - center.x;
+        const dy = m.y - center.y;
+        const dist = Math.hypot(dx, dy) || 1;
+        const angle = Math.atan2(dy, dx);
+
+        if (dist < 46) {
+          state.hp -= 1;
+          state.missiles.splice(i, 1);
+          if (state.hp <= 0) {
+            state.screen = 'end';
+            state.best = Math.max(state.best, state.score);
+            localStorage.setItem('tether-shield-ward-best', state.best);
+          }
+          continue;
+        }
+
+        const shieldHit = Math.abs(dist - shield.radius) <= shield.thickness && angleDiff(angle, shield.angle) <= shield.arc / 2;
+        if (shieldHit) {
+          if (!m.deflected) {
+            state.score += 1;
+            m.deflected = true;
+          }
+          const nx = dx / dist;
+          const ny = dy / dist;
+          const speed = Math.hypot(m.vx, m.vy);
+          m.vx = nx * speed;
+          m.vy = ny * speed;
+          m.x = center.x + nx * (shield.radius + shield.thickness + m.r + 2);
+          m.y = center.y + ny * (shield.radius + shield.thickness + m.r + 2);
+        }
+
+        if (m.x < -120 || m.x > GAME_W + 120 || m.y < -120 || m.y > GAME_H + 120) {
+          state.missiles.splice(i, 1);
+        }
+      }
+    }
+
+    if (state.screen === 'title' || state.screen === 'end') {
+      if (pointer.justDown || keys[' '] || keys.Enter) {
+        resetGame();
+        keys[' '] = false;
+        keys.Enter = false;
+      }
+    }
+
+    pointer.justDown = false;
+    pointer.justUp = false;
+  }
+
+  function render() {
+    ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
+    ctx.clearRect(0, 0, GAME_W, GAME_H);
+
+    if (state.screen === 'title') {
+      ctx.fillStyle = COLORS.ink;
+      ctx.font = '700 54px "Pretendard Variable", sans-serif';
+      ctx.fillText('Tether Shield Ward', 80, 140);
+      ctx.font = '24px "Pretendard Variable", sans-serif';
+      ctx.fillStyle = '#2f3e5c';
+      ctx.fillText('드래그로 실드 각도·반경을 조정해 코어를 보호하세요.', 80, 190);
+      ctx.fillText('방향키로 미세 조정, 스페이스로 시작', 80, 225);
+      ctx.fillStyle = COLORS.accent;
+      ctx.fillRect(80, 280, 240, 58);
+      ctx.fillStyle = '#fffaf2';
+      ctx.font = '600 24px "Pretendard Variable", sans-serif';
+      ctx.fillText('시작하기', 145, 318);
+      return;
+    }
+
+    // core
+    ctx.fillStyle = COLORS.accent2;
+    ctx.beginPath();
+    ctx.arc(center.x, center.y, 36, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    ctx.beginPath();
+    ctx.arc(center.x - 10, center.y - 8, 12, 0, Math.PI * 2);
+    ctx.fill();
+
+    // shield
+    ctx.strokeStyle = COLORS.shieldGlow;
+    ctx.lineWidth = shield.thickness + 10;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(center.x, center.y, shield.radius, shield.angle - shield.arc / 2, shield.angle + shield.arc / 2);
+    ctx.stroke();
+
+    ctx.strokeStyle = COLORS.shield;
+    ctx.lineWidth = shield.thickness;
+    ctx.beginPath();
+    ctx.arc(center.x, center.y, shield.radius, shield.angle - shield.arc / 2, shield.angle + shield.arc / 2);
+    ctx.stroke();
+
+    // missiles
+    state.missiles.forEach(m => {
+      ctx.fillStyle = m.deflected ? COLORS.accent2 : COLORS.warning;
+      ctx.beginPath();
+      ctx.arc(m.x, m.y, m.r, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    // UI
+    ctx.fillStyle = COLORS.ink;
+    ctx.font = '700 28px "Pretendard Variable", sans-serif';
+    ctx.fillText(`점수 ${state.score}`, 80, 70);
+    ctx.font = '20px "Pretendard Variable", sans-serif';
+    ctx.fillText(`HP ${state.hp} · 최고 ${state.best}`, 80, 102);
+
+    if (state.screen === 'end') {
+      ctx.fillStyle = 'rgba(31,42,68,0.7)';
+      ctx.fillRect(0, 0, GAME_W, GAME_H);
+      ctx.fillStyle = '#fffaf2';
+      ctx.font = '700 54px "Pretendard Variable", sans-serif';
+      ctx.fillText('코어 붕괴', 80, 160);
+      ctx.font = '24px "Pretendard Variable", sans-serif';
+      ctx.fillText(`최종 점수: ${state.score}`, 80, 210);
+      ctx.fillText('스페이스/탭으로 재시작', 80, 245);
+    }
+  }
+
+  let last = 0;
+  function loop(ts) {
+    const dt = Math.min(0.033, (ts - last) / 1000 || 0.016);
+    last = ts;
+    update(dt);
+    render();
+    requestAnimationFrame(loop);
+  }
+
+  window.addEventListener('resize', resize);
+  canvas.addEventListener('pointerdown', e => { pointer.down = true; pointer.justDown = true; updatePointer(e); });
+  canvas.addEventListener('pointermove', e => { updatePointer(e); });
+  window.addEventListener('pointerup', e => { pointer.down = false; pointer.justUp = true; updatePointer(e); });
+  window.addEventListener('keydown', e => { keys[e.key] = true; });
+  window.addEventListener('keyup', e => { keys[e.key] = false; });
+
+  state.best = parseInt(localStorage.getItem('tether-shield-ward-best') || '0', 10);
+  resize();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

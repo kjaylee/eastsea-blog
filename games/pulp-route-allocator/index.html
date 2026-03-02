@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+<title>Pulp Route Allocator</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #f6f1e7;
+  }
+  body {
+    font-family: "Pretendard Variable", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    color: #3b2b1d;
+  }
+  #game {
+    display: block;
+    position: absolute;
+    left: 0;
+    top: 0;
+    touch-action: none;
+    background: radial-gradient(circle at 50% 20%, #fffaf2 0%, #f3eadc 45%, #e6d6bf 100%);
+    box-shadow: 0 16px 40px rgba(60, 42, 24, 0.25);
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<script src="https://cdn.jsdelivr.net/npm/littlejsengine/dist/littlejs.min.js"></script>
+<script>
+(() => {
+  'use strict';
+
+  const GAME_W = 1280;
+  const GAME_H = 720;
+  const MAX_DAYS = 10;
+
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+
+  const view = { scale: 1, dpr: 1, offsetX: 0, offsetY: 0 };
+  const pointer = { x: 0, y: 0, down: false, justDown: false, justUp: false };
+  const keys = {};
+
+  const COLORS = {
+    ink: '#3b2b1d',
+    soft: '#6b5640',
+    wood: '#9b7a59',
+    panel: '#eadfce',
+    panelDark: '#d6c5ab',
+    accent: '#c48a4a',
+    good: '#4d7a55',
+    warn: '#b35740',
+    highlight: '#fff4da'
+  };
+
+  const TOWN_SEED = [
+    { name: '오크릿지', priority: 3 },
+    { name: '미루항', priority: 2 },
+    { name: '서판초소', priority: 1 },
+    { name: '잿물교역', priority: 2 },
+    { name: '단풍마을', priority: 3 }
+  ];
+
+  const state = {
+    screen: 'title',
+    day: 1,
+    supply: 0,
+    score: 0,
+    best: 0,
+    towns: [],
+    selected: 0,
+    dragging: -1,
+    lastResult: ''
+  };
+
+  function clamp(value, min, max) { return Math.max(min, Math.min(max, value)); }
+  function randInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+
+  function resize() {
+    const scale = Math.min(window.innerWidth / GAME_W, window.innerHeight / GAME_H);
+    canvas.style.width = Math.floor(GAME_W * scale) + 'px';
+    canvas.style.height = Math.floor(GAME_H * scale) + 'px';
+    canvas.style.left = Math.floor((window.innerWidth - GAME_W * scale) / 2) + 'px';
+    canvas.style.top = Math.floor((window.innerHeight - GAME_H * scale) / 2) + 'px';
+
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    canvas.width = GAME_W * dpr;
+    canvas.height = GAME_H * dpr;
+    view.scale = scale;
+    view.dpr = dpr;
+  }
+
+  function updatePointer(e) {
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width * GAME_W;
+    const y = (e.clientY - rect.top) / rect.height * GAME_H;
+    pointer.x = x;
+    pointer.y = y;
+  }
+
+  function initGame() {
+    state.day = 1;
+    state.score = 0;
+    state.selected = 0;
+    state.lastResult = '';
+    state.towns = TOWN_SEED.map(seed => ({
+      name: seed.name,
+      priority: seed.priority,
+      trust: 60,
+      demand: 0,
+      alloc: 0
+    }));
+    newDay();
+  }
+
+  function newDay() {
+    state.supply = randInt(10, 16);
+    state.towns.forEach(town => {
+      town.demand = randInt(2, 6) + Math.floor(Math.random() * 2);
+      town.alloc = 0;
+    });
+  }
+
+  function totalAlloc() {
+    return state.towns.reduce((sum, town) => sum + town.alloc, 0);
+  }
+
+  function adjustAlloc(index, value) {
+    const town = state.towns[index];
+    if (!town) return;
+    const currentTotal = totalAlloc();
+    const withoutCurrent = currentTotal - town.alloc;
+    const maxForTown = town.demand;
+    let next = clamp(value, 0, maxForTown);
+    const available = state.supply - withoutCurrent;
+    if (next > available) next = available;
+    town.alloc = next;
+  }
+
+  function dispatch() {
+    const used = totalAlloc();
+    if (used === 0) return;
+
+    let dayScore = 0;
+    state.towns.forEach(town => {
+      const delivered = town.alloc;
+      const demand = town.demand;
+      const satisfied = Math.min(delivered, demand);
+      const ratio = satisfied / demand;
+      const trustFactor = 0.6 + town.trust / 100;
+      dayScore += satisfied * town.priority * trustFactor * 5;
+      if (delivered >= demand) {
+        dayScore += town.priority * 8;
+        town.trust = clamp(town.trust + 6, 20, 100);
+      } else {
+        const loss = Math.ceil((1 - ratio) * 12);
+        town.trust = clamp(town.trust - loss, 20, 100);
+      }
+    });
+
+    state.score += Math.round(dayScore);
+    state.lastResult = `Day ${state.day} 결산: +${Math.round(dayScore)}점`;
+
+    if (state.day >= MAX_DAYS) {
+      state.screen = 'end';
+      state.best = Math.max(state.best, state.score);
+      localStorage.setItem('pulp-route-allocator-best', state.best);
+      return;
+    }
+
+    state.day += 1;
+    newDay();
+  }
+
+  function startGame() {
+    initGame();
+    state.screen = 'play';
+  }
+
+  function drawRoundedRect(x, y, w, h, r, fill, stroke) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+    if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+    if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke(); }
+  }
+
+  function renderTitle() {
+    ctx.fillStyle = COLORS.ink;
+    ctx.font = '700 54px "Pretendard Variable", sans-serif';
+    ctx.fillText('Pulp Route Allocator', 80, 140);
+
+    ctx.font = '24px "Pretendard Variable", sans-serif';
+    ctx.fillStyle = COLORS.soft;
+    ctx.fillText('펄프 공급을 마을 수요에 배분해 신뢰와 점수를 확보하세요.', 80, 190);
+    ctx.fillText('드래그로 배분 · 방향키/스페이스로 조작', 80, 225);
+
+    drawRoundedRect(80, 280, 240, 58, 16, COLORS.accent, null);
+    ctx.fillStyle = '#fffaf2';
+    ctx.font = '600 24px "Pretendard Variable", sans-serif';
+    ctx.fillText('시작하기', 145, 318);
+  }
+
+  function renderPlay() {
+    ctx.fillStyle = COLORS.ink;
+    ctx.font = '700 34px "Pretendard Variable", sans-serif';
+    ctx.fillText('펄프 배분 회의', 80, 80);
+
+    ctx.font = '22px "Pretendard Variable", sans-serif';
+    ctx.fillStyle = COLORS.soft;
+    ctx.fillText(`Day ${state.day} / ${MAX_DAYS}`, 80, 118);
+    ctx.fillText(`총 공급: ${state.supply} 묶음`, 260, 118);
+    ctx.fillText(`누적 점수: ${state.score}`, 460, 118);
+    ctx.fillText(`최고 기록: ${state.best}`, 690, 118);
+
+    const baseX = 80;
+    const baseY = 160;
+    const rowH = 90;
+    const barX = 430;
+    const barW = 520;
+    const barH = 22;
+
+    state.towns.forEach((town, i) => {
+      const y = baseY + i * rowH;
+      const isSelected = state.selected === i;
+      drawRoundedRect(baseX, y - 34, 1120, 70, 18, isSelected ? COLORS.highlight : COLORS.panel, COLORS.panelDark);
+
+      ctx.fillStyle = COLORS.ink;
+      ctx.font = '600 22px "Pretendard Variable", sans-serif';
+      ctx.fillText(town.name, baseX + 20, y + 6);
+      ctx.font = '18px "Pretendard Variable", sans-serif';
+      ctx.fillStyle = COLORS.soft;
+      ctx.fillText(`우선순위 ${'★'.repeat(town.priority)}`, baseX + 20, y + 32);
+
+      ctx.fillStyle = COLORS.soft;
+      ctx.fillText(`수요 ${town.demand}`, baseX + 200, y + 6);
+
+      // trust bar
+      const trustW = 120;
+      const trustX = baseX + 280;
+      const trustY = y - 6;
+      drawRoundedRect(trustX, trustY, trustW, 12, 6, COLORS.panelDark, null);
+      drawRoundedRect(trustX, trustY, trustW * (town.trust / 100), 12, 6, COLORS.good, null);
+      ctx.fillStyle = COLORS.soft;
+      ctx.fillText(`신뢰 ${town.trust}`, trustX, trustY + 28);
+
+      // allocation bar
+      drawRoundedRect(barX, y - 12, barW, barH, 10, COLORS.panelDark, null);
+      const fillW = barW * (town.alloc / town.demand || 0);
+      drawRoundedRect(barX, y - 12, fillW, barH, 10, COLORS.accent, null);
+      ctx.fillStyle = COLORS.ink;
+      ctx.font = '18px "Pretendard Variable", sans-serif';
+      ctx.fillText(`${town.alloc} / ${town.demand}`, barX + barW + 20, y + 6);
+    });
+
+    const used = totalAlloc();
+    ctx.fillStyle = used > state.supply ? COLORS.warn : COLORS.soft;
+    ctx.font = '20px "Pretendard Variable", sans-serif';
+    ctx.fillText(`배분 합계: ${used} / ${state.supply}`, 80, 650);
+
+    drawRoundedRect(930, 620, 250, 62, 16, used === 0 ? COLORS.panelDark : COLORS.accent, null);
+    ctx.fillStyle = used === 0 ? COLORS.soft : '#fffaf2';
+    ctx.font = '600 22px "Pretendard Variable", sans-serif';
+    ctx.fillText('Dispatch', 1000, 660);
+
+    if (state.lastResult) {
+      ctx.fillStyle = COLORS.wood;
+      ctx.font = '18px "Pretendard Variable", sans-serif';
+      ctx.fillText(state.lastResult, 80, 690);
+    }
+  }
+
+  function renderEnd() {
+    ctx.fillStyle = COLORS.ink;
+    ctx.font = '700 54px "Pretendard Variable", sans-serif';
+    ctx.fillText('결산 종료', 80, 140);
+    ctx.font = '24px "Pretendard Variable", sans-serif';
+    ctx.fillStyle = COLORS.soft;
+    ctx.fillText(`최종 점수: ${state.score}`, 80, 190);
+    ctx.fillText(`최고 기록: ${state.best}`, 80, 225);
+
+    drawRoundedRect(80, 280, 240, 58, 16, COLORS.accent, null);
+    ctx.fillStyle = '#fffaf2';
+    ctx.font = '600 24px "Pretendard Variable", sans-serif';
+    ctx.fillText('다시 시작', 140, 318);
+  }
+
+  function update() {
+    if (state.screen === 'play') {
+      if (keys.ArrowUp) { state.selected = (state.selected + state.towns.length - 1) % state.towns.length; keys.ArrowUp = false; }
+      if (keys.ArrowDown) { state.selected = (state.selected + 1) % state.towns.length; keys.ArrowDown = false; }
+      if (keys.ArrowLeft) {
+        const town = state.towns[state.selected];
+        adjustAlloc(state.selected, town.alloc - 1);
+        keys.ArrowLeft = false;
+      }
+      if (keys.ArrowRight) {
+        const town = state.towns[state.selected];
+        adjustAlloc(state.selected, town.alloc + 1);
+        keys.ArrowRight = false;
+      }
+      if (keys[' '] || keys.Enter) {
+        dispatch();
+        keys[' '] = false;
+        keys.Enter = false;
+      }
+
+      if (pointer.justDown) {
+        const btn = { x: 930, y: 620, w: 250, h: 62 };
+        if (pointer.x >= btn.x && pointer.x <= btn.x + btn.w && pointer.y >= btn.y && pointer.y <= btn.y + btn.h) {
+          dispatch();
+        } else {
+          const baseY = 160;
+          const rowH = 90;
+          const barX = 430;
+          const barW = 520;
+          const barH = 22;
+          state.towns.forEach((town, i) => {
+            const y = baseY + i * rowH;
+            if (pointer.x >= barX && pointer.x <= barX + barW && pointer.y >= y - 12 && pointer.y <= y - 12 + barH) {
+              state.dragging = i;
+              const value = Math.round((pointer.x - barX) / barW * town.demand);
+              adjustAlloc(i, value);
+            }
+          });
+        }
+      }
+
+      if (pointer.down && state.dragging >= 0) {
+        const barX = 430;
+        const barW = 520;
+        const town = state.towns[state.dragging];
+        const value = Math.round((pointer.x - barX) / barW * town.demand);
+        adjustAlloc(state.dragging, value);
+      }
+
+      if (pointer.justUp) {
+        state.dragging = -1;
+      }
+    }
+
+    if (state.screen === 'title' || state.screen === 'end') {
+      if (pointer.justDown || keys[' '] || keys.Enter) {
+        startGame();
+        keys[' '] = false;
+        keys.Enter = false;
+      }
+    }
+
+    pointer.justDown = false;
+    pointer.justUp = false;
+  }
+
+  function render() {
+    ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
+    ctx.clearRect(0, 0, GAME_W, GAME_H);
+
+    if (state.screen === 'title') renderTitle();
+    if (state.screen === 'play') renderPlay();
+    if (state.screen === 'end') renderEnd();
+  }
+
+  function loop() {
+    update();
+    render();
+    requestAnimationFrame(loop);
+  }
+
+  window.addEventListener('resize', resize);
+  canvas.addEventListener('pointerdown', e => { pointer.down = true; pointer.justDown = true; updatePointer(e); });
+  canvas.addEventListener('pointermove', e => { updatePointer(e); });
+  window.addEventListener('pointerup', e => { pointer.down = false; pointer.justUp = true; updatePointer(e); });
+  window.addEventListener('keydown', e => { keys[e.key] = true; });
+  window.addEventListener('keyup', e => { keys[e.key] = false; });
+
+  state.best = parseInt(localStorage.getItem('pulp-route-allocator-best') || '0', 10);
+  resize();
+  loop();
+})();
+</script>
+</body>
+</html>

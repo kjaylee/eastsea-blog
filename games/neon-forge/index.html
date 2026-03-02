@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Neon Forge — J&amp;J Games</title>
+  <meta name="description" content="떨어지는 금속 파편을 타이밍 맞춰 제작하는 네온 리듬 단조 게임">
+  <meta property="og:title" content="Neon Forge — J&amp;J Games">
+  <meta property="og:description" content="떨어지는 금속 파편을 타이밍 맞춰 제작하는 네온 리듬 단조 게임">
+  <meta property="og:image" content="https://eastsea.xyz/games/neon-forge/thumb.png">
+  <meta property="og:site_name" content="J&amp;J Games">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://eastsea.xyz/games/neon-forge/">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Neon Forge — J&amp;J Games">
+  <meta name="twitter:description" content="떨어지는 금속 파편을 타이밍 맞춰 제작하는 네온 리듬 단조 게임">
+  <meta name="twitter:image" content="https://eastsea.xyz/games/neon-forge/thumb.png">
+  <link rel="canonical" href="https://eastsea.xyz/games/neon-forge/">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"VideoGame","name":"Neon Forge","description":"떨어지는 금속 파편을 타이밍 맞춰 제작하는 네온 리듬 단조 게임","url":"https://eastsea.xyz/games/neon-forge/","author":{"@type":"Organization","name":"J&J Games"},"genre":"Rhythm, Arcade","gamePlatform":"Web Browser","operatingSystem":"Any"}</script>
+  <script src="https://cdn.jsdelivr.net/npm/littlejs/dist/littlejs.min.js"></script>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;touch-action:none;-webkit-tap-highlight-color:transparent}
+    html,body{width:100%;height:100%;background:#0a0a1a;overflow:hidden}
+    body{display:flex;align-items:center;justify-content:center}
+    canvas{display:block;cursor:pointer}
+  </style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+(function(){
+"use strict";
+const CV = document.getElementById('c');
+const X = CV.getContext('2d');
+
+// --- Sizing ---
+let W, H, S;
+function resize(){
+  const vw=window.innerWidth, vh=window.innerHeight;
+  const sz=Math.min(vw,vh,560);
+  const ww=Math.min(vw,360);
+  W=ww; H=sz;
+  CV.width=W; CV.height=H;
+  CV.style.width=ww+'px'; CV.style.height=sz+'px';
+  S=Math.min(ww,sz)/480;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// --- Audio ---
+let AC;
+function getAC(){
+  if(!AC) AC=new(window.AudioContext||window.webkitAudioContext)();
+  if(AC.state==='suspended') AC.resume();
+  return AC;
+}
+function beep(freq,type,dur,vol,rampFreq){
+  try{
+    const a=getAC(),o=a.createOscillator(),g=a.createGain();
+    o.connect(g); g.connect(a.destination);
+    o.type=type||'sine';
+    o.frequency.setValueAtTime(freq,a.currentTime);
+    if(rampFreq) o.frequency.exponentialRampToValueAtTime(rampFreq,a.currentTime+dur);
+    g.gain.setValueAtTime(vol||0.25,a.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+dur);
+    o.start(); o.stop(a.currentTime+dur);
+  }catch(e){}
+}
+function playHammer(quality){
+  // quality: 0=miss, 1=good, 2=perfect
+  const freqs=[[150,80],[400,600],[600,900]];
+  const types=['sawtooth','square','sine'];
+  const vols=[0.4,0.3,0.3];
+  beep(freqs[quality][0],types[quality],0.15,vols[quality],freqs[quality][1]);
+  if(quality===2){
+    setTimeout(()=>beep(800,'sine',0.1,0.2,1200),80);
+  }
+}
+
+// --- Materials ---
+const MATS=[
+  {name:'철',  color:'#8888aa', glow:'#aaaacc', pts:10, label:'⚔️ 검'},
+  {name:'금',  color:'#ffcc00', glow:'#ffee44', pts:25, label:'👑 왕관'},
+  {name:'수정',color:'#00ccff', glow:'#44eeff', pts:40, label:'💎 보석'},
+  {name:'루비',color:'#ff2244', glow:'#ff6688', pts:60, label:'🔮 오브'},
+];
+
+// --- Game state ---
+let state='title';
+let score=0, hs=parseInt(localStorage.getItem('neon-forge-hs')||'0');
+let combo=0, lives=3;
+let level=1, levelTimer=0;
+let gt=0, lt=0;
+
+// Fragment
+let frag=null; // current falling fragment
+let fragDelay=0; // delay before next spawn
+let fallSpeed=160; // pixels/sec
+
+// Anvil / zone constants (computed each frame from W,H,S)
+function ANVIL_Y(){ return H*0.78; }
+function ZONE_PERFECT(){ return 22*S; }
+function ZONE_GOOD(){ return 50*S; }
+function FRAG_W(){ return 60*S; }
+function FRAG_H(){ return 30*S; }
+
+// Hit flash
+let hitFlash={active:false,color:'#fff',timer:0,label:'',score:0};
+// Particles
+let particles=[];
+// Craft result popup
+let craftPop={active:false,label:'',timer:0,score:0};
+// Camera shake
+let camShake=0;
+
+function spawnFrag(){
+  const type=Math.floor(Math.random()*MATS.length);
+  // Randomly bias toward iron/gold at low levels
+  const bias=Math.min(level,MATS.length-1);
+  const t2=Math.floor(Math.random()*(bias+1));
+  frag={
+    x:W/2, y:-40*S,
+    vy:fallSpeed,
+    type:t2,
+    rot:0, rotv:(Math.random()-0.5)*1.5,
+    alive:true,
+  };
+}
+
+function spawnSparks(x,y,color,n,sp){
+  for(let i=0;i<(n||10);i++){
+    const a=Math.random()*Math.PI*2;
+    const s=(sp||100)*(0.4+Math.random());
+    const up=-Math.abs(Math.sin(a))*s*0.8;
+    particles.push({
+      x,y,vx:Math.cos(a)*s*0.6,vy:up,
+      life:0.5+Math.random()*0.5,ml:1.0,
+      color,sz:(1.5+Math.random()*2.5)*S,
+      grav:200
+    });
+  }
+}
+
+function startGame(){
+  state='playing'; score=0; combo=0; lives=3;
+  level=1; levelTimer=0; fallSpeed=160;
+  frag=null; fragDelay=0.5;
+  particles=[]; camShake=0;
+  hitFlash.active=false; craftPop.active=false;
+  spawnFrag();
+  beep(440,'square',0.1,0.2);
+}
+
+function endGame(){
+  state='gameover';
+  if(score>hs){ hs=score; localStorage.setItem('neon-forge-hs',hs); }
+  beep(150,'sawtooth',0.8,0.4,70);
+  camShake=0.6;
+  spawnSparks(W/2,H/2,'#ff4444',30,200);
+}
+
+function doHammer(){
+  if(state!=='playing') return;
+  if(!frag||!frag.alive) return;
+
+  const dist=Math.abs(frag.y - ANVIL_Y());
+  let quality=-1;
+  if(dist<ZONE_PERFECT()) quality=2;
+  else if(dist<ZONE_GOOD()) quality=1;
+
+  if(quality<0) return; // not in zone, ignore tap
+
+  const mat=MATS[frag.type];
+  playHammer(quality);
+
+  if(quality===2){
+    // Perfect
+    combo++;
+    const pts=mat.pts*2*(1+Math.floor(combo/5));
+    score+=pts;
+    hitFlash={active:true,color:'#00ffcc',timer:0.35,label:'PERFECT!',score:pts};
+    spawnSparks(W/2,ANVIL_Y(),mat.glow,20,160);
+    spawnSparks(W/2,ANVIL_Y(),'#ffffff',8,80);
+    craftPop={active:true,label:mat.label,timer:1.2,score:pts};
+    camShake=0.15;
+  } else {
+    // Good
+    combo++;
+    const pts=mat.pts*(1+Math.floor(combo/5));
+    score+=pts;
+    hitFlash={active:true,color:'#ffff00',timer:0.25,label:'GOOD',score:pts};
+    spawnSparks(W/2,ANVIL_Y(),mat.glow,12,120);
+    craftPop={active:true,label:mat.label,timer:0.9,score:pts};
+  }
+
+  frag.alive=false;
+  frag=null;
+  fragDelay=Math.max(0.4, 1.2-level*0.05);
+}
+
+// --- Input ---
+CV.addEventListener('pointerdown',e=>{
+  e.preventDefault();
+  if(state==='title'||state==='gameover') startGame();
+  else doHammer();
+});
+document.addEventListener('keydown',e=>{
+  if(['Space','ArrowDown','Enter'].includes(e.code)){
+    e.preventDefault();
+    if(state==='title'||state==='gameover') startGame();
+    else doHammer();
+  }
+});
+
+// --- Update ---
+function update(dt){
+  gt+=dt; levelTimer+=dt;
+  // Level up every 20s
+  if(levelTimer>20){ level=Math.min(level+1,8); levelTimer=0; fallSpeed=160+level*18; }
+
+  // Fragment
+  if(frag&&frag.alive){
+    frag.y+=frag.vy*dt;
+    frag.rot+=frag.rotv*dt;
+
+    // Miss if fragment goes below zone
+    if(frag.y > ANVIL_Y()+ZONE_GOOD()+20*S){
+      // Miss
+      combo=0; lives--;
+      hitFlash={active:true,color:'#ff4444',timer:0.3,label:'MISS!',score:0};
+      beep(150,'sawtooth',0.3,0.5,80);
+      spawnSparks(frag.x,frag.y,'#ff4444',12,100);
+      camShake=0.25;
+      frag.alive=false; frag=null;
+      fragDelay=Math.max(0.4, 1.0-level*0.04);
+      if(lives<=0){ endGame(); return; }
+    }
+  } else if(!frag){
+    fragDelay-=dt;
+    if(fragDelay<=0) spawnFrag();
+  }
+
+  // Flash timer
+  if(hitFlash.active){ hitFlash.timer-=dt; if(hitFlash.timer<=0) hitFlash.active=false; }
+  // Craft popup
+  if(craftPop.active){ craftPop.timer-=dt; if(craftPop.timer<=0) craftPop.active=false; }
+  // Cam shake
+  if(camShake>0) camShake-=dt;
+
+  // Particles
+  for(const p of particles){
+    p.x+=p.vx*dt; p.y+=p.vy*dt;
+    if(p.grav) p.vy+=p.grav*dt;
+    p.vx*=0.94; p.life-=dt;
+  }
+  particles=particles.filter(p=>p.life>0);
+}
+
+// --- Draw helpers ---
+function roundRect(x,y,w,h,r){
+  X.beginPath();
+  X.moveTo(x+r,y);
+  X.lineTo(x+w-r,y);
+  X.quadraticCurveTo(x+w,y,x+w,y+r);
+  X.lineTo(x+w,y+h-r);
+  X.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  X.lineTo(x+r,y+h);
+  X.quadraticCurveTo(x,y+h,x,y+h-r);
+  X.lineTo(x,y+r);
+  X.quadraticCurveTo(x,y,x+r,y);
+  X.closePath();
+}
+
+function drawBackground(){
+  // BG gradient
+  const bg=X.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0,'#0a0a1a');
+  bg.addColorStop(1,'#0d0820');
+  X.fillStyle=bg; X.fillRect(0,0,W,H);
+  // Grid lines (subtle)
+  X.save(); X.strokeStyle='rgba(40,40,80,0.35)'; X.lineWidth=1;
+  for(let x=0;x<W;x+=40*S){ X.beginPath(); X.moveTo(x,0); X.lineTo(x,H); X.stroke(); }
+  for(let y=0;y<H;y+=40*S){ X.beginPath(); X.moveTo(0,y); X.lineTo(W,y); X.stroke(); }
+  X.restore();
+}
+
+function drawZoneIndicators(){
+  const ay=ANVIL_Y();
+  const zp=ZONE_PERFECT();
+  const zg=ZONE_GOOD();
+  const laneW=FRAG_W()+20*S;
+  const lx=W/2-laneW/2;
+
+  // Good zone
+  X.save();
+  X.strokeStyle='#ffff00'; X.lineWidth=1.5*S;
+  X.setLineDash([4*S,4*S]);
+  X.globalAlpha=0.5;
+  roundRect(lx, ay-zg, laneW, zg*2, 4*S);
+  X.stroke();
+  X.globalAlpha=0.07; X.fillStyle='#ffff00'; X.fill();
+  X.restore();
+
+  // Perfect zone
+  X.save();
+  X.strokeStyle='#00ffcc'; X.lineWidth=2*S;
+  X.setLineDash([]);
+  X.globalAlpha=0.8;
+  X.shadowColor='#00ffcc'; X.shadowBlur=12;
+  roundRect(lx, ay-zp, laneW, zp*2, 3*S);
+  X.stroke();
+  X.globalAlpha=0.12; X.fillStyle='#00ffcc'; X.fill();
+  X.restore();
+
+  // Zone labels (small)
+  X.save();
+  X.font=`${Math.round(10*S)}px 'Courier New',monospace`;
+  X.textAlign='right';
+  X.fillStyle='rgba(0,255,204,0.6)'; X.shadowColor='#00ffcc'; X.shadowBlur=4;
+  X.fillText('PERFECT',W/2-laneW/2-4*S, ay-zp+4*S);
+  X.fillStyle='rgba(255,255,0,0.4)';
+  X.fillText('GOOD',W/2-laneW/2-4*S, ay-zg+4*S);
+  X.textAlign='left';
+  X.restore();
+}
+
+function drawAnvil(){
+  const ay=ANVIL_Y();
+  const aw=80*S, ah=28*S;
+  const bw=50*S, bh=20*S;
+  const ax=W/2;
+
+  X.save();
+  // Anvil glow
+  X.shadowColor='#8866ff'; X.shadowBlur=25;
+
+  // Horn
+  X.fillStyle='#6655aa';
+  X.beginPath();
+  X.moveTo(ax-aw/2, ay-ah/2);
+  X.lineTo(ax-aw/2-18*S, ay+ah/2);
+  X.lineTo(ax-aw/2, ay+ah/2);
+  X.closePath(); X.fill();
+
+  // Main body
+  X.fillStyle='#7766bb';
+  roundRect(ax-aw/2, ay-ah/2, aw, ah, 5*S);
+  X.fill();
+
+  // Top face
+  X.fillStyle='#9988dd';
+  roundRect(ax-aw/2, ay-ah/2-4*S, aw, 8*S, 3*S);
+  X.fill();
+
+  // Base
+  X.fillStyle='#5544aa';
+  roundRect(ax-bw/2, ay+ah/2, bw, bh, 4*S);
+  X.fill();
+
+  // Highlight
+  X.strokeStyle='#bbaaee'; X.lineWidth=1.5*S; X.globalAlpha=0.5;
+  roundRect(ax-aw/2+2*S, ay-ah/2-4*S, aw-4*S, 6*S, 2*S);
+  X.stroke();
+  X.restore();
+}
+
+function drawFragment(){
+  if(!frag||!frag.alive) return;
+  const mat=MATS[frag.type];
+  const fw=FRAG_W(), fh=FRAG_H();
+
+  X.save();
+  X.translate(frag.x, frag.y);
+  X.rotate(frag.rot);
+
+  // Glow
+  X.shadowColor=mat.glow; X.shadowBlur=20;
+
+  // Body
+  X.fillStyle=mat.color;
+  roundRect(-fw/2,-fh/2,fw,fh,5*S);
+  X.fill();
+
+  // Highlight
+  X.fillStyle='rgba(255,255,255,0.25)';
+  roundRect(-fw/2+4*S,-fh/2+4*S,fw-8*S,fh*0.35,3*S);
+  X.fill();
+
+  // Outline
+  X.strokeStyle=mat.glow; X.lineWidth=2*S;
+  roundRect(-fw/2,-fh/2,fw,fh,5*S);
+  X.stroke();
+
+  // Label
+  X.shadowBlur=0;
+  X.font=`bold ${Math.round(13*S)}px 'Courier New',monospace`;
+  X.textAlign='center'; X.fillStyle='#ffffff';
+  X.fillText(mat.name, 0, 5*S);
+  X.textAlign='left';
+  X.restore();
+
+  // In-zone glow pulse
+  const dist=Math.abs(frag.y - ANVIL_Y());
+  if(dist < ZONE_GOOD()){
+    const t2=1-dist/ZONE_GOOD();
+    const pulse=0.6+0.4*Math.sin(gt*12);
+    X.save();
+    X.globalAlpha=t2*pulse*0.4;
+    X.fillStyle=mat.glow;
+    X.shadowColor=mat.glow; X.shadowBlur=30;
+    roundRect(frag.x-fw/2, frag.y-fh/2, fw, fh, 5*S);
+    X.fill();
+    X.restore();
+  }
+}
+
+function drawHitFlash(){
+  if(!hitFlash.active) return;
+  const alpha=hitFlash.timer>0.25?1:hitFlash.timer/0.25;
+  X.save();
+  // Screen flash
+  X.globalAlpha=alpha*0.12;
+  X.fillStyle=hitFlash.color; X.fillRect(0,0,W,H);
+  // Text
+  X.globalAlpha=Math.min(1,alpha*1.5);
+  const sz=Math.round(28*S);
+  X.font=`bold ${sz}px 'Courier New',monospace`;
+  X.textAlign='center'; X.fillStyle=hitFlash.color;
+  X.shadowColor=hitFlash.color; X.shadowBlur=20;
+  X.fillText(hitFlash.label, W/2, ANVIL_Y()-80*S);
+  if(hitFlash.score>0){
+    X.font=`bold ${Math.round(18*S)}px 'Courier New',monospace`;
+    X.fillStyle='#ffffff'; X.shadowColor='#ffffff'; X.shadowBlur=8;
+    X.fillText('+'+hitFlash.score, W/2, ANVIL_Y()-50*S);
+  }
+  X.textAlign='left';
+  X.restore();
+}
+
+function drawCraftPop(){
+  if(!craftPop.active) return;
+  const t2=craftPop.timer;
+  const alpha=t2>0.8?1:t2/0.8;
+  const oy=-30*(1-t2/1.2)*S*5;
+  X.save();
+  X.globalAlpha=alpha;
+  X.font=`${Math.round(32*S)}px Arial,sans-serif`;
+  X.textAlign='center';
+  X.fillText(craftPop.label, W/2, H*0.35+oy);
+  X.textAlign='left';
+  X.restore();
+}
+
+function drawParticles(){
+  for(const p of particles){
+    X.save();
+    X.globalAlpha=Math.max(0,p.life/p.ml);
+    X.fillStyle=p.color;
+    X.shadowColor=p.color; X.shadowBlur=8;
+    X.beginPath(); X.arc(p.x,p.y,p.sz,0,Math.PI*2); X.fill();
+    X.restore();
+  }
+}
+
+function drawUI(){
+  X.save();
+  // Score
+  X.font=`bold ${Math.round(22*S)}px 'Courier New',monospace`;
+  X.fillStyle='#ff88ff'; X.shadowColor='#ff88ff'; X.shadowBlur=12;
+  X.fillText(score, 12*S, 30*S);
+  // HS
+  X.font=`${Math.round(12*S)}px 'Courier New',monospace`;
+  X.fillStyle='#666'; X.shadowBlur=0;
+  X.fillText('최고: '+hs, 12*S, 48*S);
+  // Combo
+  if(combo>=2){
+    X.font=`bold ${Math.round(16*S)}px 'Courier New',monospace`;
+    X.fillStyle='#ffff00'; X.shadowColor='#ffff00'; X.shadowBlur=12;
+    X.fillText('×'+combo+' 콤보', 12*S, 70*S);
+  }
+  // Lives
+  for(let i=0;i<3;i++){
+    const alive=i<lives;
+    X.fillStyle=alive?'#ff4444':'#2a2a2a';
+    X.shadowColor=alive?'#ff4444':'transparent'; X.shadowBlur=alive?8:0;
+    X.beginPath(); X.arc(W-(i+1)*20*S, 22*S, 6*S, 0, Math.PI*2); X.fill();
+  }
+  // Level
+  X.textAlign='right';
+  X.font=`${Math.round(12*S)}px 'Courier New',monospace`;
+  X.fillStyle='#8888ff'; X.shadowColor='#8888ff'; X.shadowBlur=5;
+  X.fillText('Lv.'+level, W-12*S, 48*S);
+  // Hint
+  X.textAlign='center';
+  X.font=`${Math.round(11*S)}px 'Courier New',monospace`;
+  X.fillStyle='rgba(150,150,200,0.5)'; X.shadowBlur=0;
+  X.fillText('탭 / 스페이스바 → 망치질', W/2, H-10*S);
+  X.textAlign='left';
+  X.restore();
+}
+
+function drawTitle(){
+  drawBackground();
+  X.save();
+  X.fillStyle='rgba(10,10,26,0.7)'; X.fillRect(0,0,W,H);
+  X.textAlign='center';
+  // Sparkling anvil icon
+  X.font=`${Math.round(60*S)}px Arial,sans-serif`;
+  X.fillText('⚒️', W/2, H*0.28);
+  // Title
+  X.font=`bold ${Math.round(44*S)}px 'Courier New',monospace`;
+  X.fillStyle='#ff44ff'; X.shadowColor='#ff44ff'; X.shadowBlur=30;
+  X.fillText('NEON', W/2, H*0.42);
+  X.fillStyle='#ffcc00'; X.shadowColor='#ffcc00'; X.shadowBlur=30;
+  X.fillText('FORGE', W/2, H*0.52);
+  // Desc
+  X.shadowBlur=0;
+  X.font=`${Math.round(13*S)}px 'Courier New',monospace`;
+  X.fillStyle='#aaa';
+  X.fillText('떨어지는 파편을 타이밍 맞춰', W/2, H*0.62);
+  X.fillText('탭으로 무기를 제작하세요!', W/2, H*0.68);
+  // Zones
+  X.font=`${Math.round(11*S)}px 'Courier New',monospace`;
+  X.fillStyle='#00ffcc';
+  X.fillText('🟢 PERFECT = 2배 점수', W/2, H*0.75);
+  X.fillStyle='#ffff00';
+  X.fillText('🟡 GOOD = 기본 점수', W/2, H*0.80);
+  // Start
+  X.font=`bold ${Math.round(18*S)}px 'Courier New',monospace`;
+  X.fillStyle='#ffffff'; X.shadowColor='#ffffff';
+  X.shadowBlur=8+5*Math.sin(gt*3);
+  X.fillText('탭 / 클릭으로 시작', W/2, H*0.90);
+  if(hs>0){
+    X.font=`${Math.round(13*S)}px 'Courier New',monospace`;
+    X.fillStyle='#ffff00'; X.shadowColor='#ffff00'; X.shadowBlur=8;
+    X.fillText('최고 점수: '+hs, W/2, H*0.95);
+  }
+  X.textAlign='left'; X.restore();
+}
+
+function drawGameOver(){
+  X.save();
+  X.fillStyle='rgba(10,10,26,0.82)'; X.fillRect(0,0,W,H);
+  X.textAlign='center';
+  X.font=`bold ${Math.round(38*S)}px 'Courier New',monospace`;
+  X.fillStyle='#ff4444'; X.shadowColor='#ff4444'; X.shadowBlur=22;
+  X.fillText('FORGE OVER', W/2, H*0.35);
+  X.font=`bold ${Math.round(28*S)}px 'Courier New',monospace`;
+  X.fillStyle='#ffffff'; X.shadowColor='#ffffff'; X.shadowBlur=10;
+  X.fillText('점수: '+score, W/2, H*0.46);
+  if(score>=hs&&score>0){
+    X.fillStyle='#ffff00'; X.shadowColor='#ffff00'; X.shadowBlur=15;
+    X.font=`bold ${Math.round(20*S)}px 'Courier New',monospace`;
+    X.fillText('최고 기록! 🏆', W/2, H*0.55);
+  } else {
+    X.font=`${Math.round(15*S)}px 'Courier New',monospace`;
+    X.fillStyle='#888'; X.shadowBlur=0;
+    X.fillText('최고 점수: '+hs, W/2, H*0.55);
+  }
+  X.font=`bold ${Math.round(17*S)}px 'Courier New',monospace`;
+  X.fillStyle='#fff'; X.shadowColor='#fff';
+  X.shadowBlur=8+4*Math.sin(gt*3);
+  X.fillText('탭 / 클릭으로 재시작', W/2, H*0.70);
+  X.textAlign='left'; X.restore();
+}
+
+// --- Main draw ---
+function draw(){
+  const shX=camShake>0?(Math.random()-0.5)*10*camShake:0;
+  const shY=camShake>0?(Math.random()-0.5)*10*camShake:0;
+  X.save(); X.translate(shX,shY);
+
+  drawBackground();
+
+  if(state==='playing'||state==='gameover'){
+    drawZoneIndicators();
+    drawAnvil();
+    drawFragment();
+    drawParticles();
+    drawHitFlash();
+    drawCraftPop();
+    drawUI();
+  }
+
+  X.restore();
+
+  if(state==='title') drawTitle();
+  else if(state==='gameover') drawGameOver();
+}
+
+// --- Loop ---
+function loop(ts){
+  requestAnimationFrame(loop);
+  const dt=Math.min((ts-lt)/1000,0.05);
+  lt=ts; gt+=dt;
+  if(state==='playing') update(dt);
+  draw();
+}
+
+resize();
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

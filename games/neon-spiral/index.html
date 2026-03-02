@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<title>Neon Spiral — 네온 스파이럴 | Free HTML5 Orbital Ring Game</title>
+<meta name="description" content="Neon Spiral: 3개의 빛나는 궤도 링 사이를 점프하며 오브를 수집하라! 독창적인 링 전환 메카닉. 네온 다크 테마 무료 브라우저 게임."/>
+<meta name="keywords" content="neon,spiral,orbit,ring,arcade,html5,free game,browser,게임,오브,링,궤도"/>
+<meta property="og:title" content="Neon Spiral — 네온 스파이럴"/>
+<meta property="og:description" content="3개의 빛나는 궤도 링 사이를 점프하며 오브를 수집하라! 독창적인 링 전환 아케이드 게임."/>
+<meta property="og:type" content="website"/>
+<meta property="og:url" content="https://eastsea.xyz/games/neon-spiral/"/>
+<meta property="og:image" content="https://eastsea.xyz/games/neon-spiral/og.png"/>
+<meta property="og:site_name" content="J&amp;J Games"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:title" content="Neon Spiral — 네온 스파이럴"/>
+<meta name="twitter:description" content="3개의 빛나는 궤도 링 사이를 점프하며 오브를 수집하라! 독창적인 링 전환 아케이드 게임."/>
+<meta name="twitter:image" content="https://eastsea.xyz/games/neon-spiral/og.png"/>
+<link rel="canonical" href="https://eastsea.xyz/games/neon-spiral/"/>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"VideoGame","name":"Neon Spiral — 네온 스파이럴","description":"3개의 빛나는 궤도 링 사이를 점프하며 오브를 수집하는 독창적인 링 전환 아케이드 게임.","genre":"Arcade","applicationCategory":"Game","operatingSystem":"Any","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"author":{"@type":"Organization","name":"J&J Games"},"url":"https://eastsea.xyz/games/neon-spiral/"}
+</script>
+<script src="https://cdn.jsdelivr.net/npm/littlejs/dist/littlejs.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;overflow:hidden;background:#0a0a1a;font-family:'Courier New',monospace;user-select:none}
+canvas{display:block;touch-action:none}
+#ui{position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;display:flex;flex-direction:column;align-items:center}
+#score-box{margin-top:16px;text-align:center;color:#fff;text-shadow:0 0 10px #0ff}
+#score-lbl{font-size:12px;letter-spacing:3px;color:#0ff;opacity:0.7}
+#score-val{font-size:36px;font-weight:bold;color:#fff;line-height:1.1}
+#best-val{font-size:12px;color:#888;margin-top:2px}
+#overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(10,10,26,0.92);display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:all;cursor:pointer}
+#overlay h1{font-size:32px;color:#0ff;text-shadow:0 0 20px #0ff,0 0 40px #0ff;margin-bottom:8px;letter-spacing:4px}
+#overlay .sub{font-size:14px;color:#888;margin-bottom:28px;text-align:center;line-height:1.7}
+#overlay .how{font-size:13px;color:#0f8;margin-bottom:24px;text-align:center;line-height:1.9;background:rgba(0,255,136,0.05);padding:12px 20px;border:1px solid rgba(0,255,136,0.2);border-radius:8px}
+#overlay .start-btn{font-size:18px;color:#0a0a1a;background:#0ff;border:none;padding:12px 40px;border-radius:4px;cursor:pointer;font-family:'Courier New',monospace;letter-spacing:2px;text-transform:uppercase;box-shadow:0 0 20px #0ff}
+#overlay .final{font-size:22px;color:#ff0;margin-bottom:8px;display:none}
+#overlay .best-final{font-size:14px;color:#888;margin-bottom:16px;display:none}
+</style>
+</head>
+<body>
+<canvas id="gc"></canvas>
+<div id="ui">
+  <div id="score-box">
+    <div id="score-lbl">SCORE</div>
+    <div id="score-val">0</div>
+    <div id="best-val">BEST: 0</div>
+  </div>
+</div>
+<div id="overlay">
+  <h1>NEON SPIRAL</h1>
+  <div class="sub">네온 스파이럴</div>
+  <div class="how">
+    🌀 3개의 궤도 링 사이를 전환하며 오브를 수집<br/>
+    ✨ 탭/클릭으로 다음 링으로 점프<br/>
+    💥 빨간 위험 구간을 피할 것<br/>
+    ⌨️ 키보드: Space 또는 방향키
+  </div>
+  <div class="final" id="final-score"></div>
+  <div class="best-final" id="best-final"></div>
+  <button class="start-btn" id="start-btn">시작 START</button>
+</div>
+
+<script>
+'use strict';
+
+// ── CANVAS SETUP ──────────────────────────────────────────────
+const C = document.getElementById('gc');
+const X = C.getContext('2d');
+let W, H, cx, cy;
+
+function resize() {
+  W = C.width = innerWidth;
+  H = C.height = innerHeight;
+  cx = W / 2;
+  cy = H / 2;
+}
+addEventListener('resize', resize);
+resize();
+
+// ── AUDIO ─────────────────────────────────────────────────────
+let AC;
+function getAC() {
+  if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)();
+  return AC;
+}
+function sfxJump() {
+  const a = getAC(), o = a.createOscillator(), g = a.createGain();
+  o.connect(g); g.connect(a.destination);
+  o.type = 'sine';
+  o.frequency.setValueAtTime(440, a.currentTime);
+  o.frequency.exponentialRampToValueAtTime(880, a.currentTime + 0.08);
+  g.gain.setValueAtTime(0.2, a.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + 0.15);
+  o.start(); o.stop(a.currentTime + 0.15);
+}
+function sfxCollect() {
+  const a = getAC(), o = a.createOscillator(), g = a.createGain();
+  o.connect(g); g.connect(a.destination);
+  o.type = 'triangle';
+  o.frequency.setValueAtTime(660, a.currentTime);
+  o.frequency.exponentialRampToValueAtTime(1320, a.currentTime + 0.12);
+  g.gain.setValueAtTime(0.25, a.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + 0.18);
+  o.start(); o.stop(a.currentTime + 0.18);
+}
+function sfxHit() {
+  const a = getAC();
+  const buf = a.createBuffer(1, a.sampleRate * 0.25, a.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random()*2-1) * Math.exp(-i/(a.sampleRate*0.04));
+  const s = a.createBufferSource(), gn = a.createGain();
+  s.buffer = buf; s.connect(gn); gn.connect(a.destination);
+  gn.gain.value = 0.3; s.start();
+}
+function sfxLevelUp() {
+  const a = getAC();
+  [523,659,784,1047].forEach((f,i) => {
+    const o = a.createOscillator(), g = a.createGain();
+    o.connect(g); g.connect(a.destination);
+    o.type = 'square'; o.frequency.value = f;
+    const t = a.currentTime + i*0.08;
+    g.gain.setValueAtTime(0.0, t);
+    g.gain.linearRampToValueAtTime(0.15, t+0.02);
+    g.gain.exponentialRampToValueAtTime(0.001, t+0.12);
+    o.start(t); o.stop(t+0.12);
+  });
+}
+
+// ── GAME STATE ────────────────────────────────────────────────
+const RINGS = 3;      // number of rings
+const BASE_SPEED = 0.6; // deg/sec player angular speed
+const RING_COLORS = ['#ff2d78','#00ffcc','#ffcc00'];
+const RING_GLOW   = ['#ff2d78','#00ffcc','ffcc00'];
+const ORB_SIZE = 9;
+const HAZARD_ARC = 60; // degrees
+
+let playerRing = 1;    // 0=inner,1=mid,2=outer
+let playerAngle = 90;  // degrees (top=90)
+let score = 0;
+let best = parseInt(localStorage.getItem('neonSpiral_best') || '0');
+let lives = 3;
+let level = 1;
+let gameRunning = false;
+let orbs = [];
+let hazards = [];
+let particles = [];
+let spawnTimer = 0;
+let gameTime = 0;
+let jumpCooldown = 0;
+let flashTimer = 0;
+let flashColor = '';
+
+// Ring radii computed from canvas size
+function getRingR(i) {
+  const base = Math.min(W, H) * 0.5;
+  return [base * 0.25, base * 0.4, base * 0.55][i];
+}
+
+function initGame() {
+  playerRing = 1;
+  playerAngle = 90;
+  score = 0;
+  lives = 3;
+  level = 1;
+  orbs = [];
+  hazards = [];
+  particles = [];
+  spawnTimer = 0;
+  gameTime = 0;
+  jumpCooldown = 0;
+  flashTimer = 0;
+  updateScoreUI();
+}
+
+function updateScoreUI() {
+  document.getElementById('score-val').textContent = score;
+  document.getElementById('best-val').textContent = 'BEST: ' + best;
+}
+
+// ── SPAWN LOGIC ───────────────────────────────────────────────
+function spawnOrb() {
+  const ring = Math.floor(Math.random() * RINGS);
+  const angle = Math.random() * 360;
+  orbs.push({ ring, angle, life: 1, collected: false });
+}
+function spawnHazard() {
+  const ring = Math.floor(Math.random() * RINGS);
+  const angle = Math.random() * 360;
+  hazards.push({ ring, angle, arc: HAZARD_ARC + Math.random()*30, life: 1 });
+}
+
+// ── PARTICLES ─────────────────────────────────────────────────
+function burst(px, py, color, count) {
+  for (let i = 0; i < count; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const spd = 60 + Math.random() * 100;
+    particles.push({
+      x: px, y: py, vx: Math.cos(a)*spd, vy: Math.sin(a)*spd,
+      life: 1, color
+    });
+  }
+}
+
+// ── MAIN GAME LOOP ────────────────────────────────────────────
+let lastTime = 0;
+function loop(ts) {
+  const dt = Math.min((ts - lastTime) / 1000, 0.05);
+  lastTime = ts;
+
+  // Clear
+  X.fillStyle = '#0a0a1a';
+  X.fillRect(0, 0, W, H);
+
+  if (!gameRunning) { requestAnimationFrame(loop); return; }
+
+  gameTime += dt;
+  jumpCooldown = Math.max(0, jumpCooldown - dt);
+  flashTimer = Math.max(0, flashTimer - dt);
+
+  // Level speed scaling
+  const speed = BASE_SPEED * (1 + (level - 1) * 0.15);
+  playerAngle = (playerAngle + speed * dt * 60) % 360;
+
+  // Spawn
+  spawnTimer += dt;
+  const spawnRate = Math.max(0.6, 1.5 - level * 0.05);
+  if (spawnTimer > spawnRate) {
+    spawnTimer = 0;
+    spawnOrb();
+    if (Math.random() < 0.5 + level * 0.03) spawnHazard();
+  }
+
+  // Update orbs
+  orbs = orbs.filter(o => {
+    o.life -= dt * 0.18;
+    // Check collection
+    if (!o.collected && o.ring === playerRing) {
+      const diff = Math.abs(((playerAngle - o.angle + 540) % 360) - 180);
+      if (diff < 18) {
+        o.collected = true;
+        score += 10 * level;
+        if (score > best) { best = score; localStorage.setItem('neonSpiral_best', best); }
+        const r = getRingR(o.ring);
+        const px = cx + r * Math.cos((o.angle - 90) * Math.PI / 180);
+        const py = cy + r * Math.sin((o.angle - 90) * Math.PI / 180);
+        burst(px, py, RING_COLORS[o.ring], 10);
+        sfxCollect();
+        updateScoreUI();
+        if (score % 100 === 0) { level++; sfxLevelUp(); }
+        return false;
+      }
+    }
+    return o.life > 0 && !o.collected;
+  });
+
+  // Update hazards (fade out)
+  hazards = hazards.filter(h => {
+    h.life -= dt * 0.12;
+    // Check collision with player
+    if (h.ring === playerRing) {
+      const diff = ((playerAngle - h.angle + 540) % 360) - 180;
+      if (Math.abs(diff) < h.arc / 2) {
+        lives--;
+        flashTimer = 0.4;
+        flashColor = '#ff0044';
+        sfxHit();
+        // Remove hazard after hit
+        hazards = hazards.filter(x => x !== h);
+        if (lives <= 0) endGame();
+        return false;
+      }
+    }
+    return h.life > 0;
+  });
+
+  // Update particles
+  particles = particles.filter(p => {
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    p.vx *= 0.92; p.vy *= 0.92;
+    p.life -= dt * 2;
+    return p.life > 0;
+  });
+
+  // ── DRAW ────────────────────────────────────────────────────
+
+  // Flash overlay
+  if (flashTimer > 0) {
+    X.fillStyle = flashColor.replace(')', `,${flashTimer * 0.4})`).replace('rgb', 'rgba').replace('#ff0044', 'rgba(255,0,68,');
+    X.fillStyle = `rgba(255,0,68,${flashTimer * 0.5})`;
+    X.fillRect(0, 0, W, H);
+  }
+
+  // Draw rings
+  for (let i = 0; i < RINGS; i++) {
+    const r = getRingR(i);
+    const col = RING_COLORS[i];
+    X.beginPath();
+    X.arc(cx, cy, r, 0, Math.PI * 2);
+    X.strokeStyle = col + '44';
+    X.lineWidth = i === playerRing ? 2.5 : 1.5;
+    X.shadowColor = col;
+    X.shadowBlur = i === playerRing ? 10 : 4;
+    X.stroke();
+    X.shadowBlur = 0;
+  }
+
+  // Draw hazards
+  hazards.forEach(h => {
+    const r = getRingR(h.ring);
+    const col = '#ff2244';
+    const startA = (h.angle - h.arc/2 - 90) * Math.PI / 180;
+    const endA   = (h.angle + h.arc/2 - 90) * Math.PI / 180;
+    X.beginPath();
+    X.arc(cx, cy, r, startA, endA);
+    X.strokeStyle = `rgba(255,34,68,${h.life * 0.9})`;
+    X.lineWidth = 10;
+    X.shadowColor = '#ff2244';
+    X.shadowBlur = 14;
+    X.stroke();
+    X.lineWidth = 4;
+    X.strokeStyle = `rgba(255,100,120,${h.life})`;
+    X.beginPath();
+    X.arc(cx, cy, r, startA, endA);
+    X.stroke();
+    X.shadowBlur = 0;
+  });
+
+  // Draw orbs
+  orbs.forEach(o => {
+    const r = getRingR(o.ring);
+    const col = RING_COLORS[o.ring];
+    const px = cx + r * Math.cos((o.angle - 90) * Math.PI / 180);
+    const py = cy + r * Math.sin((o.angle - 90) * Math.PI / 180);
+    const pulse = 0.7 + 0.3 * Math.sin(gameTime * 5 + o.angle);
+    X.beginPath();
+    X.arc(px, py, ORB_SIZE * pulse, 0, Math.PI * 2);
+    X.fillStyle = col;
+    X.shadowColor = col;
+    X.shadowBlur = 18;
+    X.fill();
+    X.shadowBlur = 0;
+    // Fade ring
+    X.beginPath();
+    X.arc(px, py, ORB_SIZE * 1.8 * (1 - o.life * 0.5), 0, Math.PI * 2);
+    X.strokeStyle = col + Math.floor(o.life * 99).toString(16).padStart(2,'0');
+    X.lineWidth = 1.5;
+    X.stroke();
+  });
+
+  // Draw particles
+  particles.forEach(p => {
+    X.beginPath();
+    X.arc(p.x, p.y, 3 * p.life, 0, Math.PI * 2);
+    X.fillStyle = p.color + Math.floor(p.life * 220).toString(16).padStart(2,'0');
+    X.fill();
+  });
+
+  // Draw player
+  {
+    const r = getRingR(playerRing);
+    const px = cx + r * Math.cos((playerAngle - 90) * Math.PI / 180);
+    const py = cy + r * Math.sin((playerAngle - 90) * Math.PI / 180);
+    const col = RING_COLORS[playerRing];
+
+    // Trail
+    for (let t = 1; t <= 8; t++) {
+      const ta = playerAngle - t * 4;
+      const tx = cx + r * Math.cos((ta - 90) * Math.PI / 180);
+      const ty = cy + r * Math.sin((ta - 90) * Math.PI / 180);
+      X.beginPath();
+      X.arc(tx, ty, 5 * (1 - t/9), 0, Math.PI * 2);
+      X.fillStyle = col + Math.floor((1 - t/9) * 120).toString(16).padStart(2,'0');
+      X.fill();
+    }
+
+    // Player dot
+    X.beginPath();
+    X.arc(px, py, 10, 0, Math.PI * 2);
+    X.fillStyle = '#fff';
+    X.shadowColor = col;
+    X.shadowBlur = 22;
+    X.fill();
+    X.shadowBlur = 0;
+
+    // Inner core
+    X.beginPath();
+    X.arc(px, py, 5, 0, Math.PI * 2);
+    X.fillStyle = col;
+    X.fill();
+  }
+
+  // Draw center decoration
+  {
+    const pulse = 0.85 + 0.15 * Math.sin(gameTime * 3);
+    X.beginPath();
+    X.arc(cx, cy, 14 * pulse, 0, Math.PI * 2);
+    X.fillStyle = 'rgba(0,255,204,0.12)';
+    X.fill();
+    X.beginPath();
+    X.arc(cx, cy, 6, 0, Math.PI * 2);
+    X.fillStyle = '#00ffcc';
+    X.shadowColor = '#00ffcc';
+    X.shadowBlur = 12;
+    X.fill();
+    X.shadowBlur = 0;
+  }
+
+  // Lives indicator
+  for (let i = 0; i < 3; i++) {
+    X.beginPath();
+    X.arc(cx - 24 + i * 24, H - 36, 7, 0, Math.PI * 2);
+    X.fillStyle = i < lives ? '#ff2d78' : '#333';
+    X.shadowColor = '#ff2d78';
+    X.shadowBlur = i < lives ? 10 : 0;
+    X.fill();
+    X.shadowBlur = 0;
+  }
+
+  // Level indicator
+  X.fillStyle = '#0ff6';
+  X.font = '11px Courier New';
+  X.textAlign = 'center';
+  X.fillText('LV ' + level, cx, H - 20);
+
+  // Ring labels (hint)
+  if (gameTime < 3) {
+    const alpha = Math.max(0, 1 - gameTime / 3);
+    X.globalAlpha = alpha;
+    X.fillStyle = '#fff';
+    X.font = '11px Courier New';
+    X.textAlign = 'center';
+    X.fillText('탭/클릭으로 링 전환', cx, cy + getRingR(2) + 28);
+    X.globalAlpha = 1;
+  }
+
+  requestAnimationFrame(loop);
+}
+
+// ── JUMP ──────────────────────────────────────────────────────
+function jump() {
+  if (!gameRunning || jumpCooldown > 0) return;
+  jumpCooldown = 0.12;
+  playerRing = (playerRing + 1) % RINGS;
+  sfxJump();
+  burst(
+    cx + getRingR(playerRing) * Math.cos((playerAngle - 90) * Math.PI / 180),
+    cy + getRingR(playerRing) * Math.sin((playerAngle - 90) * Math.PI / 180),
+    RING_COLORS[playerRing], 5
+  );
+}
+
+// ── END GAME ──────────────────────────────────────────────────
+function endGame() {
+  gameRunning = false;
+  if (score > best) { best = score; localStorage.setItem('neonSpiral_best', best); }
+  const ov = document.getElementById('overlay');
+  const fs = document.getElementById('final-score');
+  const bf = document.getElementById('best-final');
+  fs.style.display = 'block';
+  fs.textContent = '점수: ' + score;
+  bf.style.display = 'block';
+  bf.textContent = '최고 기록: ' + best;
+  document.getElementById('start-btn').textContent = '다시 시작 RETRY';
+  ov.style.display = 'flex';
+}
+
+// ── INPUT ─────────────────────────────────────────────────────
+C.addEventListener('pointerdown', e => { e.preventDefault(); jump(); });
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'ArrowRight') {
+    e.preventDefault(); jump();
+  }
+});
+
+document.getElementById('start-btn').addEventListener('click', () => {
+  getAC(); // unlock audio
+  initGame();
+  gameRunning = true;
+  document.getElementById('overlay').style.display = 'none';
+});
+
+// Start loop
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

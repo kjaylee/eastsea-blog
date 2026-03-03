@@ -1,0 +1,589 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <meta name="theme-color" content="#efe3cd" />
+  <title>Accordion Vault</title>
+  <style>
+    :root{
+      --bg1:#f7f0e2;
+      --bg2:#e9d9be;
+      --ink:#2d2a26;
+      --panel:#fff9efcc;
+      --accent:#c86b4a;
+      --accent2:#3f7d74;
+      --wall:#7f5f43;
+      --gate:#4f6f86;
+      --player:#f08a5d;
+    }
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    html,body{margin:0;height:100%;overflow:hidden;background:linear-gradient(180deg,var(--bg1),var(--bg2));color:var(--ink);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+    #app{height:100%;max-width:860px;margin:0 auto;display:flex;flex-direction:column;gap:10px;padding:10px 10px calc(10px + env(safe-area-inset-bottom))}
+    .hud{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+    .tile{background:var(--panel);border:1px solid #b79d7b;border-radius:12px;padding:8px 6px;text-align:center;font-size:12px;line-height:1.15;backdrop-filter:blur(4px)}
+    .tile b{display:block;font-size:16px;margin-top:3px;color:#47392e}
+    #arenaWrap{position:relative;flex:1;min-height:320px;border-radius:16px;border:2px solid #b89f80;background:linear-gradient(180deg,#fff7eb,#ebdbbf);overflow:hidden;touch-action:none}
+    canvas{display:block;width:100%;height:100%}
+    #overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:20px;pointer-events:none}
+    #overlayCard{background:rgba(255,248,233,.9);border:1px solid #b89f80;border-radius:16px;padding:16px 18px;max-width:520px;box-shadow:0 10px 30px rgba(90,68,40,.18)}
+    #overlay h1{font-size:24px;margin:0 0 6px;color:#523d2e}
+    #overlay p{margin:7px 0;font-size:14px;line-height:1.35}
+    .controls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+    button.ctrl{border:none;border-radius:12px;padding:12px 8px;background:#f4e4ca;border:1px solid #b6956f;color:#4a382c;font-weight:800;font-size:14px;touch-action:manipulation}
+    button.ctrl:active,button.ctrl.active{transform:translateY(1px);background:#e8d4b3}
+    .help{text-align:center;font-size:12px;opacity:.85;padding-bottom:2px}
+    @media (max-width:640px){
+      .hud{grid-template-columns:repeat(3,minmax(0,1fr))}
+      .tile b{font-size:15px}
+      .controls{grid-template-columns:repeat(2,minmax(0,1fr))}
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+  <div class="hud">
+    <div class="tile">Score<b id="score">0</b></div>
+    <div class="tile">Best<b id="best">0</b></div>
+    <div class="tile">Gates<b id="gates">0</b></div>
+    <div class="tile">Tier<b id="tier">1</b></div>
+    <div class="tile">Max Tier<b id="maxTier">1</b></div>
+  </div>
+
+  <div id="arenaWrap" aria-label="game arena">
+    <canvas id="gameCanvas"></canvas>
+    <div id="overlay">
+      <div id="overlayCard">
+        <h1>Accordion Vault</h1>
+        <p>Unique mechanic: move the <b>left and right vault walls</b> to reshape every gate in real time.</p>
+        <p>Guide the courier orb through shifting openings.<br>Keyboard: <b>A/Z</b> left wall, <b>K/M</b> right wall, <b>Space</b> start/retry.</p>
+        <p>Touch: hold the four control buttons below.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls" id="controls">
+    <button class="ctrl" data-act="leftIn">A · Left In</button>
+    <button class="ctrl" data-act="leftOut">Z · Left Out</button>
+    <button class="ctrl" data-act="rightIn">K · Right In</button>
+    <button class="ctrl" data-act="rightOut">M · Right Out</button>
+  </div>
+
+  <div class="help">Compress and expand the corridor to survive. Your best score and progression are saved locally.</div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  const STORAGE_KEY = 'accordion_vault_progress_v1';
+
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+  const arenaWrap = document.getElementById('arenaWrap');
+  const overlay = document.getElementById('overlay');
+  const overlayCard = document.getElementById('overlayCard');
+
+  const scoreEl = document.getElementById('score');
+  const bestEl = document.getElementById('best');
+  const gatesEl = document.getElementById('gates');
+  const tierEl = document.getElementById('tier');
+  const maxTierEl = document.getElementById('maxTier');
+
+  let pr = 1;
+  let W = 0;
+  let H = 0;
+
+  const game = {
+    running: false,
+    over: false,
+    score: 0,
+    gatesCleared: 0,
+    tier: 1,
+    best: 0,
+    maxTier: 1,
+    time: 0,
+    speed: 170,
+    spawnTimer: 0,
+    leftWall: 0,
+    rightWall: 0,
+    baseLeft: 0,
+    baseRight: 0,
+    minWidth: 140,
+    wallMargin: 24,
+    gates: [],
+    particles: [],
+    player: {x: 0, y: 0, vx: 0, r: 12}
+  };
+
+  const controls = {
+    leftIn: false,
+    leftOut: false,
+    rightIn: false,
+    rightOut: false
+  };
+
+  let audioCtx = null;
+
+  function ensureAudio() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  }
+
+  function beep(freq = 440, duration = 0.08, type = 'sine', volume = 0.05, slide = 0.9) {
+    if (!audioCtx) return;
+    const t0 = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t0);
+    osc.frequency.exponentialRampToValueAtTime(Math.max(60, freq * slide), t0 + duration);
+    gain.gain.setValueAtTime(volume, t0);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t0);
+    osc.stop(t0 + duration);
+  }
+
+  function loadProgress() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+      game.best = Number(parsed.best) || 0;
+      game.maxTier = Math.max(1, Number(parsed.maxTier) || 1);
+    } catch {
+      game.best = 0;
+      game.maxTier = 1;
+    }
+    bestEl.textContent = game.best;
+    maxTierEl.textContent = game.maxTier;
+  }
+
+  function saveProgress() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      best: game.best,
+      maxTier: game.maxTier
+    }));
+  }
+
+  function resize() {
+    pr = Math.min(window.devicePixelRatio || 1, 2);
+    W = arenaWrap.clientWidth;
+    H = arenaWrap.clientHeight;
+    canvas.width = Math.floor(W * pr);
+    canvas.height = Math.floor(H * pr);
+    ctx.setTransform(pr, 0, 0, pr, 0, 0);
+
+    game.player.y = Math.min(H - 56, H * 0.8);
+    game.baseLeft = W * 0.2;
+    game.baseRight = W * 0.8;
+    if (!game.running && !game.over) {
+      game.leftWall = game.baseLeft;
+      game.rightWall = game.baseRight;
+      game.player.x = (game.leftWall + game.rightWall) * 0.5;
+    } else {
+      game.leftWall = Math.min(game.leftWall, W - game.wallMargin - game.minWidth);
+      game.rightWall = Math.max(game.rightWall, game.wallMargin + game.minWidth);
+    }
+  }
+
+  function resetGame() {
+    game.running = false;
+    game.over = false;
+    game.score = 0;
+    game.gatesCleared = 0;
+    game.tier = 1;
+    game.speed = 170;
+    game.spawnTimer = 0;
+    game.time = 0;
+    game.gates.length = 0;
+    game.particles.length = 0;
+
+    game.leftWall = game.baseLeft;
+    game.rightWall = game.baseRight;
+    game.player.x = (game.leftWall + game.rightWall) * 0.5;
+    game.player.vx = 0;
+
+    scoreEl.textContent = '0';
+    gatesEl.textContent = '0';
+    tierEl.textContent = '1';
+
+    overlay.style.display = 'flex';
+    overlayCard.innerHTML = `
+      <h1>Accordion Vault</h1>
+      <p>Move both walls to reshape the gate geometry.</p>
+      <p>Keyboard: <b>A/Z</b> and <b>K/M</b> · <b>Space</b> to start</p>
+      <p>Touch: hold the four wall buttons.</p>
+    `;
+  }
+
+  function startGame() {
+    ensureAudio();
+    if (game.over) {
+      resetGame();
+    }
+    game.running = true;
+    overlay.style.display = 'none';
+    beep(310, 0.12, 'triangle', 0.06, 1.25);
+  }
+
+  function crash() {
+    game.running = false;
+    game.over = true;
+
+    if (game.score > game.best) game.best = Math.floor(game.score);
+    if (game.tier > game.maxTier) game.maxTier = game.tier;
+    bestEl.textContent = game.best;
+    maxTierEl.textContent = game.maxTier;
+    saveProgress();
+
+    overlay.style.display = 'flex';
+    overlayCard.innerHTML = `
+      <h1>Vault Breach</h1>
+      <p>Final Score: <b>${Math.floor(game.score)}</b> · Gates: <b>${game.gatesCleared}</b></p>
+      <p>Best: <b>${game.best}</b> · Max Tier: <b>${game.maxTier}</b></p>
+      <p>Press <b>Space</b> or tap arena to retry.</p>
+    `;
+
+    beep(180, 0.14, 'sawtooth', 0.08, 0.45);
+    setTimeout(() => beep(120, 0.2, 'square', 0.06, 0.6), 90);
+  }
+
+  function spawnGate() {
+    const h = 24 + Math.random() * 22;
+    const ratio = 0.14 + Math.random() * 0.72;
+    const gapBase = Math.max(64, 118 - game.tier * 3 + Math.random() * 28);
+    game.gates.push({
+      y: -h - 14,
+      h,
+      ratio,
+      gapBase,
+      phase: Math.random() * Math.PI * 2,
+      swayAmp: 0.03 + Math.random() * 0.09,
+      swaySpeed: 0.8 + Math.random() * 1.4,
+      passed: false
+    });
+  }
+
+  function gateGeometry(g) {
+    const corridorWidth = game.rightWall - game.leftWall;
+    const sway = Math.sin(game.time * g.swaySpeed + g.phase) * g.swayAmp * corridorWidth;
+    const center = game.leftWall + corridorWidth * g.ratio + sway;
+    const gap = Math.max(52, Math.min(corridorWidth - 34, g.gapBase + (corridorWidth - 260) * 0.28));
+    const leftEnd = Math.max(game.leftWall, center - gap * 0.5);
+    const rightStart = Math.min(game.rightWall, center + gap * 0.5);
+    return {leftEnd, rightStart, center, gap};
+  }
+
+  function emit(x, y, color, count = 8) {
+    for (let i = 0; i < count; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const s = 35 + Math.random() * 110;
+      game.particles.push({
+        x, y,
+        vx: Math.cos(a) * s,
+        vy: Math.sin(a) * s,
+        life: 0.4 + Math.random() * 0.4,
+        t: 0,
+        color
+      });
+    }
+  }
+
+  function update(dt) {
+    game.time += dt;
+
+    const prevL = game.leftWall;
+    const prevR = game.rightWall;
+
+    const wallSpeed = 250;
+    if (controls.leftIn) game.leftWall += wallSpeed * dt;
+    if (controls.leftOut) game.leftWall -= wallSpeed * dt;
+    if (controls.rightIn) game.rightWall -= wallSpeed * dt;
+    if (controls.rightOut) game.rightWall += wallSpeed * dt;
+
+    game.leftWall += (game.baseLeft - game.leftWall) * dt * 0.6;
+    game.rightWall += (game.baseRight - game.rightWall) * dt * 0.6;
+
+    const leftMin = game.wallMargin;
+    const leftMax = W - game.wallMargin - game.minWidth;
+    const rightMin = game.wallMargin + game.minWidth;
+    const rightMax = W - game.wallMargin;
+
+    game.leftWall = Math.min(leftMax, Math.max(leftMin, game.leftWall));
+    game.rightWall = Math.min(rightMax, Math.max(rightMin, game.rightWall));
+    if (game.rightWall - game.leftWall < game.minWidth) {
+      const mid = (game.leftWall + game.rightWall) * 0.5;
+      game.leftWall = mid - game.minWidth * 0.5;
+      game.rightWall = mid + game.minWidth * 0.5;
+    }
+
+    const dL = game.leftWall - prevL;
+    const dR = game.rightWall - prevR;
+
+    game.player.vx *= Math.exp(-dt * 4.2);
+    game.player.x += game.player.vx * dt;
+
+    if (game.player.x - game.player.r < game.leftWall) {
+      game.player.x = game.leftWall + game.player.r;
+      if (dL > 0) game.player.vx += dL * 8.5;
+    }
+    if (game.player.x + game.player.r > game.rightWall) {
+      game.player.x = game.rightWall - game.player.r;
+      if (dR < 0) game.player.vx += dR * 8.5;
+    }
+
+    game.tier = 1 + Math.floor(game.gatesCleared / 8);
+    game.speed = 170 + game.tier * 20;
+
+    game.spawnTimer += dt;
+    const spawnEvery = Math.max(0.46, 1.05 - game.tier * 0.04);
+    if (game.spawnTimer >= spawnEvery) {
+      game.spawnTimer = 0;
+      spawnGate();
+    }
+
+    for (let i = game.gates.length - 1; i >= 0; i--) {
+      const g = game.gates[i];
+      g.y += game.speed * dt;
+      const geom = gateGeometry(g);
+
+      if (!g.passed && g.y > game.player.y + game.player.r) {
+        g.passed = true;
+        game.gatesCleared += 1;
+        game.score += 80 + game.tier * 16;
+        emit(game.player.x, game.player.y - 18, '#3f7d74', 6);
+        beep(560 + Math.random() * 140, 0.05, 'triangle', 0.04, 1.06);
+      }
+
+      const withinY = game.player.y + game.player.r > g.y && game.player.y - game.player.r < g.y + g.h;
+      const blocked = game.player.x - game.player.r < geom.leftEnd || game.player.x + game.player.r > geom.rightStart;
+      if (withinY && blocked) {
+        emit(game.player.x, game.player.y, '#c86b4a', 20);
+        crash();
+        return;
+      }
+
+      if (g.y > H + 40) game.gates.splice(i, 1);
+    }
+
+    for (let i = game.particles.length - 1; i >= 0; i--) {
+      const p = game.particles[i];
+      p.t += dt;
+      if (p.t > p.life) {
+        game.particles.splice(i, 1);
+        continue;
+      }
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vx *= Math.exp(-dt * 2.4);
+      p.vy = p.vy * Math.exp(-dt * 2.4) + 12 * dt;
+    }
+
+    game.score += dt * (22 + game.tier * 5);
+    if (game.score > game.best) {
+      game.best = Math.floor(game.score);
+      bestEl.textContent = game.best;
+      saveProgress();
+    }
+
+    scoreEl.textContent = Math.floor(game.score);
+    gatesEl.textContent = game.gatesCleared;
+    tierEl.textContent = game.tier;
+  }
+
+  function drawRoundedRect(x, y, w, h, r) {
+    const rr = Math.min(r, w * 0.5, h * 0.5);
+    ctx.beginPath();
+    ctx.moveTo(x + rr, y);
+    ctx.arcTo(x + w, y, x + w, y + h, rr);
+    ctx.arcTo(x + w, y + h, x, y + h, rr);
+    ctx.arcTo(x, y + h, x, y, rr);
+    ctx.arcTo(x, y, x + w, y, rr);
+    ctx.closePath();
+  }
+
+  function render() {
+    ctx.clearRect(0, 0, W, H);
+
+    const bg = ctx.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, '#fff7ea');
+    bg.addColorStop(1, '#ead8b7');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    // decorative grain lines
+    ctx.globalAlpha = 0.17;
+    ctx.strokeStyle = '#bda078';
+    for (let i = 0; i < 12; i++) {
+      const yy = (i + 1) * (H / 13);
+      ctx.beginPath();
+      ctx.moveTo(0, yy + Math.sin((game.time * 0.6) + i) * 2);
+      ctx.lineTo(W, yy + Math.cos((game.time * 0.5) + i * 1.6) * 2);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    // corridor fill
+    const corridorW = game.rightWall - game.leftWall;
+    drawRoundedRect(game.leftWall, 0, corridorW, H, 22);
+    ctx.fillStyle = '#f2eadc';
+    ctx.fill();
+
+    // walls
+    ctx.fillStyle = '#7f5f43';
+    ctx.fillRect(game.leftWall - 8, 0, 8, H);
+    ctx.fillRect(game.rightWall, 0, 8, H);
+
+    // gates
+    for (const g of game.gates) {
+      const geom = gateGeometry(g);
+      ctx.fillStyle = '#4f6f86';
+      ctx.fillRect(game.leftWall, g.y, Math.max(0, geom.leftEnd - game.leftWall), g.h);
+      ctx.fillRect(geom.rightStart, g.y, Math.max(0, game.rightWall - geom.rightStart), g.h);
+
+      // gate trim
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = '#d7eef5';
+      ctx.fillRect(game.leftWall, g.y + 3, Math.max(0, geom.leftEnd - game.leftWall), 2);
+      ctx.fillRect(geom.rightStart, g.y + 3, Math.max(0, game.rightWall - geom.rightStart), 2);
+      ctx.globalAlpha = 1;
+    }
+
+    // player trail
+    ctx.globalAlpha = 0.25;
+    ctx.fillStyle = '#f5b190';
+    ctx.beginPath();
+    ctx.ellipse(game.player.x - game.player.vx * 0.035, game.player.y + 3, game.player.r * 1.25, game.player.r * 0.8, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // player orb
+    const orb = ctx.createRadialGradient(game.player.x - 3, game.player.y - 4, 2, game.player.x, game.player.y, game.player.r + 4);
+    orb.addColorStop(0, '#ffd8bc');
+    orb.addColorStop(1, '#f08a5d');
+    ctx.fillStyle = orb;
+    ctx.beginPath();
+    ctx.arc(game.player.x, game.player.y, game.player.r, 0, Math.PI * 2);
+    ctx.fill();
+
+    // particles
+    for (const p of game.particles) {
+      const a = 1 - (p.t / p.life);
+      ctx.globalAlpha = Math.max(0, a);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(p.x, p.y, 3, 3);
+    }
+    ctx.globalAlpha = 1;
+
+    // wall indicators
+    ctx.fillStyle = '#3f7d74';
+    ctx.font = '12px system-ui';
+    ctx.fillText('L', game.leftWall - 17, 20);
+    ctx.fillText('R', game.rightWall + 11, 20);
+  }
+
+  let lastTs = 0;
+  function loop(ts) {
+    const dt = Math.min(0.033, (ts - lastTs || 16) / 1000);
+    lastTs = ts;
+
+    if (game.running) update(dt);
+    render();
+    requestAnimationFrame(loop);
+  }
+
+  function setControl(name, value) {
+    controls[name] = value;
+    const btn = document.querySelector(`button[data-act="${name}"]`);
+    if (btn) btn.classList.toggle('active', value);
+  }
+
+  function wireButton(btn) {
+    const act = btn.dataset.act;
+    if (!act) return;
+
+    btn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      ensureAudio();
+      if (!game.running && !game.over) startGame();
+      setControl(act, true);
+    });
+
+    const off = (e) => {
+      e && e.preventDefault();
+      setControl(act, false);
+    };
+
+    btn.addEventListener('pointerup', off);
+    btn.addEventListener('pointercancel', off);
+    btn.addEventListener('pointerleave', off);
+
+    // explicit touch support
+    btn.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      ensureAudio();
+      if (!game.running && !game.over) startGame();
+      setControl(act, true);
+    }, {passive:false});
+    btn.addEventListener('touchend', off, {passive:false});
+    btn.addEventListener('touchcancel', off, {passive:false});
+  }
+
+  document.querySelectorAll('button[data-act]').forEach(wireButton);
+
+  const keyMap = {
+    a: 'leftIn',
+    z: 'leftOut',
+    k: 'rightIn',
+    m: 'rightOut'
+  };
+
+  window.addEventListener('keydown', (e) => {
+    const key = e.key.toLowerCase();
+    if (keyMap[key]) {
+      e.preventDefault();
+      ensureAudio();
+      if (!game.running && !game.over) startGame();
+      setControl(keyMap[key], true);
+      return;
+    }
+    if (e.code === 'Space') {
+      e.preventDefault();
+      ensureAudio();
+      if (!game.running) startGame();
+    }
+  });
+
+  window.addEventListener('keyup', (e) => {
+    const key = e.key.toLowerCase();
+    if (keyMap[key]) {
+      e.preventDefault();
+      setControl(keyMap[key], false);
+    }
+  });
+
+  arenaWrap.addEventListener('pointerdown', () => {
+    ensureAudio();
+    if (!game.running) startGame();
+  });
+
+  arenaWrap.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    ensureAudio();
+    if (!game.running) startGame();
+  }, {passive:false});
+
+  window.addEventListener('blur', () => {
+    Object.keys(controls).forEach((k) => setControl(k, false));
+  });
+
+  window.addEventListener('resize', resize);
+
+  loadProgress();
+  resize();
+  resetGame();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

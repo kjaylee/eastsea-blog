@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#ff2d78">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>K-Deck Arena</title>
+<link rel="manifest" href="manifest.json">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0a0a1a;--card-bg:#12122a;--neon-pink:#ff2d78;--neon-blue:#00d4ff;--neon-green:#39ff14;--neon-purple:#b347ff;--neon-gold:#ffd700;--text:#e8e8f0;--text-dim:#8888aa;--atk-color:#ff4444;--def-color:#4488ff;--spc-color:#b347ff}
+html,body{width:100%;height:100%;overflow:hidden;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text)}
+#app{width:100%;height:100%;display:flex;flex-direction:column;position:relative}
+
+/* Screens */
+.screen{display:none;flex-direction:column;align-items:center;width:100%;height:100%;position:absolute;top:0;left:0}
+.screen.active{display:flex}
+
+/* Title Screen */
+#title-screen{justify-content:center;gap:24px;background:radial-gradient(ellipse at 50% 30%,#1a1040 0%,var(--bg) 70%)}
+#title-screen h1{font-size:clamp(2rem,8vw,3.5rem);font-weight:900;background:linear-gradient(135deg,var(--neon-pink),var(--neon-blue));-webkit-background-clip:text;-webkit-text-fill-color:transparent;text-shadow:0 0 40px rgba(255,45,120,.3);letter-spacing:2px}
+#title-screen .subtitle{color:var(--text-dim);font-size:clamp(.8rem,3vw,1rem);letter-spacing:4px;text-transform:uppercase}
+.rating-display{color:var(--neon-gold);font-size:1.1rem;margin-top:8px}
+.stats-row{display:flex;gap:20px;color:var(--text-dim);font-size:.85rem}
+
+/* Buttons */
+.btn{padding:14px 40px;border:2px solid var(--neon-pink);background:transparent;color:var(--neon-pink);font-size:1.1rem;font-weight:700;border-radius:8px;cursor:pointer;transition:all .2s;text-transform:uppercase;letter-spacing:2px;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+.btn:hover,.btn:focus{background:var(--neon-pink);color:#fff;box-shadow:0 0 30px rgba(255,45,120,.4);outline:none}
+.btn-secondary{border-color:var(--neon-blue);color:var(--neon-blue)}
+.btn-secondary:hover,.btn-secondary:focus{background:var(--neon-blue);color:#000}
+.btn-small{padding:8px 20px;font-size:.85rem}
+
+/* Battle Screen */
+#battle-screen{justify-content:space-between;padding:8px}
+.battle-header{width:100%;display:flex;justify-content:space-between;align-items:center;padding:8px 12px}
+.player-info{display:flex;align-items:center;gap:8px}
+.player-info .name{font-weight:700;font-size:.9rem}
+.score-badge{background:var(--neon-pink);color:#fff;padding:2px 10px;border-radius:12px;font-weight:700;font-size:.85rem}
+.round-info{text-align:center;font-size:.85rem;color:var(--text-dim)}
+.round-num{color:var(--neon-gold);font-weight:700}
+
+/* Arena */
+.arena{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:12px;width:100%;position:relative;min-height:0}
+.arena-zone{width:100%;display:flex;justify-content:center;align-items:center;min-height:120px;position:relative}
+.vs-text{font-size:1.5rem;font-weight:900;color:var(--neon-pink);text-shadow:0 0 20px rgba(255,45,120,.5);animation:pulse 1.5s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+
+/* Cards */
+.card{width:100px;height:140px;border-radius:10px;position:relative;cursor:pointer;transition:all .25s cubic-bezier(.4,0,.2,1);-webkit-tap-highlight-color:transparent;touch-action:manipulation;flex-shrink:0}
+.card:hover{transform:translateY(-8px)}
+.card.selected{transform:translateY(-12px);box-shadow:0 0 25px rgba(255,45,120,.6)}
+.card-inner{width:100%;height:100%;border-radius:10px;padding:8px;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden}
+.card-type-atk .card-inner{background:linear-gradient(135deg,#1a0808,#2a1020);border:2px solid var(--atk-color)}
+.card-type-def .card-inner{background:linear-gradient(135deg,#081018,#102030);border:2px solid var(--def-color)}
+.card-type-spc .card-inner{background:linear-gradient(135deg,#100820,#201040);border:2px solid var(--spc-color)}
+.card-icon{font-size:2rem;text-align:center;line-height:1;margin:4px 0}
+.card-name{font-size:.6rem;text-align:center;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card-stats{display:flex;justify-content:space-between;font-size:.65rem;font-weight:700}
+.card-atk{color:var(--atk-color)}
+.card-def{color:var(--def-color)}
+.card-type-badge{position:absolute;top:4px;right:4px;font-size:.5rem;padding:1px 4px;border-radius:3px;font-weight:700;text-transform:uppercase}
+.card-type-atk .card-type-badge{background:var(--atk-color);color:#fff}
+.card-type-def .card-type-badge{background:var(--def-color);color:#fff}
+.card-type-spc .card-type-badge{background:var(--spc-color);color:#fff}
+
+/* Card played in arena */
+.arena-card{width:120px;height:168px}
+.arena-card .card-icon{font-size:2.5rem}
+.arena-card .card-name{font-size:.75rem}
+.arena-card .card-stats{font-size:.8rem}
+
+/* Hand */
+.hand-area{width:100%;padding:8px 4px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.hand{display:flex;justify-content:center;gap:6px;min-height:145px;padding:4px}
+.hand .card{opacity:1;animation:dealIn .3s ease-out backwards}
+@keyframes dealIn{from{opacity:0;transform:translateY(40px) scale(.8)}}
+.hand .card:nth-child(1){animation-delay:.05s}
+.hand .card:nth-child(2){animation-delay:.1s}
+.hand .card:nth-child(3){animation-delay:.15s}
+.hand .card:nth-child(4){animation-delay:.2s}
+.hand .card:nth-child(5){animation-delay:.25s}
+
+/* AI cards (face down) */
+.ai-hand{display:flex;justify-content:center;gap:6px;padding:4px}
+.ai-card-back{width:70px;height:98px;border-radius:8px;background:linear-gradient(135deg,#1a1a3a,#0a0a2a);border:2px solid #333;display:flex;align-items:center;justify-content:center;font-size:1.2rem;opacity:.6}
+
+/* Battle result overlay */
+.battle-result{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:clamp(1.5rem,6vw,2.5rem);font-weight:900;padding:12px 30px;border-radius:12px;z-index:10;animation:resultPop .4s cubic-bezier(.4,0,.2,1);pointer-events:none}
+@keyframes resultPop{from{transform:translate(-50%,-50%) scale(0);opacity:0}to{transform:translate(-50%,-50%) scale(1);opacity:1}}
+.result-win{background:rgba(57,255,20,.15);color:var(--neon-green);border:2px solid var(--neon-green);text-shadow:0 0 20px rgba(57,255,20,.5)}
+.result-lose{background:rgba(255,68,68,.15);color:#ff4444;border:2px solid #ff4444;text-shadow:0 0 20px rgba(255,68,68,.5)}
+.result-draw{background:rgba(255,215,0,.15);color:var(--neon-gold);border:2px solid var(--neon-gold);text-shadow:0 0 20px rgba(255,215,0,.5)}
+
+/* Action prompt */
+.action-prompt{text-align:center;font-size:.85rem;color:var(--neon-pink);padding:4px;min-height:28px;animation:blink 1.2s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* Result Screen */
+#result-screen{justify-content:center;gap:20px;background:radial-gradient(ellipse at 50% 40%,#1a1040 0%,var(--bg) 70%)}
+.result-title{font-size:clamp(2rem,8vw,3rem);font-weight:900}
+.result-victory{color:var(--neon-green);text-shadow:0 0 40px rgba(57,255,20,.4)}
+.result-defeat{color:#ff4444;text-shadow:0 0 40px rgba(255,68,68,.4)}
+.result-tie{color:var(--neon-gold);text-shadow:0 0 40px rgba(255,215,0,.4)}
+.result-details{text-align:center;line-height:2}
+.result-details .label{color:var(--text-dim);font-size:.85rem}
+.result-details .value{font-weight:700;font-size:1.1rem;margin-left:8px}
+.rating-change{font-size:1.2rem;font-weight:700}
+.rating-up{color:var(--neon-green)}
+.rating-down{color:#ff4444}
+
+/* Deck Screen */
+#deck-screen{padding:16px;overflow-y:auto}
+#deck-screen h2{font-size:1.4rem;margin-bottom:12px;color:var(--neon-blue)}
+.deck-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:10px;width:100%;padding-bottom:80px}
+.deck-card-wrapper{display:flex;flex-direction:column;align-items:center;gap:4px}
+.deck-toggle{font-size:.7rem;padding:4px 8px;border:1px solid var(--text-dim);background:transparent;color:var(--text-dim);border-radius:4px;cursor:pointer}
+.deck-toggle.in-deck{border-color:var(--neon-green);color:var(--neon-green)}
+.deck-count{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--card-bg);border:2px solid var(--neon-pink);padding:8px 24px;border-radius:8px;font-weight:700;z-index:5}
+.deck-back-btn{position:fixed;top:12px;left:12px;z-index:5}
+
+/* Responsive */
+@media(max-width:380px){
+  .card{width:80px;height:112px}
+  .card-icon{font-size:1.5rem}
+  .arena-card{width:100px;height:140px}
+  .arena-card .card-icon{font-size:2rem}
+  .ai-card-back{width:56px;height:78px}
+}
+@media(min-width:500px){
+  .card{width:110px;height:154px}
+  .card-icon{font-size:2.2rem}
+  .arena-card{width:140px;height:196px}
+}
+
+/* Card special ability text */
+.card-ability{font-size:.5rem;text-align:center;color:var(--neon-gold);font-style:italic;line-height:1.1;margin-top:2px}
+
+/* Particles */
+.particle{position:absolute;pointer-events:none;border-radius:50%;animation:particleFade 1s ease-out forwards}
+@keyframes particleFade{0%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(0) translateY(-60px)}}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- Title Screen -->
+<div id="title-screen" class="screen active">
+  <h1>K-DECK ARENA</h1>
+  <p class="subtitle">K-Culture Card Battle</p>
+  <div class="rating-display">⭐ Rating: <span id="title-rating">1000</span></div>
+  <div class="stats-row">
+    <span>🏆 <span id="stat-wins">0</span>W</span>
+    <span>💀 <span id="stat-losses">0</span>L</span>
+    <span>🤝 <span id="stat-draws">0</span>D</span>
+  </div>
+  <button class="btn" id="btn-battle" autofocus>⚔ BATTLE</button>
+  <button class="btn btn-secondary btn-small" id="btn-deck">🃏 DECK</button>
+</div>
+
+<!-- Battle Screen -->
+<div id="battle-screen" class="screen">
+  <div class="battle-header">
+    <div class="player-info">
+      <span class="name">YOU</span>
+      <span class="score-badge" id="player-score">0</span>
+    </div>
+    <div class="round-info">ROUND <span class="round-num" id="round-num">1</span>/5</div>
+    <div class="player-info">
+      <span class="score-badge" id="ai-score">0</span>
+      <span class="name">AI</span>
+    </div>
+  </div>
+  <div class="ai-hand" id="ai-hand"></div>
+  <div class="arena" id="arena">
+    <div class="arena-zone" id="ai-play-zone"></div>
+    <div class="vs-text" id="vs-text">VS</div>
+    <div class="arena-zone" id="player-play-zone"></div>
+  </div>
+  <div class="action-prompt" id="action-prompt">카드를 선택하세요</div>
+  <div class="hand-area">
+    <div class="hand" id="player-hand"></div>
+  </div>
+</div>
+
+<!-- Result Screen -->
+<div id="result-screen" class="screen">
+  <div class="result-title" id="result-title">VICTORY</div>
+  <div class="result-details">
+    <div><span class="label">Score</span><span class="value" id="result-score">3 - 2</span></div>
+    <div><span class="label">Rating</span><span class="value rating-change" id="result-rating">+25</span></div>
+    <div><span class="label">Record</span><span class="value" id="result-record">1W 0L</span></div>
+  </div>
+  <button class="btn" id="btn-again">⚔ REMATCH</button>
+  <button class="btn btn-secondary btn-small" id="btn-home">🏠 HOME</button>
+</div>
+
+<!-- Deck Screen -->
+<div id="deck-screen" class="screen">
+  <button class="btn btn-small deck-back-btn" id="btn-deck-back">← BACK</button>
+  <h2>🃏 Deck Builder</h2>
+  <p style="color:var(--text-dim);font-size:.8rem;margin-bottom:12px">Select 10 cards for your deck (5 drawn each battle)</p>
+  <div class="deck-grid" id="deck-grid"></div>
+  <div class="deck-count" id="deck-count">Deck: 0/10</div>
+</div>
+
+</div>
+
+<script>
+'use strict';
+// ===== CARD DATA =====
+const ALL_CARDS=[
+// Attack (7)
+{id:1,name:"BTS 파이어",type:"atk",atk:9,def:3,icon:"🔥",ability:"Burn: +2 ATK vs DEF"},
+{id:2,name:"블랙핑크 스트라이크",type:"atk",atk:8,def:4,icon:"⚡",ability:"Pierce: ignore 1 DEF"},
+{id:3,name:"스트레이키즈 돌격",type:"atk",atk:10,def:2,icon:"🗡️",ability:"Rush: highest ATK"},
+{id:4,name:"에스파 사이버슬래시",type:"atk",atk:7,def:5,icon:"💫",ability:"Cyber: balanced ATK"},
+{id:5,name:"세븐틴 캐럿펀치",type:"atk",atk:8,def:3,icon:"💎",ability:"Gem Strike: +1 if win"},
+{id:6,name:"NCT 드림킥",type:"atk",atk:9,def:2,icon:"🌟",ability:"Dream: fast strike"},
+{id:7,name:"투모로우 스매시",type:"atk",atk:7,def:4,icon:"🌙",ability:"Moon Smash: night power"},
+// Defense (7)
+{id:8,name:"손흥민 골든쉴드",type:"def",atk:3,def:9,icon:"🛡️",ability:"Golden Wall: top DEF"},
+{id:9,name:"김연아 아이스가드",type:"def",atk:4,def:8,icon:"❄️",ability:"Ice: freeze attacker"},
+{id:10,name:"박지성 미드블록",type:"def",atk:5,def:7,icon:"🧱",ability:"Block: solid defense"},
+{id:11,name:"류현진 매직월",type:"def",atk:3,def:9,icon:"🧤",ability:"Catch: reflect 1 ATK"},
+{id:12,name:"이강인 철벽",type:"def",atk:4,def:8,icon:"🏰",ability:"Fortress: unbreakable"},
+{id:13,name:"황희찬 카운터",type:"def",atk:6,def:7,icon:"🔄",ability:"Counter: ATK=DEF/2"},
+{id:14,name:"김민재 타워",type:"def",atk:3,def:10,icon:"🗼",ability:"Tower: max defense"},
+// Special (6)
+{id:15,name:"오징어게임 역전",type:"spc",atk:6,def:6,icon:"🦑",ability:"Reverse: swap ATK/DEF"},
+{id:16,name:"기생충 트릭",type:"spc",atk:5,def:5,icon:"🎭",ability:"Trick: copy enemy type"},
+{id:17,name:"한복 마스터",type:"spc",atk:7,def:7,icon:"👘",ability:"Harmony: balanced power"},
+{id:18,name:"태권도 챔프",type:"spc",atk:8,def:4,icon:"🥋",ability:"Combo: ATK+DEF judge"},
+{id:19,name:"K-푸드 파워",type:"spc",atk:4,def:8,icon:"🍜",ability:"Heal: +1 DEF per round"},
+{id:20,name:"한류 웨이브",type:"spc",atk:6,def:6,icon:"🌊",ability:"Wave: total stat wins"}
+];
+
+// ===== GAME STATE =====
+let state={
+  screen:'title',
+  playerHand:[],
+  aiHand:[],
+  playerScore:0,
+  aiScore:0,
+  round:1,
+  maxRounds:5,
+  selectedCard:null,
+  busy:false,
+  playerDeck:[],
+  rating:1000,
+  wins:0,
+  losses:0,
+  draws:0
+};
+
+// ===== AUDIO ENGINE =====
+const AudioEngine=(()=>{
+  let ctx=null;
+  const init=()=>{if(!ctx)ctx=new(window.AudioContext||window.webkitAudioContext)();if(ctx.state==='suspended')ctx.resume()};
+  const play=(freq,dur,type='square',vol=.15)=>{
+    try{
+      init();
+      const o=ctx.createOscillator(),g=ctx.createGain();
+      o.type=type;o.frequency.value=freq;
+      g.gain.setValueAtTime(vol,ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+dur);
+      o.connect(g);g.connect(ctx.destination);
+      o.start();o.stop(ctx.currentTime+dur);
+    }catch(e){}
+  };
+  return{
+    cardPlay:()=>{play(523,.08,'square',.12);setTimeout(()=>play(659,.06,'square',.1),60)},
+    cardHit:()=>{play(200,.15,'sawtooth',.1);setTimeout(()=>play(150,.1,'sawtooth',.08),80)},
+    win:()=>{[523,659,784,1047].forEach((f,i)=>setTimeout(()=>play(f,.2,'square',.12),i*120))},
+    lose:()=>{[400,350,300,250].forEach((f,i)=>setTimeout(()=>play(f,.25,'sawtooth',.1),i*150))},
+    roundWin:()=>{play(784,.12,'square',.12);setTimeout(()=>play(1047,.15,'square',.1),100)},
+    roundLose:()=>{play(300,.2,'sawtooth',.1)},
+    select:()=>play(880,.05,'sine',.08),
+    draw:()=>{play(523,.15,'triangle',.1);setTimeout(()=>play(523,.15,'triangle',.08),150)}
+  };
+})();
+
+// ===== STORAGE =====
+const Storage={
+  KEY:'k-deck-arena-save',
+  load(){
+    try{
+      const d=JSON.parse(localStorage.getItem(this.KEY));
+      if(d){
+        state.rating=d.rating||1000;
+        state.wins=d.wins||0;
+        state.losses=d.losses||0;
+        state.draws=d.draws||0;
+        state.playerDeck=d.deck||[];
+      }
+    }catch(e){}
+    if(!state.playerDeck.length)state.playerDeck=ALL_CARDS.slice(0,10).map(c=>c.id);
+  },
+  save(){
+    try{
+      localStorage.setItem(this.KEY,JSON.stringify({
+        rating:state.rating,wins:state.wins,losses:state.losses,draws:state.draws,
+        deck:state.playerDeck
+      }));
+    }catch(e){}
+  }
+};
+
+// ===== ELO =====
+function calcElo(rating,won,lost){
+  const K=32,expected=1/(1+Math.pow(10,(1000-rating)/400));
+  let score=won>lost?1:won<lost?0:.5;
+  return Math.round(rating+K*(score-expected));
+}
+
+// ===== RENDERING =====
+function $(id){return document.getElementById(id)}
+function showScreen(name){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  $(name+'-screen').classList.add('active');
+  state.screen=name;
+}
+
+function renderCard(card,extra=''){
+  const cls=`card card-type-${card.type} ${extra}`;
+  return`<div class="${cls}" data-id="${card.id}">
+    <div class="card-inner">
+      <span class="card-type-badge">${card.type.toUpperCase()}</span>
+      <div class="card-icon">${card.icon}</div>
+      <div class="card-name">${card.name}</div>
+      <div class="card-ability">${card.ability}</div>
+      <div class="card-stats"><span class="card-atk">⚔${card.atk}</span><span class="card-def">🛡${card.def}</span></div>
+    </div>
+  </div>`;
+}
+
+function renderArenaCard(card){
+  return renderCard(card,'arena-card');
+}
+
+function updateTitle(){
+  $('title-rating').textContent=state.rating;
+  $('stat-wins').textContent=state.wins;
+  $('stat-losses').textContent=state.losses;
+  $('stat-draws').textContent=state.draws;
+}
+
+function updateBattleUI(){
+  $('round-num').textContent=state.round;
+  $('player-score').textContent=state.playerScore;
+  $('ai-score').textContent=state.aiScore;
+  // AI hand
+  $('ai-hand').innerHTML=state.aiHand.map(()=>'<div class="ai-card-back">🂠</div>').join('');
+  // Player hand
+  $('player-hand').innerHTML=state.playerHand.map(c=>{
+    const sel=state.selectedCard===c.id?'selected':'';
+    return renderCard(c,sel);
+  }).join('');
+  // Bind clicks
+  $('player-hand').querySelectorAll('.card').forEach(el=>{
+    el.addEventListener('click',()=>selectCard(parseInt(el.dataset.id)));
+    el.addEventListener('touchend',e=>{e.preventDefault();selectCard(parseInt(el.dataset.id))});
+  });
+}
+
+// ===== GAME LOGIC =====
+function shuffle(arr){
+  const a=[...arr];
+  for(let i=a.length-1;i>0;i--){const j=Math.random()*i+1|0;[a[i],a[j]]=[a[j],a[i]]}
+  return a;
+}
+
+function startBattle(){
+  AudioEngine.select();
+  state.round=1;state.playerScore=0;state.aiScore=0;state.selectedCard=null;state.busy=false;
+  // Draw 5 from player deck
+  const deckCards=state.playerDeck.map(id=>ALL_CARDS.find(c=>c.id===id)).filter(Boolean);
+  state.playerHand=shuffle(deckCards).slice(0,5);
+  // AI gets random 5
+  state.aiHand=shuffle([...ALL_CARDS]).slice(0,5);
+  showScreen('battle');
+  $('action-prompt').textContent='카드를 선택하세요';
+  $('player-play-zone').innerHTML='';
+  $('ai-play-zone').innerHTML='';
+  $('vs-text').textContent='VS';
+  updateBattleUI();
+}
+
+function selectCard(id){
+  if(state.busy)return;
+  AudioEngine.select();
+  state.selectedCard=id;
+  updateBattleUI();
+  // Auto-play after short delay for feedback
+  state.busy=true;
+  $('action-prompt').textContent='대결 중...';
+  setTimeout(()=>playRound(id),400);
+}
+
+function resolveAbility(pCard,aCard){
+  let pAtk=pCard.atk,pDef=pCard.def,aAtk=aCard.atk,aDef=aCard.def;
+  // Player abilities
+  if(pCard.id===1&&aCard.type==='def')pAtk+=2; // BTS Fire vs DEF
+  if(pCard.id===2)aDef=Math.max(0,aDef-1); // Blackpink Pierce
+  if(pCard.id===15){[pAtk,pDef]=[pDef,pAtk]} // Squid Game Reverse
+  if(pCard.id===16)pAtk=aAtk; // Parasite Trick copy
+  if(pCard.id===20){return{pTotal:pAtk+pDef,aTotal:aAtk+aDef,mode:'total'}} // Hallyu Wave
+  if(pCard.id===18){return{pTotal:pAtk+pDef,aTotal:aAtk+aDef,mode:'total'}} // Taekwondo Combo
+  // AI abilities (mirror)
+  if(aCard.id===1&&pCard.type==='def')aAtk+=2;
+  if(aCard.id===2)pDef=Math.max(0,pDef-1);
+  if(aCard.id===15){[aAtk,aDef]=[aDef,aAtk]}
+  if(aCard.id===16)aAtk=pAtk;
+  if(aCard.id===20){return{pTotal:pAtk+pDef,aTotal:aAtk+aDef,mode:'total'}}
+  if(aCard.id===18){return{pTotal:pAtk+pDef,aTotal:aAtk+aDef,mode:'total'}}
+  return{pAtk,pDef,aAtk,aDef,mode:'normal'};
+}
+
+function playRound(playerCardId){
+  const pCard=state.playerHand.find(c=>c.id===playerCardId);
+  const aiIdx=Math.floor(Math.random()*state.aiHand.length);
+  const aCard=state.aiHand[aiIdx];
+  // Remove from hands
+  state.playerHand=state.playerHand.filter(c=>c.id!==playerCardId);
+  state.aiHand=state.aiHand.filter((_,i)=>i!==aiIdx);
+
+  AudioEngine.cardPlay();
+
+  // Show cards in arena
+  $('player-play-zone').innerHTML=renderArenaCard(pCard);
+  $('ai-play-zone').innerHTML=renderArenaCard(aCard);
+
+  // Resolve
+  const r=resolveAbility(pCard,aCard);
+  let result;
+  if(r.mode==='total'){
+    result=r.pTotal>r.aTotal?'win':r.pTotal<r.aTotal?'lose':'draw';
+  }else{
+    // ATK vs DEF comparison: player ATK vs AI DEF, AI ATK vs player DEF
+    const pDmg=Math.max(0,r.pAtk-r.aDef);
+    const aDmg=Math.max(0,r.aAtk-r.pDef);
+    result=pDmg>aDmg?'win':pDmg<aDmg?'lose':'draw';
+  }
+
+  setTimeout(()=>{
+    AudioEngine.cardHit();
+    // Show result
+    const arena=$('arena');
+    const overlay=document.createElement('div');
+    overlay.className=`battle-result result-${result}`;
+    overlay.textContent=result==='win'?'WIN!':result==='lose'?'LOSE':'DRAW';
+    arena.appendChild(overlay);
+
+    if(result==='win'){state.playerScore++;AudioEngine.roundWin()}
+    else if(result==='lose'){state.aiScore++;AudioEngine.roundLose()}
+    else{AudioEngine.draw()}
+
+    $('player-score').textContent=state.playerScore;
+    $('ai-score').textContent=state.aiScore;
+
+    spawnParticles(arena,result);
+
+    setTimeout(()=>{
+      overlay.remove();
+      $('player-play-zone').innerHTML='';
+      $('ai-play-zone').innerHTML='';
+      if(state.round>=state.maxRounds){
+        endBattle();
+      }else{
+        state.round++;
+        state.selectedCard=null;
+        state.busy=false;
+        $('action-prompt').textContent='카드를 선택하세요';
+        updateBattleUI();
+      }
+    },1200);
+  },600);
+}
+
+function spawnParticles(container,result){
+  const colors=result==='win'?['#39ff14','#00d4ff']:result==='lose'?['#ff4444','#ff2d78']:['#ffd700','#ffaa00'];
+  for(let i=0;i<8;i++){
+    const p=document.createElement('div');
+    p.className='particle';
+    const sz=Math.random()*8+4;
+    p.style.cssText=`width:${sz}px;height:${sz}px;background:${colors[i%2]};left:${40+Math.random()*20}%;top:${40+Math.random()*20}%;`;
+    container.appendChild(p);
+    setTimeout(()=>p.remove(),1000);
+  }
+}
+
+function endBattle(){
+  const pS=state.playerScore,aS=state.aiScore;
+  const oldRating=state.rating;
+  state.rating=calcElo(state.rating,pS,aS);
+  const diff=state.rating-oldRating;
+
+  if(pS>aS){state.wins++;AudioEngine.win()}
+  else if(pS<aS){state.losses++;AudioEngine.lose()}
+  else{state.draws++;AudioEngine.draw()}
+
+  Storage.save();
+
+  // Show result screen
+  const el=$('result-title');
+  if(pS>aS){el.textContent='VICTORY';el.className='result-title result-victory'}
+  else if(pS<aS){el.textContent='DEFEAT';el.className='result-title result-defeat'}
+  else{el.textContent='DRAW';el.className='result-title result-tie'}
+
+  $('result-score').textContent=`${pS} - ${aS}`;
+  const rd=$('result-rating');
+  rd.textContent=(diff>=0?'+':'')+diff+` (${state.rating})`;
+  rd.className='value rating-change '+(diff>=0?'rating-up':'rating-down');
+  $('result-record').textContent=`${state.wins}W ${state.losses}L ${state.draws}D`;
+  showScreen('result');
+}
+
+// ===== DECK BUILDER =====
+function renderDeckScreen(){
+  const grid=$('deck-grid');
+  grid.innerHTML=ALL_CARDS.map(c=>{
+    const inDeck=state.playerDeck.includes(c.id);
+    return`<div class="deck-card-wrapper">
+      ${renderCard(c)}
+      <button class="deck-toggle ${inDeck?'in-deck':''}" data-id="${c.id}">${inDeck?'✓ IN DECK':'+ ADD'}</button>
+    </div>`;
+  }).join('');
+  grid.querySelectorAll('.deck-toggle').forEach(btn=>{
+    btn.addEventListener('click',()=>toggleDeckCard(parseInt(btn.dataset.id)));
+  });
+  updateDeckCount();
+}
+
+function toggleDeckCard(id){
+  AudioEngine.select();
+  if(state.playerDeck.includes(id)){
+    state.playerDeck=state.playerDeck.filter(x=>x!==id);
+  }else{
+    if(state.playerDeck.length>=10)return;
+    state.playerDeck.push(id);
+  }
+  Storage.save();
+  renderDeckScreen();
+}
+
+function updateDeckCount(){
+  $('deck-count').textContent=`Deck: ${state.playerDeck.length}/10`;
+}
+
+// ===== KEYBOARD =====
+document.addEventListener('keydown',e=>{
+  if(state.screen==='title'){
+    if(e.key==='Enter'||e.key===' ')startBattle();
+    if(e.key==='d')openDeck();
+  }else if(state.screen==='battle'&&!state.busy){
+    const n=parseInt(e.key);
+    if(n>=1&&n<=state.playerHand.length){
+      selectCard(state.playerHand[n-1].id);
+    }
+  }else if(state.screen==='result'){
+    if(e.key==='Enter'||e.key===' ')startBattle();
+    if(e.key==='Escape')goHome();
+  }else if(state.screen==='deck'){
+    if(e.key==='Escape')closeDeck();
+  }
+});
+
+function openDeck(){
+  AudioEngine.select();
+  renderDeckScreen();
+  showScreen('deck');
+}
+function closeDeck(){
+  AudioEngine.select();
+  updateTitle();
+  showScreen('title');
+}
+function goHome(){
+  AudioEngine.select();
+  updateTitle();
+  showScreen('title');
+}
+
+// ===== EVENT BINDINGS =====
+$('btn-battle').addEventListener('click',startBattle);
+$('btn-deck').addEventListener('click',openDeck);
+$('btn-again').addEventListener('click',startBattle);
+$('btn-home').addEventListener('click',goHome);
+$('btn-deck-back').addEventListener('click',closeDeck);
+
+// Prevent double-tap zoom
+document.addEventListener('touchstart',e=>{if(e.touches.length>1)e.preventDefault()},{passive:false});
+
+// ===== SERVICE WORKER =====
+if('serviceWorker'in navigator){
+  navigator.serviceWorker.register('data:text/javascript,'+encodeURIComponent(
+    "self.addEventListener('install',e=>self.skipWaiting());"+
+    "self.addEventListener('activate',e=>self.clients.claim());"+
+    "self.addEventListener('fetch',e=>e.respondWith(fetch(e.request).catch(()=>new Response('Offline'))));"
+  )).catch(()=>{});
+}
+
+// ===== INIT =====
+Storage.load();
+updateTitle();
+</script>
+</body>
+</html>

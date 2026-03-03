@@ -1,0 +1,795 @@
+<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
+<title>Deep Angler</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#071222;touch-action:none;user-select:none;-webkit-user-select:none}
+canvas{display:block;width:100%;height:100%}
+</style></head><body>
+<canvas id="g"></canvas>
+<script>'use strict';
+try{window.Telegram&&Telegram.WebApp&&Telegram.WebApp.expand()}catch(e){}
+const C=document.getElementById('g'),X=C.getContext('2d');
+let W,H,dpr=1,now=0,dt=0,lastT=0;
+function resize(){
+  dpr=Math.min(window.devicePixelRatio||1,2);
+  W=window.innerWidth;H=window.innerHeight;
+  C.width=W*dpr;C.height=H*dpr;
+  X.setTransform(dpr,0,0,dpr,0,0);
+}
+window.addEventListener('resize',resize);resize();
+
+// Audio
+const AC=new(window.AudioContext||window.webkitAudioContext)();
+function resumeAC(){if(AC.state==='suspended')AC.resume()}
+function snd(freq,dur,type,vol){
+  resumeAC();
+  const o=AC.createOscillator(),g=AC.createGain();
+  o.type=type||'sine';o.frequency.value=freq;
+  g.gain.setValueAtTime(vol||0.1,AC.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001,AC.currentTime+dur);
+  o.connect(g);g.connect(AC.destination);
+  o.start();o.stop(AC.currentTime+dur);
+}
+function sndSplash(){snd(120,0.4,'triangle',0.15);snd(80,0.6,'sine',0.08)}
+function sndBite(){snd(880,0.1,'square',0.2);snd(660,0.1,'square',0.15)}
+function sndReel(){snd(200+Math.random()*100,0.05,'triangle',0.05)}
+function sndCatch(){snd(523,0.15,'sine',0.2);setTimeout(()=>snd(659,0.15,'sine',0.2),100);setTimeout(()=>snd(784,0.2,'sine',0.2),200)}
+function sndSnap(){snd(60,0.5,'sawtooth',0.25)}
+function sndCoin(){snd(1200,0.1,'sine',0.12);setTimeout(()=>snd(1600,0.15,'sine',0.12),80)}
+function sndBtn(){snd(400,0.08,'sine',0.08)}
+
+// Colors
+const COL={
+  bg1:'#071222',bg2:'#0a1e38',bg3:'#061430',
+  surface:'#1a3a5c',water:'#0e2040',
+  glow:'#00e5ff',lantern:'#ffb74d',danger:'#ff5252',
+  gold:'#ffd700',ui:'#b0bec5',uiBg:'rgba(8,18,36,0.92)',
+  white:'#e8f0f8',green:'#76ff03',purple:'#e040fb',
+  orange:'#ff6e40',teal:'#00bfa5',pink:'#f48fb1'
+};
+
+// Game data
+const ZONES=[
+  {name:'빛의 바다',depth:200,color:'#1a3a5c',fishCol:['#64b5f6','#4dd0e1','#81c784']},
+  {name:'황혼의 심연',depth:500,color:'#0e2040',fishCol:['#7c4dff','#ea80fc','#ff8a65']},
+  {name:'암흑의 바다',depth:800,color:'#071630',fishCol:['#ff5252','#ffab40','#69f0ae']},
+  {name:'심연의 끝',depth:1200,color:'#030a14',fishCol:['#ffd700','#ff4081','#00e5ff']}
+];
+const FISH=[
+  {n:'정어리',z:0,w:8,pts:10,spd:1.2,str:1,sz:0.6},
+  {n:'고등어',z:0,w:5,pts:25,spd:1,str:2,sz:0.8},
+  {n:'참치',z:0,w:2,pts:60,spd:1.5,str:3,sz:1.1},
+  {n:'황새치',z:1,w:5,pts:120,spd:1.8,str:4,sz:1.2},
+  {n:'문어',z:1,w:4,pts:180,spd:0.7,str:5,sz:1},
+  {n:'곰치',z:1,w:2,pts:250,spd:1.3,str:6,sz:1.1},
+  {n:'아귀',z:2,w:4,pts:350,spd:0.8,str:7,sz:1},
+  {n:'대왕오징어',z:2,w:2,pts:600,spd:0.6,str:9,sz:1.5},
+  {n:'산갈치',z:2,w:1,pts:900,spd:1.1,str:8,sz:1.8},
+  {n:'실러캔스',z:3,w:3,pts:1200,spd:0.5,str:10,sz:1.2},
+  {n:'리바이어던',z:3,w:1,pts:2500,spd:0.9,str:14,sz:2},
+  {n:'크라켄',z:3,w:0.5,pts:5000,spd:0.4,str:18,sz:2.5}
+];
+const UPGRADES=[
+  {n:'낚싯줄 강화',key:'line',base:100,mult:1.8,max:10,desc:'최대 장력 +15%'},
+  {n:'줄 연장',key:'depth',base:150,mult:2,max:8,desc:'최대 수심 +100m'},
+  {n:'랜턴 강화',key:'lamp',base:120,mult:1.7,max:8,desc:'조명 범위 +20%'},
+  {n:'미끼 개선',key:'bait',base:80,mult:1.6,max:10,desc:'입질 빈도 +12%'},
+  {n:'릴 강화',key:'reel',base:100,mult:1.8,max:8,desc:'감기 속도 +10%'}
+];
+
+// State
+let state='MENU',gold=0,totalCaught=0,bestDepth=0,bestFish='';
+let upgrades={line:0,depth:0,lamp:0,bait:0,reel:0};
+let collection={};
+let hookY=0,hookTargetY=0,hookMaxDepth=200,casting=false;
+let lampOn=true,lampBattery=100,lampRadius=60;
+let fishes=[],bubbles=[],particles=[];
+let biteTimer=0,biteActive=false,biteFish=null,biteFlash=0;
+let reelTension=50,reelFish=null,reelProgress=0,reelDir=0,reelPull=0;
+let shopScroll=0,resultFish=null,resultGold=0;
+let menuAnim=0,depthDisplay=0;
+let touchDown=false,touchX=0,touchY=0,touchStartY=0;
+
+function maxDepth(){return 200+(upgrades.depth*120)}
+function maxTension(){return 50+(upgrades.line*15)}
+function reelSpeed(){return 1+(upgrades.reel*0.12)}
+function lampRad(){return 55+(upgrades.lamp*14)}
+function baitMult(){return 1+(upgrades.bait*0.15)}
+function upgCost(i){return Math.floor(UPGRADES[i].base*Math.pow(UPGRADES[i].mult,upgrades[UPGRADES[i].key]))}
+
+// Save/Load
+function save(){
+  try{localStorage.setItem('da_save',JSON.stringify({g:gold,u:upgrades,c:collection,tc:totalCaught,bd:bestDepth,bf:bestFish}))}catch(e){}
+}
+function load(){
+  try{
+    const d=JSON.parse(localStorage.getItem('da_save'));
+    if(d){gold=d.g||0;upgrades=Object.assign({line:0,depth:0,lamp:0,bait:0,reel:0},d.u);collection=d.c||{};totalCaught=d.tc||0;bestDepth=d.bd||0;bestFish=d.bf||''}
+  }catch(e){}
+}
+load();
+
+// Fish spawning
+function spawnFish(){
+  const md=maxDepth(),zone=md>=1000?3:md>=600?2:md>=300?1:0;
+  const pool=FISH.filter(f=>f.z<=zone);
+  const weights=pool.map(f=>f.w);
+  const total=weights.reduce((a,b)=>a+b,0);
+  let r=Math.random()*total,fi=0;
+  for(let i=0;i<weights.length;i++){r-=weights[i];if(r<=0){fi=i;break}}
+  const f=pool[fi];
+  const minD=f.z===0?20:f.z===1?200:f.z===2?500:800;
+  const maxD=Math.min(ZONES[f.z].depth+200,md);
+  const depth=minD+Math.random()*(maxD-minD);
+  const dir=Math.random()>0.5?1:-1;
+  const zc=ZONES[f.z].fishCol;
+  return{
+    ...f,depth,x:dir>0?-30:W+30,dir,
+    col:zc[Math.floor(Math.random()*zc.length)],
+    tailPhase:Math.random()*Math.PI*2,
+    yOff:Math.random()*20-10
+  };
+}
+function updateFishes(){
+  if(fishes.length<8+Math.floor(maxDepth()/200)){
+    if(Math.random()<0.02*baitMult())fishes.push(spawnFish());
+  }
+  for(let i=fishes.length-1;i>=0;i--){
+    const f=fishes[i];
+    f.x+=f.dir*f.spd*(0.3+Math.random()*0.1)*dt*60;
+    f.tailPhase+=dt*4;
+    f.yOff+=Math.sin(now*2+i)*0.1;
+    if((f.dir>0&&f.x>W+50)||(f.dir<0&&f.x<-50))fishes.splice(i,1);
+  }
+}
+
+// Bubbles
+function spawnBubble(x,y){
+  bubbles.push({x:x+Math.random()*10-5,y,r:1+Math.random()*3,spd:20+Math.random()*30,a:0.5+Math.random()*0.3,life:1});
+}
+function updateBubbles(){
+  for(let i=bubbles.length-1;i>=0;i--){
+    const b=bubbles[i];
+    b.y-=b.spd*dt;b.x+=Math.sin(now*3+i)*0.3;b.life-=dt*0.4;b.a=b.life*0.5;
+    if(b.life<=0)bubbles.splice(i,1);
+  }
+}
+
+// Particles
+function addParticle(x,y,col,life){
+  particles.push({x,y,vx:(Math.random()-0.5)*40,vy:(Math.random()-0.5)*40,col,life,maxLife:life,r:2+Math.random()*3});
+}
+function updateParticles(){
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i];
+    p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=20*dt;p.life-=dt;
+    if(p.life<=0)particles.splice(i,1);
+  }
+}
+
+// Depth to screen Y conversion
+function depthToY(d){
+  const waterTop=H*0.15;
+  const waterH=H*0.85;
+  const md=Math.max(maxDepth(),hookY+100);
+  return waterTop+((d/md)*waterH)*0.9;
+}
+
+// Drawing helpers
+function fillText(txt,x,y,col,sz,align){
+  X.fillStyle=col||COL.white;X.font=(sz||14)+'px "Segoe UI",system-ui,sans-serif';
+  X.textAlign=align||'center';X.textBaseline='middle';X.fillText(txt,x,y);
+}
+function roundRect(x,y,w,h,r){
+  X.beginPath();X.moveTo(x+r,y);X.lineTo(x+w-r,y);X.quadraticCurveTo(x+w,y,x+w,y+r);
+  X.lineTo(x+w,y+h-r);X.quadraticCurveTo(x+w,y+h,x+w-r,y+h);X.lineTo(x+r,y+h);
+  X.quadraticCurveTo(x,y+h,x,y+h-r);X.lineTo(x,y+r);X.quadraticCurveTo(x,y,x+r,y);X.closePath();
+}
+function btn(x,y,w,h,text,col,textCol){
+  X.fillStyle=col||'rgba(0,229,255,0.15)';
+  roundRect(x,y,w,h,8);X.fill();
+  X.strokeStyle=COL.glow;X.lineWidth=1.5;roundRect(x,y,w,h,8);X.stroke();
+  fillText(text,x+w/2,y+h/2,textCol||COL.glow,15);
+}
+function inRect(px,py,x,y,w,h){return px>=x&&px<=x+w&&py>=y&&py<=y+h}
+
+// Draw water background
+function drawWater(){
+  const wt=H*0.15;
+  // Sky gradient
+  const skyG=X.createLinearGradient(0,0,0,wt);
+  skyG.addColorStop(0,'#040d1a');skyG.addColorStop(1,'#0a1e38');
+  X.fillStyle=skyG;X.fillRect(0,0,W,wt);
+  // Stars
+  for(let i=0;i<20;i++){
+    const sx=(i*137.5)%W,sy=(i*91.3)%wt;
+    X.fillStyle=`rgba(200,220,255,${0.3+Math.sin(now+i)*0.2})`;
+    X.fillRect(sx,sy,1.5,1.5);
+  }
+  // Moon
+  X.fillStyle='rgba(200,220,240,0.1)';X.beginPath();X.arc(W*0.8,wt*0.35,20,0,Math.PI*2);X.fill();
+  X.fillStyle='rgba(220,235,255,0.15)';X.beginPath();X.arc(W*0.8,wt*0.35,16,0,Math.PI*2);X.fill();
+  // Water
+  const wG=X.createLinearGradient(0,wt,0,H);
+  wG.addColorStop(0,'#0e2a4a');wG.addColorStop(0.3,'#0a1e38');wG.addColorStop(0.6,'#061430');wG.addColorStop(1,'#020810');
+  X.fillStyle=wG;X.fillRect(0,wt,W,H-wt);
+  // Water surface waves
+  X.strokeStyle='rgba(100,181,246,0.3)';X.lineWidth=2;
+  X.beginPath();
+  for(let i=0;i<W;i+=4){
+    const wy=wt+Math.sin(i*0.02+now*2)*3+Math.sin(i*0.01+now*1.5)*2;
+    i===0?X.moveTo(i,wy):X.lineTo(i,wy);
+  }
+  X.stroke();
+}
+
+// Draw boat
+function drawBoat(){
+  const bx=W/2,by=H*0.15-2+Math.sin(now*1.5)*2;
+  // Hull
+  X.fillStyle='#5d4037';
+  X.beginPath();X.moveTo(bx-25,by);X.lineTo(bx+25,by);X.lineTo(bx+18,by+10);X.lineTo(bx-18,by+10);X.closePath();X.fill();
+  // Mast
+  X.strokeStyle='#8d6e63';X.lineWidth=2;
+  X.beginPath();X.moveTo(bx,by);X.lineTo(bx,by-20);X.stroke();
+  // Lantern on mast
+  if(lampOn&&lampBattery>0){
+    const lx=bx,ly=by-18;
+    const g=X.createRadialGradient(lx,ly,2,lx,ly,15);
+    g.addColorStop(0,'rgba(255,183,77,0.8)');g.addColorStop(1,'rgba(255,183,77,0)');
+    X.fillStyle=g;X.fillRect(lx-15,ly-15,30,30);
+    X.fillStyle=COL.lantern;X.beginPath();X.arc(lx,ly,3,0,Math.PI*2);X.fill();
+  }
+  return{x:bx,y:by+10};
+}
+
+// Draw fishing line & hook
+function drawLine(boatPos){
+  if(state!=='CAST'&&state!=='WAIT'&&state!=='BITE')return;
+  const hookScreenY=depthToY(hookY);
+  // Line
+  X.strokeStyle='rgba(180,200,220,0.5)';X.lineWidth=1;
+  X.beginPath();X.moveTo(boatPos.x,boatPos.y);
+  const ctrl=boatPos.y+(hookScreenY-boatPos.y)*0.3;
+  X.quadraticCurveTo(boatPos.x+Math.sin(now)*3,ctrl,boatPos.x+Math.sin(now*0.7)*5,hookScreenY);
+  X.stroke();
+  // Hook
+  const hx=boatPos.x+Math.sin(now*0.7)*5,hy=hookScreenY;
+  X.strokeStyle=COL.ui;X.lineWidth=2;
+  X.beginPath();X.moveTo(hx,hy-5);X.lineTo(hx,hy+5);X.quadraticCurveTo(hx+6,hy+8,hx+4,hy+2);X.stroke();
+  // Lantern glow underwater
+  if(lampOn&&lampBattery>0){
+    const lr=lampRad();
+    const g=X.createRadialGradient(hx,hy,5,hx,hy,lr);
+    g.addColorStop(0,'rgba(255,183,77,0.15)');g.addColorStop(0.5,'rgba(255,183,77,0.05)');g.addColorStop(1,'rgba(255,183,77,0)');
+    X.fillStyle=g;X.beginPath();X.arc(hx,hy,lr,0,Math.PI*2);X.fill();
+  }
+  // Depth indicator
+  fillText(Math.floor(hookY)+'m',W-40,hookScreenY,COL.ui,11,'right');
+}
+
+// Draw a fish
+function drawFish(f,screenY){
+  const sz=f.sz||1;const s=12*sz;
+  const tailW=Math.sin(f.tailPhase)*4*sz;
+  X.save();X.translate(f.x,screenY+f.yOff);
+  if(f.dir<0)X.scale(-1,1);
+  // Body glow
+  const gg=X.createRadialGradient(0,0,s*0.3,0,0,s*1.5);
+  gg.addColorStop(0,f.col+'40');gg.addColorStop(1,f.col+'00');
+  X.fillStyle=gg;X.beginPath();X.arc(0,0,s*1.5,0,Math.PI*2);X.fill();
+  // Body
+  X.fillStyle=f.col;
+  X.beginPath();X.ellipse(0,0,s,s*0.5,0,0,Math.PI*2);X.fill();
+  // Tail
+  X.beginPath();X.moveTo(-s,0);X.lineTo(-s-6*sz,(-4+tailW)*sz);X.lineTo(-s-6*sz,(4+tailW)*sz);X.closePath();X.fill();
+  // Eye
+  X.fillStyle='#fff';X.beginPath();X.arc(s*0.5,-s*0.15,2*sz,0,Math.PI*2);X.fill();
+  X.fillStyle='#111';X.beginPath();X.arc(s*0.5+0.5,-s*0.15,1*sz,0,Math.PI*2);X.fill();
+  // Fin
+  X.fillStyle=f.col+'99';
+  X.beginPath();X.moveTo(0,s*0.3);X.lineTo(-3*sz,s*0.3+4*sz);X.lineTo(3*sz,s*0.3+4*sz);X.closePath();X.fill();
+  X.restore();
+}
+
+// Draw all fish
+function drawFishes(){
+  for(const f of fishes){
+    const sy=depthToY(f.depth);
+    // Only draw if in visible range
+    if(sy>H*0.12&&sy<H+20)drawFish(f,sy);
+  }
+}
+
+// Draw bubbles
+function drawBubbles(){
+  for(const b of bubbles){
+    X.strokeStyle=`rgba(150,200,255,${b.a})`;X.lineWidth=0.8;
+    X.beginPath();X.arc(b.x,b.y,b.r,0,Math.PI*2);X.stroke();
+  }
+}
+
+// Draw particles
+function drawParticles(){
+  for(const p of particles){
+    const a=p.life/p.maxLife;
+    X.fillStyle=p.col+Math.floor(a*255).toString(16).padStart(2,'0');
+    X.beginPath();X.arc(p.x,p.y,p.r*a,0,Math.PI*2);X.fill();
+  }
+}
+
+// UI: Top bar
+function drawHUD(){
+  // Top bar bg
+  X.fillStyle='rgba(6,14,30,0.85)';X.fillRect(0,0,W,44);
+  // Gold
+  X.fillStyle=COL.gold;X.font='bold 16px system-ui,sans-serif';X.textAlign='left';
+  X.fillText('💰 '+gold,12,26);
+  // Depth
+  if(state==='CAST'||state==='WAIT'||state==='BITE'){
+    fillText('🔻 '+Math.floor(hookY)+'m / '+maxDepth()+'m',W/2,26,COL.ui,13);
+  }
+  // Lamp battery
+  if(state==='CAST'||state==='WAIT'||state==='BITE'){
+    const bw=50,bh=12,bx=W-bw-12,by=16;
+    X.strokeStyle=COL.lantern;X.lineWidth=1;roundRect(bx,by,bw,bh,3);X.stroke();
+    const pct=lampBattery/100;
+    X.fillStyle=pct>0.3?COL.lantern:COL.danger;
+    roundRect(bx+2,by+2,Math.max(0,(bw-4)*pct),bh-4,2);X.fill();
+    fillText('🔦',bx-14,by+6,COL.lantern,11);
+  }
+}
+
+// States
+function drawMenu(){
+  drawWater();
+  menuAnim+=dt;
+  // Title
+  const ty=H*0.25+Math.sin(menuAnim*1.2)*8;
+  X.save();
+  X.shadowColor=COL.glow;X.shadowBlur=20;
+  fillText('DEEP ANGLER',W/2,ty,COL.glow,32);
+  X.shadowBlur=0;X.restore();
+  fillText('심해 낚시',W/2,ty+32,COL.ui,16);
+  // Animated fish
+  const fx=W/2+Math.sin(menuAnim)*60;
+  const fy=H*0.48+Math.sin(menuAnim*0.8)*15;
+  X.save();X.globalAlpha=0.6;
+  const demoF={sz:1.5,col:COL.glow,tailPhase:menuAnim*3,dir:Math.sin(menuAnim)>0?1:-1,yOff:0};
+  X.translate(fx,fy);if(demoF.dir<0)X.scale(-1,1);
+  X.fillStyle=COL.glow+'40';X.beginPath();X.arc(0,0,30,0,Math.PI*2);X.fill();
+  X.fillStyle=COL.glow;X.beginPath();X.ellipse(0,0,18,9,0,0,Math.PI*2);X.fill();
+  const tw=Math.sin(demoF.tailPhase)*5;
+  X.beginPath();X.moveTo(-18,0);X.lineTo(-27,-6+tw);X.lineTo(-27,6+tw);X.closePath();X.fill();
+  X.fillStyle='#fff';X.beginPath();X.arc(9,-2,3,0,Math.PI*2);X.fill();
+  X.restore();
+  // Stats
+  if(totalCaught>0){
+    fillText('🐟 총 '+totalCaught+'마리 · 최고 '+bestDepth+'m',W/2,H*0.62,COL.ui,12);
+  }
+  // Buttons
+  const bw=180,bh=48;
+  btn(W/2-bw/2,H*0.7,bw,bh,'🎣  출항하기',undefined,COL.glow);
+  btn(W/2-bw/2,H*0.7+60,bw,bh,'🔧  장비 상점');
+  btn(W/2-bw/2,H*0.7+120,bw,bh,'📖  도감');
+  // Decorative bubbles
+  if(Math.random()<0.1)spawnBubble(Math.random()*W,H);
+  drawBubbles();
+}
+
+function startFishing(){
+  state='CAST';hookY=0;hookTargetY=0;casting=false;
+  lampBattery=100;lampOn=true;biteActive=false;biteTimer=2+Math.random()*3;
+  fishes=[];for(let i=0;i<5;i++)fishes.push(spawnFish());
+  sndSplash();
+}
+
+function updateCast(){
+  if(casting){
+    hookTargetY=Math.min(hookTargetY+80*dt,maxDepth());
+  }
+  hookY+=(hookTargetY-hookY)*3*dt;
+  if(Math.abs(hookY-hookTargetY)<1)hookY=hookTargetY;
+  if(!casting&&hookY>10)state='WAIT';
+  depthDisplay+=(hookY-depthDisplay)*5*dt;
+  // Lamp battery
+  if(lampOn)lampBattery=Math.max(0,lampBattery-3*dt);
+  if(lampBattery<=0)lampOn=false;
+  // Bubbles from hook
+  if(casting&&Math.random()<0.2){
+    const hy=depthToY(hookY);
+    spawnBubble(W/2+Math.sin(now)*5,hy);
+  }
+  updateFishes();updateBubbles();updateParticles();
+}
+
+function updateWait(){
+  hookY+=(hookTargetY-hookY)*3*dt;
+  if(lampOn)lampBattery=Math.max(0,lampBattery-2.5*dt);
+  if(lampBattery<=0)lampOn=false;
+  // Check for bite
+  biteTimer-=dt*baitMult();
+  if(biteTimer<=0&&!biteActive){
+    // Find a fish near the hook
+    const hookScreen=depthToY(hookY);
+    const lampR=lampOn?lampRad():20;
+    let candidates=fishes.filter(f=>{
+      const fy=depthToY(f.depth);
+      const dx=Math.abs(f.x-W/2);
+      const dy=Math.abs(fy-hookScreen);
+      return dx<lampR*1.2&&dy<lampR*0.8;
+    });
+    if(candidates.length===0){
+      // Attract a fish if lamp is on
+      candidates=fishes.filter(f=>Math.abs(f.depth-hookY)<150);
+    }
+    if(candidates.length>0){
+      biteFish=candidates[Math.floor(Math.random()*candidates.length)];
+      biteActive=true;biteFlash=2.5;
+      sndBite();
+    }else{
+      biteTimer=1+Math.random()*2;
+    }
+  }
+  if(biteActive){
+    biteFlash-=dt;
+    if(biteFlash<=0){biteActive=false;biteFish=null;biteTimer=2+Math.random()*4;}
+  }
+  updateFishes();updateBubbles();updateParticles();
+}
+
+function startReel(fish){
+  state='REEL';reelFish=fish;reelTension=50;reelProgress=0;reelDir=0;reelPull=0;
+}
+
+function updateReel(){
+  if(!reelFish)return;
+  const str=reelFish.str;
+  // Fish pulls randomly
+  reelPull+=((Math.random()-0.5)*str*30-reelPull*0.5)*dt;
+  reelTension+=reelPull*dt*2;
+  // Player reeling
+  if(touchDown){
+    reelTension+=15*dt;
+    reelProgress+=reelSpeed()*dt*8;
+    if(Math.random()<0.3)sndReel();
+  }else{
+    reelTension-=10*dt;
+    reelProgress-=0.5*dt;
+  }
+  // Fish struggle bursts
+  if(Math.random()<0.02*str){
+    reelTension+=str*3;
+    reelPull=(Math.random()-0.5)*str*5;
+  }
+  reelTension=Math.max(0,Math.min(100,reelTension));
+  reelProgress=Math.max(0,reelProgress);
+  // Check win/lose
+  if(reelTension>=100){
+    // Line snapped!
+    sndSnap();
+    for(let i=0;i<10;i++)addParticle(W/2,H*0.5,COL.danger,1);
+    state='CAST';hookY=0;hookTargetY=0;
+    biteActive=false;biteTimer=3+Math.random()*3;
+    setTimeout(()=>{state='WAIT'},500);
+    return;
+  }
+  if(reelProgress>=100){
+    // Caught!
+    const pts=reelFish.pts;
+    gold+=pts;totalCaught++;
+    if(hookY>bestDepth)bestDepth=Math.floor(hookY);
+    if(!bestFish||pts>(FISH.find(f=>f.n===bestFish)||{pts:0}).pts)bestFish=reelFish.n;
+    collection[reelFish.n]=(collection[reelFish.n]||0)+1;
+    resultFish=reelFish;resultGold=pts;
+    sndCatch();sndCoin();
+    for(let i=0;i<15;i++)addParticle(W/2,H*0.4,COL.gold,1.5);
+    state='RESULT';save();
+    // Remove from fishes
+    const idx=fishes.indexOf(reelFish);
+    if(idx>=0)fishes.splice(idx,1);
+    return;
+  }
+  updateParticles();
+}
+
+function drawReel(){
+  drawWater();
+  // Darkened overlay
+  X.fillStyle='rgba(4,10,20,0.5)';X.fillRect(0,0,W,H);
+  // Fish name
+  if(reelFish)fillText('🐟 '+reelFish.n+' 걸림!',W/2,H*0.12,COL.glow,20);
+  // Tension meter
+  const mw=W*0.7,mh=24,mx=(W-mw)/2,my=H*0.2;
+  X.fillStyle='rgba(255,255,255,0.1)';roundRect(mx,my,mw,mh,6);X.fill();
+  // Safe zone (30-70%)
+  const safeL=mx+mw*0.25,safeW=mw*0.4;
+  X.fillStyle='rgba(0,229,255,0.15)';X.fillRect(safeL,my+2,safeW,mh-4);
+  // Tension bar
+  const tPct=reelTension/100;
+  const tCol=tPct>0.75?COL.danger:tPct>0.6?COL.lantern:COL.glow;
+  X.fillStyle=tCol;roundRect(mx+2,my+2,Math.max(0,(mw-4)*tPct),mh-4,4);X.fill();
+  // Labels
+  fillText('장력',mx+mw/2,my-10,COL.ui,11);
+  fillText(tPct>0.75?'위험!':tPct<0.2?'느슨!':'적당',mx+mw/2,my+mh+14,tPct>0.75?COL.danger:tPct<0.2?COL.lantern:COL.green,12);
+  // Progress bar
+  const pw=W*0.7,ph=20,px=(W-pw)/2,py=H*0.32;
+  X.fillStyle='rgba(255,255,255,0.08)';roundRect(px,py,pw,ph,5);X.fill();
+  const rPct=Math.min(1,reelProgress/100);
+  X.fillStyle=COL.green;roundRect(px+2,py+2,Math.max(0,(pw-4)*rPct),ph-4,3);X.fill();
+  fillText('진행 '+Math.floor(rPct*100)+'%',px+pw/2,py-10,COL.ui,11);
+  // Fish animation
+  const fishX=W/2+Math.sin(now*3)*30+reelPull*5;
+  const fishY=H*0.55+Math.sin(now*2)*10;
+  if(reelFish){
+    const zc=ZONES[reelFish.z]||ZONES[0];
+    drawFish({...reelFish,x:0,tailPhase:now*5,dir:reelPull>0?1:-1,yOff:0},0);
+    // Draw centered
+    X.save();X.translate(fishX,fishY);
+    const gf=X.createRadialGradient(0,0,5,0,0,40);
+    gf.addColorStop(0,reelFish.col+'60');gf.addColorStop(1,reelFish.col+'00');
+    X.fillStyle=gf;X.beginPath();X.arc(0,0,40,0,Math.PI*2);X.fill();
+    if(reelFish.dir<0)X.scale(-1,1);
+    const s=12*reelFish.sz;
+    X.fillStyle=reelFish.col;X.beginPath();X.ellipse(0,0,s,s*0.5,0,0,Math.PI*2);X.fill();
+    const tw=Math.sin(now*5)*5;
+    X.beginPath();X.moveTo(-s,0);X.lineTo(-s-8*reelFish.sz,(-5+tw)*reelFish.sz);X.lineTo(-s-8*reelFish.sz,(5+tw)*reelFish.sz);X.closePath();X.fill();
+    X.fillStyle='#fff';X.beginPath();X.arc(s*0.4,-s*0.15,2.5*reelFish.sz,0,Math.PI*2);X.fill();
+    X.restore();
+  }
+  // Instruction
+  fillText(touchDown?'🎣 감는 중...':'화면을 눌러 감기!',W/2,H*0.78,COL.lantern,15);
+  // Line visual (rope from top to fish)
+  X.strokeStyle='rgba(180,200,220,0.4)';X.lineWidth=1.5;
+  X.beginPath();X.moveTo(W/2,0);X.quadraticCurveTo(W/2+reelPull*10,fishY*0.5,fishX,fishY-15);X.stroke();
+  drawParticles();
+}
+
+function drawResult(){
+  drawWater();
+  X.fillStyle='rgba(4,10,20,0.7)';X.fillRect(0,0,W,H);
+  if(!resultFish)return;
+  // Fish caught panel
+  const pw=Math.min(280,W*0.85),ph=320,px=(W-pw)/2,py=(H-ph)/2-20;
+  X.fillStyle=COL.uiBg;roundRect(px,py,pw,ph,16);X.fill();
+  X.strokeStyle=COL.glow+'60';X.lineWidth=1;roundRect(px,py,pw,ph,16);X.stroke();
+  fillText('🎉 잡았다!',W/2,py+30,COL.glow,22);
+  // Fish display
+  const fcy=py+100;
+  X.save();X.translate(W/2,fcy);
+  const gf=X.createRadialGradient(0,0,10,0,0,50);
+  gf.addColorStop(0,resultFish.col+'50');gf.addColorStop(1,resultFish.col+'00');
+  X.fillStyle=gf;X.beginPath();X.arc(0,0,50,0,Math.PI*2);X.fill();
+  const s=12*resultFish.sz*1.3;
+  X.fillStyle=resultFish.col;X.beginPath();X.ellipse(0,0,s,s*0.5,0,0,Math.PI*2);X.fill();
+  const tw=Math.sin(now*3)*5;
+  X.beginPath();X.moveTo(-s,0);X.lineTo(-s-8*resultFish.sz,(-5+tw)*resultFish.sz);X.lineTo(-s-8*resultFish.sz,(5+tw)*resultFish.sz);X.closePath();X.fill();
+  X.fillStyle='#fff';X.beginPath();X.arc(s*0.4,-2,3*resultFish.sz,0,Math.PI*2);X.fill();
+  X.restore();
+  fillText(resultFish.n,W/2,fcy+40,COL.white,20);
+  fillText(ZONES[resultFish.z].name+' 서식',W/2,fcy+62,COL.ui,12);
+  fillText('💰 +'+resultGold+'G',W/2,fcy+90,COL.gold,18);
+  fillText('수심 '+Math.floor(hookY)+'m에서 포획',W/2,fcy+115,COL.ui,12);
+  // Buttons
+  const bw=140,bh=42;
+  btn(W/2-bw-8,py+ph-58,bw,bh,'🎣 계속 낚시');
+  btn(W/2+8,py+ph-58,bw,bh,'🏠 돌아가기');
+  drawParticles();
+}
+
+function drawShop(){
+  X.fillStyle=COL.bg1;X.fillRect(0,0,W,H);
+  // Header
+  X.fillStyle=COL.uiBg;X.fillRect(0,0,W,50);
+  fillText('🔧 장비 상점',W/2,25,COL.glow,20);
+  fillText('💰 '+gold+'G',W-60,25,COL.gold,14,'right');
+  // Back button
+  btn(8,8,60,34,'← 뒤로','rgba(255,255,255,0.05)',COL.ui);
+  // Upgrades list
+  const startY=60-shopScroll;
+  for(let i=0;i<UPGRADES.length;i++){
+    const u=UPGRADES[i];const lv=upgrades[u.key];
+    const maxed=lv>=u.max;const cost=upgCost(i);
+    const canBuy=!maxed&&gold>=cost;
+    const iy=startY+i*80;
+    if(iy<40||iy>H)continue;
+    // Card
+    X.fillStyle=canBuy?'rgba(0,229,255,0.06)':'rgba(255,255,255,0.03)';
+    roundRect(12,iy,W-24,70,10);X.fill();
+    X.strokeStyle=canBuy?COL.glow+'40':'rgba(255,255,255,0.08)';X.lineWidth=1;
+    roundRect(12,iy,W-24,70,10);X.stroke();
+    // Info
+    fillText(u.n,20,iy+18,COL.white,15,'left');
+    fillText(u.desc,20,iy+38,COL.ui,11,'left');
+    // Level pips
+    for(let j=0;j<u.max;j++){
+      const px=20+j*14,ppy=iy+54;
+      X.fillStyle=j<lv?COL.glow:'rgba(255,255,255,0.15)';
+      X.fillRect(px,ppy,10,4);
+    }
+    // Buy button
+    if(!maxed){
+      const bx=W-100,bby=iy+15;
+      btn(bx,bby,76,36,cost+'G',canBuy?'rgba(0,229,255,0.15)':'rgba(255,82,82,0.1)',canBuy?COL.glow:COL.danger);
+    }else{
+      fillText('MAX',W-60,iy+35,COL.gold,14);
+    }
+  }
+}
+
+function drawCollection(){
+  X.fillStyle=COL.bg1;X.fillRect(0,0,W,H);
+  X.fillStyle=COL.uiBg;X.fillRect(0,0,W,50);
+  fillText('📖 어류 도감',W/2,25,COL.glow,20);
+  btn(8,8,60,34,'← 뒤로','rgba(255,255,255,0.05)',COL.ui);
+  const startY=60-shopScroll;
+  for(let i=0;i<FISH.length;i++){
+    const f=FISH[i];const caught=collection[f.n]||0;
+    const iy=startY+i*56;
+    if(iy<40||iy>H)continue;
+    X.fillStyle=caught?'rgba(0,229,255,0.04)':'rgba(255,255,255,0.02)';
+    roundRect(12,iy,W-24,48,8);X.fill();
+    if(caught){
+      fillText(f.n,20,iy+16,COL.white,14,'left');
+      fillText(ZONES[f.z].name+' · '+f.pts+'G · '+caught+'마리',20,iy+35,COL.ui,11,'left');
+      // Mini fish
+      X.save();X.translate(W-50,iy+24);
+      const zc=ZONES[f.z].fishCol;
+      X.fillStyle=zc[0];
+      const s=6*f.sz;
+      X.beginPath();X.ellipse(0,0,s,s*0.5,0,0,Math.PI*2);X.fill();
+      X.restore();
+    }else{
+      fillText('???',20,iy+16,'rgba(255,255,255,0.3)',14,'left');
+      fillText(ZONES[f.z].name+' · ???G',20,iy+35,'rgba(255,255,255,0.15)',11,'left');
+    }
+  }
+}
+
+function drawCast(){
+  drawWater();
+  const bp=drawBoat();
+  drawFishes();drawLine(bp);drawBubbles();drawParticles();
+  drawHUD();
+  fillText('화면을 눌러 줄을 내리세요',W/2,H*0.92,COL.ui,13);
+  if(hookY>20)fillText('손을 떼면 멈춤',W/2,H*0.96,COL.ui,11);
+}
+
+function drawWaitState(){
+  drawWater();
+  const bp=drawBoat();
+  drawFishes();drawLine(bp);drawBubbles();drawParticles();
+  drawHUD();
+  // Bite indicator
+  if(biteActive&&biteFlash>0){
+    const flash=Math.sin(now*12)>0;
+    if(flash){
+      X.fillStyle='rgba(255,82,82,0.2)';X.fillRect(0,0,W,H);
+    }
+    fillText('‼️ 입질! 지금 터치!',W/2,H*0.88,COL.danger,20);
+    // Indicator near hook
+    const hy=depthToY(hookY);
+    X.strokeStyle=COL.danger;X.lineWidth=2;
+    X.beginPath();X.arc(W/2,hy,15+Math.sin(now*10)*5,0,Math.PI*2);X.stroke();
+  }else{
+    fillText('입질을 기다리는 중...',W/2,H*0.92,COL.ui,13);
+  }
+  // Back button
+  btn(8,H-48,70,36,'↩ 귀항','rgba(255,255,255,0.05)',COL.ui);
+  // Lamp toggle
+  btn(W-80,H-48,70,36,lampOn?'🔦 ON':'🔦 OFF',lampOn?'rgba(255,183,77,0.15)':'rgba(255,255,255,0.05)',lampOn?COL.lantern:COL.ui);
+  // Depth control buttons
+  btn(W/2-70,H-48,60,36,'▼ 깊게','rgba(0,229,255,0.1)',COL.glow);
+  btn(W/2+10,H-48,60,36,'▲ 올려','rgba(0,229,255,0.1)',COL.glow);
+}
+
+// Input
+function handleTouchStart(x,y){
+  touchDown=true;touchX=x;touchY=y;touchStartY=y;resumeAC();
+  if(state==='MENU'){
+    const bw=180,bh=48,bx=W/2-bw/2;
+    if(inRect(x,y,bx,H*0.7,bw,bh)){sndBtn();startFishing();return;}
+    if(inRect(x,y,bx,H*0.7+60,bw,bh)){sndBtn();state='SHOP';shopScroll=0;return;}
+    if(inRect(x,y,bx,H*0.7+120,bw,bh)){sndBtn();state='COLLECTION';shopScroll=0;return;}
+  }
+  if(state==='CAST'){casting=true;}
+  if(state==='WAIT'){
+    // Check bite
+    if(biteActive&&biteFish){
+      startReel(biteFish);biteActive=false;return;
+    }
+    // Back
+    if(inRect(x,y,8,H-48,70,36)){sndBtn();state='MENU';save();return;}
+    // Lamp toggle
+    if(inRect(x,y,W-80,H-48,70,36)){sndBtn();if(lampBattery>0)lampOn=!lampOn;return;}
+    // Deeper
+    if(inRect(x,y,W/2-70,H-48,60,36)){hookTargetY=Math.min(hookTargetY+50,maxDepth());return;}
+    // Shallower
+    if(inRect(x,y,W/2+10,H-48,60,36)){hookTargetY=Math.max(hookTargetY-50,10);return;}
+  }
+  if(state==='RESULT'){
+    const bw=140,bh=42,ph=320,py=(H-ph)/2-20;
+    if(inRect(x,y,W/2-bw-8,py+ph-58,bw,bh)){sndBtn();state='WAIT';biteTimer=2+Math.random()*3;biteActive=false;return;}
+    if(inRect(x,y,W/2+8,py+ph-58,bw,bh)){sndBtn();state='MENU';return;}
+  }
+  if(state==='SHOP'){
+    // Back
+    if(inRect(x,y,8,8,60,34)){sndBtn();state='MENU';return;}
+    // Buy
+    const startY=60-shopScroll;
+    for(let i=0;i<UPGRADES.length;i++){
+      const u=UPGRADES[i];const lv=upgrades[u.key];
+      if(lv>=u.max)continue;
+      const cost=upgCost(i);
+      const iy=startY+i*80;
+      const bx=W-100,bby=iy+15;
+      if(inRect(x,y,bx,bby,76,36)&&gold>=cost){
+        sndCoin();gold-=cost;upgrades[u.key]++;save();return;
+      }
+    }
+  }
+  if(state==='COLLECTION'){
+    if(inRect(x,y,8,8,60,34)){sndBtn();state='MENU';return;}
+  }
+}
+function handleTouchMove(x,y){
+  touchX=x;touchY=y;
+  if(state==='SHOP'||state==='COLLECTION'){
+    shopScroll+=touchStartY-y;
+    shopScroll=Math.max(0,shopScroll);
+    touchStartY=y;
+  }
+}
+function handleTouchEnd(){
+  touchDown=false;
+  if(state==='CAST'){casting=false;}
+}
+
+C.addEventListener('pointerdown',e=>{e.preventDefault();handleTouchStart(e.clientX,e.clientY)});
+C.addEventListener('pointermove',e=>{e.preventDefault();handleTouchMove(e.clientX,e.clientY)});
+C.addEventListener('pointerup',e=>{e.preventDefault();handleTouchEnd()});
+C.addEventListener('pointercancel',e=>{handleTouchEnd()});
+
+// Keyboard
+const keys={};
+window.addEventListener('keydown',e=>{
+  keys[e.code]=true;resumeAC();
+  if(state==='MENU'&&e.code==='Space'){startFishing()}
+  if(state==='WAIT'&&biteActive&&(e.code==='Space'||e.code==='Enter')){
+    if(biteFish){startReel(biteFish);biteActive=false;}
+  }
+  if(state==='WAIT'&&e.code==='Escape'){state='MENU';save();}
+  if((state==='SHOP'||state==='COLLECTION')&&e.code==='Escape'){state='MENU';}
+});
+window.addEventListener('keyup',e=>{keys[e.code]=false;
+  if(state==='CAST'&&e.code==='Space'){casting=false;}
+});
+
+// Main loop
+function frame(t){
+  now=t/1000;dt=Math.min(0.05,lastT?now-lastT:0.016);lastT=now;
+  X.clearRect(0,0,W,H);
+  // Keyboard continuous input
+  if(state==='CAST'&&keys['Space'])casting=true;
+  if(state==='REEL')touchDown=touchDown||!!keys['Space'];
+  if(state==='WAIT'){
+    if(keys['ArrowDown'])hookTargetY=Math.min(hookTargetY+60*dt,maxDepth());
+    if(keys['ArrowUp'])hookTargetY=Math.max(hookTargetY-60*dt,10);
+  }
+  switch(state){
+    case'MENU':drawMenu();break;
+    case'CAST':updateCast();drawCast();break;
+    case'WAIT':updateWait();drawWaitState();break;
+    case'BITE':break;
+    case'REEL':updateReel();drawReel();break;
+    case'RESULT':drawResult();break;
+    case'SHOP':drawShop();break;
+    case'COLLECTION':drawCollection();break;
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script></body></html>

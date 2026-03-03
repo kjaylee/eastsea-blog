@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<meta name="theme-color" content="#f5f0e8">
+<title>Quantum Fold</title>
+<link rel="manifest" href="manifest.json">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;font-family:'Georgia','Times New Roman',serif;background:#f5f0e8;color:#2c2a5e;touch-action:none;user-select:none}
+
+#game-container{position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center}
+canvas{display:block}
+
+/* Palette: Cream White + Indigo */
+:root{
+  --cream:#f5f0e8;--cream-dark:#e8e0d0;--cream-shadow:#d8d0c0;
+  --indigo:#2c2a5e;--indigo-mid:#4a46a0;--indigo-light:#6b65d4;
+  --accent:#8b83e8;--accent-glow:rgba(139,131,232,.3);
+  --warm:#c4956a;--warm-light:#e8c4a0;
+  --paper:#faf7f0;--fold-line:#9990d0;
+  --success:#5a9e6f;--error:#c45a5a;
+}
+
+.overlay{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(245,240,232,.96);z-index:10;transition:opacity .4s}
+.overlay.hidden{opacity:0;pointer-events:none}
+.overlay h1{font-size:2.4em;color:var(--indigo);margin-bottom:8px;letter-spacing:.02em}
+.overlay h2{font-size:1.2em;color:var(--indigo-mid);font-weight:400;margin-bottom:20px;font-style:italic}
+.overlay p{max-width:360px;text-align:center;font-size:.95em;line-height:1.6;color:#5a577a;margin-bottom:24px}
+.btn{padding:14px 40px;font-size:1.05em;border:2px solid var(--indigo);background:transparent;color:var(--indigo);border-radius:6px;cursor:pointer;transition:all .2s;font-family:inherit;letter-spacing:.03em}
+.btn:hover,.btn:active{background:var(--indigo);color:var(--cream)}
+.btn+.btn{margin-top:10px}
+.btn-small{padding:8px 20px;font-size:.9em}
+
+/* HUD */
+#hud{position:absolute;top:12px;left:12px;right:12px;display:flex;justify-content:space-between;align-items:center;z-index:5;pointer-events:none}
+#hud span{font-size:.85em;color:var(--indigo-mid);background:rgba(245,240,232,.8);padding:4px 12px;border-radius:4px;border:1px solid var(--cream-dark)}
+
+/* Controls */
+#controls{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);display:flex;gap:10px;z-index:5}
+#controls button{width:52px;height:52px;border-radius:8px;border:2px solid var(--indigo-mid);background:var(--cream);color:var(--indigo-mid);font-size:1.3em;cursor:pointer;transition:all .15s;font-family:inherit;display:flex;align-items:center;justify-content:center}
+#controls button:active{background:var(--indigo);color:var(--cream);transform:scale(.95)}
+#controls button:disabled{opacity:.3;pointer-events:none}
+
+/* Target preview */
+#target-preview{position:absolute;top:60px;right:12px;z-index:5;background:var(--paper);border:2px solid var(--cream-dark);border-radius:8px;padding:8px}
+#target-preview p{font-size:.7em;text-align:center;color:var(--indigo-mid);margin-bottom:4px}
+#target-canvas{border:1px solid var(--cream-shadow);border-radius:4px}
+
+/* Level complete */
+#level-complete{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--paper);border:2px solid var(--indigo-mid);border-radius:12px;padding:28px 36px;text-align:center;z-index:15;box-shadow:0 8px 32px rgba(44,42,94,.15)}
+#level-complete.hidden{display:none}
+#level-complete h2{color:var(--indigo);margin-bottom:8px}
+#level-complete p{color:var(--indigo-mid);margin-bottom:16px}
+#level-complete .stars{font-size:1.8em;margin-bottom:12px}
+
+/* Fold direction indicators */
+.fold-hint{position:absolute;z-index:6;pointer-events:none;font-size:.7em;color:var(--fold-line);background:rgba(250,247,240,.8);padding:2px 6px;border-radius:3px}
+</style>
+</head>
+<body>
+<div id="game-container">
+  <canvas id="gc"></canvas>
+  
+  <div id="hud">
+    <span id="hud-level">Fold 1</span>
+    <span id="hud-folds">Folds: 0/3</span>
+  </div>
+  
+  <!-- Target shape preview -->
+  <div id="target-preview">
+    <p>Target</p>
+    <canvas id="target-canvas" width="80" height="80"></canvas>
+  </div>
+  
+  <!-- Controls -->
+  <div id="controls">
+    <button id="btn-fold-up" title="Fold Up">↑</button>
+    <button id="btn-fold-down" title="Fold Down">↓</button>
+    <button id="btn-fold-left" title="Fold Left">←</button>
+    <button id="btn-fold-right" title="Fold Right">→</button>
+    <button id="btn-undo" title="Undo" class="btn-small">↩</button>
+    <button id="btn-reset" title="Reset" class="btn-small">⟳</button>
+  </div>
+  
+  <!-- Title -->
+  <div class="overlay" id="title-screen">
+    <h1>Quantum Fold</h1>
+    <h2>Paper Folding Puzzles</h2>
+    <p>Fold the paper shape to match the target silhouette. Each fold halves the paper along the chosen axis. Think carefully — folds are limited.</p>
+    <button class="btn" id="btn-start">Start Folding</button>
+  </div>
+  
+  <!-- Level Complete -->
+  <div id="level-complete" class="hidden">
+    <div class="stars" id="lc-stars">★★★</div>
+    <h2>Perfect Fold!</h2>
+    <p id="lc-msg">Shape matched!</p>
+    <button class="btn" id="btn-next">Next Puzzle</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+(function(){
+
+/* === Telegram === */
+if(window.Telegram&&Telegram.WebApp){try{Telegram.WebApp.expand();Telegram.WebApp.ready()}catch(e){}}
+
+/* === Audio === */
+const AudioCtx=window.AudioContext||window.webkitAudioContext;
+let actx=null;
+function initAudio(){if(!actx)actx=new AudioCtx();if(actx.state==='suspended')actx.resume()}
+
+function playFold(){
+  initAudio();
+  const o=actx.createOscillator(),g=actx.createGain();
+  o.type='sine';o.frequency.value=600;
+  o.frequency.exponentialRampToValueAtTime(300,actx.currentTime+.15);
+  g.gain.setValueAtTime(.15,actx.currentTime);
+  g.gain.exponentialRampToValueAtTime(.001,actx.currentTime+.2);
+  o.connect(g);g.connect(actx.destination);
+  o.start();o.stop(actx.currentTime+.2);
+}
+
+function playUnfold(){
+  initAudio();
+  const o=actx.createOscillator(),g=actx.createGain();
+  o.type='triangle';o.frequency.value=300;
+  o.frequency.exponentialRampToValueAtTime(500,actx.currentTime+.12);
+  g.gain.setValueAtTime(.1,actx.currentTime);
+  g.gain.exponentialRampToValueAtTime(.001,actx.currentTime+.15);
+  o.connect(g);g.connect(actx.destination);
+  o.start();o.stop(actx.currentTime+.15);
+}
+
+function playWin(){
+  initAudio();
+  [523.25,659.25,783.99].forEach((f,i)=>{
+    const o=actx.createOscillator(),g=actx.createGain();
+    o.type='sine';o.frequency.value=f;
+    g.gain.setValueAtTime(.15,actx.currentTime+i*.12);
+    g.gain.exponentialRampToValueAtTime(.001,actx.currentTime+i*.12+.3);
+    o.connect(g);g.connect(actx.destination);
+    o.start(actx.currentTime+i*.12);o.stop(actx.currentTime+i*.12+.3);
+  });
+}
+
+function playError(){
+  initAudio();
+  const o=actx.createOscillator(),g=actx.createGain();
+  o.type='square';o.frequency.value=200;
+  g.gain.setValueAtTime(.08,actx.currentTime);
+  g.gain.exponentialRampToValueAtTime(.001,actx.currentTime+.15);
+  o.connect(g);g.connect(actx.destination);
+  o.start();o.stop(actx.currentTime+.15);
+}
+
+/* === Canvas === */
+const canvas=document.getElementById('gc');
+const ctx=canvas.getContext('2d');
+const tCanvas=document.getElementById('target-canvas');
+const tCtx=tCanvas.getContext('2d');
+let W,H;
+
+function resize(){
+  W=window.innerWidth;H=window.innerHeight;
+  canvas.width=W;canvas.height=H;
+}
+window.addEventListener('resize',()=>{resize();renderAll()});
+resize();
+
+/* === Grid-Based Paper System === */
+const GRID=12; // grid resolution
+let paperGrid=[]; // current paper state: grid[y][x] = layer count (0=empty)
+let targetGrid=[];
+let history=[];
+let level=0;
+let foldsMade=0;
+let maxFolds=3;
+let state='title';
+let animating=false;
+let animPhase=0; // 0..1 for fold animation
+let animDir=''; // up/down/left/right
+let animCallback=null;
+
+/* === Level Definitions === */
+// Each level: initial shape (as grid), target shape (derived by applying specific folds), maxFolds
+// We generate levels procedurally: start with a shape, apply N folds to get target
+
+function createShape(type,size){
+  const g=Array.from({length:GRID},()=>Array(GRID).fill(0));
+  const cx=Math.floor(GRID/2),cy=Math.floor(GRID/2);
+  const s=Math.min(size,GRID/2-1);
+  
+  switch(type){
+    case'rect':
+      for(let y=cy-s;y<=cy+s;y++)
+        for(let x=cx-s-1;x<=cx+s+1;x++)
+          if(y>=0&&y<GRID&&x>=0&&x<GRID)g[y][x]=1;
+      break;
+    case'cross':
+      for(let y=cy-s;y<=cy+s;y++)
+        for(let x=cx-1;x<=cx+1;x++)
+          if(y>=0&&y<GRID&&x>=0&&x<GRID)g[y][x]=1;
+      for(let y=cy-1;y<=cy+1;y++)
+        for(let x=cx-s;x<=cx+s;x++)
+          if(y>=0&&y<GRID&&x>=0&&x<GRID)g[y][x]=1;
+      break;
+    case'L':
+      for(let y=cy-s;y<=cy+s;y++)
+        for(let x=cx-s;x<=cx-s+2;x++)
+          if(y>=0&&y<GRID&&x>=0&&x<GRID)g[y][x]=1;
+      for(let x=cx-s;x<=cx+s;x++)
+        if(cy+s<GRID&&x>=0&&x<GRID)g[cy+s][x]=1;
+      break;
+    case'T':
+      for(let x=cx-s;x<=cx+s;x++)
+        if(cy-s>=0&&x>=0&&x<GRID)g[cy-s][x]=1;
+      for(let y=cy-s;y<=cy+s;y++)
+        if(cx>=0&&cx<GRID&&y>=0&&y<GRID)g[y][cx]=1;
+      break;
+    case'diamond':
+      for(let y=0;y<GRID;y++)
+        for(let x=0;x<GRID;x++){
+          if(Math.abs(x-cx)+Math.abs(y-cy)<=s)g[y][x]=1;
+        }
+      break;
+    case'stairs':
+      for(let i=0;i<=s;i++){
+        for(let y=cy-s+i;y<=cy+s;y++)
+          if(y>=0&&y<GRID&&cx-s+i*2>=0&&cx-s+i*2<GRID)
+            g[y][cx-s+i*2]=1;
+        if(cx-s+i*2+1<GRID)
+          for(let y=cy-s+i;y<=cy+s;y++)
+            if(y>=0&&y<GRID)g[y][cx-s+i*2+1]=1;
+      }
+      break;
+    default: // square
+      for(let y=cy-s;y<=cy+s;y++)
+        for(let x=cx-s;x<=cx+s;x++)
+          if(y>=0&&y<GRID&&x>=0&&x<GRID)g[y][x]=1;
+  }
+  return g;
+}
+
+function cloneGrid(g){return g.map(r=>[...r])}
+
+function foldGrid(g,dir){
+  const ng=Array.from({length:GRID},()=>Array(GRID).fill(0));
+  
+  switch(dir){
+    case'up': // fold top half down
+      for(let y=0;y<GRID;y++)
+        for(let x=0;x<GRID;x++)
+          if(g[y][x]>0){
+            if(y<Math.floor(GRID/2)){
+              // This part folds down: mirror y around center
+              const my=GRID-1-y;
+              if(my<GRID)ng[my][x]+=g[y][x];
+            }else{
+              ng[y][x]+=g[y][x];
+            }
+          }
+      break;
+    case'down': // fold bottom half up
+      for(let y=0;y<GRID;y++)
+        for(let x=0;x<GRID;x++)
+          if(g[y][x]>0){
+            if(y>=Math.ceil(GRID/2)){
+              const my=GRID-1-y;
+              if(my>=0)ng[my][x]+=g[y][x];
+            }else{
+              ng[y][x]+=g[y][x];
+            }
+          }
+      break;
+    case'left': // fold left half right
+      for(let y=0;y<GRID;y++)
+        for(let x=0;x<GRID;x++)
+          if(g[y][x]>0){
+            if(x<Math.floor(GRID/2)){
+              const mx=GRID-1-x;
+              if(mx<GRID)ng[y][mx]+=g[y][x];
+            }else{
+              ng[y][x]+=g[y][x];
+            }
+          }
+      break;
+    case'right': // fold right half left
+      for(let y=0;y<GRID;y++)
+        for(let x=0;x<GRID;x++)
+          if(g[y][x]>0){
+            if(x>=Math.ceil(GRID/2)){
+              const mx=GRID-1-x;
+              if(mx>=0)ng[y][mx]+=g[y][x];
+            }else{
+              ng[y][x]+=g[y][x];
+            }
+          }
+      break;
+  }
+  return ng;
+}
+
+function gridsMatch(a,b){
+  for(let y=0;y<GRID;y++)
+    for(let x=0;x<GRID;x++)
+      if((a[y][x]>0)!==(b[y][x]>0))return false;
+  return true;
+}
+
+function gridArea(g){
+  let c=0;
+  for(let y=0;y<GRID;y++)
+    for(let x=0;x<GRID;x++)
+      if(g[y][x]>0)c++;
+  return c;
+}
+
+/* === Level Generation === */
+const SHAPES=['rect','cross','L','T','diamond','square','stairs'];
+const DIRS=['up','down','left','right'];
+
+function generateLevel(n){
+  const diff=Math.min(n,15);
+  const shapeIdx=n%SHAPES.length;
+  const size=Math.min(2+Math.floor(diff/3),4);
+  const nFolds=Math.min(1+Math.floor(diff/2),4);
+  
+  let startGrid=createShape(SHAPES[shapeIdx],size);
+  
+  // Apply random folds to create target
+  const foldSeq=[];
+  let current=cloneGrid(startGrid);
+  for(let i=0;i<nFolds;i++){
+    const d=DIRS[(n*3+i*7)%4];
+    const next=foldGrid(current,d);
+    if(gridArea(next)>0){
+      foldSeq.push(d);
+      current=next;
+    }
+  }
+  
+  maxFolds=foldSeq.length+1; // Give 1 extra fold as buffer
+  return{start:startGrid,target:current,solution:foldSeq};
+}
+
+/* === State Management === */
+let currentLevel=null;
+
+function initLevel(){
+  resize();
+  currentLevel=generateLevel(level);
+  paperGrid=cloneGrid(currentLevel.start);
+  targetGrid=currentLevel.target;
+  history=[];
+  foldsMade=0;
+  animating=false;
+  updateHUD();
+  renderTarget();
+  renderAll();
+}
+
+function updateHUD(){
+  document.getElementById('hud-level').textContent='Fold '+(level+1);
+  document.getElementById('hud-folds').textContent='Folds: '+foldsMade+'/'+maxFolds;
+}
+
+/* === Save/Load === */
+function saveProgress(){
+  try{localStorage.setItem('quantum-fold-save',JSON.stringify({level}))}catch(e){}
+}
+function loadProgress(){
+  try{const s=localStorage.getItem('quantum-fold-save');if(s){const d=JSON.parse(s);level=d.level||0}}catch(e){}
+}
+
+/* === Rendering === */
+function getCellSize(){
+  const area=Math.min(W-40,H-180);
+  return Math.floor(area/GRID);
+}
+
+function getGridOffset(){
+  const cs=getCellSize();
+  return{
+    x:Math.floor((W-GRID*cs)/2),
+    y:Math.floor((H-GRID*cs)/2)-20
+  };
+}
+
+function drawGrid(context,grid,ox,oy,cs,showLayers){
+  // Background paper texture
+  context.fillStyle='#faf7f0';
+  context.fillRect(ox-2,oy-2,GRID*cs+4,GRID*cs+4);
+  context.strokeStyle='#e0d8c8';
+  context.lineWidth=2;
+  context.strokeRect(ox-2,oy-2,GRID*cs+4,GRID*cs+4);
+  
+  // Grid lines
+  context.strokeStyle='rgba(44,42,94,.06)';
+  context.lineWidth=.5;
+  for(let i=0;i<=GRID;i++){
+    context.beginPath();
+    context.moveTo(ox+i*cs,oy);context.lineTo(ox+i*cs,oy+GRID*cs);
+    context.stroke();
+    context.beginPath();
+    context.moveTo(ox,oy+i*cs);context.lineTo(ox+GRID*cs,oy+i*cs);
+    context.stroke();
+  }
+  
+  // Cells
+  for(let y=0;y<GRID;y++){
+    for(let x=0;x<GRID;x++){
+      if(grid[y][x]>0){
+        const layers=grid[y][x];
+        // Color intensity by layer count
+        const intensity=Math.min(layers/4,1);
+        const r=Math.round(44+intensity*30);
+        const g=Math.round(42+intensity*24);
+        const b=Math.round(94+intensity*60);
+        context.fillStyle=`rgb(${r},${g},${b})`;
+        context.fillRect(ox+x*cs+1,oy+y*cs+1,cs-2,cs-2);
+        
+        // Paper fold texture for multi-layer
+        if(showLayers&&layers>1){
+          context.fillStyle=`rgba(139,131,232,${.1*layers})`;
+          context.fillRect(ox+x*cs+1,oy+y*cs+1,cs-2,cs-2);
+          // Layer count indicator
+          if(cs>15){
+            context.fillStyle='rgba(245,240,232,.7)';
+            context.font=`${Math.max(8,cs*.35)}px Georgia`;
+            context.textAlign='center';
+            context.textBaseline='middle';
+            context.fillText(layers,ox+x*cs+cs/2,oy+y*cs+cs/2);
+          }
+        }
+        
+        // Subtle edge shadows
+        context.fillStyle='rgba(44,42,94,.08)';
+        context.fillRect(ox+x*cs+1,oy+y*cs+cs-3,cs-2,2);
+        context.fillRect(ox+x*cs+cs-3,oy+y*cs+1,2,cs-2);
+      }
+    }
+  }
+  
+  // Fold center lines
+  context.setLineDash([4,4]);
+  context.strokeStyle='rgba(153,144,208,.3)';
+  context.lineWidth=1;
+  // Horizontal center
+  context.beginPath();
+  context.moveTo(ox,oy+Math.floor(GRID/2)*cs);
+  context.lineTo(ox+GRID*cs,oy+Math.floor(GRID/2)*cs);
+  context.stroke();
+  // Vertical center
+  context.beginPath();
+  context.moveTo(ox+Math.floor(GRID/2)*cs,oy);
+  context.lineTo(ox+Math.floor(GRID/2)*cs,oy+GRID*cs);
+  context.stroke();
+  context.setLineDash([]);
+}
+
+function renderTarget(){
+  const tcs=Math.floor(80/GRID);
+  tCanvas.width=GRID*tcs;tCanvas.height=GRID*tcs;
+  
+  tCtx.fillStyle='#faf7f0';
+  tCtx.fillRect(0,0,tCanvas.width,tCanvas.height);
+  
+  for(let y=0;y<GRID;y++){
+    for(let x=0;x<GRID;x++){
+      if(targetGrid[y][x]>0){
+        tCtx.fillStyle='#4a46a0';
+        tCtx.fillRect(x*tcs,y*tcs,tcs,tcs);
+      }
+    }
+  }
+}
+
+function renderAll(){
+  ctx.fillStyle='#f5f0e8';
+  ctx.fillRect(0,0,W,H);
+  
+  if(state==='title')return;
+  
+  // Decorative pattern (subtle paper grain)
+  ctx.fillStyle='rgba(44,42,94,.015)';
+  for(let i=0;i<W;i+=20){
+    for(let j=0;j<H;j+=20){
+      if((i+j)%40===0)ctx.fillRect(i,j,1,1);
+    }
+  }
+  
+  const cs=getCellSize();
+  const{x:ox,y:oy}=getGridOffset();
+  
+  if(animating){
+    renderFoldAnimation(ox,oy,cs);
+  }else{
+    drawGrid(ctx,paperGrid,ox,oy,cs,true);
+    
+    // Match highlight
+    if(gridsMatch(paperGrid,targetGrid)){
+      ctx.strokeStyle='rgba(90,158,111,.6)';
+      ctx.lineWidth=4;
+      ctx.strokeRect(ox-6,oy-6,GRID*cs+12,GRID*cs+12);
+    }
+  }
+}
+
+/* === Fold Animation === */
+let animStartGrid=null;
+let animEndGrid=null;
+
+function renderFoldAnimation(ox,oy,cs){
+  // Draw the base (non-folding half)
+  drawGrid(ctx,animEndGrid,ox,oy,cs,true);
+  
+  // Overlay the folding part with transform
+  const t=easeInOutCubic(animPhase);
+  ctx.save();
+  
+  const centerX=ox+GRID*cs/2;
+  const centerY=oy+GRID*cs/2;
+  
+  switch(animDir){
+    case'up':
+      ctx.translate(0,centerY);
+      ctx.scale(1,1-t);
+      ctx.translate(0,-centerY);
+      break;
+    case'down':
+      ctx.translate(0,centerY);
+      ctx.scale(1,1-t);
+      ctx.translate(0,-centerY);
+      break;
+    case'left':
+      ctx.translate(centerX,0);
+      ctx.scale(1-t,1);
+      ctx.translate(-centerX,0);
+      break;
+    case'right':
+      ctx.translate(centerX,0);
+      ctx.scale(1-t,1);
+      ctx.translate(-centerX,0);
+      break;
+  }
+  
+  // Draw only the folding half
+  const foldHalf=Array.from({length:GRID},()=>Array(GRID).fill(0));
+  for(let y=0;y<GRID;y++){
+    for(let x=0;x<GRID;x++){
+      if(animStartGrid[y][x]>0&&animEndGrid[y][x]===0){
+        foldHalf[y][x]=animStartGrid[y][x];
+      }
+    }
+  }
+  
+  ctx.globalAlpha=1-t*.5;
+  for(let y=0;y<GRID;y++){
+    for(let x=0;x<GRID;x++){
+      if(foldHalf[y][x]>0){
+        ctx.fillStyle='rgba(74,70,160,.6)';
+        ctx.fillRect(ox+x*cs+1,oy+y*cs+1,cs-2,cs-2);
+      }
+    }
+  }
+  ctx.globalAlpha=1;
+  ctx.restore();
+}
+
+function easeInOutCubic(t){return t<.5?4*t*t*t:(t-1)*(2*t-2)*(2*t-2)+1}
+
+function animateFold(dir,callback){
+  animating=true;
+  animDir=dir;
+  animStartGrid=cloneGrid(paperGrid);
+  animEndGrid=foldGrid(paperGrid,dir);
+  animPhase=0;
+  
+  const start=performance.now();
+  const duration=300;
+  
+  function step(time){
+    animPhase=Math.min(1,(time-start)/duration);
+    renderAll();
+    if(animPhase<1){
+      requestAnimationFrame(step);
+    }else{
+      animating=false;
+      paperGrid=animEndGrid;
+      renderAll();
+      if(callback)callback();
+    }
+  }
+  requestAnimationFrame(step);
+}
+
+/* === Fold Action === */
+function doFold(dir){
+  if(state!=='playing'||animating||foldsMade>=maxFolds)return;
+  
+  const newGrid=foldGrid(paperGrid,dir);
+  if(gridArea(newGrid)===0){
+    playError();
+    return;
+  }
+  
+  history.push(cloneGrid(paperGrid));
+  playFold();
+  foldsMade++;
+  updateHUD();
+  
+  animateFold(dir,()=>{
+    checkWin();
+  });
+}
+
+function undoFold(){
+  if(state!=='playing'||animating||history.length===0)return;
+  paperGrid=history.pop();
+  foldsMade--;
+  playUnfold();
+  updateHUD();
+  renderAll();
+}
+
+function resetPuzzle(){
+  if(state!=='playing'||animating)return;
+  paperGrid=cloneGrid(currentLevel.start);
+  history=[];
+  foldsMade=0;
+  updateHUD();
+  renderAll();
+}
+
+function checkWin(){
+  if(gridsMatch(paperGrid,targetGrid)){
+    state='levelcomplete';
+    playWin();
+    level++;
+    saveProgress();
+    
+    const stars=foldsMade<=currentLevel.solution.length?'★★★':
+                foldsMade<=currentLevel.solution.length+1?'★★☆':'★☆☆';
+    document.getElementById('lc-stars').textContent=stars;
+    document.getElementById('lc-msg').textContent=`Completed in ${foldsMade} folds!`;
+    document.getElementById('level-complete').classList.remove('hidden');
+  }
+}
+
+/* === Input === */
+document.getElementById('btn-fold-up').addEventListener('click',()=>{initAudio();doFold('up')});
+document.getElementById('btn-fold-down').addEventListener('click',()=>{initAudio();doFold('down')});
+document.getElementById('btn-fold-left').addEventListener('click',()=>{initAudio();doFold('left')});
+document.getElementById('btn-fold-right').addEventListener('click',()=>{initAudio();doFold('right')});
+document.getElementById('btn-undo').addEventListener('click',()=>{initAudio();undoFold()});
+document.getElementById('btn-reset').addEventListener('click',()=>{initAudio();resetPuzzle()});
+
+// Keyboard
+document.addEventListener('keydown',e=>{
+  if(state!=='playing')return;
+  switch(e.key){
+    case'ArrowUp':case'w':case'W':doFold('up');e.preventDefault();break;
+    case'ArrowDown':case's':case'S':doFold('down');e.preventDefault();break;
+    case'ArrowLeft':case'a':case'A':doFold('left');e.preventDefault();break;
+    case'ArrowRight':case'd':case'D':doFold('right');e.preventDefault();break;
+    case'z':case'Z':undoFold();e.preventDefault();break;
+    case'r':case'R':resetPuzzle();e.preventDefault();break;
+  }
+});
+
+// Swipe on canvas
+let touchStart=null;
+canvas.addEventListener('touchstart',e=>{
+  initAudio();
+  touchStart={x:e.touches[0].clientX,y:e.touches[0].clientY};
+  e.preventDefault();
+},{passive:false});
+
+canvas.addEventListener('touchend',e=>{
+  if(!touchStart||state!=='playing')return;
+  const t=e.changedTouches[0];
+  const dx=t.clientX-touchStart.x;
+  const dy=t.clientY-touchStart.y;
+  const dist=Math.hypot(dx,dy);
+  
+  if(dist>40){
+    if(Math.abs(dx)>Math.abs(dy)){
+      doFold(dx>0?'right':'left');
+    }else{
+      doFold(dy>0?'down':'up');
+    }
+  }
+  touchStart=null;
+  e.preventDefault();
+},{passive:false});
+
+/* === UI === */
+document.getElementById('btn-start').addEventListener('click',()=>{
+  initAudio();
+  loadProgress();
+  initLevel();
+  state='playing';
+  document.getElementById('title-screen').classList.add('hidden');
+});
+
+document.getElementById('btn-next').addEventListener('click',()=>{
+  document.getElementById('level-complete').classList.add('hidden');
+  initLevel();
+  state='playing';
+});
+
+/* === Main Loop === */
+function mainLoop(){
+  if(state==='playing'&&!animating){
+    // Subtle idle animation - paper breathing
+  }
+  requestAnimationFrame(mainLoop);
+}
+requestAnimationFrame(mainLoop);
+renderAll();
+
+})();
+</script>
+</body>
+</html>

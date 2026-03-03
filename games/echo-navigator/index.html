@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<meta name="theme-color" content="#0d4a3a">
+<title>Echo Navigator</title>
+<link rel="manifest" href="manifest.json">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;font-family:'Segoe UI',system-ui,sans-serif;background:#0d4a3a;color:#f0e6d3;touch-action:none;user-select:none}
+#game-container{position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center}
+canvas{display:block;image-rendering:pixelated}
+
+/* UI overlays */
+.overlay{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(10,58,46,0.92);z-index:10;transition:opacity .4s}
+.overlay.hidden{opacity:0;pointer-events:none}
+.overlay h1{font-size:2.2em;color:#e8735a;margin-bottom:12px;text-shadow:0 2px 8px rgba(232,115,90,.4)}
+.overlay h2{font-size:1.3em;color:#7ecdb8;margin-bottom:20px;font-weight:400}
+.overlay p{max-width:340px;text-align:center;font-size:.95em;line-height:1.5;color:#b8d8cc;margin-bottom:24px}
+.btn{padding:14px 36px;font-size:1.1em;border:2px solid #e8735a;background:transparent;color:#e8735a;border-radius:8px;cursor:pointer;transition:all .2s;font-family:inherit}
+.btn:hover,.btn:active{background:#e8735a;color:#0d4a3a}
+.btn+.btn{margin-top:10px}
+
+/* HUD */
+#hud{position:absolute;top:12px;left:12px;right:12px;display:flex;justify-content:space-between;align-items:center;z-index:5;pointer-events:none}
+#hud span{font-size:.85em;color:#7ecdb8;background:rgba(10,58,46,.7);padding:4px 10px;border-radius:4px}
+
+/* Pulse indicator */
+#pulse-indicator{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);z-index:5}
+#pulse-btn{width:70px;height:70px;border-radius:50%;border:3px solid #e8735a;background:rgba(232,115,90,.15);color:#e8735a;font-size:.75em;font-weight:700;cursor:pointer;transition:all .15s;font-family:inherit}
+#pulse-btn:active{transform:scale(.9);background:rgba(232,115,90,.4)}
+#pulse-btn.cooldown{opacity:.4;pointer-events:none}
+
+/* Level complete */
+#level-complete{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(10,58,46,.95);border:2px solid #e8735a;border-radius:12px;padding:28px 36px;text-align:center;z-index:15}
+#level-complete.hidden{display:none}
+#level-complete h2{color:#e8735a;margin-bottom:8px}
+#level-complete p{color:#7ecdb8;margin-bottom:16px}
+</style>
+</head>
+<body>
+<div id="game-container">
+  <canvas id="gc"></canvas>
+  
+  <!-- HUD -->
+  <div id="hud">
+    <span id="hud-level">Level 1</span>
+    <span id="hud-pulses">Pulses: 5</span>
+  </div>
+  
+  <!-- Pulse Button -->
+  <div id="pulse-indicator">
+    <button id="pulse-btn">PULSE</button>
+  </div>
+  
+  <!-- Title Screen -->
+  <div class="overlay" id="title-screen">
+    <h1>Echo Navigator</h1>
+    <h2>Navigate by Sound</h2>
+    <p>You're lost in darkness. Send sonar pulses to reveal terrain. Find the exit before your echoes run out.</p>
+    <button class="btn" id="btn-start">Begin Journey</button>
+  </div>
+  
+  <!-- Level Complete -->
+  <div id="level-complete" class="hidden">
+    <h2>Echo Found</h2>
+    <p id="lc-msg">Level cleared!</p>
+    <button class="btn" id="btn-next">Next Chamber</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+(function(){
+
+/* === Telegram WebApp === */
+if(window.Telegram&&Telegram.WebApp){try{Telegram.WebApp.expand();Telegram.WebApp.ready()}catch(e){}}
+
+/* === Audio Engine === */
+const AudioCtx=window.AudioContext||window.webkitAudioContext;
+let actx=null;
+function initAudio(){if(!actx)actx=new AudioCtx();if(actx.state==='suspended')actx.resume()}
+
+function playPulse(){
+  initAudio();
+  const o=actx.createOscillator(),g=actx.createGain();
+  o.type='sine';o.frequency.setValueAtTime(800,actx.currentTime);
+  o.frequency.exponentialRampToValueAtTime(200,actx.currentTime+.6);
+  g.gain.setValueAtTime(.3,actx.currentTime);
+  g.gain.exponentialRampToValueAtTime(.001,actx.currentTime+.6);
+  o.connect(g);g.connect(actx.destination);
+  o.start();o.stop(actx.currentTime+.6);
+}
+
+function playEchoHit(dist){
+  initAudio();
+  const delay=Math.min(dist/300,.5);
+  const o=actx.createOscillator(),g=actx.createGain();
+  o.type='triangle';o.frequency.value=400+Math.random()*200;
+  g.gain.setValueAtTime(0,actx.currentTime+delay);
+  g.gain.linearRampToValueAtTime(.15,actx.currentTime+delay+.05);
+  g.gain.exponentialRampToValueAtTime(.001,actx.currentTime+delay+.3);
+  o.connect(g);g.connect(actx.destination);
+  o.start(actx.currentTime+delay);o.stop(actx.currentTime+delay+.3);
+}
+
+function playExitSound(){
+  initAudio();
+  [0,.15,.3].forEach((d,i)=>{
+    const o=actx.createOscillator(),g=actx.createGain();
+    o.type='sine';o.frequency.value=440*(1+i*.25);
+    g.gain.setValueAtTime(.2,actx.currentTime+d);
+    g.gain.exponentialRampToValueAtTime(.001,actx.currentTime+d+.3);
+    o.connect(g);g.connect(actx.destination);
+    o.start(actx.currentTime+d);o.stop(actx.currentTime+d+.3);
+  });
+}
+
+function playStep(){
+  initAudio();
+  const o=actx.createOscillator(),g=actx.createGain();
+  o.type='square';o.frequency.value=120+Math.random()*40;
+  g.gain.setValueAtTime(.05,actx.currentTime);
+  g.gain.exponentialRampToValueAtTime(.001,actx.currentTime+.08);
+  o.connect(g);g.connect(actx.destination);
+  o.start();o.stop(actx.currentTime+.08);
+}
+
+/* === Canvas Setup === */
+const canvas=document.getElementById('gc');
+const ctx=canvas.getContext('2d');
+let W,H,CELL,COLS,ROWS;
+
+function resize(){
+  W=window.innerWidth;H=window.innerHeight;
+  canvas.width=W;canvas.height=H;
+  CELL=Math.max(20,Math.min(40,Math.floor(Math.min(W,H)/20)));
+  COLS=Math.floor(W/CELL);ROWS=Math.floor(H/CELL);
+}
+window.addEventListener('resize',resize);
+resize();
+
+/* === Game State === */
+const PALETTE={
+  bg:'#0d4a3a',bgDark:'#082e25',
+  wall:'#1a6b55',wallLit:'#2a8b6e',
+  floor:'#0f5c48',floorLit:'#1a7a5f',
+  player:'#e8735a',playerGlow:'rgba(232,115,90,.3)',
+  exit:'#f4a261',exitGlow:'rgba(244,162,97,.4)',
+  echo:'rgba(126,205,184,.6)',echoFade:'rgba(126,205,184,.05)',
+  coral:'#e8735a',coralDim:'rgba(232,115,90,.15)',
+  teal:'#7ecdb8',fog:'rgba(8,46,37,.97)'
+};
+
+let state='title'; // title, playing, paused, levelcomplete
+let level=0;
+let player={x:0,y:0};
+let exitPos={x:0,y:0};
+let grid=[]; // 0=floor, 1=wall
+let revealed=[]; // visibility per cell [0..1]
+let pulses=[]; // active sonar rings
+let pulsesLeft=5;
+let maxPulses=5;
+let particles=[];
+let stepTimer=0;
+
+/* === Save / Load === */
+function saveProgress(){
+  try{localStorage.setItem('echo-nav-save',JSON.stringify({level}))}catch(e){}
+}
+function loadProgress(){
+  try{const s=localStorage.getItem('echo-nav-save');if(s){const d=JSON.parse(s);level=d.level||0}}catch(e){}
+}
+
+/* === Maze Generation (Recursive Backtracker) === */
+function generateMaze(cols,rows){
+  const g=Array.from({length:rows},()=>Array(cols).fill(1));
+  const visited=Array.from({length:rows},()=>Array(cols).fill(false));
+  
+  function carve(cx,cy){
+    visited[cy][cx]=true;
+    g[cy][cx]=0;
+    const dirs=[[0,-2],[0,2],[-2,0],[2,0]].sort(()=>Math.random()-.5);
+    for(const[dx,dy]of dirs){
+      const nx=cx+dx,ny=cy+dy;
+      if(nx>=0&&nx<cols&&ny>=0&&ny<rows&&!visited[ny][nx]){
+        g[cy+dy/2][cx+dx/2]=0;
+        carve(nx,ny);
+      }
+    }
+  }
+  
+  // Ensure odd dimensions for proper maze
+  const sc=cols%2===0?cols-1:cols;
+  const sr=rows%2===0?rows-1:rows;
+  carve(1,1);
+  
+  // Add some extra passages for exploration
+  const extras=Math.floor(cols*rows*.04);
+  for(let i=0;i<extras;i++){
+    const rx=1+Math.floor(Math.random()*(cols-2));
+    const ry=1+Math.floor(Math.random()*(rows-2));
+    if(g[ry][rx]===1){
+      let adj=0;
+      if(ry>0&&g[ry-1][rx]===0)adj++;
+      if(ry<rows-1&&g[ry+1][rx]===0)adj++;
+      if(rx>0&&g[ry][rx-1]===0)adj++;
+      if(rx<cols-1&&g[ry][rx+1]===0)adj++;
+      if(adj>=2)g[ry][rx]=0;
+    }
+  }
+  return g;
+}
+
+function initLevel(){
+  resize();
+  const mc=Math.min(COLS,35+level*2);
+  const mr=Math.min(ROWS,25+level*2);
+  const gc=mc%2===0?mc-1:mc;
+  const gr=mr%2===0?mr-1:mr;
+  
+  grid=generateMaze(gc,gr);
+  revealed=Array.from({length:gr},()=>Array(gc).fill(0));
+  
+  // Player starts top-left area
+  player={x:1,y:1};
+  revealed[1][1]=1;
+  
+  // Exit at bottom-right area
+  exitPos={x:gc-2,y:gr-2};
+  grid[exitPos.y][exitPos.x]=0;
+  
+  // Ensure exit reachable (carve path if needed)
+  if(grid[exitPos.y-1]&&grid[exitPos.y-1][exitPos.x]===1&&
+     grid[exitPos.y][exitPos.x-1]===1){
+    grid[exitPos.y-1][exitPos.x]=0;
+  }
+  
+  maxPulses=Math.max(3,7-Math.floor(level/3));
+  pulsesLeft=maxPulses;
+  pulses=[];
+  particles=[];
+  
+  updateHUD();
+}
+
+function updateHUD(){
+  document.getElementById('hud-level').textContent='Level '+(level+1);
+  document.getElementById('hud-pulses').textContent='Pulses: '+pulsesLeft;
+}
+
+/* === Sonar Pulse System === */
+function emitPulse(){
+  if(pulsesLeft<=0)return;
+  pulsesLeft--;
+  updateHUD();
+  playPulse();
+  
+  const px=player.x*CELL+CELL/2;
+  const py=player.y*CELL+CELL/2;
+  pulses.push({x:px,y:py,radius:0,maxRadius:CELL*8+level*CELL,speed:CELL*4,alpha:1,revealed:new Set()});
+}
+
+function updatePulses(dt){
+  for(let i=pulses.length-1;i>=0;i--){
+    const p=pulses[i];
+    p.radius+=p.speed*dt;
+    p.alpha=Math.max(0,1-p.radius/p.maxRadius);
+    
+    // Reveal cells within pulse radius
+    const rows=grid.length,cols=grid[0].length;
+    const cr=Math.ceil(p.radius/CELL)+1;
+    const pcx=Math.floor(p.x/CELL),pcy=Math.floor(p.y/CELL);
+    
+    for(let dy=-cr;dy<=cr;dy++){
+      for(let dx=-cr;dx<=cr;dx++){
+        const cx=pcx+dx,cy=pcy+dy;
+        if(cx<0||cy<0||cy>=rows||cx>=cols)continue;
+        const cellCx=cx*CELL+CELL/2,cellCy=cy*CELL+CELL/2;
+        const dist=Math.hypot(cellCx-p.x,cellCy-p.y);
+        const key=cy*1000+cx;
+        if(dist<=p.radius&&dist>=p.radius-CELL*2&&!p.revealed.has(key)){
+          p.revealed.add(key);
+          const revealStr=Math.max(revealed[cy][cx], grid[cy][cx]===1?.8:.5);
+          revealed[cy][cx]=revealStr;
+          if(grid[cy][cx]===1)playEchoHit(dist);
+          // Spawn particle
+          particles.push({x:cellCx,y:cellCy,vx:(Math.random()-.5)*30,vy:(Math.random()-.5)*30,life:1,color:grid[cy][cx]===1?PALETTE.coral:PALETTE.teal});
+        }
+      }
+    }
+    
+    if(p.radius>=p.maxRadius)pulses.splice(i,1);
+  }
+}
+
+/* === Player Movement === */
+function movePlayer(dx,dy){
+  if(state!=='playing')return;
+  const nx=player.x+dx,ny=player.y+dy;
+  if(ny<0||ny>=grid.length||nx<0||nx>=grid[0].length)return;
+  if(grid[ny][nx]===1)return;
+  
+  player.x=nx;player.y=ny;
+  revealed[ny][nx]=1;
+  stepTimer=0;
+  playStep();
+  
+  // Reveal immediate neighbors slightly
+  for(const[ddx,ddy]of[[0,-1],[0,1],[-1,0],[1,0]]){
+    const ax=nx+ddx,ay=ny+ddy;
+    if(ay>=0&&ay<grid.length&&ax>=0&&ax<grid[0].length){
+      revealed[ay][ax]=Math.max(revealed[ay][ax],.25);
+    }
+  }
+  
+  // Check exit
+  if(nx===exitPos.x&&ny===exitPos.y){
+    winLevel();
+  }
+}
+
+function winLevel(){
+  state='levelcomplete';
+  playExitSound();
+  level++;
+  saveProgress();
+  document.getElementById('lc-msg').textContent=`Chamber ${level} cleared! Pulses remaining: ${pulsesLeft}`;
+  document.getElementById('level-complete').classList.remove('hidden');
+}
+
+/* === Rendering === */
+function render(){
+  ctx.fillStyle=PALETTE.bgDark;
+  ctx.fillRect(0,0,W,H);
+  
+  if(state==='title')return;
+  
+  const rows=grid.length,cols=grid[0].length;
+  const offsetX=Math.floor((W-cols*CELL)/2);
+  const offsetY=Math.floor((H-rows*CELL)/2);
+  
+  ctx.save();
+  ctx.translate(offsetX,offsetY);
+  
+  // Camera follow (scroll if maze is larger than screen)
+  let camX=0,camY=0;
+  if(cols*CELL>W){
+    camX=Math.max(0,Math.min(cols*CELL-W, player.x*CELL-W/2+CELL/2));
+  }
+  if(rows*CELL>H){
+    camY=Math.max(0,Math.min(rows*CELL-H, player.y*CELL-H/2+CELL/2));
+  }
+  ctx.translate(-camX,-camY);
+  
+  // Draw cells
+  for(let y=0;y<rows;y++){
+    for(let x=0;x<cols;x++){
+      const vis=revealed[y][x];
+      if(vis<=0){
+        ctx.fillStyle=PALETTE.fog;
+        ctx.fillRect(x*CELL,y*CELL,CELL,CELL);
+        continue;
+      }
+      
+      if(grid[y][x]===1){
+        // Wall
+        const c=lerpColor(PALETTE.bgDark,PALETTE.wallLit,vis);
+        ctx.fillStyle=c;
+        ctx.fillRect(x*CELL,y*CELL,CELL,CELL);
+        // Wall top highlight
+        ctx.fillStyle=`rgba(42,139,110,${vis*.3})`;
+        ctx.fillRect(x*CELL,y*CELL,CELL,2);
+      }else{
+        // Floor
+        const c=lerpColor(PALETTE.bgDark,PALETTE.floorLit,vis*.6);
+        ctx.fillStyle=c;
+        ctx.fillRect(x*CELL,y*CELL,CELL,CELL);
+        // Subtle grid lines
+        ctx.strokeStyle=`rgba(126,205,184,${vis*.08})`;
+        ctx.strokeRect(x*CELL+.5,y*CELL+.5,CELL-1,CELL-1);
+      }
+    }
+  }
+  
+  // Draw exit
+  const ev=revealed[exitPos.y]?revealed[exitPos.y][exitPos.x]:0;
+  if(ev>0){
+    const eTime=performance.now()/1000;
+    const ePulse=.5+Math.sin(eTime*3)*.3;
+    ctx.fillStyle=PALETTE.exitGlow;
+    ctx.beginPath();
+    ctx.arc(exitPos.x*CELL+CELL/2,exitPos.y*CELL+CELL/2,CELL*ePulse*1.5,0,Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle=PALETTE.exit;
+    ctx.beginPath();
+    ctx.arc(exitPos.x*CELL+CELL/2,exitPos.y*CELL+CELL/2,CELL*.35,0,Math.PI*2);
+    ctx.fill();
+  }
+  
+  // Draw sonar rings
+  for(const p of pulses){
+    ctx.strokeStyle=`rgba(126,205,184,${p.alpha*.5})`;
+    ctx.lineWidth=3;
+    ctx.beginPath();
+    ctx.arc(p.x,p.y,p.radius,0,Math.PI*2);
+    ctx.stroke();
+    // Inner ring
+    ctx.strokeStyle=`rgba(232,115,90,${p.alpha*.3})`;
+    ctx.lineWidth=1;
+    ctx.beginPath();
+    ctx.arc(p.x,p.y,p.radius*.8,0,Math.PI*2);
+    ctx.stroke();
+  }
+  
+  // Draw particles
+  for(const pt of particles){
+    ctx.globalAlpha=pt.life;
+    ctx.fillStyle=pt.color;
+    ctx.fillRect(pt.x-2,pt.y-2,4,4);
+  }
+  ctx.globalAlpha=1;
+  
+  // Draw player
+  const px=player.x*CELL+CELL/2,py=player.y*CELL+CELL/2;
+  // Glow
+  const grd=ctx.createRadialGradient(px,py,0,px,py,CELL*2);
+  grd.addColorStop(0,PALETTE.playerGlow);
+  grd.addColorStop(1,'transparent');
+  ctx.fillStyle=grd;
+  ctx.beginPath();ctx.arc(px,py,CELL*2,0,Math.PI*2);ctx.fill();
+  // Body
+  ctx.fillStyle=PALETTE.player;
+  ctx.beginPath();ctx.arc(px,py,CELL*.35,0,Math.PI*2);ctx.fill();
+  // Small breathing pulse
+  const breath=.2+Math.sin(performance.now()/500)*.1;
+  ctx.strokeStyle=`rgba(232,115,90,${breath})`;
+  ctx.lineWidth=2;
+  ctx.beginPath();ctx.arc(px,py,CELL*.55,0,Math.PI*2);ctx.stroke();
+  
+  ctx.restore();
+  
+  // Fog decay
+  for(let y=0;y<rows;y++){
+    for(let x=0;x<cols;x++){
+      if(revealed[y][x]>0){
+        const dist=Math.abs(player.x-x)+Math.abs(player.y-y);
+        if(dist>3)revealed[y][x]=Math.max(0,revealed[y][x]-.0008);
+      }
+    }
+  }
+}
+
+function lerpColor(a,b,t){
+  const ah=parseInt(a.slice(1),16),bh=parseInt(b.slice(1),16);
+  const ar=(ah>>16)&255,ag=(ah>>8)&255,ab=ah&255;
+  const br=(bh>>16)&255,bg=(bh>>8)&255,bb=bh&255;
+  const rr=Math.round(ar+(br-ar)*t);
+  const rg=Math.round(ag+(bg-ag)*t);
+  const rb=Math.round(ab+(bb-ab)*t);
+  return `rgb(${rr},${rg},${rb})`;
+}
+
+/* === Update Loop === */
+let lastTime=0;
+function update(time){
+  const dt=Math.min((time-lastTime)/1000,.05);
+  lastTime=time;
+  
+  if(state==='playing'){
+    updatePulses(dt);
+    
+    // Update particles
+    for(let i=particles.length-1;i>=0;i--){
+      const p=particles[i];
+      p.x+=p.vx*dt;p.y+=p.vy*dt;
+      p.life-=dt*1.5;
+      if(p.life<=0)particles.splice(i,1);
+    }
+    
+    stepTimer+=dt;
+  }
+  
+  render();
+  requestAnimationFrame(update);
+}
+
+/* === Input Handling === */
+// Keyboard
+document.addEventListener('keydown',e=>{
+  if(state!=='playing')return;
+  switch(e.key){
+    case'ArrowUp':case'w':case'W':movePlayer(0,-1);e.preventDefault();break;
+    case'ArrowDown':case's':case'S':movePlayer(0,1);e.preventDefault();break;
+    case'ArrowLeft':case'a':case'A':movePlayer(-1,0);e.preventDefault();break;
+    case'ArrowRight':case'd':case'D':movePlayer(1,0);e.preventDefault();break;
+    case' ':emitPulse();e.preventDefault();break;
+  }
+});
+
+// Touch controls (swipe)
+let touchStart=null;
+canvas.addEventListener('touchstart',e=>{
+  initAudio();
+  const t=e.touches[0];
+  touchStart={x:t.clientX,y:t.clientY,time:Date.now()};
+  e.preventDefault();
+},{passive:false});
+
+canvas.addEventListener('touchend',e=>{
+  if(!touchStart||state!=='playing')return;
+  const t=e.changedTouches[0];
+  const dx=t.clientX-touchStart.x;
+  const dy=t.clientY-touchStart.y;
+  const dist=Math.hypot(dx,dy);
+  const elapsed=Date.now()-touchStart.time;
+  
+  if(dist<15&&elapsed<300){
+    // Tap = pulse
+    emitPulse();
+  }else if(dist>25){
+    // Swipe = move
+    if(Math.abs(dx)>Math.abs(dy)){
+      movePlayer(dx>0?1:-1,0);
+    }else{
+      movePlayer(0,dy>0?1:-1);
+    }
+  }
+  touchStart=null;
+  e.preventDefault();
+},{passive:false});
+
+// Pulse button
+document.getElementById('pulse-btn').addEventListener('click',e=>{
+  initAudio();
+  if(state==='playing')emitPulse();
+  e.stopPropagation();
+});
+
+/* === UI Events === */
+document.getElementById('btn-start').addEventListener('click',()=>{
+  initAudio();
+  loadProgress();
+  initLevel();
+  state='playing';
+  document.getElementById('title-screen').classList.add('hidden');
+});
+
+document.getElementById('btn-next').addEventListener('click',()=>{
+  document.getElementById('level-complete').classList.add('hidden');
+  initLevel();
+  state='playing';
+});
+
+/* === Init === */
+requestAnimationFrame(update);
+
+})();
+</script>
+</body>
+</html>

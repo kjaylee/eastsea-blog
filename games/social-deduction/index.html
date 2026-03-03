@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<meta name="theme-color" content="#0a0a1a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
+<title>Shadow Council — 소셜 추론 게임</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0a0a1a;--card:#12122a;--neon:#00e5ff;--neon2:#ff2d7b;--neon3:#b946ff;--gold:#ffd700;--text:#e0e0f0;--dim:#6a6a8a;--danger:#ff4444;--safe:#44ff88;--panel:#1a1a3a;--border:#2a2a5a}
+html,body{width:100%;height:100%;overflow:hidden;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text)}
+#app{width:100%;height:100%;display:flex;flex-direction:column;position:relative;max-width:480px;margin:0 auto}
+.screen{display:none;flex-direction:column;height:100%;width:100%;position:absolute;top:0;left:0;padding:16px;overflow-y:auto}
+.screen.active{display:flex}
+h1{font-size:1.8em;text-align:center;background:linear-gradient(135deg,var(--neon),var(--neon3));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:8px;text-shadow:0 0 30px rgba(0,229,255,.3)}
+h2{font-size:1.2em;text-align:center;color:var(--neon);margin:12px 0 8px;text-transform:uppercase;letter-spacing:2px}
+.subtitle{text-align:center;color:var(--dim);font-size:.85em;margin-bottom:16px}
+.btn{background:linear-gradient(135deg,var(--neon),var(--neon3));color:#000;border:none;padding:14px 28px;border-radius:12px;font-size:1em;font-weight:700;cursor:pointer;transition:all .2s;text-transform:uppercase;letter-spacing:1px;-webkit-tap-highlight-color:transparent;touch-action:manipulation;width:100%;max-width:300px;margin:6px auto;display:block}
+.btn:hover{transform:scale(1.03);box-shadow:0 0 20px rgba(0,229,255,.4)}
+.btn:active{transform:scale(.97)}
+.btn.danger{background:linear-gradient(135deg,var(--danger),#cc0033)}
+.btn.ghost{background:transparent;border:2px solid var(--neon);color:var(--neon)}
+.btn.sm{padding:10px 16px;font-size:.85em}
+.btn:disabled{opacity:.4;pointer-events:none}
+.card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;margin:8px 0;position:relative;overflow:hidden}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--neon),transparent)}
+.player-list{display:flex;flex-direction:column;gap:8px;margin:8px 0}
+.player-row{display:flex;align-items:center;gap:12px;padding:12px;background:var(--panel);border-radius:12px;border:1px solid var(--border);cursor:pointer;transition:all .2s;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+.player-row:hover{border-color:var(--neon)}
+.player-row.selected{border-color:var(--neon);box-shadow:0 0 15px rgba(0,229,255,.3)}
+.player-row.eliminated{opacity:.4;pointer-events:none;text-decoration:line-through}
+.player-row.dead::after{content:'💀';position:absolute;right:12px;font-size:1.2em}
+.avatar{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.4em;flex-shrink:0}
+.player-info{flex:1;min-width:0}
+.player-name{font-weight:600;font-size:.95em}
+.player-status{font-size:.75em;color:var(--dim)}
+.role-reveal{text-align:center;padding:30px 20px}
+.role-icon{font-size:4em;margin:16px 0;filter:drop-shadow(0 0 20px rgba(0,229,255,.5));animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
+.role-name{font-size:1.8em;font-weight:700;margin:8px 0}
+.role-desc{color:var(--dim);font-size:.9em;line-height:1.5;margin-top:8px}
+.chat-area{flex:1;overflow-y:auto;padding:8px 0;display:flex;flex-direction:column;gap:8px;min-height:0}
+.chat-msg{padding:10px 14px;border-radius:12px;background:var(--panel);max-width:85%;animation:slideIn .3s ease}
+.chat-msg.system{background:transparent;color:var(--dim);text-align:center;font-size:.8em;max-width:100%;align-self:center}
+.chat-msg.ai{align-self:flex-start;border:1px solid var(--border)}
+.chat-msg .sender{font-size:.75em;color:var(--neon);margin-bottom:4px;font-weight:600}
+.chat-msg .text{font-size:.9em;line-height:1.4}
+@keyframes slideIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.vote-section{padding:8px 0}
+.timer{text-align:center;font-size:2em;font-weight:700;color:var(--neon);margin:8px 0;font-variant-numeric:tabular-nums}
+.timer.urgent{color:var(--danger);animation:blink 1s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.5}}
+.phase-banner{text-align:center;padding:20px;margin:8px 0}
+.phase-banner .icon{font-size:3em;margin-bottom:8px}
+.phase-banner .label{font-size:1.4em;font-weight:700;text-transform:uppercase;letter-spacing:3px}
+.result-screen{text-align:center;padding:20px}
+.result-icon{font-size:5em;margin:20px 0}
+.result-title{font-size:2em;font-weight:700;margin:8px 0}
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:16px 0}
+.stat-box{background:var(--panel);border-radius:12px;padding:14px;text-align:center;border:1px solid var(--border)}
+.stat-val{font-size:1.6em;font-weight:700;color:var(--neon)}
+.stat-label{font-size:.75em;color:var(--dim);margin-top:4px}
+.progress-bar{width:100%;height:6px;background:var(--panel);border-radius:3px;overflow:hidden;margin:8px 0}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--neon),var(--neon3));border-radius:3px;transition:width .5s ease}
+.tab-bar{display:flex;gap:8px;margin:8px 0}
+.tab{flex:1;padding:10px;text-align:center;background:var(--panel);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:.85em;transition:all .2s;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+.tab.active{border-color:var(--neon);color:var(--neon);background:rgba(0,229,255,.1)}
+.history-list{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.history-row{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--panel);border-radius:8px;font-size:.85em}
+.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:.7em;font-weight:600;text-transform:uppercase}
+.badge.win{background:rgba(68,255,136,.2);color:var(--safe)}
+.badge.lose{background:rgba(255,68,68,.2);color:var(--danger)}
+.overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;z-index:100;padding:20px}
+.overlay.active{display:flex}
+.overlay-content{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:24px;max-width:350px;width:100%;text-align:center}
+.footer-nav{display:flex;gap:4px;padding:8px 0;margin-top:auto;flex-shrink:0}
+.footer-nav .btn{flex:1;padding:10px;font-size:.8em}
+.round-indicator{display:flex;justify-content:center;gap:6px;margin:8px 0}
+.round-dot{width:10px;height:10px;border-radius:50%;background:var(--panel);border:1px solid var(--border)}
+.round-dot.active{background:var(--neon);box-shadow:0 0 10px rgba(0,229,255,.5)}
+.round-dot.done{background:var(--dim)}
+.tooltip{position:absolute;background:var(--card);border:1px solid var(--neon);padding:8px 12px;border-radius:8px;font-size:.8em;z-index:50;pointer-events:none;white-space:nowrap}
+.night-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(10,10,26,.95);z-index:50;display:none;align-items:center;justify-content:center;flex-direction:column}
+.night-overlay.active{display:flex}
+.shake{animation:shake .3s ease}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+.glow-text{text-shadow:0 0 10px currentColor}
+@media(max-width:480px){
+ #app{max-width:100%}
+ .screen{padding:12px}
+ h1{font-size:1.5em}
+ .btn{padding:12px 20px;font-size:.9em}
+ .role-icon{font-size:3em}
+ .result-icon{font-size:3.5em}
+}
+</style>
+</head>
+<body>
+<div id="app">
+<!-- TITLE SCREEN -->
+<div id="screen-title" class="screen active">
+ <div style="flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center">
+  <div style="font-size:4em;margin-bottom:12px">🕵️</div>
+  <h1>Shadow Council</h1>
+  <p class="subtitle">소셜 추론 게임 — 누가 마피아인가?</p>
+  <div style="margin-top:24px;width:100%">
+   <button class="btn" onclick="G.startNewGame()">새 게임 시작</button>
+   <button class="btn ghost" onclick="G.showScreen('screen-records')" style="margin-top:8px">전적 기록</button>
+   <button class="btn ghost" onclick="G.showScreen('screen-how')" style="margin-top:8px">게임 방법</button>
+  </div>
+ </div>
+ <p style="text-align:center;color:var(--dim);font-size:.7em;padding:8px">v1.0 — Telegram Mini App</p>
+</div>
+
+<!-- HOW TO PLAY -->
+<div id="screen-how" class="screen">
+ <h2>🎮 게임 방법</h2>
+ <div class="card">
+  <p style="font-size:.9em;line-height:1.6;color:var(--dim)">
+   <strong style="color:var(--neon)">목표:</strong> 마피아를 찾아내 제거하세요!<br><br>
+   <strong style="color:var(--text)">👥 역할</strong><br>
+   🧑 <strong>시민:</strong> 투표로 마피아를 추방하세요<br>
+   🔪 <strong>마피아:</strong> 밤에 시민을 제거하세요<br>
+   🔍 <strong>탐정:</strong> 밤에 1명을 조사하세요<br><br>
+   <strong style="color:var(--text)">🔄 라운드</strong><br>
+   ☀️ <strong>낮:</strong> 토론 → 의심 투표 → 추방<br>
+   🌙 <strong>밤:</strong> 마피아 제거 / 탐정 조사<br><br>
+   <strong style="color:var(--text)">🏆 승리 조건</strong><br>
+   시민 승: 마피아 전원 제거<br>
+   마피아 승: 마피아 수 ≥ 시민 수
+  </p>
+ </div>
+ <button class="btn ghost" onclick="G.showScreen('screen-title')" style="margin-top:16px">돌아가기</button>
+</div>
+
+<!-- RECORDS SCREEN -->
+<div id="screen-records" class="screen">
+ <h2>📊 전적 기록</h2>
+ <div class="stats-grid" id="stats-overview"></div>
+ <div class="tab-bar">
+  <div class="tab active" onclick="G.showRecordTab('all',this)">전체</div>
+  <div class="tab" onclick="G.showRecordTab('wins',this)">승리</div>
+  <div class="tab" onclick="G.showRecordTab('losses',this)">패배</div>
+ </div>
+ <div class="history-list" id="history-list"></div>
+ <button class="btn ghost" onclick="G.showScreen('screen-title')" style="margin-top:16px">돌아가기</button>
+</div>
+
+<!-- ROLE REVEAL SCREEN -->
+<div id="screen-role" class="screen">
+ <div class="role-reveal" style="flex:1;display:flex;flex-direction:column;justify-content:center">
+  <p style="color:var(--dim);font-size:.85em">라운드 <span id="role-round">1</span> / 3</p>
+  <div class="round-indicator" id="round-dots"></div>
+  <div class="phase-banner" style="margin:20px 0">
+   <div id="role-icon" class="role-icon">🧑</div>
+   <div id="role-name" class="role-name" style="color:var(--neon)">시민</div>
+   <div id="role-desc" class="role-desc">마피아를 찾아 투표하세요</div>
+  </div>
+  <div class="card" id="role-players" style="text-align:left"></div>
+  <button class="btn" onclick="G.startDay()" style="margin-top:16px">시작하기 ▶</button>
+ </div>
+</div>
+
+<!-- DAY PHASE SCREEN -->
+<div id="screen-day" class="screen">
+ <div style="display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
+  <div>
+   <span style="color:var(--gold)">☀️ 낮</span>
+   <span style="color:var(--dim);font-size:.8em;margin-left:6px">R<span id="day-round">1</span></span>
+  </div>
+  <div class="timer" id="day-timer">30</div>
+  <div style="font-size:.8em;color:var(--dim)">생존: <span id="alive-count">4</span></div>
+ </div>
+ <div class="progress-bar"><div class="progress-fill" id="day-progress" style="width:100%"></div></div>
+ <div class="chat-area" id="chat-area"></div>
+ <div id="vote-section" style="flex-shrink:0;display:none">
+  <h2 style="font-size:.9em">🗳️ 투표: 누가 마피아인가?</h2>
+  <div class="player-list" id="vote-list"></div>
+  <button class="btn sm" id="btn-skip-vote" onclick="G.skipVote()">투표 건너뛰기</button>
+ </div>
+</div>
+
+<!-- NIGHT PHASE SCREEN -->
+<div id="screen-night" class="screen" style="background:rgba(5,5,15,.98)">
+ <div class="phase-banner" style="margin-top:40px">
+  <div class="icon">🌙</div>
+  <div class="label" style="color:var(--neon3)">밤이 되었습니다</div>
+  <p class="subtitle" id="night-desc">행동을 선택하세요</p>
+ </div>
+ <div id="night-action" style="flex:1"></div>
+</div>
+
+<!-- ELIMINATION SCREEN -->
+<div id="screen-elim" class="screen">
+ <div style="flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center">
+  <div id="elim-icon" style="font-size:4em;margin-bottom:12px">💀</div>
+  <h2 id="elim-title" style="font-size:1.3em">제거됨</h2>
+  <p id="elim-desc" style="color:var(--dim);margin:8px 0;font-size:.9em"></p>
+  <div class="card" id="elim-detail" style="width:100%"></div>
+  <button class="btn" id="elim-continue" onclick="G.continueAfterElim()" style="margin-top:16px">계속 ▶</button>
+ </div>
+</div>
+
+<!-- GAME OVER SCREEN -->
+<div id="screen-result" class="screen">
+ <div class="result-screen" style="flex:1;display:flex;flex-direction:column;justify-content:center">
+  <div class="result-icon" id="result-icon">🏆</div>
+  <div class="result-title" id="result-title" style="color:var(--gold)">승리!</div>
+  <p id="result-desc" style="color:var(--dim);margin:8px 0"></p>
+  <div class="stats-grid" id="result-stats"></div>
+  <div class="card" id="result-roles" style="text-align:left;margin-top:12px"></div>
+  <button class="btn" onclick="G.startNewGame()" style="margin-top:16px">다시 플레이</button>
+  <button class="btn ghost" onclick="G.showScreen('screen-title')" style="margin-top:8px">메인 메뉴</button>
+ </div>
+</div>
+</div>
+
+<script>
+'use strict';
+const G={
+ // === STATE ===
+ players:[],
+ playerRole:'',
+ round:1,
+ maxRounds:3,
+ phase:'title',
+ dayTimer:null,
+ dayTimeLeft:30,
+ selectedVote:null,
+ gameLog:[],
+ eliminated:[],
+ nightAction:null,
+ detKnown:{},
+ mafiaKills:0,
+ correctVotes:0,
+ totalVotes:0,
+ survivalRounds:0,
+ pendingElimType:'',
+ audioCtx:null,
+
+ // === PLAYER DATA ===
+ NAMES:['당신','민준','서연','지호','하은'],
+ COLORS:['#00e5ff','#ff2d7b','#b946ff','#ffd700','#44ff88'],
+ AVATARS:['🧑','👤','👩','🧔','👧'],
+ MAFIA_LINES:[
+  '저는 확실히 시민이에요. 다른 사람을 의심해보세요.',
+  '아까 좀 수상한 사람이 있었어요...',
+  '제가 마피아면 이렇게 당당하겠어요?',
+  '조용한 사람이 오히려 더 의심스럽지 않나요?',
+  '저를 믿어주세요, 확실한 근거가 있어요.',
+  '탐정이 있으면 저를 조사해보세요. 결백합니다.',
+  '이번 라운드는 신중하게 투표합시다.',
+ ],
+ CITIZEN_LINES:[
+  '뭔가 느낌이 이상한 사람이 있어요.',
+  '저는 시민이에요. 같이 마피아를 찾아봐요!',
+  '어젯밤에 무슨 일이 있었는지 모르겠어요...',
+  '누군가 거짓말을 하고 있는 것 같아요.',
+  '직감을 믿어야 할 것 같아요.',
+  '너무 적극적으로 방어하는 사람이 의심스러워요.',
+  '침착하게 증거를 모아봅시다.',
+ ],
+ DET_LINES:[
+  '어젯밤 조사에서 흥미로운 결과가 나왔어요.',
+  '한 명에 대해 확신이 생겼습니다.',
+  '제 조사 결과를 공유할게요.',
+  '의심가는 사람이 있는데, 좀 더 확인이 필요해요.',
+ ],
+ DET_REVEAL_LINES:[
+  '{name}을(를) 조사했는데... {result}인 것 같아요!',
+  '어젯밤 {name}을(를) 봤는데, {result} 느낌이었어요.',
+  '{name}, 당신은 {result}이죠? 제가 확인했습니다.',
+ ],
+
+ // === AUDIO ===
+ initAudio(){
+  if(this.audioCtx)return;
+  try{this.audioCtx=new(window.AudioContext||window.webkitAudioContext)()}catch(e){}
+ },
+ playTone(freq,dur,type='sine',vol=.15){
+  if(!this.audioCtx)return;
+  try{
+   const o=this.audioCtx.createOscillator(),g=this.audioCtx.createGain();
+   o.type=type;o.frequency.value=freq;
+   g.gain.setValueAtTime(vol,this.audioCtx.currentTime);
+   g.gain.exponentialRampToValueAtTime(.001,this.audioCtx.currentTime+dur);
+   o.connect(g);g.connect(this.audioCtx.destination);
+   o.start();o.stop(this.audioCtx.currentTime+dur);
+  }catch(e){}
+ },
+ sfxVote(){this.playTone(520,.15,'sine',.12);setTimeout(()=>this.playTone(680,.12,'sine',.1),100)},
+ sfxElim(){this.playTone(200,.4,'sawtooth',.1);setTimeout(()=>this.playTone(150,.5,'sawtooth',.08),200)},
+ sfxWin(){[0,150,300,450].forEach((d,i)=>setTimeout(()=>this.playTone([523,659,784,1047][i],.3,'sine',.12),d))},
+ sfxLose(){[0,200,400].forEach((d,i)=>setTimeout(()=>this.playTone([400,300,200][i],.4,'sawtooth',.1),d))},
+ sfxNight(){this.playTone(220,.6,'sine',.06);setTimeout(()=>this.playTone(165,.8,'sine',.04),300)},
+ sfxDay(){this.playTone(440,.2,'triangle',.1);setTimeout(()=>this.playTone(550,.2,'triangle',.08),150)},
+ sfxClick(){this.playTone(800,.05,'sine',.08)},
+
+ // === SCREENS ===
+ showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+ },
+
+ // === STORAGE ===
+ loadStats(){
+  try{return JSON.parse(localStorage.getItem('sc_stats'))||{games:0,wins:0,losses:0,history:[]}}
+  catch(e){return{games:0,wins:0,losses:0,history:[]}}
+ },
+ saveStats(s){try{localStorage.setItem('sc_stats',JSON.stringify(s))}catch(e){}},
+ recordGame(won,role,rounds){
+  const s=this.loadStats();
+  s.games++;if(won)s.wins++;else s.losses++;
+  s.history.unshift({won,role,rounds,date:new Date().toLocaleDateString('ko-KR'),ts:Date.now()});
+  if(s.history.length>50)s.history.length=50;
+  this.saveStats(s);
+ },
+
+ // === RECORDS SCREEN ===
+ showRecordTab(tab,el){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  if(el)el.classList.add('active');
+  const s=this.loadStats();
+  const ov=document.getElementById('stats-overview');
+  const wr=s.games?Math.round(s.wins/s.games*100):0;
+  ov.innerHTML=`
+   <div class="stat-box"><div class="stat-val">${s.games}</div><div class="stat-label">총 게임</div></div>
+   <div class="stat-box"><div class="stat-val">${wr}%</div><div class="stat-label">승률</div></div>
+   <div class="stat-box"><div class="stat-val">${s.wins}</div><div class="stat-label">승리</div></div>
+   <div class="stat-box"><div class="stat-val">${s.losses}</div><div class="stat-label">패배</div></div>`;
+  let list=s.history||[];
+  if(tab==='wins')list=list.filter(h=>h.won);
+  if(tab==='losses')list=list.filter(h=>!h.won);
+  const hl=document.getElementById('history-list');
+  if(!list.length){hl.innerHTML='<p style="text-align:center;color:var(--dim);padding:20px">기록이 없습니다</p>';return}
+  hl.innerHTML=list.map(h=>`
+   <div class="history-row">
+    <span>${h.date}</span>
+    <span>${this.roleName(h.role)}</span>
+    <span>${h.rounds||'?'}R</span>
+    <span class="badge ${h.won?'win':'lose'}">${h.won?'승리':'패배'}</span>
+   </div>`).join('');
+ },
+ roleName(r){return r==='mafia'?'🔪 마피아':r==='detective'?'🔍 탐정':'🧑 시민'},
+
+ // === GAME INIT ===
+ startNewGame(){
+  this.initAudio();
+  this.round=1;this.phase='role';this.gameLog=[];this.eliminated=[];
+  this.nightAction=null;this.detKnown={};this.mafiaKills=0;
+  this.correctVotes=0;this.totalVotes=0;this.survivalRounds=0;
+  this.selectedVote=null;
+  // Assign roles: 1 mafia, 1 detective, 2 citizens + player
+  const roles=['citizen','citizen','citizen','citizen'];
+  // Random mafia among AI
+  const mafIdx=1+Math.floor(Math.random()*4);
+  roles[mafIdx]='mafia';
+  // Random detective among remaining AI (not mafia)
+  let detIdx;
+  do{detIdx=1+Math.floor(Math.random()*4)}while(detIdx===mafIdx);
+  roles[detIdx]='detective';
+  // Player role: random
+  const pr=Math.random();
+  if(pr<.3)roles[0]='mafia';
+  else if(pr<.5)roles[0]='detective';
+  else roles[0]='citizen';
+  // If player is mafia, ensure at least 1 AI mafia too OR make player the only mafia
+  // Simplify: exactly 1 mafia total, 1 detective total
+  // Reset: assign cleanly
+  const allRoles=['citizen','citizen','citizen','citizen','citizen'];
+  // Pick 1 mafia
+  const maf=Math.floor(Math.random()*5);
+  allRoles[maf]='mafia';
+  // Pick 1 detective (not mafia)
+  let det;do{det=Math.floor(Math.random()*5)}while(det===maf);
+  allRoles[det]='detective';
+
+  this.players=this.NAMES.map((n,i)=>({
+   id:i,name:n,role:allRoles[i],alive:true,color:this.COLORS[i],avatar:this.AVATARS[i],isPlayer:i===0,votes:0
+  }));
+  this.playerRole=allRoles[0];
+  this.showRoleReveal();
+ },
+
+ showRoleReveal(){
+  this.showScreen('screen-role');
+  const r=this.playerRole;
+  document.getElementById('role-round').textContent=this.round;
+  const dots=document.getElementById('round-dots');
+  dots.innerHTML='';
+  for(let i=1;i<=this.maxRounds;i++){
+   const d=document.createElement('div');d.className='round-dot'+(i<this.round?' done':'')+(i===this.round?' active':'');
+   dots.appendChild(d);
+  }
+  const icons={citizen:'🧑',mafia:'🔪',detective:'🔍'};
+  const names={citizen:'시민',mafia:'마피아',detective:'탐정'};
+  const descs={
+   citizen:'마피아를 찾아 투표로 추방하세요.\n다수결의 힘을 믿으세요!',
+   mafia:'들키지 않고 밤마다 한 명을 제거하세요.\n의심을 다른 사람에게 돌리세요!',
+   detective:'매일 밤 한 명을 조사할 수 있습니다.\n마피아를 찾아 시민들을 이끄세요!'
+  };
+  document.getElementById('role-icon').textContent=icons[r];
+  document.getElementById('role-name').textContent=names[r];
+  document.getElementById('role-name').style.color=r==='mafia'?'var(--neon2)':r==='detective'?'var(--neon3)':'var(--neon)';
+  document.getElementById('role-desc').textContent=descs[r];
+  const pl=document.getElementById('role-players');
+  pl.innerHTML='<p style="font-size:.8em;color:var(--dim);margin-bottom:8px">참가자</p>'+
+   this.players.map(p=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;${!p.alive?'opacity:.4':''}">
+    <span style="color:${p.color}">${p.avatar}</span>
+    <span>${p.name}${p.isPlayer?' (나)':''}</span>
+    ${!p.alive?'<span style="color:var(--danger);font-size:.8em">💀 제거됨</span>':''}
+   </div>`).join('');
+ },
+
+ // === DAY PHASE ===
+ startDay(){
+  this.phase='day';this.selectedVote=null;
+  this.showScreen('screen-day');
+  this.sfxDay();
+  document.getElementById('day-round').textContent=this.round;
+  document.getElementById('alive-count').textContent=this.alivePlayers().length;
+  const chat=document.getElementById('chat-area');chat.innerHTML='';
+  document.getElementById('vote-section').style.display='none';
+
+  this.addChat(null,`☀️ ${this.round}라운드 낮이 밝았습니다. 토론을 시작하세요!`,'system');
+
+  if(this.round>1&&this.gameLog.length){
+   const last=this.gameLog[this.gameLog.length-1];
+   if(last)this.addChat(null,last,'system');
+  }
+
+  // AI discussion with delays
+  const alive=this.alivePlayers().filter(p=>!p.isPlayer);
+  let delay=800;
+  alive.forEach(p=>{
+   setTimeout(()=>{
+    if(this.phase!=='day')return;
+    const msg=this.getAIDiscussion(p);
+    this.addChat(p,msg,'ai');
+   },delay);
+   delay+=1200+Math.random()*1500;
+  });
+
+  // Start vote phase after discussion
+  setTimeout(()=>{
+   if(this.phase!=='day')return;
+   this.startVotePhase();
+  },delay+500);
+ },
+
+ getAIDiscussion(p){
+  const role=p.role;
+  if(role==='mafia'){
+   // Mafia deflects, sometimes accuses detective
+   const lines=this.MAFIA_LINES;
+   let msg=lines[Math.floor(Math.random()*lines.length)];
+   // Sometimes point finger at someone
+   if(Math.random()<.4){
+    const targets=this.alivePlayers().filter(t=>t.id!==p.id);
+    const t=targets[Math.floor(Math.random()*targets.length)];
+    msg+=` ${t.name}이(가) 좀 수상해요.`;
+   }
+   return msg;
+  }else if(role==='detective'){
+   // Detective may share findings
+   const known=Object.keys(this.detKnown);
+   if(known.length>0&&Math.random()<.6){
+    const tid=known[known.length-1];
+    const tp=this.players[parseInt(tid)];
+    if(tp&&tp.alive){
+     const result=this.detKnown[tid]?'마피아':'시민';
+     const tpl=this.DET_REVEAL_LINES;
+     return tpl[Math.floor(Math.random()*tpl.length)].replace('{name}',tp.name).replace('{result}',result);
+    }
+   }
+   return this.DET_LINES[Math.floor(Math.random()*this.DET_LINES.length)];
+  }else{
+   return this.CITIZEN_LINES[Math.floor(Math.random()*this.CITIZEN_LINES.length)];
+  }
+ },
+
+ addChat(player,text,type){
+  const chat=document.getElementById('chat-area');
+  const div=document.createElement('div');
+  div.className='chat-msg '+type;
+  if(player){
+   div.innerHTML=`<div class="sender" style="color:${player.color}">${player.avatar} ${player.name}</div><div class="text">${text}</div>`;
+  }else{
+   div.innerHTML=`<div class="text">${text}</div>`;
+  }
+  chat.appendChild(div);
+  chat.scrollTop=chat.scrollHeight;
+ },
+
+ startVotePhase(){
+  if(this.phase!=='day')return;
+  this.addChat(null,'🗳️ 투표 시간입니다! 마피아로 의심되는 사람을 선택하세요.','system');
+  const vs=document.getElementById('vote-section');vs.style.display='block';
+  const vl=document.getElementById('vote-list');
+  const alive=this.alivePlayers().filter(p=>!p.isPlayer);
+  vl.innerHTML=alive.map(p=>`
+   <div class="player-row" data-id="${p.id}" onclick="G.selectVote(${p.id},this)">
+    <div class="avatar" style="background:${p.color}30;color:${p.color}">${p.avatar}</div>
+    <div class="player-info">
+     <div class="player-name">${p.name}</div>
+     <div class="player-status">탭하여 투표</div>
+    </div>
+   </div>`).join('');
+  // Timer
+  this.dayTimeLeft=25;
+  this.updateDayTimer();
+  this.dayTimer=setInterval(()=>{
+   this.dayTimeLeft--;
+   this.updateDayTimer();
+   if(this.dayTimeLeft<=0){
+    clearInterval(this.dayTimer);
+    this.resolveVote();
+   }
+  },1000);
+ },
+
+ updateDayTimer(){
+  const el=document.getElementById('day-timer');
+  el.textContent=this.dayTimeLeft;
+  el.className='timer'+(this.dayTimeLeft<=5?' urgent':'');
+  document.getElementById('day-progress').style.width=(this.dayTimeLeft/25*100)+'%';
+ },
+
+ selectVote(id,el){
+  this.sfxClick();
+  this.selectedVote=id;
+  document.querySelectorAll('#vote-list .player-row').forEach(r=>{
+   r.classList.remove('selected');
+   r.querySelector('.player-status').textContent='탭하여 투표';
+  });
+  el.classList.add('selected');
+  el.querySelector('.player-status').textContent='✓ 선택됨';
+  // Auto-submit after short delay
+  clearInterval(this.dayTimer);
+  setTimeout(()=>this.resolveVote(),600);
+ },
+
+ skipVote(){
+  this.sfxClick();
+  this.selectedVote=null;
+  clearInterval(this.dayTimer);
+  this.resolveVote();
+ },
+
+ resolveVote(){
+  if(this.phase!=='day')return;
+  this.sfxVote();
+  document.getElementById('vote-section').style.display='none';
+
+  // AI votes
+  const alive=this.alivePlayers();
+  const votes={};
+  alive.forEach(p=>votes[p.id]=0);
+
+  // Player vote
+  if(this.selectedVote!==null){
+   votes[this.selectedVote]=(votes[this.selectedVote]||0)+1;
+   this.totalVotes++;
+   if(this.players[this.selectedVote].role==='mafia')this.correctVotes++;
+  }
+
+  // AI votes
+  alive.filter(p=>!p.isPlayer).forEach(p=>{
+   const targets=alive.filter(t=>t.id!==p.id);
+   let target;
+   if(p.role==='mafia'){
+    // Mafia votes for non-mafia, preferring detective
+    const nonMaf=targets.filter(t=>t.role!=='mafia');
+    const det=nonMaf.filter(t=>t.role==='detective');
+    target=det.length&&Math.random()<.3?det[0]:nonMaf[Math.floor(Math.random()*nonMaf.length)];
+   }else if(p.role==='detective'){
+    // Detective votes for known mafia, or random
+    const knownMaf=targets.filter(t=>this.detKnown[t.id]===true);
+    target=knownMaf.length?knownMaf[0]:targets[Math.floor(Math.random()*targets.length)];
+   }else{
+    // Citizen votes randomly (sometimes correctly if lucky)
+    target=targets[Math.floor(Math.random()*targets.length)];
+   }
+   if(target)votes[target.id]=(votes[target.id]||0)+1;
+  });
+
+  // Find most voted
+  let maxV=0,eliminated=null;
+  Object.entries(votes).forEach(([id,v])=>{
+   if(v>maxV){maxV=v;eliminated=parseInt(id)}
+  });
+
+  if(eliminated!==null&&maxV>1){
+   const ep=this.players[eliminated];
+   ep.alive=false;
+   this.eliminated.push({id:ep.id,name:ep.name,role:ep.role,round:this.round,phase:'day'});
+   this.pendingElimType='day';
+   this.showElimination(ep,'day',votes);
+  }else{
+   // No majority - skip
+   this.addChat(null,'투표가 무효 처리되었습니다. 아무도 추방되지 않았습니다.','system');
+   this.pendingElimType='none';
+   setTimeout(()=>this.startNight(),1500);
+  }
+ },
+
+ // === ELIMINATION SCREEN ===
+ showElimination(player,phase,votes){
+  this.sfxElim();
+  this.showScreen('screen-elim');
+  const isDay=phase==='day';
+  document.getElementById('elim-icon').textContent=isDay?'🗳️💀':'🌙💀';
+  document.getElementById('elim-title').textContent=`${player.name}이(가) ${isDay?'추방':'제거'}되었습니다`;
+  document.getElementById('elim-desc').textContent=isDay?'투표 결과에 의해 추방되었습니다':'밤 사이에 마피아에 의해 제거되었습니다';
+
+  let detail=`<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+   <div class="avatar" style="background:${player.color}30;color:${player.color};font-size:2em;width:60px;height:60px">${player.avatar}</div>
+   <div><div style="font-size:1.1em;font-weight:600">${player.name}</div>
+   <div style="color:${player.role==='mafia'?'var(--neon2)':player.role==='detective'?'var(--neon3)':'var(--dim)'};font-size:.9em">${this.roleName(player.role)}</div></div></div>`;
+
+  if(votes){
+   detail+='<div style="font-size:.8em;color:var(--dim);margin-top:8px">투표 결과:</div>';
+   this.alivePlayers().concat([player]).forEach(p=>{
+    if(votes[p.id]!==undefined&&votes[p.id]>0){
+     detail+=`<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:.85em">
+      <span>${p.name}</span><span style="color:var(--neon)">${votes[p.id]}표</span></div>`;
+    }
+   });
+  }
+  document.getElementById('elim-detail').innerHTML=detail;
+
+  // Check game end
+  const gameEnd=this.checkGameEnd();
+  if(gameEnd){
+   document.getElementById('elim-continue').textContent='결과 보기 ▶';
+   document.getElementById('elim-continue').onclick=()=>this.showGameResult(gameEnd);
+  }else{
+   document.getElementById('elim-continue').textContent='계속 ▶';
+   document.getElementById('elim-continue').onclick=()=>this.continueAfterElim();
+  }
+ },
+
+ continueAfterElim(){
+  const gameEnd=this.checkGameEnd();
+  if(gameEnd){this.showGameResult(gameEnd);return}
+  if(this.pendingElimType==='day'){
+   this.startNight();
+  }else{
+   // After night elim, go to next round or day
+   this.round++;
+   if(this.round>this.maxRounds){
+    this.showGameResult(this.determineFinalResult());
+   }else{
+    this.showRoleReveal();
+   }
+  }
+ },
+
+ // === NIGHT PHASE ===
+ startNight(){
+  this.phase='night';
+  this.sfxNight();
+
+  // Check if player is alive
+  const player=this.players[0];
+  if(!player.alive){
+   // Player dead - auto night
+   this.autoNight();
+   return;
+  }
+
+  this.showScreen('screen-night');
+  const na=document.getElementById('night-action');
+
+  if(this.playerRole==='mafia'){
+   document.getElementById('night-desc').textContent='제거할 대상을 선택하세요';
+   const targets=this.alivePlayers().filter(p=>!p.isPlayer);
+   na.innerHTML='<div class="player-list">'+targets.map(p=>`
+    <div class="player-row" onclick="G.mafiaKill(${p.id},this)">
+     <div class="avatar" style="background:${p.color}30;color:${p.color}">${p.avatar}</div>
+     <div class="player-info">
+      <div class="player-name">${p.name}</div>
+      <div class="player-status">탭하여 제거</div>
+     </div>
+    </div>`).join('')+'</div>';
+  }else if(this.playerRole==='detective'){
+   document.getElementById('night-desc').textContent='조사할 대상을 선택하세요';
+   const targets=this.alivePlayers().filter(p=>!p.isPlayer);
+   na.innerHTML='<div class="player-list">'+targets.map(p=>{
+    const known=this.detKnown[p.id]!==undefined;
+    return`<div class="player-row${known?' selected':''}" onclick="${known?'':'G.detectiveInvestigate('+p.id+',this)'}">
+     <div class="avatar" style="background:${p.color}30;color:${p.color}">${p.avatar}</div>
+     <div class="player-info">
+      <div class="player-name">${p.name}</div>
+      <div class="player-status">${known?(this.detKnown[p.id]?'🔪 마피아!':'✓ 시민'):'탭하여 조사'}</div>
+     </div>
+    </div>`}).join('')+'</div>';
+  }else{
+   // Citizen - just waiting
+   document.getElementById('night-desc').textContent='밤이 지나가고 있습니다...';
+   na.innerHTML='<div style="text-align:center;padding:40px"><div style="font-size:3em;margin-bottom:16px">😴</div><p style="color:var(--dim)">시민은 잠을 자며 기다립니다...</p></div>';
+   setTimeout(()=>this.resolveNight(),2500);
+  }
+ },
+
+ mafiaKill(id,el){
+  this.sfxClick();
+  this.nightAction={type:'kill',target:id};
+  document.querySelectorAll('#night-action .player-row').forEach(r=>r.classList.remove('selected'));
+  el.classList.add('selected');
+  el.querySelector('.player-status').textContent='🔪 대상 선택됨';
+  setTimeout(()=>this.resolveNight(),800);
+ },
+
+ detectiveInvestigate(id,el){
+  this.sfxClick();
+  const isMafia=this.players[id].role==='mafia';
+  this.detKnown[id]=isMafia;
+  this.nightAction={type:'investigate',target:id,result:isMafia};
+  el.classList.add('selected');
+  el.querySelector('.player-status').textContent=isMafia?'🔪 마피아 발견!':'✓ 시민 확인';
+  el.querySelector('.player-status').style.color=isMafia?'var(--danger)':'var(--safe)';
+  setTimeout(()=>this.resolveNight(),1500);
+ },
+
+ autoNight(){
+  // AI actions when player is dead or citizen
+  setTimeout(()=>this.resolveNight(),1500);
+ },
+
+ resolveNight(){
+  this.phase='night-resolve';
+
+  // Mafia kill
+  const mafias=this.alivePlayers().filter(p=>p.role==='mafia');
+  let killTarget=null;
+
+  if(mafias.length>0){
+   if(this.playerRole==='mafia'&&this.players[0].alive&&this.nightAction){
+    killTarget=this.nightAction.target;
+   }else{
+    // AI mafia picks target
+    const targets=this.alivePlayers().filter(p=>p.role!=='mafia');
+    // Prefer detective
+    const det=targets.filter(p=>p.role==='detective');
+    if(det.length&&Math.random()<.4){
+     killTarget=det[0].id;
+    }else{
+     killTarget=targets[Math.floor(Math.random()*targets.length)]?.id;
+    }
+   }
+  }
+
+  // Detective investigate (AI)
+  if(this.playerRole!=='detective'){
+   const detAlive=this.alivePlayers().find(p=>p.role==='detective'&&!p.isPlayer);
+   if(detAlive){
+    const targets=this.alivePlayers().filter(p=>p.id!==detAlive.id&&this.detKnown[p.id]===undefined);
+    if(targets.length){
+     const t=targets[Math.floor(Math.random()*targets.length)];
+     this.detKnown[t.id]=(t.role==='mafia');
+    }
+   }
+  }
+
+  // Apply kill
+  if(killTarget!==null&&this.players[killTarget]){
+   const victim=this.players[killTarget];
+   victim.alive=false;
+   this.mafiaKills++;
+   this.eliminated.push({id:victim.id,name:victim.name,role:victim.role,round:this.round,phase:'night'});
+   const log=`🌙 밤 사이에 ${victim.name}이(가) 제거되었습니다.`;
+   this.gameLog.push(log);
+   this.pendingElimType='night';
+   this.showElimination(victim,'night',null);
+  }else{
+   // No kill (mafia already dead somehow)
+   this.gameLog.push('🌙 평화로운 밤이었습니다.');
+   this.round++;
+   if(this.round>this.maxRounds){
+    this.showGameResult(this.determineFinalResult());
+   }else{
+    this.showRoleReveal();
+   }
+  }
+
+  // Track survival
+  if(this.players[0].alive)this.survivalRounds=this.round;
+ },
+
+ // === GAME END ===
+ alivePlayers(){return this.players.filter(p=>p.alive)},
+
+ checkGameEnd(){
+  const alive=this.alivePlayers();
+  const mafAlive=alive.filter(p=>p.role==='mafia').length;
+  const civAlive=alive.filter(p=>p.role!=='mafia').length;
+  if(mafAlive===0)return'citizen_win';
+  if(mafAlive>=civAlive)return'mafia_win';
+  return null;
+ },
+
+ determineFinalResult(){
+  const alive=this.alivePlayers();
+  const mafAlive=alive.filter(p=>p.role==='mafia').length;
+  if(mafAlive===0)return'citizen_win';
+  return'mafia_win';
+ },
+
+ showGameResult(result){
+  this.phase='result';
+  const playerIsMafia=this.playerRole==='mafia';
+  const won=(result==='citizen_win'&&!playerIsMafia)||(result==='mafia_win'&&playerIsMafia);
+
+  if(won)this.sfxWin();else this.sfxLose();
+
+  this.recordGame(won,this.playerRole,this.round);
+  this.showScreen('screen-result');
+
+  document.getElementById('result-icon').textContent=won?'🏆':'💀';
+  document.getElementById('result-title').textContent=won?'승리!':'패배...';
+  document.getElementById('result-title').style.color=won?'var(--gold)':'var(--danger)';
+  document.getElementById('result-desc').textContent=result==='citizen_win'?'시민이 마피아를 모두 찾아냈습니다!':'마피아가 마을을 장악했습니다...';
+
+  const accuracy=this.totalVotes>0?Math.round(this.correctVotes/this.totalVotes*100):0;
+  document.getElementById('result-stats').innerHTML=`
+   <div class="stat-box"><div class="stat-val">${this.roleName(this.playerRole)}</div><div class="stat-label">내 역할</div></div>
+   <div class="stat-box"><div class="stat-val">${this.round}R</div><div class="stat-label">진행 라운드</div></div>
+   <div class="stat-box"><div class="stat-val">${accuracy}%</div><div class="stat-label">투표 정확도</div></div>
+   <div class="stat-box"><div class="stat-val">${this.eliminated.length}</div><div class="stat-label">총 제거 수</div></div>`;
+
+  document.getElementById('result-roles').innerHTML='<p style="font-size:.85em;color:var(--dim);margin-bottom:8px">역할 공개</p>'+
+   this.players.map(p=>{
+    const dead=!p.alive;
+    return`<div style="display:flex;align-items:center;gap:10px;padding:6px 0;${dead?'opacity:.5':''}">
+     <span style="color:${p.color}">${p.avatar}</span>
+     <span style="flex:1">${p.name}${p.isPlayer?' (나)':''}</span>
+     <span style="color:${p.role==='mafia'?'var(--neon2)':p.role==='detective'?'var(--neon3)':'var(--dim)'};font-size:.85em">${this.roleName(p.role)}</span>
+     ${dead?'<span>💀</span>':'<span>✓</span>'}
+    </div>`}).join('');
+ },
+
+ // === KEYBOARD ===
+ handleKey(e){
+  if(this.phase==='day'&&document.getElementById('vote-section').style.display!=='none'){
+   const num=parseInt(e.key);
+   if(num>=1&&num<=4){
+    const alive=this.alivePlayers().filter(p=>!p.isPlayer);
+    if(alive[num-1]){
+     const rows=document.querySelectorAll('#vote-list .player-row');
+     if(rows[num-1])this.selectVote(alive[num-1].id,rows[num-1]);
+    }
+   }
+   if(e.key==='s'||e.key==='S')this.skipVote();
+  }
+  if(e.key==='Enter'){
+   if(this.phase==='role')this.startDay();
+  }
+ }
+};
+
+// Event listeners
+document.addEventListener('keydown',e=>G.handleKey(e));
+document.addEventListener('touchstart',()=>G.initAudio(),{once:true});
+document.addEventListener('click',()=>G.initAudio(),{once:true});
+
+// Telegram WebApp integration
+if(window.Telegram&&window.Telegram.WebApp){
+ try{
+  Telegram.WebApp.ready();
+  Telegram.WebApp.expand();
+  Telegram.WebApp.setHeaderColor('#0a0a1a');
+  Telegram.WebApp.setBackgroundColor('#0a0a1a');
+ }catch(e){}
+}
+
+// Service Worker registration
+if('serviceWorker'in navigator){
+ navigator.serviceWorker.register('sw.js').catch(()=>{});
+}
+</script>
+</body>
+</html>

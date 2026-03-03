@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>Loadstone — 구조 물리 퍼즐</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1B2838">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;overflow:hidden;background:#1B2838;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;color:#E8D5B7;touch-action:none;user-select:none}
+#app{display:flex;flex-direction:column;height:100%;max-width:600px;margin:0 auto}
+#topbar{display:flex;align-items:center;justify-content:space-between;padding:6px 12px;background:#162232;border-bottom:2px solid #2B4A6E;min-height:44px;flex-shrink:0}
+#topbar .level-name{font-size:15px;font-weight:700;letter-spacing:0.5px}
+#topbar .budget-display{font-size:13px;display:flex;align-items:center;gap:6px}
+#topbar .budget-display .coin{color:#D4A03C;font-weight:700}
+#canvas-wrap{flex:1;position:relative;overflow:hidden}
+#gameCanvas{display:block;width:100%;height:100%}
+#overlay{position:absolute;top:0;left:0;right:0;bottom:0;display:none;background:rgba(27,40,56,0.92);flex-direction:column;align-items:center;justify-content:center;z-index:10;padding:20px}
+#overlay.show{display:flex}
+#overlay h2{font-size:24px;margin-bottom:8px;color:#D4A03C}
+#overlay .subtitle{font-size:14px;margin-bottom:16px;text-align:center;line-height:1.5;max-width:300px;color:#8FA4B8}
+#overlay .stars-display{font-size:36px;margin-bottom:16px;letter-spacing:8px}
+#overlay .btn-row{display:flex;gap:12px;margin-top:8px}
+.btn{padding:10px 22px;border:2px solid #2B4A6E;border-radius:8px;background:#1B2838;color:#E8D5B7;font-size:14px;font-weight:600;cursor:pointer;transition:all .15s}
+.btn:hover,.btn:active{background:#2B4A6E;border-color:#D4A03C}
+.btn.primary{background:#2B4A6E;border-color:#D4A03C;color:#D4A03C}
+#toolbar{display:flex;align-items:center;justify-content:space-between;padding:6px 8px;background:#162232;border-top:2px solid #2B4A6E;min-height:56px;flex-shrink:0;gap:4px}
+.mat-btn{display:flex;flex-direction:column;align-items:center;padding:4px 10px;border:2px solid transparent;border-radius:8px;background:none;color:#E8D5B7;cursor:pointer;font-size:11px;gap:2px;transition:all .15s}
+.mat-btn .swatch{width:20px;height:20px;border-radius:4px;border:2px solid rgba(255,255,255,0.15)}
+.mat-btn.active{border-color:#D4A03C;background:rgba(212,160,60,0.12)}
+.mat-btn .cost{font-size:10px;color:#8FA4B8}
+.tool-btn{width:40px;height:40px;border:2px solid #2B4A6E;border-radius:8px;background:none;color:#E8D5B7;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.tool-btn:hover,.tool-btn:active{background:#2B4A6E;border-color:#E8D5B7}
+.tool-btn.test-btn{background:#2B4A6E;border-color:#4A8B5C;color:#4A8B5C;font-size:13px;font-weight:700;width:auto;padding:0 14px}
+.tool-btn.test-btn.running{border-color:#C45B28;color:#C45B28}
+#progress-bar{height:3px;background:#2B4A6E;flex-shrink:0}
+#progress-fill{height:100%;width:0;background:#4A8B5C;transition:width .1s linear}
+#menu-screen{position:absolute;top:0;left:0;right:0;bottom:0;background:#1B2838;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:20;padding:20px}
+#menu-screen.hide{display:none}
+#menu-screen h1{font-size:32px;color:#D4A03C;margin-bottom:4px;letter-spacing:2px}
+#menu-screen .tagline{font-size:13px;color:#8FA4B8;margin-bottom:24px}
+#level-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;max-width:280px;width:100%;margin-bottom:20px}
+.level-cell{aspect-ratio:1;border:2px solid #2B4A6E;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;background:#162232;transition:all .15s;font-size:18px;font-weight:700}
+.level-cell:hover,.level-cell:active{border-color:#D4A03C;background:#1B2838}
+.level-cell.locked{opacity:0.35;cursor:default}
+.level-cell.locked:hover{border-color:#2B4A6E;background:#162232}
+.level-cell .cell-stars{font-size:10px;margin-top:2px;letter-spacing:1px}
+#hint-bar{position:absolute;top:50px;left:50%;transform:translateX(-50%);background:rgba(22,34,50,0.92);border:1px solid #2B4A6E;border-radius:8px;padding:8px 16px;font-size:12px;color:#8FA4B8;text-align:center;max-width:300px;z-index:5;pointer-events:none;opacity:0;transition:opacity .3s}
+#hint-bar.show{opacity:1}
+@media(max-width:480px){
+  #topbar{padding:4px 8px;min-height:38px}
+  #topbar .level-name{font-size:13px}
+  #toolbar{padding:4px 6px;min-height:50px}
+  .mat-btn{padding:3px 7px;font-size:10px}
+  .mat-btn .swatch{width:16px;height:16px}
+  #overlay h2{font-size:20px}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <span class="level-name" id="levelName">Level 1</span>
+    <span class="budget-display"><span class="coin">◆</span> <span id="budgetText">500</span></span>
+  </div>
+  <div id="progress-bar"><div id="progress-fill"></div></div>
+  <div id="canvas-wrap">
+    <canvas id="gameCanvas"></canvas>
+    <div id="overlay">
+      <h2 id="overlayTitle">Level Complete!</h2>
+      <div class="stars-display" id="overlayStars">★★★</div>
+      <p class="subtitle" id="overlaySubtitle">Your structure held firm!</p>
+      <div class="btn-row">
+        <button class="btn" id="overlayBtnA">Menu</button>
+        <button class="btn primary" id="overlayBtnB">Next</button>
+      </div>
+    </div>
+    <div id="hint-bar"></div>
+  </div>
+  <div id="toolbar">
+    <div style="display:flex;gap:4px" id="matBtns"></div>
+    <div style="display:flex;gap:4px;align-items:center">
+      <button class="tool-btn" id="undoBtn" title="Undo">↩</button>
+      <button class="tool-btn" id="resetBtn" title="Reset">⟲</button>
+      <button class="tool-btn" id="eraseBtn" title="Eraser">✕</button>
+      <button class="tool-btn test-btn" id="testBtn">TEST</button>
+    </div>
+  </div>
+</div>
+<div id="menu-screen">
+  <h1>LOADSTONE</h1>
+  <p class="tagline">구조 물리 퍼즐 — Build. Test. Survive.</p>
+  <div id="level-grid"></div>
+  <button class="btn primary" id="menuPlayBtn" style="padding:12px 40px;font-size:16px">PLAY</button>
+</div>
+
+<script>
+'use strict';
+// ====== TELEGRAM WEBAPP ======
+try{if(window.Telegram&&Telegram.WebApp){Telegram.WebApp.expand();Telegram.WebApp.ready()}}catch(e){}
+
+// ====== AUDIO ======
+const AudioCtx=window.AudioContext||window.webkitAudioContext;
+let actx=null;
+function ensureAudio(){if(!actx)actx=new AudioCtx();if(actx.state==='suspended')actx.resume()}
+function playTone(freq,dur,type,vol){
+  ensureAudio();if(!actx)return;
+  const o=actx.createOscillator(),g=actx.createGain();
+  o.type=type||'triangle';o.frequency.value=freq;
+  g.gain.setValueAtTime(vol||0.12,actx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001,actx.currentTime+dur);
+  o.connect(g);g.connect(actx.destination);
+  o.start();o.stop(actx.currentTime+dur);
+}
+function sfxPlace(){playTone(520,0.08,'square',0.08);playTone(660,0.06,'square',0.06)}
+function sfxRemove(){playTone(300,0.1,'sawtooth',0.06)}
+function sfxBreak(){playTone(120,0.3,'sawtooth',0.15);playTone(80,0.4,'square',0.1)}
+function sfxSuccess(){playTone(523,0.15,'triangle',0.1);setTimeout(()=>playTone(659,0.15,'triangle',0.1),120);setTimeout(()=>playTone(784,0.3,'triangle',0.12),240)}
+function sfxFail(){playTone(200,0.3,'sawtooth',0.1);playTone(150,0.4,'sawtooth',0.08)}
+function sfxClick(){playTone(800,0.04,'square',0.05)}
+function sfxStress(){playTone(100+Math.random()*60,0.15,'sawtooth',0.04)}
+
+// ====== MATERIALS ======
+const MAT={
+  wood:{id:'wood',name:'Wood',cost:40,maxStrain:0.07,color:'#C4883A',strokeW:4},
+  steel:{id:'steel',name:'Steel',cost:100,maxStrain:0.025,color:'#8FA4B8',strokeW:5},
+  cable:{id:'cable',name:'Cable',cost:60,maxStrain:0.12,color:'#4A8B5C',strokeW:3,tensionOnly:true}
+};
+
+// ====== LEVELS ======
+const LEVELS=[
+{name:'The Gap',desc:'Bridge the gap with beams.',cols:7,rows:5,
+ anchors:[[0,4],[6,4]],loads:[[3,4,120]],budget:300,mats:['wood'],
+ stars:[300,220,160],hint:'Tap two adjacent nodes to place a beam.'},
+
+{name:'Triangle Power',desc:'Triangles are the strongest shape.',cols:7,rows:6,
+ anchors:[[0,5],[6,5]],loads:[[3,5,180]],budget:450,mats:['wood'],
+ stars:[450,340,260],hint:'Diagonal beams create triangles for strength.'},
+
+{name:'Deep Valley',desc:'Build supports from below.',cols:8,rows:7,
+ anchors:[[0,3],[7,3],[3,6],[4,6]],loads:[[3,3,200],[4,3,200]],budget:600,mats:['wood'],
+ stars:[600,440,340],hint:'Use bottom anchors as support pillars.'},
+
+{name:'Heavy Duty',desc:'Some loads need stronger materials.',cols:7,rows:6,
+ anchors:[[0,5],[6,5]],loads:[[3,5,400]],budget:700,mats:['wood','steel'],
+ stars:[700,520,400],hint:'Steel is expensive but handles heavy loads.'},
+
+{name:'Suspension',desc:'Hang your bridge from above.',cols:8,rows:7,
+ anchors:[[0,6],[7,6],[2,0],[5,0]],loads:[[3,6,250],[4,6,250]],budget:800,mats:['wood','cable'],
+ stars:[800,600,460],hint:'Cables work in tension — hang beams from top anchors.'},
+
+{name:'The Arch',desc:'Discover the power of arches.',cols:9,rows:7,
+ anchors:[[0,6],[8,6],[4,6]],loads:[[2,4,180],[6,4,180]],budget:750,mats:['wood','steel'],
+ stars:[750,560,420],hint:'Arched shapes distribute load efficiently.'},
+
+{name:'Quake Zone',desc:'Survive the earthquake!',cols:8,rows:6,
+ anchors:[[0,5],[7,5],[3,5],[4,5]],loads:[[2,3,200],[5,3,200]],budget:900,mats:['wood','steel','cable'],
+ stars:[900,680,520],quake:0.6,hint:'Diagonal bracing resists lateral forces.'},
+
+{name:'Masterwork',desc:'The ultimate structural challenge.',cols:9,rows:7,
+ anchors:[[0,6],[8,6],[4,6],[1,0],[7,0]],loads:[[2,4,300],[4,2,250],[6,4,300]],budget:1200,mats:['wood','steel','cable'],
+ stars:[1200,900,700],quake:0.3,hint:'Combine all techniques for the final test.'}
+];
+
+// ====== STATE ======
+let S={
+  screen:'menu',level:0,selectedMat:'wood',eraseMode:false,
+  nodes:[],beams:[],particles:[],
+  selNode:null,budget:0,spent:0,
+  testing:false,testTime:0,testDur:7,loadRamp:2,
+  passed:false,failed:false,
+  kbCursor:{x:0,y:0},kbActive:false,
+  history:[],shakeX:0,shakeY:0,shakeDecay:0
+};
+
+let save={unlocked:1,stars:{}};
+try{const s=localStorage.getItem('loadstone_save');if(s)save=JSON.parse(s)}catch(e){}
+function saveProg(){try{localStorage.setItem('loadstone_save',JSON.stringify(save))}catch(e){}}
+
+// ====== CANVAS ======
+const cvs=document.getElementById('gameCanvas');
+const ctx=cvs.getContext('2d');
+let W=0,H=0,cellW=0,cellH=0,gridOX=0,gridOY=0;
+
+function resize(){
+  const wrap=cvs.parentElement;
+  const dpr=Math.min(window.devicePixelRatio||1,2);
+  W=wrap.clientWidth;H=wrap.clientHeight;
+  cvs.width=W*dpr;cvs.height=H*dpr;
+  cvs.style.width=W+'px';cvs.style.height=H+'px';
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  calcGrid();
+}
+window.addEventListener('resize',resize);
+
+function calcGrid(){
+  if(S.screen!=='game')return;
+  const lv=LEVELS[S.level];
+  const padX=30,padY=30;
+  cellW=Math.min((W-padX*2)/(lv.cols-1),55);
+  cellH=Math.min((H-padY*2)/(lv.rows-1),55);
+  const cs=Math.min(cellW,cellH);cellW=cs;cellH=cs;
+  gridOX=(W-(lv.cols-1)*cellW)/2;
+  gridOY=(H-(lv.rows-1)*cellH)/2;
+}
+
+// ====== NODE/BEAM ======
+class Node{
+  constructor(gx,gy,fixed){
+    this.gx=gx;this.gy=gy;this.fixed=fixed;
+    this.x=0;this.y=0;this.px=0;this.py=0;this.ox=0;this.oy=0;
+  }
+  setPos(){this.x=gridOX+this.gx*cellW;this.y=gridOY+this.gy*cellH;this.px=this.x;this.py=this.y;this.ox=this.x;this.oy=this.y}
+}
+class Beam{
+  constructor(a,b,mat){
+    this.a=a;this.b=b;this.mat=mat;
+    this.restLen=0;this.stress=0;this.broken=false;this.breakAnim=0;
+  }
+  calcRest(){const dx=this.a.x-this.b.x,dy=this.a.y-this.b.y;this.restLen=Math.sqrt(dx*dx+dy*dy)}
+}
+
+function nodeAt(gx,gy){return S.nodes.find(n=>n.gx===gx&&n.gy===gy)}
+function beamBetween(a,b){return S.beams.find(be=>!be.broken&&((be.a===a&&be.b===b)||(be.a===b&&be.b===a)))}
+function isAdjacent(a,b){return Math.abs(a.gx-b.gx)<=1&&Math.abs(a.gy-b.gy)<=1&&(a!==b)}
+
+// ====== LEVEL INIT ======
+function initLevel(idx){
+  S.level=idx;S.screen='game';
+  const lv=LEVELS[idx];
+  S.nodes=[];S.beams=[];S.particles=[];S.history=[];
+  S.selNode=null;S.testing=false;S.testTime=0;S.passed=false;S.failed=false;
+  S.selectedMat=lv.mats[0];S.eraseMode=false;
+  S.spent=0;S.budget=lv.budget;S.shakeX=0;S.shakeY=0;S.shakeDecay=0;
+  // create nodes
+  for(let gy=0;gy<lv.rows;gy++)for(let gx=0;gx<lv.cols;gx++){
+    const fixed=lv.anchors.some(a=>a[0]===gx&&a[1]===gy);
+    S.nodes.push(new Node(gx,gy,fixed));
+  }
+  calcGrid();
+  S.nodes.forEach(n=>n.setPos());
+  updateUI();showMenu(false);
+  showHint(lv.hint||'');
+}
+
+// ====== PHYSICS ======
+const GRAVITY=400;const ITERATIONS=16;const SUB_STEPS=4;
+
+function stepPhysics(dt){
+  const lv=LEVELS[S.level];
+  const subDt=dt/SUB_STEPS;
+  for(let sub=0;sub<SUB_STEPS;sub++){
+    // Verlet integration
+    for(const n of S.nodes){
+      if(n.fixed)continue;
+      const vx=n.x-n.px,vy=n.y-n.py;
+      n.px=n.x;n.py=n.y;
+      n.x+=vx*0.998; // slight damping
+      n.y+=vy*0.998+GRAVITY*subDt*subDt;
+    }
+    // Apply loads
+    const ramp=Math.min(S.testTime/S.loadRamp,1);
+    for(const ld of lv.loads){
+      const node=nodeAt(ld[0],ld[1]);
+      if(node&&!node.fixed){node.y+=ld[2]*ramp*subDt*subDt*0.01}
+    }
+    // Earthquake
+    if(lv.quake&&lv.quake>0){
+      const qForce=lv.quake*Math.sin(S.testTime*4.5)*ramp;
+      for(const n of S.nodes){
+        if(n.fixed){n.x=n.ox+qForce*cellW*0.3}
+      }
+    }
+    // Solve constraints
+    for(let i=0;i<ITERATIONS;i++){
+      for(const b of S.beams){
+        if(b.broken)continue;
+        const dx=b.b.x-b.a.x,dy=b.b.y-b.a.y;
+        const dist=Math.sqrt(dx*dx+dy*dy)||0.001;
+        const diff=(dist-b.restLen)/dist;
+        const strain=Math.abs(dist-b.restLen)/b.restLen;
+        b.stress=strain/b.mat.maxStrain;
+        // tension-only cables
+        if(b.mat.tensionOnly&&dist<b.restLen){b.stress=0;continue}
+        if(b.stress>1.0){
+          b.broken=true;b.breakAnim=1;
+          spawnBreakParticles(b);sfxBreak();
+          continue;
+        }
+        const stiffness=0.45;
+        if(!b.a.fixed&&!b.b.fixed){
+          b.a.x+=dx*stiffness*diff;b.a.y+=dy*stiffness*diff;
+          b.b.x-=dx*stiffness*diff;b.b.y-=dy*stiffness*diff;
+        }else if(!b.a.fixed){
+          b.a.x+=dx*diff*stiffness*2;b.a.y+=dy*diff*stiffness*2;
+        }else if(!b.b.fixed){
+          b.b.x-=dx*diff*stiffness*2;b.b.y-=dy*diff*stiffness*2;
+        }
+      }
+    }
+  }
+}
+
+// ====== PARTICLES ======
+function spawnBreakParticles(beam){
+  const mx=(beam.a.x+beam.b.x)/2,my=(beam.a.y+beam.b.y)/2;
+  for(let i=0;i<8;i++){
+    const ang=Math.random()*Math.PI*2,spd=40+Math.random()*80;
+    S.particles.push({x:mx,y:my,vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd-30,
+      life:1,color:beam.mat.color,size:2+Math.random()*3});
+  }
+  S.shakeX=(Math.random()-0.5)*6;S.shakeY=(Math.random()-0.5)*6;S.shakeDecay=0.3;
+}
+function updateParticles(dt){
+  for(let i=S.particles.length-1;i>=0;i--){
+    const p=S.particles[i];
+    p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=300*dt;p.life-=dt*1.5;
+    if(p.life<=0)S.particles.splice(i,1);
+  }
+  if(S.shakeDecay>0){S.shakeDecay-=dt;if(S.shakeDecay<=0){S.shakeX=0;S.shakeY=0}}
+  else{S.shakeX*=0.9;S.shakeY*=0.9}
+}
+
+// ====== TEST LOGIC ======
+function startTest(){
+  if(S.testing)return;
+  if(S.beams.filter(b=>!b.broken).length===0)return;
+  S.testing=true;S.testTime=0;S.passed=false;S.failed=false;
+  S.nodes.forEach(n=>n.setPos());
+  S.beams.forEach(b=>{b.stress=0;b.broken=false;b.calcRest()});
+  S.particles=[];
+  document.getElementById('testBtn').classList.add('running');
+  document.getElementById('testBtn').textContent='STOP';
+  ensureAudio();
+}
+function stopTest(){
+  S.testing=false;S.testTime=0;
+  S.nodes.forEach(n=>n.setPos());
+  S.beams.forEach(b=>{b.stress=0;b.broken=false});
+  S.particles=[];S.shakeX=0;S.shakeY=0;
+  document.getElementById('testBtn').classList.remove('running');
+  document.getElementById('testBtn').textContent='TEST';
+  document.getElementById('progress-fill').style.width='0%';
+}
+function checkTestResult(){
+  const lv=LEVELS[S.level];
+  // Check if load-bearing nodes have fallen too far
+  for(const ld of lv.loads){
+    const n=nodeAt(ld[0],ld[1]);
+    if(!n)continue;
+    const dy=n.y-n.oy;
+    if(dy>cellH*2.5){S.failed=true;return}
+  }
+  // Check if all beams broke
+  if(S.beams.filter(b=>!b.broken).length===0&&S.beams.length>0){S.failed=true;return}
+  // Check if time passed
+  if(S.testTime>=S.testDur){S.passed=true}
+}
+
+function onTestEnd(success){
+  stopTest();
+  const lv=LEVELS[S.level];
+  const ov=document.getElementById('overlay');
+  if(success){
+    sfxSuccess();
+    let starCount=1;
+    const remaining=S.budget-S.spent;
+    if(remaining>=lv.budget-lv.stars[1])starCount=2;
+    if(remaining>=lv.budget-lv.stars[2])starCount=3;
+    const starStr='★'.repeat(starCount)+'☆'.repeat(3-starCount);
+    document.getElementById('overlayTitle').textContent='Structure Holds!';
+    document.getElementById('overlayStars').textContent=starStr;
+    document.getElementById('overlayStars').style.color='#D4A03C';
+    document.getElementById('overlaySubtitle').textContent=
+      `Budget: ◆${S.spent} / ${lv.budget} — Remaining: ◆${remaining}`;
+    document.getElementById('overlayBtnA').textContent='Menu';
+    document.getElementById('overlayBtnA').onclick=()=>{ov.classList.remove('show');showMenu(true)};
+    const hasNext=S.level<LEVELS.length-1;
+    document.getElementById('overlayBtnB').textContent=hasNext?'Next Level':'Menu';
+    document.getElementById('overlayBtnB').onclick=()=>{
+      ov.classList.remove('show');
+      if(hasNext)initLevel(S.level+1);else showMenu(true);
+    };
+    // Save progress
+    const prev=save.stars[S.level]||0;
+    if(starCount>prev)save.stars[S.level]=starCount;
+    if(S.level+1>=save.unlocked)save.unlocked=Math.min(S.level+2,LEVELS.length);
+    saveProg();
+  }else{
+    sfxFail();
+    document.getElementById('overlayTitle').textContent='Collapse!';
+    document.getElementById('overlayStars').textContent='💥';
+    document.getElementById('overlayStars').style.color='#C45B28';
+    document.getElementById('overlaySubtitle').textContent='Your structure couldn\'t handle the load.';
+    document.getElementById('overlayBtnA').textContent='Menu';
+    document.getElementById('overlayBtnA').onclick=()=>{ov.classList.remove('show');showMenu(true)};
+    document.getElementById('overlayBtnB').textContent='Retry';
+    document.getElementById('overlayBtnB').onclick=()=>{ov.classList.remove('show');initLevel(S.level)};
+  }
+  ov.classList.add('show');
+}
+
+// ====== RENDER ======
+function stressColor(stress){
+  if(stress<0.3)return '#4A8B5C';
+  if(stress<0.6)return '#D4A03C';
+  if(stress<0.85)return '#C47828';
+  return '#C45B28';
+}
+
+function render(){
+  ctx.save();
+  ctx.translate(S.shakeX,S.shakeY);
+  // Background
+  ctx.fillStyle='#1B2838';ctx.fillRect(-10,-10,W+20,H+20);
+  if(S.screen!=='game'){ctx.restore();return}
+  const lv=LEVELS[S.level];
+  // Grid
+  ctx.strokeStyle='rgba(43,74,110,0.25)';ctx.lineWidth=1;
+  for(let gy=0;gy<lv.rows;gy++){
+    for(let gx=0;gx<lv.cols;gx++){
+      const x=gridOX+gx*cellW,y=gridOY+gy*cellH;
+      ctx.beginPath();ctx.arc(x,y,2.5,0,Math.PI*2);ctx.stroke();
+    }
+  }
+  // Grid lines (faint)
+  ctx.strokeStyle='rgba(43,74,110,0.12)';ctx.lineWidth=0.5;
+  for(let gy=0;gy<lv.rows;gy++){
+    ctx.beginPath();ctx.moveTo(gridOX,gridOY+gy*cellH);
+    ctx.lineTo(gridOX+(lv.cols-1)*cellW,gridOY+gy*cellH);ctx.stroke();
+  }
+  for(let gx=0;gx<lv.cols;gx++){
+    ctx.beginPath();ctx.moveTo(gridOX+gx*cellW,gridOY);
+    ctx.lineTo(gridOX+gx*cellW,gridOY+(lv.rows-1)*cellH);ctx.stroke();
+  }
+  // Beams
+  for(const b of S.beams){
+    if(b.broken){
+      if(b.breakAnim>0){
+        ctx.globalAlpha=b.breakAnim;
+        ctx.strokeStyle='#C45B28';ctx.lineWidth=b.mat.strokeW;
+        ctx.setLineDash([4,4]);
+        ctx.beginPath();ctx.moveTo(b.a.x,b.a.y);ctx.lineTo(b.b.x,b.b.y);ctx.stroke();
+        ctx.setLineDash([]);ctx.globalAlpha=1;
+        b.breakAnim-=0.02;
+      }
+      continue;
+    }
+    const col=S.testing?stressColor(b.stress):b.mat.color;
+    ctx.strokeStyle=col;ctx.lineWidth=b.mat.strokeW;
+    if(b.mat.tensionOnly){ctx.setLineDash([6,4])}
+    ctx.beginPath();ctx.moveTo(b.a.x,b.a.y);ctx.lineTo(b.b.x,b.b.y);ctx.stroke();
+    ctx.setLineDash([]);
+    // Stress glow
+    if(S.testing&&b.stress>0.5){
+      ctx.strokeStyle=stressColor(b.stress);ctx.lineWidth=b.mat.strokeW+4;
+      ctx.globalAlpha=0.15+b.stress*0.15;
+      ctx.beginPath();ctx.moveTo(b.a.x,b.a.y);ctx.lineTo(b.b.x,b.b.y);ctx.stroke();
+      ctx.globalAlpha=1;
+    }
+  }
+  // Nodes
+  for(const n of S.nodes){
+    const x=n.x,y=n.y;
+    if(n.fixed){
+      // Anchor triangle
+      ctx.fillStyle='#D4A03C';
+      ctx.beginPath();
+      ctx.moveTo(x,y-6);ctx.lineTo(x-7,y+6);ctx.lineTo(x+7,y+6);ctx.closePath();ctx.fill();
+      ctx.strokeStyle='#1B2838';ctx.lineWidth=1.5;ctx.stroke();
+      // Hash lines under anchor
+      ctx.strokeStyle='rgba(212,160,60,0.4)';ctx.lineWidth=1;
+      for(let i=0;i<3;i++){
+        ctx.beginPath();ctx.moveTo(x-8+i*4,y+8);ctx.lineTo(x-5+i*4,y+12);ctx.stroke();
+      }
+    }else{
+      // Normal node
+      const hasBeam=S.beams.some(b=>!b.broken&&(b.a===n||b.b===n));
+      ctx.fillStyle=hasBeam?'#E8D5B7':'rgba(232,213,183,0.3)';
+      ctx.beginPath();ctx.arc(x,y,hasBeam?4:3,0,Math.PI*2);ctx.fill();
+    }
+    // Selection highlight
+    if(n===S.selNode&&!S.testing){
+      ctx.strokeStyle='#D4A03C';ctx.lineWidth=2;
+      ctx.beginPath();ctx.arc(x,y,10,0,Math.PI*2);ctx.stroke();
+    }
+  }
+  // Keyboard cursor
+  if(S.kbActive&&!S.testing){
+    const cn=nodeAt(S.kbCursor.x,S.kbCursor.y);
+    if(cn){
+      ctx.strokeStyle='rgba(232,213,183,0.5)';ctx.lineWidth=1.5;
+      ctx.setLineDash([3,3]);
+      ctx.beginPath();ctx.arc(cn.x,cn.y,12,0,Math.PI*2);ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+  // Load indicators
+  for(const ld of lv.loads){
+    const n=nodeAt(ld[0],ld[1]);
+    if(!n)continue;
+    const ramp=S.testing?Math.min(S.testTime/S.loadRamp,1):0;
+    const arrowLen=15+ld[2]*0.05;
+    // Arrow
+    ctx.strokeStyle=S.testing?`rgba(196,91,40,${0.3+ramp*0.7})`:'rgba(196,91,40,0.5)';
+    ctx.lineWidth=2.5;
+    ctx.beginPath();ctx.moveTo(n.x,n.y-arrowLen-8);ctx.lineTo(n.x,n.y-8);ctx.stroke();
+    ctx.fillStyle=ctx.strokeStyle;
+    ctx.beginPath();ctx.moveTo(n.x,n.y-4);ctx.lineTo(n.x-5,n.y-12);ctx.lineTo(n.x+5,n.y-12);ctx.closePath();ctx.fill();
+    // Weight label
+    ctx.fillStyle='rgba(196,91,40,0.7)';ctx.font='bold 10px system-ui';ctx.textAlign='center';
+    ctx.fillText(ld[2]+'kg',n.x,n.y-arrowLen-12);
+  }
+  // Particles
+  for(const p of S.particles){
+    ctx.globalAlpha=p.life;
+    ctx.fillStyle=p.color;
+    ctx.fillRect(p.x-p.size/2,p.y-p.size/2,p.size,p.size);
+  }
+  ctx.globalAlpha=1;
+  // Erase mode indicator
+  if(S.eraseMode&&!S.testing){
+    ctx.fillStyle='rgba(196,91,40,0.15)';ctx.fillRect(0,0,W,H);
+    ctx.fillStyle='#C45B28';ctx.font='bold 12px system-ui';ctx.textAlign='center';
+    ctx.fillText('ERASE MODE — tap a beam to remove',W/2,20);
+  }
+  ctx.restore();
+}
+
+// ====== UI ======
+function updateUI(){
+  const lv=LEVELS[S.level];
+  document.getElementById('levelName').textContent=`${S.level+1}. ${lv.name}`;
+  document.getElementById('budgetText').textContent=`${S.budget-S.spent} / ${S.budget}`;
+  // Material buttons
+  const matDiv=document.getElementById('matBtns');
+  matDiv.innerHTML='';
+  for(const mid of lv.mats){
+    const m=MAT[mid];
+    const btn=document.createElement('button');
+    btn.className='mat-btn'+(S.selectedMat===mid&&!S.eraseMode?' active':'');
+    btn.innerHTML=`<span class="swatch" style="background:${m.color}"></span><span>${m.name}</span><span class="cost">◆${m.cost}</span>`;
+    btn.onclick=()=>{S.selectedMat=mid;S.eraseMode=false;updateUI();sfxClick()};
+    matDiv.appendChild(btn);
+  }
+  // Erase button
+  document.getElementById('eraseBtn').style.borderColor=S.eraseMode?'#C45B28':'#2B4A6E';
+  document.getElementById('eraseBtn').style.color=S.eraseMode?'#C45B28':'#E8D5B7';
+}
+
+function showHint(text){
+  const hb=document.getElementById('hint-bar');
+  if(!text){hb.classList.remove('show');return}
+  hb.textContent=text;hb.classList.add('show');
+  setTimeout(()=>hb.classList.remove('show'),4000);
+}
+
+// ====== MENU ======
+function showMenu(show){
+  const ms=document.getElementById('menu-screen');
+  if(show){
+    ms.classList.remove('hide');S.screen='menu';
+    renderLevelGrid();
+  }else{
+    ms.classList.add('hide');S.screen='game';
+  }
+}
+
+function renderLevelGrid(){
+  const grid=document.getElementById('level-grid');
+  grid.innerHTML='';
+  for(let i=0;i<LEVELS.length;i++){
+    const cell=document.createElement('div');
+    cell.className='level-cell'+(i>=save.unlocked?' locked':'');
+    const starCount=save.stars[i]||0;
+    const starStr=starCount>0?('★'.repeat(starCount)+'☆'.repeat(3-starCount)):'';
+    cell.innerHTML=`${i+1}<span class="cell-stars" style="color:#D4A03C">${starStr}</span>`;
+    if(i<save.unlocked){
+      cell.onclick=()=>{sfxClick();initLevel(i)};
+    }
+    grid.appendChild(cell);
+  }
+}
+
+document.getElementById('menuPlayBtn').onclick=()=>{
+  sfxClick();ensureAudio();
+  const firstUnbeaten=Object.keys(save.stars).length;
+  const lvl=Math.min(firstUnbeaten,save.unlocked-1,LEVELS.length-1);
+  initLevel(Math.max(0,lvl));
+};
+
+// ====== INPUT ======
+function getNodeNear(px,py,radius){
+  let best=null,bestD=radius||28;
+  for(const n of S.nodes){
+    const dx=n.x-px,dy=n.y-py,d=Math.sqrt(dx*dx+dy*dy);
+    if(d<bestD){bestD=d;best=n}
+  }
+  return best;
+}
+
+function getBeamNear(px,py,radius){
+  let best=null,bestD=radius||15;
+  for(const b of S.beams){
+    if(b.broken)continue;
+    // Point-to-segment distance
+    const dx=b.b.x-b.a.x,dy=b.b.y-b.a.y;
+    const len2=dx*dx+dy*dy;
+    let t=Math.max(0,Math.min(1,((px-b.a.x)*dx+(py-b.a.y)*dy)/len2));
+    const cx=b.a.x+t*dx,cy=b.a.y+t*dy;
+    const d=Math.sqrt((px-cx)**2+(py-cy)**2);
+    if(d<bestD){bestD=d;best=b}
+  }
+  return best;
+}
+
+function handleTap(px,py){
+  if(S.testing)return;
+  if(S.eraseMode){
+    const beam=getBeamNear(px,py);
+    if(beam){removeBeam(beam);sfxRemove()}
+    return;
+  }
+  const node=getNodeNear(px,py);
+  if(!node)return;
+  if(!S.selNode){
+    S.selNode=node;sfxClick();
+  }else if(S.selNode===node){
+    S.selNode=null;sfxClick();
+  }else{
+    if(isAdjacent(S.selNode,node)&&!beamBetween(S.selNode,node)){
+      placeBeam(S.selNode,node);
+    }
+    S.selNode=null;
+  }
+  updateUI();
+}
+
+function placeBeam(a,b){
+  const m=MAT[S.selectedMat];
+  if(S.spent+m.cost>S.budget){showHint('Not enough budget!');return}
+  const beam=new Beam(a,b,m);
+  beam.calcRest();
+  S.beams.push(beam);
+  S.spent+=m.cost;
+  S.history.push({type:'place',beam:beam,cost:m.cost});
+  sfxPlace();updateUI();
+}
+
+function removeBeam(beam){
+  const idx=S.beams.indexOf(beam);
+  if(idx>=0){
+    S.beams.splice(idx,1);
+    S.spent-=beam.mat.cost;
+    S.history.push({type:'remove',beam:beam,cost:beam.mat.cost});
+    updateUI();
+  }
+}
+
+function undo(){
+  if(S.testing||S.history.length===0)return;
+  const h=S.history.pop();
+  if(h.type==='place'){
+    const idx=S.beams.indexOf(h.beam);
+    if(idx>=0)S.beams.splice(idx,1);
+    S.spent-=h.cost;
+  }else if(h.type==='remove'){
+    S.beams.push(h.beam);
+    S.spent+=h.cost;
+  }
+  sfxClick();updateUI();
+}
+
+// Touch
+cvs.addEventListener('pointerdown',e=>{
+  e.preventDefault();
+  const rect=cvs.getBoundingClientRect();
+  handleTap(e.clientX-rect.left,e.clientY-rect.top);
+  S.kbActive=false;
+});
+
+// Keyboard
+document.addEventListener('keydown',e=>{
+  if(S.screen!=='game')return;
+  const lv=LEVELS[S.level];
+  S.kbActive=true;
+  switch(e.key){
+    case'ArrowLeft':S.kbCursor.x=Math.max(0,S.kbCursor.x-1);e.preventDefault();break;
+    case'ArrowRight':S.kbCursor.x=Math.min(lv.cols-1,S.kbCursor.x+1);e.preventDefault();break;
+    case'ArrowUp':S.kbCursor.y=Math.max(0,S.kbCursor.y-1);e.preventDefault();break;
+    case'ArrowDown':S.kbCursor.y=Math.min(lv.rows-1,S.kbCursor.y+1);e.preventDefault();break;
+    case' ':case'Enter':{
+      e.preventDefault();
+      const n=nodeAt(S.kbCursor.x,S.kbCursor.y);
+      if(n)handleTap(n.x,n.y);
+      break;
+    }
+    case'1':if(lv.mats[0]){S.selectedMat=lv.mats[0];S.eraseMode=false;updateUI()}break;
+    case'2':if(lv.mats[1]){S.selectedMat=lv.mats[1];S.eraseMode=false;updateUI()}break;
+    case'3':if(lv.mats[2]){S.selectedMat=lv.mats[2];S.eraseMode=false;updateUI()}break;
+    case't':case'T':document.getElementById('testBtn').click();break;
+    case'r':case'R':document.getElementById('resetBtn').click();break;
+    case'z':if(e.ctrlKey||e.metaKey){undo();e.preventDefault()}break;
+    case'e':case'E':document.getElementById('eraseBtn').click();break;
+    case'Escape':if(S.testing)stopTest();else showMenu(true);break;
+  }
+});
+
+// Toolbar buttons
+document.getElementById('testBtn').onclick=()=>{
+  sfxClick();if(S.testing)stopTest();else startTest();
+};
+document.getElementById('resetBtn').onclick=()=>{sfxClick();initLevel(S.level)};
+document.getElementById('undoBtn').onclick=()=>undo();
+document.getElementById('eraseBtn').onclick=()=>{
+  S.eraseMode=!S.eraseMode;S.selNode=null;sfxClick();updateUI();
+};
+
+// ====== GAME LOOP ======
+let lastTime=0;let stressSfxTimer=0;
+function loop(ts){
+  const dt=Math.min((ts-lastTime)/1000,0.033);
+  lastTime=ts;
+  if(S.testing&&!S.passed&&!S.failed){
+    S.testTime+=dt;
+    stepPhysics(dt);
+    checkTestResult();
+    // Progress bar
+    const pct=Math.min(S.testTime/S.testDur*100,100);
+    document.getElementById('progress-fill').style.width=pct+'%';
+    // Stress creaking
+    stressSfxTimer-=dt;
+    if(stressSfxTimer<=0){
+      const maxStress=Math.max(...S.beams.filter(b=>!b.broken).map(b=>b.stress),0);
+      if(maxStress>0.6){sfxStress();stressSfxTimer=0.4+Math.random()*0.3}
+      else stressSfxTimer=0.5;
+    }
+    if(S.passed)onTestEnd(true);
+    if(S.failed)onTestEnd(false);
+  }
+  updateParticles(dt);
+  render();
+  requestAnimationFrame(loop);
+}
+
+// ====== INIT ======
+resize();
+showMenu(true);
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

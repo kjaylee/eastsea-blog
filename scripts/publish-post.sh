@@ -4,7 +4,7 @@
 #   예시: ./scripts/publish-post.sh 2026-03-03-indie-game-trend
 #
 # 크론/서브에이전트 표준 발행 절차:
-#   cd /Users/kjaylee/.openclaw/workspace/eastsea-blog
+#   cd "$WORKSPACE/eastsea-blog"
 #   bash scripts/publish-post.sh YYYY-MM-DD-slug
 
 set -euo pipefail

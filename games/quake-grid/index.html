@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Quake Grid — J&amp;J Games</title>
+<meta name="description" content="행/열을 진동시켜 같은 숫자 크리스탈을 충돌·합성하는 신개념 퍼즐. 제한된 퀘이크 횟수 안에 목표 점수를 달성하라!">
+<meta name="keywords" content="puzzle, 퍼즐, grid, 그리드, merge, 합성, HTML5 game, J&J Games">
+<meta name="author" content="J&amp;J Games">
+<meta property="og:title" content="Quake Grid — J&amp;J Games">
+<meta property="og:description" content="행/열을 진동시켜 같은 숫자 크리스탈을 충돌·합성하는 신개념 퍼즐. 제한된 퀘이크 횟수 안에 목표 점수를 달성하라!">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://eastsea.xyz/games/quake-grid/">
+<meta property="og:image" content="https://eastsea.xyz/games/quake-grid/thumb.png">
+<meta property="og:site_name" content="J&amp;J Games">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Quake Grid — J&amp;J Games">
+<meta name="twitter:description" content="행/열을 진동시켜 같은 숫자 크리스탈을 충돌·합성하는 신개념 퍼즐.">
+<meta name="twitter:image" content="https://eastsea.xyz/games/quake-grid/thumb.png">
+<link rel="canonical" href="https://eastsea.xyz/games/quake-grid/">
+<script src="https://cdn.jsdelivr.net/npm/littlejs/dist/littlejs.min.js"></script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "VideoGame",
+  "name": "Quake Grid",
+  "description": "행/열을 진동시켜 같은 숫자 크리스탈을 합성하는 신개념 퍼즐.",
+  "url": "https://eastsea.xyz/games/quake-grid/",
+  "image": "https://eastsea.xyz/games/quake-grid/thumb.png",
+  "author": {"@type": "Organization", "name": "J&J Games"},
+  "genre": "Puzzle",
+  "gamePlatform": "Web Browser",
+  "operatingSystem": "Any",
+  "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}
+}
+</script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#1c1428;overflow:hidden;touch-action:manipulation;font-family:'Segoe UI',system-ui,sans-serif}
+#app{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;width:100%;height:100%;max-width:480px;margin:0 auto;padding:10px;gap:8px}
+#header{width:100%;display:flex;justify-content:space-between;align-items:center;padding:4px 0}
+#header h1{font-size:clamp(16px,5vw,22px);color:#f0e6ff;font-weight:900;letter-spacing:1px}
+#stats{display:flex;gap:10px;font-size:12px;font-weight:700}
+.stat{background:#2d1f3d;border:1px solid #4a3070;border-radius:8px;padding:4px 10px;color:#e2d9f3}
+.stat span{color:#ffd54f}
+#levelBar{width:100%;background:#2d1f3d;border:1px solid #4a3070;border-radius:8px;padding:6px 12px;font-size:12px;color:#b39ddb;display:flex;justify-content:space-between;align-items:center}
+#progressBar{width:100%;height:6px;background:#3d2b5c;border-radius:4px;overflow:hidden;margin-top:3px}
+#progressFill{height:100%;background:linear-gradient(90deg,#26c6da,#ec407a);border-radius:4px;transition:width 0.4s}
+#gridWrap{position:relative;flex:0 0 auto}
+#gridCanvas{display:block;image-rendering:pixelated;touch-action:none}
+#quakeHint{font-size:11px;color:#7e6a9e;text-align:center;margin-top:2px}
+#overlay,#winScreen,#loseScreen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(28,20,40,0.95);z-index:30;color:#f0e6ff;text-align:center;padding:20px;gap:12px}
+#winScreen,#loseScreen{display:none}
+#overlay h1{font-size:clamp(28px,8vw,44px);color:#26c6da;letter-spacing:2px}
+#winScreen h2{color:#ffd54f;font-size:clamp(24px,7vw,38px)}
+#loseScreen h2{color:#ec407a;font-size:clamp(24px,7vw,38px)}
+.desc{font-size:13px;color:#9e8ab5;line-height:1.9;max-width:320px}
+.mechanic-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;max-width:320px;font-size:12px}
+.mechanic-box{background:#2d1f3d;border:1px solid #4a3070;border-radius:8px;padding:8px;text-align:center}
+.mechanic-box .icon{font-size:20px;margin-bottom:4px}
+.mechanic-box p{color:#b39ddb;font-size:11px;line-height:1.5}
+.play-btn{background:linear-gradient(135deg,#26c6da,#7b1fa2);color:#fff;border:none;border-radius:12px;padding:13px 40px;font-size:17px;font-weight:900;cursor:pointer;letter-spacing:1px;transition:transform 0.1s;margin-top:4px}
+.play-btn:active{transform:scale(0.95)}
+.result-stat{font-size:16px;color:#ffd54f}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="header">
+    <h1>⚡ Quake Grid</h1>
+    <div id="stats">
+      <div class="stat">점수 <span id="scoreEl">0</span></div>
+      <div class="stat">퀘이크 <span id="quakesEl">?</span></div>
+    </div>
+  </div>
+  <div id="levelBar">
+    <span>레벨 <span id="levelEl">1</span> / 10 — 목표: <span id="targetEl">0</span>점</span>
+    <span id="quakesLeft">남은 퀘이크: <span id="qLeft">?</span></span>
+  </div>
+  <div id="progressBar"><div id="progressFill" style="width:0%"></div></div>
+  <div id="gridWrap">
+    <canvas id="gridCanvas"></canvas>
+  </div>
+  <div id="quakeHint">← → 화살표를 탭하거나 키보드 화살표 키 + Enter</div>
+</div>
+
+<div id="overlay">
+  <h1>⚡ Quake Grid</h1>
+  <div class="desc">행/열 화살표를 눌러 크리스탈을 같은 방향으로 밀어라.<br>같은 숫자끼리 충돌하면 <b style="color:#ffd54f">합성</b>! 5단계에서 <b style="color:#ec407a">폭발 소거</b>!</div>
+  <div class="mechanic-grid">
+    <div class="mechanic-box"><div class="icon">⬅️</div><p>행을 왼쪽으로<br>퀘이크</p></div>
+    <div class="mechanic-box"><div class="icon">➡️</div><p>행을 오른쪽으로<br>퀘이크</p></div>
+    <div class="mechanic-box"><div class="icon">⬆️</div><p>열을 위로<br>퀘이크</p></div>
+    <div class="mechanic-box"><div class="icon">⬇️</div><p>열을 아래로<br>퀘이크</p></div>
+  </div>
+  <div class="desc" style="font-size:12px">합성 성공 → +점수<br>제한 퀘이크 내 목표 달성 → 레벨 업!</div>
+  <button class="play-btn" id="startBtn">게임 시작</button>
+</div>
+
+<div id="winScreen">
+  <h2>🎉 레벨 클리어!</h2>
+  <div class="result-stat">획득 점수: <span id="winScore">0</span></div>
+  <div class="result-stat">누적 점수: <span id="totalScore">0</span></div>
+  <button class="play-btn" id="nextBtn">다음 레벨</button>
+</div>
+
+<div id="loseScreen">
+  <h2>💥 퀘이크 소진!</h2>
+  <div class="result-stat">최종 점수: <span id="loseScore">0</span></div>
+  <div class="result-stat">🏆 최고점: <span id="loseBest">0</span></div>
+  <button class="play-btn" id="retryBtn">처음부터</button>
+</div>
+
+<script>
+// ── Audio ─────────────────────────────────────────────────────
+const AC = new (window.AudioContext || window.webkitAudioContext)();
+function tone(freq, type, dur, vol=0.3) {
+  try {
+    const o=AC.createOscillator(), g=AC.createGain();
+    o.connect(g); g.connect(AC.destination);
+    o.type=type; o.frequency.value=freq;
+    g.gain.setValueAtTime(0, AC.currentTime);
+    g.gain.linearRampToValueAtTime(vol, AC.currentTime+0.01);
+    g.gain.exponentialRampToValueAtTime(0.001, AC.currentTime+dur);
+    o.start(); o.stop(AC.currentTime+dur+0.05);
+  } catch(e){}
+}
+function sfxSlide() {
+  tone(80, 'sawtooth', 0.18, 0.25);
+  tone(60, 'sine', 0.2, 0.15);
+}
+function sfxMerge(level) {
+  const freqs = [220,330,440,660,880];
+  const f = freqs[Math.min(level-1,4)];
+  tone(f, 'sine', 0.25, 0.35);
+  tone(f*1.5, 'triangle', 0.2, 0.2);
+}
+function sfxClear() {
+  [880,1320,1760,2200].forEach((f,i)=>{
+    setTimeout(()=>tone(f,'sine',0.3,0.3),i*60);
+  });
+}
+function sfxLevelUp() {
+  [440,554,659,880,1108].forEach((f,i)=>setTimeout(()=>tone(f,'sine',0.35,0.28),i*80));
+}
+function sfxGameOver() {
+  [330,220,165,110].forEach((f,i)=>setTimeout(()=>tone(f,'sawtooth',0.3,0.25),i*90));
+}
+
+// ── Grid Constants ────────────────────────────────────────────
+const GRID_COLS = 6, GRID_ROWS = 6;
+const MAX_VAL = 4;
+const CRYSTAL_COLORS = [
+  null,           // 0 = empty
+  {bg:'#006064',fg:'#26c6da',text:'#e0f7fa'}, // 1 = aqua
+  {bg:'#1b5e20',fg:'#66bb6a',text:'#e8f5e9'}, // 2 = jade
+  {bg:'#e65100',fg:'#ffa726',text:'#fff3e0'}, // 3 = amber
+  {bg:'#880e4f',fg:'#ec407a',text:'#fce4ec'}, // 4 = rose
+];
+
+// ── Levels ───────────────────────────────────────────────────
+const LEVELS = [
+  // {grid:6x6 values, target, maxQuakes}
+  { target:20,  maxQ:10, setup: ()=>mkGrid([[0,0,0,0,0,0],[0,1,0,1,0,0],[0,0,0,0,0,0],[0,1,0,0,1,0],[0,0,0,0,0,0],[0,0,0,0,0,0]]) },
+  { target:50,  maxQ:12, setup: ()=>mkGrid([[0,1,0,2,0,0],[0,0,1,0,0,2],[0,0,0,0,0,0],[0,0,2,0,1,0],[0,1,0,0,0,2],[0,0,0,0,0,0]]) },
+  { target:80,  maxQ:12, setup: ()=>mkGrid([[1,0,2,0,1,0],[0,0,0,2,0,1],[2,0,0,0,0,0],[0,1,0,2,0,1],[0,0,1,0,2,0],[0,0,0,0,0,0]]) },
+  { target:120, maxQ:14, setup: ()=>mkGrid([[1,2,0,0,2,1],[0,0,1,2,0,0],[2,0,3,0,1,0],[0,1,0,3,0,2],[0,2,0,0,1,0],[1,0,2,0,0,3]]) },
+  { target:160, maxQ:14, setup: ()=>mkGrid([[2,0,1,0,3,0],[0,3,0,2,0,1],[1,0,2,0,0,3],[3,0,0,1,2,0],[0,2,3,0,1,0],[0,1,0,3,0,2]]) },
+  { target:220, maxQ:16, setup: ()=>mkGrid([[3,1,0,2,0,1],[1,0,2,0,3,0],[0,2,1,3,0,2],[2,0,3,1,0,3],[1,3,0,2,1,0],[0,1,2,0,3,1]]) },
+  { target:280, maxQ:16, setup: ()=>mkGrid([[1,3,2,0,1,2],[3,0,1,2,3,0],[2,1,3,1,0,3],[0,2,0,3,2,1],[3,1,2,0,3,2],[1,2,3,1,0,3]]) },
+  { target:340, maxQ:18, setup: ()=>mkGrid([[2,3,1,4,2,1],[1,2,3,1,4,3],[3,4,2,3,1,2],[4,1,3,2,3,4],[2,3,4,1,2,3],[1,2,3,4,1,2]]) },
+  { target:420, maxQ:18, setup: ()=>mkGrid([[3,4,2,3,1,4],[4,1,3,4,2,3],[2,3,4,2,3,1],[1,2,3,1,4,2],[4,3,1,3,2,4],[2,4,2,4,3,1]]) },
+  { target:520, maxQ:20, setup: ()=>mkGrid([[4,3,2,4,3,2],[3,2,4,3,2,4],[2,4,3,2,4,3],[4,3,2,4,3,2],[3,2,4,3,2,4],[2,4,3,2,4,3]]) },
+];
+
+function mkGrid(arr) {
+  const g = [];
+  for (let r = 0; r < GRID_ROWS; r++) {
+    g.push([]);
+    for (let c = 0; c < GRID_COLS; c++) {
+      g[r].push({ val: arr[r][c], flash: 0, merge: 0, shake: 0 });
+    }
+  }
+  return g;
+}
+
+// ── Game State ────────────────────────────────────────────────
+let grid, score, totalScore, best, levelIdx, quakesLeft, levelScore, gameActive;
+let animFrames = [];
+let CELL_SIZE, GRID_OFFSET_X, GRID_OFFSET_Y;
+let selectedRow = -1, selectedCol = -1;
+let animQueue = [];
+let animating = false;
+
+best = parseInt(localStorage.getItem('quakegrid_best') || '0');
+
+const cv = document.getElementById('gridCanvas');
+const ctx2 = cv.getContext('2d');
+
+function setupCanvas() {
+  const wrap = document.getElementById('gridWrap');
+  const maxW = Math.min(window.innerWidth - 20, 480);
+  const maxH = window.innerHeight - 200;
+  CELL_SIZE = Math.floor(Math.min(maxW, maxH) / (GRID_COLS + 2));
+  CELL_SIZE = Math.min(CELL_SIZE, 64);
+  const totalW = CELL_SIZE * (GRID_COLS + 2);
+  const totalH = CELL_SIZE * (GRID_ROWS + 2);
+  cv.width = totalW; cv.height = totalH;
+  cv.style.width = totalW + 'px';
+  cv.style.height = totalH + 'px';
+  GRID_OFFSET_X = CELL_SIZE; // room for arrows on left
+  GRID_OFFSET_Y = CELL_SIZE; // room for arrows on top
+}
+
+function startGame() {
+  AC.resume();
+  document.getElementById('overlay').style.display = 'none';
+  document.getElementById('winScreen').style.display = 'none';
+  document.getElementById('loseScreen').style.display = 'none';
+  totalScore = 0;
+  score = 0;
+  levelIdx = 0;
+  best = parseInt(localStorage.getItem('quakegrid_best') || '0');
+  loadLevel(levelIdx);
+  gameActive = true;
+  setupCanvas();
+  scheduleRender();
+}
+
+function loadLevel(idx) {
+  const lv = LEVELS[idx];
+  grid = lv.setup();
+  quakesLeft = lv.maxQ;
+  levelScore = 0;
+  updateUI();
+}
+
+function updateUI() {
+  const lv = LEVELS[levelIdx];
+  document.getElementById('scoreEl').textContent = totalScore + levelScore;
+  document.getElementById('levelEl').textContent = levelIdx + 1;
+  document.getElementById('targetEl').textContent = lv.target;
+  document.getElementById('quakesEl').textContent = quakesLeft;
+  document.getElementById('qLeft').textContent = quakesLeft;
+  const pct = Math.min(100, Math.round(levelScore / lv.target * 100));
+  document.getElementById('progressFill').style.width = pct + '%';
+}
+
+// ── Quake Logic ────────────────────────────────────────────────
+function quakeRow(row, dir) {
+  // dir: 'left' or 'right'
+  if (quakesLeft <= 0 || animating) return;
+  quakesLeft--;
+  sfxSlide();
+  let merged = false;
+  if (dir === 'left') {
+    for (let c = 0; c < GRID_COLS - 1; c++) {
+      for (let cc = c+1; cc < GRID_COLS; cc++) {
+        if (grid[row][cc].val > 0) {
+          // Move this to c
+          if (grid[row][c].val === 0) {
+            grid[row][c] = {...grid[row][cc], shake:4};
+            grid[row][cc] = {val:0,flash:0,merge:0,shake:0};
+          } else if (grid[row][c].val === grid[row][cc].val && grid[row][c].val < MAX_VAL) {
+            // Merge
+            const newVal = grid[row][c].val + 1;
+            grid[row][c] = {val:newVal, flash:0, merge:12, shake:4};
+            grid[row][cc] = {val:0,flash:0,merge:0,shake:0};
+            const pts = Math.pow(2, newVal) * 10;
+            levelScore += pts;
+            merged = true;
+            sfxMerge(newVal);
+            if (newVal > MAX_VAL) { grid[row][c].val = 0; grid[row][c].merge = 0; sfxClear(); levelScore += 100; }
+          } else { break; }
+          break;
+        }
+      }
+    }
+    // Compact left
+    const vals = grid[row].filter(c => c.val > 0);
+    for (let c = 0; c < GRID_COLS; c++) {
+      if (c < vals.length) grid[row][c] = {...vals[c], shake:4};
+      else grid[row][c] = {val:0,flash:0,merge:0,shake:0};
+    }
+  } else { // right
+    for (let c = GRID_COLS-1; c > 0; c--) {
+      for (let cc = c-1; cc >= 0; cc--) {
+        if (grid[row][cc].val > 0) {
+          if (grid[row][c].val === 0) {
+            grid[row][c] = {...grid[row][cc], shake:4};
+            grid[row][cc] = {val:0,flash:0,merge:0,shake:0};
+          } else if (grid[row][c].val === grid[row][cc].val && grid[row][c].val < MAX_VAL) {
+            const newVal = grid[row][c].val + 1;
+            grid[row][c] = {val:newVal, flash:0, merge:12, shake:4};
+            grid[row][cc] = {val:0,flash:0,merge:0,shake:0};
+            const pts = Math.pow(2, newVal) * 10;
+            levelScore += pts;
+            merged = true;
+            sfxMerge(newVal);
+            if (newVal > MAX_VAL) { grid[row][c].val = 0; grid[row][c].merge = 0; sfxClear(); levelScore += 100; }
+          } else { break; }
+          break;
+        }
+      }
+    }
+    // Compact right
+    const vals = grid[row].filter(c => c.val > 0).reverse();
+    for (let c = GRID_COLS-1; c >= 0; c--) {
+      const idx = GRID_COLS-1-c;
+      if (idx < vals.length) grid[row][c] = {...vals[idx], shake:4};
+      else grid[row][c] = {val:0,flash:0,merge:0,shake:0};
+    }
+  }
+  updateUI();
+  checkWin();
+}
+
+function quakeCol(col, dir) {
+  // dir: 'up' or 'down'
+  if (quakesLeft <= 0 || animating) return;
+  quakesLeft--;
+  sfxSlide();
+  if (dir === 'up') {
+    // Compact up with merge
+    const vals = [];
+    for (let r = 0; r < GRID_ROWS; r++) if (grid[r][col].val > 0) vals.push({...grid[r][col]});
+    // Process merges going up
+    const merged = [];
+    let i = 0;
+    while (i < vals.length) {
+      if (i+1 < vals.length && vals[i].val === vals[i+1].val && vals[i].val < MAX_VAL) {
+        const newVal = vals[i].val + 1;
+        const pts = Math.pow(2, newVal) * 10;
+        levelScore += pts;
+        sfxMerge(newVal);
+        let cell = {val: newVal, flash:0, merge:12, shake:4};
+        if (newVal > MAX_VAL) { cell.val = 0; sfxClear(); levelScore += 100; }
+        merged.push(cell);
+        i += 2;
+      } else {
+        merged.push({...vals[i], shake:4});
+        i++;
+      }
+    }
+    for (let r = 0; r < GRID_ROWS; r++) {
+      if (r < merged.length && merged[r].val > 0) grid[r][col] = merged[r];
+      else grid[r][col] = {val:0,flash:0,merge:0,shake:0};
+    }
+  } else { // down
+    const vals = [];
+    for (let r = GRID_ROWS-1; r >= 0; r--) if (grid[r][col].val > 0) vals.push({...grid[r][col]});
+    const merged = [];
+    let i = 0;
+    while (i < vals.length) {
+      if (i+1 < vals.length && vals[i].val === vals[i+1].val && vals[i].val < MAX_VAL) {
+        const newVal = vals[i].val + 1;
+        const pts = Math.pow(2, newVal) * 10;
+        levelScore += pts;
+        sfxMerge(newVal);
+        let cell = {val: newVal, flash:0, merge:12, shake:4};
+        if (newVal > MAX_VAL) { cell.val = 0; sfxClear(); levelScore += 100; }
+        merged.push(cell);
+        i += 2;
+      } else {
+        merged.push({...vals[i], shake:4});
+        i++;
+      }
+    }
+    for (let r = GRID_ROWS-1; r >= 0; r--) {
+      const idx = GRID_ROWS-1-r;
+      if (idx < merged.length && merged[idx].val > 0) grid[r][col] = merged[idx];
+      else grid[r][col] = {val:0,flash:0,merge:0,shake:0};
+    }
+  }
+  updateUI();
+  checkWin();
+}
+
+function checkWin() {
+  const lv = LEVELS[levelIdx];
+  if (levelScore >= lv.target) {
+    totalScore += levelScore;
+    if (totalScore > best) {
+      best = totalScore;
+      localStorage.setItem('quakegrid_best', best);
+    }
+    sfxLevelUp();
+    if (levelIdx >= LEVELS.length - 1) {
+      // Final win!
+      showWin(true);
+    } else {
+      showWin(false);
+    }
+    return;
+  }
+  if (quakesLeft <= 0) {
+    totalScore += levelScore;
+    if (totalScore > best) {
+      best = totalScore;
+      localStorage.setItem('quakegrid_best', best);
+    }
+    sfxGameOver();
+    document.getElementById('loseScore').textContent = totalScore;
+    document.getElementById('loseBest').textContent = best;
+    document.getElementById('loseScreen').style.display = 'flex';
+  }
+}
+
+function showWin(final) {
+  document.getElementById('winScore').textContent = levelScore;
+  document.getElementById('totalScore').textContent = totalScore;
+  const btn = document.getElementById('nextBtn');
+  btn.textContent = final ? '🎊 게임 완료!' : '다음 레벨 →';
+  document.getElementById('winScreen').style.display = 'flex';
+}
+
+// ── Rendering ─────────────────────────────────────────────────
+let rafId;
+function scheduleRender() {
+  if (rafId) cancelAnimationFrame(rafId);
+  rafId = requestAnimationFrame(renderLoop);
+}
+let frameN = 0;
+function renderLoop() {
+  frameN++;
+  render();
+  // Decay animations
+  for (let r = 0; r < GRID_ROWS; r++)
+    for (let c = 0; c < GRID_COLS; c++) {
+      if (grid[r][c].merge > 0) grid[r][c].merge--;
+      if (grid[r][c].shake > 0) grid[r][c].shake--;
+    }
+  rafId = requestAnimationFrame(renderLoop);
+}
+
+function render() {
+  ctx2.clearRect(0, 0, cv.width, cv.height);
+  // Background
+  ctx2.fillStyle = '#1c1428';
+  ctx2.fillRect(0, 0, cv.width, cv.height);
+  drawGrid();
+  drawArrows();
+}
+
+function cellX(c) { return GRID_OFFSET_X + c * CELL_SIZE; }
+function cellY(r) { return GRID_OFFSET_Y + r * CELL_SIZE; }
+
+function drawGrid() {
+  for (let r = 0; r < GRID_ROWS; r++) {
+    for (let c = 0; c < GRID_COLS; c++) {
+      const x = cellX(c), y = cellY(r);
+      const cell = grid[r][c];
+      const shakeX = cell.shake > 0 ? (Math.random()-0.5)*cell.shake*1.5 : 0;
+      const shakeY = cell.shake > 0 ? (Math.random()-0.5)*cell.shake*1.5 : 0;
+      // Cell background
+      ctx2.fillStyle = '#2d1f3d';
+      ctx2.fillRect(x+1, y+1, CELL_SIZE-2, CELL_SIZE-2);
+
+      if (cell.val > 0) {
+        const cc = CRYSTAL_COLORS[cell.val];
+        const cx = x + CELL_SIZE/2 + shakeX;
+        const cy = y + CELL_SIZE/2 + shakeY;
+        const r2 = CELL_SIZE * 0.38;
+        // Merge flash
+        const mergeScale = cell.merge > 0 ? 1 + (cell.merge/12)*0.3 : 1;
+        ctx2.save();
+        ctx2.translate(cx, cy);
+        ctx2.scale(mergeScale, mergeScale);
+        // Crystal background circle
+        ctx2.shadowColor = cc.fg;
+        ctx2.shadowBlur = cell.merge > 0 ? 18 : 8;
+        ctx2.fillStyle = cc.bg;
+        ctx2.beginPath();
+        // Diamond shape
+        ctx2.moveTo(0, -r2);
+        ctx2.lineTo(r2*0.7, 0);
+        ctx2.lineTo(0, r2);
+        ctx2.lineTo(-r2*0.7, 0);
+        ctx2.closePath();
+        ctx2.fill();
+        // Inner lighter
+        ctx2.fillStyle = cc.fg;
+        ctx2.globalAlpha = 0.5;
+        ctx2.beginPath();
+        ctx2.moveTo(0, -r2*0.5);
+        ctx2.lineTo(r2*0.35, 0);
+        ctx2.lineTo(0, r2*0.5);
+        ctx2.lineTo(-r2*0.35, 0);
+        ctx2.closePath();
+        ctx2.fill();
+        ctx2.globalAlpha = 1;
+        ctx2.shadowBlur = 0;
+        // Number
+        ctx2.fillStyle = cc.text;
+        ctx2.font = `bold ${Math.round(CELL_SIZE*0.35)}px sans-serif`;
+        ctx2.textAlign = 'center';
+        ctx2.textBaseline = 'middle';
+        ctx2.fillText(cell.val, 0, 1);
+        ctx2.restore();
+      }
+    }
+  }
+}
+
+function drawArrows() {
+  const arrowSize = CELL_SIZE * 0.4;
+  ctx2.font = `${Math.round(arrowSize)}px sans-serif`;
+  ctx2.textAlign = 'center';
+  ctx2.textBaseline = 'middle';
+
+  // Row arrows (left and right sides)
+  for (let r = 0; r < GRID_ROWS; r++) {
+    const y = cellY(r) + CELL_SIZE/2;
+    // Left arrow
+    ctx2.fillStyle = hoverRow === r && hoverDir === 'left' ? '#26c6da' : '#4a3070';
+    ctx2.fillText('◀', GRID_OFFSET_X/2, y);
+    // Right arrow
+    ctx2.fillStyle = hoverRow === r && hoverDir === 'right' ? '#26c6da' : '#4a3070';
+    ctx2.fillText('▶', GRID_OFFSET_X + GRID_COLS*CELL_SIZE + GRID_OFFSET_X/2, y);
+  }
+
+  // Col arrows (top and bottom)
+  for (let c = 0; c < GRID_COLS; c++) {
+    const x = cellX(c) + CELL_SIZE/2;
+    // Up arrow
+    ctx2.fillStyle = hoverCol === c && hoverDir === 'up' ? '#ec407a' : '#4a3070';
+    ctx2.fillText('▲', x, GRID_OFFSET_Y/2);
+    // Down arrow
+    ctx2.fillStyle = hoverCol === c && hoverDir === 'down' ? '#ec407a' : '#4a3070';
+    ctx2.fillText('▼', x, GRID_OFFSET_Y + GRID_ROWS*CELL_SIZE + GRID_OFFSET_Y/2);
+  }
+}
+
+// ── Input Handling ────────────────────────────────────────────
+let hoverRow = -1, hoverCol = -1, hoverDir = '';
+
+function getArrowClick(x, y) {
+  // Left arrows column
+  if (x < GRID_OFFSET_X) {
+    const r = Math.floor((y - GRID_OFFSET_Y) / CELL_SIZE);
+    if (r >= 0 && r < GRID_ROWS) return {type:'row', idx:r, dir:'left'};
+  }
+  // Right arrows column
+  if (x > GRID_OFFSET_X + GRID_COLS*CELL_SIZE) {
+    const r = Math.floor((y - GRID_OFFSET_Y) / CELL_SIZE);
+    if (r >= 0 && r < GRID_ROWS) return {type:'row', idx:r, dir:'right'};
+  }
+  // Top arrows row
+  if (y < GRID_OFFSET_Y) {
+    const c = Math.floor((x - GRID_OFFSET_X) / CELL_SIZE);
+    if (c >= 0 && c < GRID_COLS) return {type:'col', idx:c, dir:'up'};
+  }
+  // Bottom arrows row
+  if (y > GRID_OFFSET_Y + GRID_ROWS*CELL_SIZE) {
+    const c = Math.floor((x - GRID_OFFSET_X) / CELL_SIZE);
+    if (c >= 0 && c < GRID_COLS) return {type:'col', idx:c, dir:'down'};
+  }
+  return null;
+}
+
+function handleClick(cx, cy) {
+  if (!gameActive) return;
+  const arrow = getArrowClick(cx, cy);
+  if (!arrow) return;
+  if (arrow.type === 'row') quakeRow(arrow.idx, arrow.dir);
+  else quakeCol(arrow.idx, arrow.dir);
+}
+
+cv.addEventListener('click', e => {
+  AC.resume();
+  const rect = cv.getBoundingClientRect();
+  const scaleX = cv.width / rect.width;
+  const scaleY = cv.height / rect.height;
+  handleClick((e.clientX - rect.left)*scaleX, (e.clientY - rect.top)*scaleY);
+});
+
+cv.addEventListener('touchstart', e => {
+  e.preventDefault();
+  AC.resume();
+  const rect = cv.getBoundingClientRect();
+  const scaleX = cv.width / rect.width;
+  const scaleY = cv.height / rect.height;
+  const t = e.touches[0];
+  handleClick((t.clientX - rect.left)*scaleX, (t.clientY - rect.top)*scaleY);
+}, {passive:false});
+
+cv.addEventListener('mousemove', e => {
+  const rect = cv.getBoundingClientRect();
+  const scaleX = cv.width / rect.width;
+  const scaleY = cv.height / rect.height;
+  const cx = (e.clientX - rect.left)*scaleX;
+  const cy = (e.clientY - rect.top)*scaleY;
+  const arrow = getArrowClick(cx, cy);
+  if (arrow) {
+    hoverRow = arrow.type==='row' ? arrow.idx : -1;
+    hoverCol = arrow.type==='col' ? arrow.idx : -1;
+    hoverDir = arrow.dir;
+    cv.style.cursor = 'pointer';
+  } else {
+    hoverRow = -1; hoverCol = -1; hoverDir = '';
+    cv.style.cursor = 'default';
+  }
+});
+
+// Keyboard: arrow keys + shift to select, Enter to confirm
+let kbRow = 0, kbCol = 0, kbMode = 'row'; // 'row' or 'col'
+document.addEventListener('keydown', e => {
+  if (!gameActive) return;
+  if (e.code === 'ArrowLeft') { quakeRow(kbRow, 'left'); e.preventDefault(); }
+  if (e.code === 'ArrowRight') { quakeRow(kbRow, 'right'); e.preventDefault(); }
+  if (e.code === 'ArrowUp') { quakeCol(kbCol, 'up'); e.preventDefault(); }
+  if (e.code === 'ArrowDown') { quakeCol(kbCol, 'down'); e.preventDefault(); }
+  if (e.code === 'KeyW') kbRow = Math.max(0, kbRow-1);
+  if (e.code === 'KeyS') kbRow = Math.min(GRID_ROWS-1, kbRow+1);
+  if (e.code === 'KeyA') kbCol = Math.max(0, kbCol-1);
+  if (e.code === 'KeyD') kbCol = Math.min(GRID_COLS-1, kbCol+1);
+});
+
+// ── Button Handlers ───────────────────────────────────────────
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('nextBtn').addEventListener('click', () => {
+  document.getElementById('winScreen').style.display = 'none';
+  if (levelIdx < LEVELS.length - 1) {
+    levelIdx++;
+    loadLevel(levelIdx);
+    setupCanvas();
+  } else {
+    // All levels done, reset
+    startGame();
+  }
+});
+document.getElementById('retryBtn').addEventListener('click', startGame);
+
+// Initial setup
+setupCanvas();
+scheduleRender();
+</script>
+</body>
+</html>

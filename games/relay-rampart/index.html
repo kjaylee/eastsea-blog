@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+<title>Relay Rampart - 릴레이 램파트 | 무료 HTML5 게임</title>
+<meta name="description" content="두 앵커를 연결해 에너지 장벽을 만들고 코어를 지켜내는 실시간 디펜스 게임. Relay Rampart를 브라우저에서 바로 플레이하세요." />
+<meta name="keywords" content="defense,action,html5,canvas,littlejs,모바일게임,디펜스" />
+<meta name="author" content="J&J Games" />
+<meta property="og:title" content="Relay Rampart - 릴레이 램파트" />
+<meta property="og:description" content="앵커 2점을 연결해 장벽을 만들고 코어를 방어하는 오리지널 디펜스." />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://games.eastsea.xyz/relay-rampart/" />
+<meta property="og:image" content="https://games.eastsea.xyz/relay-rampart/og-image.png" />
+<meta property="og:site_name" content="J&J Games" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Relay Rampart - 릴레이 램파트" />
+<meta name="twitter:description" content="앵커를 이어 장벽을 만들고 돌진 드론을 반사하는 모바일 디펜스." />
+<link rel="canonical" href="https://games.eastsea.xyz/relay-rampart/" />
+<link rel="manifest" href="/games/manifest.json" />
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "VideoGame",
+  "name": "Relay Rampart",
+  "description": "Connect two anchors to form reflective barriers and defend the core in this real-time defense game.",
+  "genre": "Defense",
+  "gamePlatform": "Web Browser",
+  "applicationCategory": "Game",
+  "operatingSystem": "Any",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "author": { "@type": "Organization", "name": "J&J Games" },
+  "url": "https://games.eastsea.xyz/relay-rampart/"
+}
+</script>
+<script src="https://killedbyapixel.github.io/LittleJS/dist/littlejs.min.js"></script>
+<script src="../i18n.js"></script>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="../tg-sdk-wrapper.js"></script>
+<script src="../shared/sound-manager.js"></script>
+<script src="/shared/analytics.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;user-select:none}
+  html,body{width:100%;height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Noto Sans KR',sans-serif}
+  body{background:linear-gradient(180deg,#f5eddc 0%,#dbc8a8 100%);touch-action:none;color:#2f2b29}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+
+  .hud{position:fixed;left:0;top:0;width:100%;z-index:30;padding:calc(10px + env(safe-area-inset-top)) 10px 8px;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+  .hud.hidden{display:none}
+  .row{display:flex;gap:6px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+  .pill{background:rgba(255,255,255,.8);border:1px solid rgba(124,95,76,.25);border-radius:999px;padding:6px 10px;font-size:12px;font-weight:700;color:#3a2f28;backdrop-filter:blur(4px)}
+  .actions{display:flex;gap:6px;pointer-events:auto}
+  .hud-btn{border:none;border-radius:11px;padding:8px 10px;font-size:12px;font-weight:800;color:#fff;background:linear-gradient(135deg,#3a6073,#63b4d1);box-shadow:0 8px 16px rgba(58,96,115,.26)}
+  .hud-btn.alt{background:linear-gradient(135deg,#8a5a3f,#e58b5d);box-shadow:0 8px 16px rgba(126,78,52,.28)}
+  .hud-btn:disabled{opacity:.45;box-shadow:none}
+  .bar{height:10px;border-radius:999px;background:rgba(58,96,115,.15);overflow:hidden;border:1px solid rgba(58,96,115,.22)}
+  .fill{height:100%;width:100%;transition:width .12s linear}
+  .hp{background:linear-gradient(90deg,#8dd08b,#4e9f70)}
+  .xp{background:linear-gradient(90deg,#63b4d1,#3a6073)}
+
+  .panel{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:40;width:min(92vw,430px);background:rgba(255,248,235,.94);border:2px solid rgba(124,95,76,.23);border-radius:18px;padding:18px 16px;text-align:center;box-shadow:0 20px 42px rgba(88,70,49,.24)}
+  .panel.hidden{display:none}
+  .panel h1{font-size:30px;line-height:1.1;color:#3a2f28;margin-bottom:8px}
+  .panel p{font-size:14px;line-height:1.45;color:#4f433c}
+  .panel .desc{margin:8px 0 12px}
+  .panel .mini{font-size:12px;color:#6b5d54;margin-top:10px;line-height:1.5}
+  .btn-row{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px}
+  .btn{border:none;cursor:pointer;border-radius:12px;padding:12px 14px;min-width:128px;font-size:14px;font-weight:800;color:#fff;background:linear-gradient(135deg,#3a6073,#63b4d1);box-shadow:0 8px 16px rgba(58,96,115,.28)}
+  .btn.secondary{background:linear-gradient(135deg,#7c5f4c,#d09063);box-shadow:0 8px 16px rgba(124,95,76,.24)}
+  .stats{margin-top:8px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
+
+  #leaderboard{position:fixed;right:8px;bottom:calc(8px + env(safe-area-inset-bottom));z-index:20;max-width:min(90vw,330px);transform:scale(.84);transform-origin:bottom right;pointer-events:none}
+  #toast{position:fixed;left:50%;bottom:calc(14px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:50;background:rgba(58,47,40,.9);color:#fff;border-radius:999px;padding:9px 13px;font-size:12px;font-weight:700;opacity:0;transition:opacity .18s}
+  #toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div id="hud" class="hud hidden">
+  <div class="row">
+    <div class="pill" id="hudScore">Score 0</div>
+    <div class="pill" id="hudWave">Wave 1</div>
+    <div class="pill" id="hudLevel">Lv 1</div>
+    <div class="pill" id="hudCore">Core 5</div>
+    <div class="pill" id="hudEnergy">EN 0</div>
+  </div>
+  <div class="row actions">
+    <button id="btnPulse" class="hud-btn" type="button">Pulse</button>
+    <button id="btnGate" class="hud-btn alt" type="button">Gate +</button>
+  </div>
+  <div class="bar"><div id="hpFill" class="fill hp"></div></div>
+  <div class="bar"><div id="xpFill" class="fill xp"></div></div>
+</div>
+
+<section id="titleScreen" class="panel">
+  <h1 id="titleText">Relay Rampart</h1>
+  <p id="titleDesc" class="desc">Connect two anchors to forge a barrier and reflect incoming drones.</p>
+  <div class="btn-row"><button id="startBtn" class="btn" type="button">Start</button></div>
+  <div class="stats">
+    <div class="pill" id="bestText">Best 0</div>
+    <div class="pill" id="bestWaveText">Best Wave 1</div>
+    <div class="pill" id="shardText">Shard 0</div>
+  </div>
+  <p id="controlHint" class="mini">Tap one anchor then another to create a relay wall. Pulse and Gate upgrades cost energy.</p>
+</section>
+
+<section id="gameOverScreen" class="panel hidden">
+  <h1 id="gameOverTitle">Core Lost</h1>
+  <p id="resultLine">Score 0 · Wave 1</p>
+  <p id="resultShard">+0 Shard</p>
+  <div class="btn-row">
+    <button id="retryBtn" class="btn" type="button">Retry</button>
+    <button id="homeBtn" class="btn secondary" type="button">Title</button>
+  </div>
+</section>
+
+<div id="leaderboard" data-lb-slug="relay-rampart"></div>
+<div id="toast"></div>
+
+<script>
+(() => {
+  'use strict';
+
+  const GAME_ID = 'relay-rampart';
+  const STORAGE_KEY = 'relay_rampart_v1';
+
+  const T = GameI18n({
+    title: { ko: '릴레이 램파트', en: 'Relay Rampart' },
+    titleDesc: { ko: '앵커 두 점을 연결해 장벽을 만들고 코어를 지켜내세요.', en: 'Connect two anchors to form barriers and protect the core.' },
+    start: { ko: '시작', en: 'Start' },
+    retry: { ko: '다시 시작', en: 'Retry' },
+    home: { ko: '타이틀', en: 'Title' },
+    coreLost: { ko: '코어 붕괴', en: 'Core Lost' },
+    score: { ko: '점수', en: 'Score' },
+    wave: { ko: '웨이브', en: 'Wave' },
+    level: { ko: '레벨', en: 'Lv' },
+    core: { ko: '코어', en: 'Core' },
+    energy: { ko: '에너지', en: 'EN' },
+    shard: { ko: '샤드', en: 'Shard' },
+    best: { ko: '최고', en: 'Best' },
+    bestWave: { ko: '최고 웨이브', en: 'Best Wave' },
+    pulse: { ko: '펄스', en: 'Pulse' },
+    gateUp: { ko: '게이트 +', en: 'Gate +' },
+    pulseCost: { ko: '펄스 -18', en: 'Pulse -18' },
+    gateMax: { ko: '게이트 최대', en: 'Gate MAX' },
+    hint: { ko: '앵커를 두 번 탭해 장벽 생성 · 펄스/게이트는 에너지 사용', en: 'Tap two anchors to build a barrier. Pulse/Gate consume energy.' },
+    scoreWave: { ko: '점수 {s} · 웨이브 {w}', en: 'Score {s} · Wave {w}' },
+    shardGain: { ko: '+{n} 샤드 획득', en: '+{n} shards earned' },
+    toastLink: { ko: '릴레이 장벽 전개', en: 'Relay barrier deployed' },
+    toastPulse: { ko: '펄스 방출', en: 'Pulse released' },
+    toastGate: { ko: '게이트 슬롯 증가', en: 'Gate slot upgraded' },
+    toastLevel: { ko: '레벨 업', en: 'Level up' },
+    toastNeedEnergy: { ko: '에너지가 부족합니다', en: 'Not enough energy' }
+  });
+
+  const ui = {
+    hud: document.getElementById('hud'),
+    score: document.getElementById('hudScore'),
+    wave: document.getElementById('hudWave'),
+    level: document.getElementById('hudLevel'),
+    core: document.getElementById('hudCore'),
+    energy: document.getElementById('hudEnergy'),
+    hpFill: document.getElementById('hpFill'),
+    xpFill: document.getElementById('xpFill'),
+    pulseBtn: document.getElementById('btnPulse'),
+    gateBtn: document.getElementById('btnGate'),
+    titleScreen: document.getElementById('titleScreen'),
+    gameOverScreen: document.getElementById('gameOverScreen'),
+    titleText: document.getElementById('titleText'),
+    titleDesc: document.getElementById('titleDesc'),
+    startBtn: document.getElementById('startBtn'),
+    bestText: document.getElementById('bestText'),
+    bestWaveText: document.getElementById('bestWaveText'),
+    shardText: document.getElementById('shardText'),
+    controlHint: document.getElementById('controlHint'),
+    gameOverTitle: document.getElementById('gameOverTitle'),
+    resultLine: document.getElementById('resultLine'),
+    resultShard: document.getElementById('resultShard'),
+    retryBtn: document.getElementById('retryBtn'),
+    homeBtn: document.getElementById('homeBtn'),
+    toast: document.getElementById('toast')
+  };
+
+  const soundMgr = typeof SoundManager === 'function' ? new SoundManager() : null;
+  const sfxSelect = typeof Sound === 'function' ? new Sound([1,.03]) : null;
+  const sfxHit = typeof Sound === 'function' ? new Sound([1,.05,.25]) : null;
+  const sfxPulse = typeof Sound === 'function' ? new Sound([1,.08,.4]) : null;
+  const sfxBreak = typeof Sound === 'function' ? new Sound([1,.12,.8]) : null;
+
+  let gameState = 'title';
+  let score = 0;
+  let wave = 1;
+  let level = 1;
+  let xp = 0;
+  let nextXp = 110;
+  let coreHP = 5;
+  let coreHPMax = 5;
+  let energy = 0;
+  let gateLevel = 1;
+  let bestScore = 0;
+  let bestWave = 1;
+  let shards = 0;
+  let selectedAnchor = -1;
+
+  let anchors = [];
+  let barriers = [];
+  let enemies = [];
+  let sparks = [];
+
+  let spawnTimer = 0;
+  let waveTimer = 0;
+
+  const CORE_RADIUS = 1.04;
+  const ANCHOR_RADIUS = 4.25;
+  const SPAWN_RADIUS = 8.6;
+
+  function formatText(template, vars) {
+    return template.replace(/\{(\w+)\}/g, (_, key) => vars[key] ?? '');
+  }
+
+  function showToast(msg) {
+    ui.toast.textContent = msg;
+    ui.toast.classList.add('show');
+    clearTimeout(showToast._timer);
+    showToast._timer = setTimeout(() => ui.toast.classList.remove('show'), 680);
+  }
+
+  function playSfx(sound) {
+    try { if (sound) sound.play(); } catch (_) {}
+    try { soundMgr?.play?.('tap'); } catch (_) {}
+  }
+
+  function gateUpgradeCost() {
+    return 20 + gateLevel * 18;
+  }
+
+  function applyTexts() {
+    ui.titleText.textContent = T('title');
+    ui.titleDesc.textContent = T('titleDesc');
+    ui.startBtn.textContent = T('start');
+    ui.retryBtn.textContent = T('retry');
+    ui.homeBtn.textContent = T('home');
+    ui.gameOverTitle.textContent = T('coreLost');
+    ui.controlHint.textContent = T('hint');
+  }
+
+  function updateHUD() {
+    ui.score.textContent = `${T('score')} ${score}`;
+    ui.wave.textContent = `${T('wave')} ${wave}`;
+    ui.level.textContent = `${T('level')} ${level}`;
+    ui.core.textContent = `${T('core')} ${coreHP}`;
+    ui.energy.textContent = `${T('energy')} ${Math.floor(energy)}`;
+    ui.hpFill.style.width = `${Math.max(0, (coreHP / coreHPMax) * 100)}%`;
+    ui.xpFill.style.width = `${Math.min(100, (xp / nextXp) * 100)}%`;
+
+    ui.bestText.textContent = `${T('best')} ${bestScore}`;
+    ui.bestWaveText.textContent = `${T('bestWave')} ${bestWave}`;
+    ui.shardText.textContent = `${T('shard')} ${shards}`;
+
+    ui.pulseBtn.textContent = T('pulseCost');
+    ui.gateBtn.textContent = gateLevel >= 3 ? T('gateMax') : `${T('gateUp')} ${gateUpgradeCost()}`;
+    ui.pulseBtn.disabled = gameState !== 'play' || energy < 18;
+    ui.gateBtn.disabled = gameState !== 'play' || gateLevel >= 3 || energy < gateUpgradeCost();
+  }
+
+  function loadSave() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const data = JSON.parse(raw);
+      bestScore = Number(data.bestScore) || 0;
+      bestWave = Number(data.bestWave) || 1;
+      shards = Number(data.shards) || 0;
+    } catch (_) {}
+  }
+
+  function saveProgress() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ bestScore, bestWave, shards }));
+    } catch (_) {}
+  }
+
+  function buildAnchors() {
+    anchors = [];
+    for (let i = 0; i < 6; i++) {
+      const a = (Math.PI * 2 * i) / 6 - Math.PI / 2;
+      anchors.push(vec2(Math.cos(a) * ANCHOR_RADIUS, Math.sin(a) * ANCHOR_RADIUS));
+    }
+  }
+
+  function resetRun() {
+    score = 0;
+    wave = 1;
+    level = 1;
+    xp = 0;
+    nextXp = 110;
+    coreHPMax = 5;
+    coreHP = coreHPMax;
+    energy = 0;
+    gateLevel = 1;
+    selectedAnchor = -1;
+    barriers = [];
+    enemies = [];
+    sparks = [];
+    spawnTimer = .6;
+    waveTimer = 0;
+    gameState = 'play';
+    ui.titleScreen.classList.add('hidden');
+    ui.gameOverScreen.classList.add('hidden');
+    ui.hud.classList.remove('hidden');
+    updateHUD();
+    try { window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.('light'); } catch (_) {}
+  }
+
+  function showTitle() {
+    gameState = 'title';
+    ui.hud.classList.add('hidden');
+    ui.gameOverScreen.classList.add('hidden');
+    ui.titleScreen.classList.remove('hidden');
+    updateHUD();
+  }
+
+  function showGameOver() {
+    gameState = 'gameover';
+    ui.hud.classList.add('hidden');
+    ui.gameOverScreen.classList.remove('hidden');
+    ui.titleScreen.classList.add('hidden');
+
+    const gained = Math.max(1, Math.floor(score / 130) + Math.floor((wave - 1) * .8));
+    shards += gained;
+    bestScore = Math.max(bestScore, score);
+    bestWave = Math.max(bestWave, wave);
+    saveProgress();
+
+    ui.resultLine.textContent = formatText(T('scoreWave'), { s: score, w: wave });
+    ui.resultShard.textContent = formatText(T('shardGain'), { n: gained });
+
+    try {
+      const name = (window.Telegram?.WebApp?.initDataUnsafe?.user?.username || 'Player').slice(0, 24);
+      window.Leaderboard?.submit?.(GAME_ID, name, score, { wave });
+      window.Leaderboard?.getTop?.(GAME_ID)?.then((rows) => window.Leaderboard?.renderBoard?.('leaderboard', rows));
+    } catch (_) {}
+  }
+
+  function spawnEnemy() {
+    const angle = rand(Math.PI * 2);
+    const pos = vec2(Math.cos(angle) * SPAWN_RADIUS, Math.sin(angle) * SPAWN_RADIUS);
+    const speed = 1.2 + wave * .12;
+    enemies.push({
+      pos,
+      vel: vec2().subtract(pos).normalize(speed),
+      speed,
+      hp: 14 + wave * 4,
+      r: .24 + Math.min(.12, wave * .006),
+      hitLock: 0
+    });
+  }
+
+  function addSpark(pos, hue = .56, big = false) {
+    for (let i = 0; i < (big ? 8 : 4); i++) {
+      const dir = randVec2(rand(.8, .2));
+      sparks.push({
+        pos: pos.copy(),
+        vel: dir,
+        life: rand(.45, .2),
+        maxLife: .45,
+        size: rand(.13, .05),
+        hue
+      });
+    }
+
+    if (typeof ParticleEmitter === 'function') {
+      try {
+        new ParticleEmitter(
+          pos.copy(), 0,
+          0, 0, 120, Math.PI * 2,
+          tile(0, 16),
+          hsl(hue, .8, .7), hsl(hue + .05, .8, .55),
+          hsl(hue, .8, .7, 0), hsl(hue + .05, .8, .55, 0),
+          .22, .13, .02, .4, 1,
+          .95, 1, 0, Math.PI * 2,
+          .06, .6, false, true
+        );
+      } catch (_) {}
+    }
+  }
+
+  function createBarrier(i, j) {
+    if (i === j) return;
+    const a = Math.min(i, j);
+    const b = Math.max(i, j);
+    const existing = barriers.find((x) => x.a === a && x.b === b);
+    const duration = 3 + level * .2;
+    const damage = 24 + level * 3.2;
+
+    if (existing) {
+      existing.life = duration;
+      existing.maxLife = duration;
+      existing.damage = damage;
+      return;
+    }
+
+    barriers.push({ a, b, life: duration, maxLife: duration, damage });
+    while (barriers.length > gateLevel) barriers.shift();
+
+    const mid = anchors[a].add(anchors[b]).scale(.5);
+    addSpark(mid, .53, true);
+    playSfx(sfxSelect);
+    showToast(T('toastLink'));
+  }
+
+  function pointSegmentDistance(p, a, b) {
+    const ab = b.subtract(a);
+    const ap = p.subtract(a);
+    const len2 = ab.lengthSquared();
+    const t = clamp(len2 ? ap.dot(ab) / len2 : 0, 0, 1);
+    const proj = a.add(ab.scale(t));
+    return { dist: p.distance(proj), proj };
+  }
+
+  function killEnemy(index) {
+    const enemy = enemies[index];
+    score += 11 + wave * 2;
+    energy = min(99, energy + 4);
+    xp += 16;
+    addSpark(enemy.pos, .08, true);
+    enemies.splice(index, 1);
+
+    if (xp >= nextXp) {
+      xp -= nextXp;
+      level += 1;
+      nextXp = Math.floor(nextXp * 1.22);
+      showToast(T('toastLevel'));
+    }
+  }
+
+  function emitPulse() {
+    if (energy < 18 || gameState !== 'play') {
+      showToast(T('toastNeedEnergy'));
+      return;
+    }
+
+    energy -= 18;
+    const range = 4.7;
+    const damage = 10 + level * 2.2;
+
+    for (let i = enemies.length - 1; i >= 0; i--) {
+      const enemy = enemies[i];
+      if (enemy.pos.length() <= range) {
+        enemy.hp -= damage;
+        enemy.vel = enemy.vel.add(enemy.pos.normalize(1.6));
+        addSpark(enemy.pos, .12);
+        if (enemy.hp <= 0) killEnemy(i);
+      }
+    }
+
+    addSpark(vec2(0, 0), .16, true);
+    playSfx(sfxPulse);
+    showToast(T('toastPulse'));
+    try { window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.('success'); } catch (_) {}
+  }
+
+  function upgradeGate() {
+    if (gameState !== 'play') return;
+    if (gateLevel >= 3) return;
+    const cost = gateUpgradeCost();
+    if (energy < cost) {
+      showToast(T('toastNeedEnergy'));
+      return;
+    }
+    energy -= cost;
+    gateLevel += 1;
+    showToast(T('toastGate'));
+    playSfx(sfxSelect);
+  }
+
+  function pickAnchor(point) {
+    let best = -1;
+    let bestDist = .75;
+    for (let i = 0; i < anchors.length; i++) {
+      const d = anchors[i].distance(point);
+      if (d < bestDist) {
+        bestDist = d;
+        best = i;
+      }
+    }
+    return best;
+  }
+
+  function handlePlayInput() {
+    if (!mouseWasPressed(0)) return;
+    const hit = pickAnchor(mousePos);
+    if (hit === -1) {
+      selectedAnchor = -1;
+      return;
+    }
+    if (selectedAnchor === -1) {
+      selectedAnchor = hit;
+      playSfx(sfxSelect);
+      return;
+    }
+    if (selectedAnchor === hit) {
+      selectedAnchor = -1;
+      return;
+    }
+    createBarrier(selectedAnchor, hit);
+    selectedAnchor = -1;
+  }
+
+  function updatePlay() {
+    handlePlayInput();
+    energy = min(99, energy + timeDelta * 1.1);
+
+    for (let i = barriers.length - 1; i >= 0; i--) {
+      barriers[i].life -= timeDelta;
+      if (barriers[i].life <= 0) barriers.splice(i, 1);
+    }
+
+    waveTimer += timeDelta;
+    if (waveTimer >= 17) {
+      waveTimer = 0;
+      wave += 1;
+      for (let i = 0; i < Math.min(2 + wave / 3, 5); i++) spawnEnemy();
+    }
+
+    spawnTimer -= timeDelta;
+    if (spawnTimer <= 0) {
+      spawnEnemy();
+      spawnTimer = max(.5, 1.45 - wave * .05);
+    }
+
+    for (let i = enemies.length - 1; i >= 0; i--) {
+      const enemy = enemies[i];
+      enemy.hitLock -= timeDelta;
+      const toward = vec2().subtract(enemy.pos).normalize(enemy.speed);
+      enemy.vel = enemy.vel.lerp(toward, .06);
+      enemy.pos = enemy.pos.add(enemy.vel.scale(timeDelta));
+
+      for (let k = 0; k < barriers.length; k++) {
+        const bar = barriers[k];
+        const a = anchors[bar.a];
+        const b = anchors[bar.b];
+        const hit = pointSegmentDistance(enemy.pos, a, b);
+        if (enemy.hitLock <= 0 && hit.dist < enemy.r + .45) {
+          enemy.hitLock = .12;
+          enemy.hp -= bar.damage;
+          const normal = enemy.pos.subtract(hit.proj).normalize(1);
+          enemy.pos = hit.proj.add(normal.scale(enemy.r + .18));
+          enemy.vel = enemy.vel.add(normal.scale(2.6)).clampLength(4);
+          addSpark(hit.proj, .55);
+          playSfx(sfxHit);
+          if (enemy.hp <= 0) {
+            killEnemy(i);
+            break;
+          }
+        }
+      }
+
+      if (!enemies[i]) continue;
+
+      if (enemy.pos.length() <= CORE_RADIUS) {
+        enemies.splice(i, 1);
+        coreHP -= 1;
+        addSpark(vec2(0, 0), .02, true);
+        playSfx(sfxBreak);
+        try { window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.('heavy'); } catch (_) {}
+        if (coreHP <= 0) {
+          showGameOver();
+          break;
+        }
+      }
+    }
+
+    for (let i = sparks.length - 1; i >= 0; i--) {
+      const s = sparks[i];
+      s.life -= timeDelta;
+      s.pos = s.pos.add(s.vel.scale(timeDelta * 3));
+      s.vel = s.vel.scale(.95);
+      if (s.life <= 0) sparks.splice(i, 1);
+    }
+
+    updateHUD();
+  }
+
+  function gameInit() {
+    setCameraPos(vec2(0, 0));
+    setCameraScale(42);
+    canvasClearColor = hsl(.1, .16, .92);
+    buildAnchors();
+    loadSave();
+    applyTexts();
+    showTitle();
+
+    ui.startBtn.addEventListener('click', resetRun);
+    ui.retryBtn.addEventListener('click', resetRun);
+    ui.homeBtn.addEventListener('click', showTitle);
+    ui.pulseBtn.addEventListener('click', emitPulse);
+    ui.gateBtn.addEventListener('click', upgradeGate);
+
+    try {
+      window.Leaderboard?.getTop?.(GAME_ID)?.then((rows) => window.Leaderboard?.renderBoard?.('leaderboard', rows));
+    } catch (_) {}
+  }
+
+  function gameUpdate() {
+    if (gameState === 'play') updatePlay();
+  }
+
+  function gameUpdatePost() {}
+
+  function drawBackground() {
+    drawRect(vec2(0, 0), vec2(20, 20), hsl(.1, .2, .93));
+    drawCircle(vec2(0, 0), 6.1, hsl(.57, .22, .84), 0, hsl(.57, .25, .55));
+    drawCircle(vec2(0, 0), 4.7, hsl(.09, .25, .79), 0, hsl(.09, .3, .42));
+  }
+
+  function gameRender() {
+    drawBackground();
+
+    drawCircle(vec2(0, 0), CORE_RADIUS, hsl(.34, .33, .52), .08, hsl(.09, .25, .24));
+    drawCircle(vec2(0, 0), .62, hsl(.55, .6, .65));
+
+    for (let i = 0; i < anchors.length; i++) {
+      const p = anchors[i];
+      const selected = i === selectedAnchor;
+      drawCircle(p, .34, selected ? hsl(.08, .7, .62) : hsl(.56, .38, .54));
+      drawCircle(p, .18, hsl(.57, .8, .9));
+    }
+
+    for (let i = 0; i < barriers.length; i++) {
+      const bar = barriers[i];
+      const lifeP = clamp(bar.life / bar.maxLife, 0, 1);
+      const width = .12 + .06 * lifeP;
+      drawLine(anchors[bar.a], anchors[bar.b], width, hsl(.54, .8, .58));
+      drawLine(anchors[bar.a], anchors[bar.b], .03, hsl(.12, .6, .84));
+    }
+
+    for (let i = 0; i < enemies.length; i++) {
+      const e = enemies[i];
+      drawCircle(e.pos, e.r + .06, hsl(.02, .45, .28));
+      drawCircle(e.pos, e.r, hsl(.03, .62, .53));
+      const hpP = clamp(e.hp / (14 + wave * 4), 0, 1);
+      drawRect(e.pos.add(vec2(0, .34)), vec2(.5 * hpP, .06), hsl(.34, .45, .55));
+    }
+
+    for (let i = 0; i < sparks.length; i++) {
+      const s = sparks[i];
+      const alpha = clamp(s.life / s.maxLife, 0, 1);
+      drawRect(s.pos, vec2(s.size), hsl(s.hue, .85, .63, alpha));
+    }
+  }
+
+  function gameRenderPost() {
+    if (gameState !== 'play') return;
+    drawTextScreen(`${T('hint')}`, vec2(mainCanvasSize.x / 2, mainCanvasSize.y - 38), 18, hsl(.08, .18, .28), 3, hsl(.1, .2, .92));
+  }
+
+  if (typeof setShowSplashScreen === 'function') setShowSplashScreen(false);
+  engineInit(gameInit, gameUpdate, gameUpdatePost, gameRender, gameRenderPost);
+})();
+</script>
+
+<script src="/games/cross-promo.js"></script>
+<script src="../shared/leaderboard.js"></script>
+</body>
+</html>

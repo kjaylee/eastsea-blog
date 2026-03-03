@@ -1,0 +1,1231 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+<title>Sigil Forge Rogue | 무료 HTML5 게임</title>
+<meta name="description" content="룬 체인을 드래그해 주문을 만드는 로그라이크 액션 RPG. Sigil Forge Rogue를 브라우저에서 바로 플레이하세요." />
+<meta name="keywords" content="roguelike,rpg,canvas,html5,룬,로그라이크,모바일게임" />
+<meta property="og:title" content="Sigil Forge Rogue" />
+<meta property="og:description" content="룬 체인을 연결해 주문을 발동하는 모바일 로그라이크 액션." />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://games.eastsea.xyz/sigil-forge-rogue/" />
+<meta property="og:image" content="https://games.eastsea.xyz/sigil-forge-rogue/og-image.png" />
+<meta name="twitter:card" content="summary_large_image" />
+<link rel="canonical" href="https://games.eastsea.xyz/sigil-forge-rogue/" />
+<link rel="manifest" href="/games/manifest.json" />
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="../i18n.js"></script>
+<script src="../tg-sdk-wrapper.js"></script>
+<script src="../shared/sound-manager.js"></script>
+<script src="../shared/leaderboard.js"></script>
+<style>
+  :root {
+    --ink:#2f2432;
+    --sand:#f3ead7;
+    --clay:#d9c3a0;
+    --deep:#3b2f2a;
+    --gold:#ad6c3b;
+    --mint:#4c956c;
+    --sky:#2f4858;
+    --violet:#7d5ba6;
+    --danger:#b84b3b;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+  html, body {
+    width:100%; height:100%; overflow:hidden;
+    font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background:linear-gradient(180deg, #f3ead7 0%, #d9c3a0 100%);
+    color:var(--ink);
+    touch-action:none;
+  }
+  canvas { position:fixed; inset:0; width:100%; height:100%; display:block; }
+  .hud {
+    position:fixed; inset:0 auto auto 0; width:100%; z-index:20;
+    padding:calc(10px + env(safe-area-inset-top)) 12px 10px;
+    pointer-events:none;
+    display:flex; flex-direction:column; gap:7px;
+  }
+  .hud-row { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  .pill {
+    background:rgba(255,255,255,0.76);
+    border:1px solid rgba(47,36,50,0.16);
+    border-radius:999px;
+    padding:6px 10px;
+    font-size:12px;
+    font-weight:700;
+    backdrop-filter: blur(3px);
+  }
+  .hp-wrap {
+    width:100%; height:12px; border-radius:999px; overflow:hidden;
+    background:rgba(47,36,50,0.14);
+    border:1px solid rgba(47,36,50,0.2);
+  }
+  .hp-fill {
+    height:100%; width:100%;
+    background:linear-gradient(90deg, #4c956c, #89c07f);
+    transition:width .12s linear;
+  }
+  .xp-fill {
+    height:100%; width:0%;
+    background:linear-gradient(90deg, #7d5ba6, #b9a0db);
+    transition:width .12s linear;
+  }
+  .panel {
+    position:fixed; z-index:30;
+    left:50%; top:50%; transform:translate(-50%, -50%);
+    width:min(92vw, 430px);
+    background:rgba(255,249,239,0.94);
+    border:2px solid rgba(47,36,50,0.15);
+    border-radius:18px;
+    padding:18px;
+    box-shadow:0 14px 40px rgba(28,20,20,0.24);
+    text-align:center;
+  }
+  .panel h1 { font-size:30px; line-height:1.15; margin-bottom:8px; color:var(--deep); }
+  .panel p { font-size:14px; line-height:1.45; opacity:0.9; }
+  .title-desc { margin:8px 0 14px; }
+  .btn-row { display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-top:12px; }
+  button {
+    border:none; border-radius:12px; cursor:pointer;
+    padding:11px 14px; font-weight:800; font-size:14px;
+    color:#fff; background:linear-gradient(135deg, var(--gold), #c88a4a);
+    min-width:120px;
+    box-shadow:0 7px 16px rgba(173,108,59,0.3);
+  }
+  button.alt { background:linear-gradient(135deg, var(--sky), #4f738a); box-shadow:0 7px 16px rgba(47,72,88,.3); }
+  button:disabled { opacity:.45; cursor:not-allowed; box-shadow:none; }
+  .relic-grid {
+    margin-top:12px;
+    display:grid;
+    grid-template-columns:repeat(3, minmax(0,1fr));
+    gap:8px;
+  }
+  .relic {
+    background:#fff;
+    border:1px solid rgba(47,36,50,.15);
+    border-radius:12px;
+    padding:8px;
+  }
+  .relic h3 { font-size:13px; margin-bottom:3px; }
+  .relic small { display:block; font-size:11px; opacity:0.7; min-height:30px; }
+  .relic .lv { font-size:12px; font-weight:700; margin:6px 0; }
+  .hint {
+    margin-top:10px;
+    background:rgba(47,72,88,.08);
+    border:1px dashed rgba(47,72,88,.25);
+    border-radius:10px;
+    padding:8px;
+    font-size:12px;
+  }
+  .hidden { display:none !important; }
+  #toast {
+    position:fixed; left:50%; bottom:calc(18px + env(safe-area-inset-bottom)); transform:translateX(-50%);
+    background:rgba(47,36,50,.92); color:#fff; font-weight:700; font-size:13px;
+    padding:9px 12px; border-radius:999px; z-index:40;
+    opacity:0; pointer-events:none; transition:opacity .2s;
+  }
+  #leaderboard {
+    position:fixed; right:8px; bottom:calc(8px + env(safe-area-inset-bottom)); z-index:25;
+    transform:scale(.85); transform-origin:bottom right;
+    max-width:min(92vw,320px);
+    pointer-events:none;
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="hud" class="hud hidden">
+  <div class="hud-row">
+    <div class="pill" id="hudScore">Score 0</div>
+    <div class="pill" id="hudLevel">Lv 1</div>
+    <div class="pill" id="hudWave">Wave 1</div>
+  </div>
+  <div class="hp-wrap"><div id="hpFill" class="hp-fill"></div></div>
+  <div class="hp-wrap"><div id="xpFill" class="xp-fill"></div></div>
+</div>
+
+<section id="titleScreen" class="panel">
+  <h1 id="titleText">Sigil Forge Rogue</h1>
+  <p id="titleDesc" class="title-desc">Draw rune chains to cast adaptive spells.</p>
+  <div class="btn-row">
+    <button id="startBtn">Start Run</button>
+  </div>
+
+  <div class="btn-row" style="margin-top:10px;">
+    <div class="pill" id="bestText">Best: 0</div>
+    <div class="pill" id="shardText">Shard: 0</div>
+  </div>
+
+  <div class="relic-grid">
+    <div class="relic">
+      <h3 id="relicPowerTitle">Power Relic</h3>
+      <small id="relicPowerDesc">Spell damage +</small>
+      <div class="lv" id="relicPowerLv">Lv.0</div>
+      <button class="alt" id="buyPowerBtn">Buy</button>
+    </div>
+    <div class="relic">
+      <h3 id="relicGuardTitle">Guard Relic</h3>
+      <small id="relicGuardDesc">Max HP +</small>
+      <div class="lv" id="relicGuardLv">Lv.0</div>
+      <button class="alt" id="buyGuardBtn">Buy</button>
+    </div>
+    <div class="relic">
+      <h3 id="relicFocusTitle">Focus Relic</h3>
+      <small id="relicFocusDesc">Cast cooldown -</small>
+      <div class="lv" id="relicFocusLv">Lv.0</div>
+      <button class="alt" id="buyFocusBtn">Buy</button>
+    </div>
+  </div>
+
+  <div class="hint" id="controlHint">Drag across runes to forge a spell. 3+ unique runes = Nova, same start/end rune = Ward.</div>
+</section>
+
+<section id="gameOverScreen" class="panel hidden">
+  <h1 id="gameOverTitle">Run Complete</h1>
+  <p id="resultSummary">Score 0</p>
+  <p id="resultShard">+0 Shards</p>
+  <div class="btn-row">
+    <button id="retryBtn">Retry</button>
+    <button id="homeBtn" class="alt">Title</button>
+  </div>
+</section>
+
+<div id="leaderboard" data-lb-slug="sigil-forge-rogue"></div>
+<div id="toast"></div>
+
+<script>
+(() => {
+  'use strict';
+
+  const GAME_ID = 'sigil-forge-rogue';
+  const STORAGE_KEY = 'sigil_forge_rogue_v1';
+
+  const T = GameI18n({
+    title: { ko: '시길 포지 로그', en: 'Sigil Forge Rogue' },
+    titleDesc: { ko: '룬 체인을 그려 주문을 발동하고 포지를 지켜내세요.', en: 'Draw rune chains to cast adaptive spells and defend the forge.' },
+    startRun: { ko: '런 시작', en: 'Start Run' },
+    retry: { ko: '다시 시작', en: 'Retry' },
+    home: { ko: '타이틀', en: 'Title' },
+    best: { ko: '최고', en: 'Best' },
+    shard: { ko: '샤드', en: 'Shards' },
+    score: { ko: '점수', en: 'Score' },
+    wave: { ko: '웨이브', en: 'Wave' },
+    runComplete: { ko: '런 종료', en: 'Run Complete' },
+    resultLine: { ko: '점수 {score} · 레벨 {level} · 처치 {kills}', en: 'Score {score} · Level {level} · Kills {kills}' },
+    shardGain: { ko: '+{amount} 샤드 획득', en: '+{amount} shards earned' },
+    hint: { ko: '룬을 드래그로 연결하세요. 서로 다른 룬 3개 이상 = 노바, 시작/끝 룬 동일 = 배리어', en: 'Drag across runes. 3 unique runes = Nova, same start/end rune = Ward.' },
+    relicPowerTitle: { ko: '화력 유물', en: 'Power Relic' },
+    relicPowerDesc: { ko: '주문 피해 증가', en: 'Boost spell damage' },
+    relicGuardTitle: { ko: '수호 유물', en: 'Guard Relic' },
+    relicGuardDesc: { ko: '최대 HP 증가', en: 'Increase max HP' },
+    relicFocusTitle: { ko: '집중 유물', en: 'Focus Relic' },
+    relicFocusDesc: { ko: '시전 쿨타임 감소', en: 'Reduce cast cooldown' },
+    buy: { ko: '구매', en: 'Buy' },
+    needShard: { ko: '샤드 부족', en: 'Not enough shards' },
+    toastBought: { ko: '{name} 강화 완료', en: '{name} upgraded' },
+    toastWard: { ko: '순환 봉인! 배리어 전개', en: 'Circular Ward! Barrier up' },
+    toastNova: { ko: '삼중 공명! 노바 폭발', en: 'Triune Resonance! Nova burst' },
+    toastChain: { ko: '공허 연쇄 발동', en: 'Void chain triggered' },
+    boonVital: { ko: '레벨업: 최대 HP 상승', en: 'Level up: Vitality increased' },
+    boonFocus: { ko: '레벨업: 캐스팅 속도 상승', en: 'Level up: Casting speed improved' },
+    boonPower: { ko: '레벨업: 화력 상승', en: 'Level up: Spell power increased' }
+  });
+
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+
+  const ui = {
+    hud: document.getElementById('hud'),
+    hpFill: document.getElementById('hpFill'),
+    xpFill: document.getElementById('xpFill'),
+    hudScore: document.getElementById('hudScore'),
+    hudLevel: document.getElementById('hudLevel'),
+    hudWave: document.getElementById('hudWave'),
+    titleScreen: document.getElementById('titleScreen'),
+    gameOverScreen: document.getElementById('gameOverScreen'),
+    titleText: document.getElementById('titleText'),
+    titleDesc: document.getElementById('titleDesc'),
+    startBtn: document.getElementById('startBtn'),
+    bestText: document.getElementById('bestText'),
+    shardText: document.getElementById('shardText'),
+    relicPowerTitle: document.getElementById('relicPowerTitle'),
+    relicPowerDesc: document.getElementById('relicPowerDesc'),
+    relicGuardTitle: document.getElementById('relicGuardTitle'),
+    relicGuardDesc: document.getElementById('relicGuardDesc'),
+    relicFocusTitle: document.getElementById('relicFocusTitle'),
+    relicFocusDesc: document.getElementById('relicFocusDesc'),
+    relicPowerLv: document.getElementById('relicPowerLv'),
+    relicGuardLv: document.getElementById('relicGuardLv'),
+    relicFocusLv: document.getElementById('relicFocusLv'),
+    buyPowerBtn: document.getElementById('buyPowerBtn'),
+    buyGuardBtn: document.getElementById('buyGuardBtn'),
+    buyFocusBtn: document.getElementById('buyFocusBtn'),
+    controlHint: document.getElementById('controlHint'),
+    gameOverTitle: document.getElementById('gameOverTitle'),
+    resultSummary: document.getElementById('resultSummary'),
+    resultShard: document.getElementById('resultShard'),
+    retryBtn: document.getElementById('retryBtn'),
+    homeBtn: document.getElementById('homeBtn'),
+    toast: document.getElementById('toast')
+  };
+
+  const STATE = { title: 'title', play: 'play', gameover: 'gameover' };
+  let state = STATE.title;
+
+  let width = 390;
+  let height = 844;
+  let dpr = 1;
+
+  const player = { x: 0, y: 0, r: 18, hp: 100, maxHp: 100, damage: 14 };
+  const runes = [
+    { id: 0, color: '#ad6c3b', glyph: 'ᚠ', angle: -Math.PI * 0.5 },
+    { id: 1, color: '#2f4858', glyph: 'ᚢ', angle: -Math.PI * 0.1 },
+    { id: 2, color: '#4c956c', glyph: 'ᚦ', angle: Math.PI * 0.28 },
+    { id: 3, color: '#7d5ba6', glyph: 'ᚱ', angle: Math.PI * 0.66 },
+    { id: 4, color: '#b84b3b', glyph: 'ᛟ', angle: Math.PI * 1.08 }
+  ];
+
+  const world = {
+    time: 0,
+    score: 0,
+    level: 1,
+    xp: 0,
+    xpNeed: 36,
+    kills: 0,
+    wave: 1,
+    spawnCd: 0,
+    spawnBase: 1.1,
+    barrier: 0,
+    combo: 0,
+    comboTimer: 0,
+    castCd: 680,
+    lastCastMs: -9999
+  };
+
+  let enemies = [];
+  let projectiles = [];
+  let bursts = [];
+  let sparkLines = [];
+  let floatingTexts = [];
+
+  let drawing = false;
+  let pointerX = 0;
+  let pointerY = 0;
+  let tracePoints = [];
+  let chain = [];
+
+  let lastFrame = performance.now();
+
+  let meta = {
+    best: 0,
+    shards: 0,
+    relicPower: 0,
+    relicGuard: 0,
+    relicFocus: 0,
+    runs: 0
+  };
+
+  let sound = null;
+
+  function tr(key, vars = {}) {
+    let s = T(key);
+    Object.keys(vars).forEach((k) => {
+      s = s.replace(`{${k}}`, String(vars[k]));
+    });
+    return s;
+  }
+
+  function showToast(text) {
+    ui.toast.textContent = text;
+    ui.toast.style.opacity = '1';
+    clearTimeout(showToast._timer);
+    showToast._timer = setTimeout(() => { ui.toast.style.opacity = '0'; }, 1150);
+  }
+
+  function playSfx(name) {
+    if (!sound) return;
+    try {
+      if (typeof sound.playSFX === 'function') sound.playSFX(name, { volume: 0.7 });
+      else if (typeof sound.play === 'function') sound.play(name);
+    } catch (_) {}
+  }
+
+  function haptic(type, style) {
+    try {
+      if (window.TG && typeof window.TG.haptic === 'function') window.TG.haptic(type, style);
+    } catch (_) {}
+  }
+
+  function saveMeta() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(meta));
+      if (window.TG && typeof window.TG.save === 'function') window.TG.save(STORAGE_KEY, meta);
+    } catch (_) {}
+  }
+
+  function loadMeta() {
+    let loaded = null;
+    try {
+      loaded = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+    } catch (_) {}
+
+    if (!loaded && window.TG && typeof window.TG.load === 'function') {
+      try { loaded = window.TG.load(STORAGE_KEY); } catch (_) {}
+    }
+
+    if (loaded && typeof loaded === 'object') {
+      meta.best = Number(loaded.best || 0);
+      meta.shards = Number(loaded.shards || 0);
+      meta.relicPower = Number(loaded.relicPower || 0);
+      meta.relicGuard = Number(loaded.relicGuard || 0);
+      meta.relicFocus = Number(loaded.relicFocus || 0);
+      meta.runs = Number(loaded.runs || 0);
+    }
+  }
+
+  function resolvePlayerName() {
+    try {
+      const tgUser = window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.user;
+      if (tgUser) {
+        const full = [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ').trim();
+        if (full) return full;
+        if (tgUser.username) return tgUser.username;
+      }
+    } catch (_) {}
+    return 'Player' + Math.floor(1000 + Math.random() * 9000);
+  }
+
+  async function refreshBoard() {
+    if (!window.Leaderboard) return;
+    try {
+      if (typeof window.Leaderboard.getTop === 'function') {
+        const rows = await window.Leaderboard.getTop(GAME_ID, 8);
+        window.Leaderboard.renderBoard('leaderboard', rows);
+      } else {
+        window.Leaderboard.renderBoard('leaderboard');
+      }
+    } catch (_) {}
+  }
+
+  function submitScore() {
+    if (!window.Leaderboard || typeof window.Leaderboard.submit !== 'function') return;
+    try {
+      window.Leaderboard.submit(GAME_ID, resolvePlayerName(), Math.floor(world.score), {
+        level: world.level,
+        kills: world.kills,
+        wave: world.wave
+      });
+    } catch (_) {}
+  }
+
+  function powerCost() { return 10 + meta.relicPower * 8; }
+  function guardCost() { return 10 + meta.relicGuard * 8; }
+  function focusCost() { return 12 + meta.relicFocus * 10; }
+
+  function updateTitleUI() {
+    ui.titleText.textContent = T('title');
+    ui.titleDesc.textContent = T('titleDesc');
+    ui.startBtn.textContent = T('startRun');
+    ui.bestText.textContent = `${T('best')}: ${Math.floor(meta.best).toLocaleString()}`;
+    ui.shardText.textContent = `${T('shard')}: ${Math.floor(meta.shards).toLocaleString()}`;
+
+    ui.relicPowerTitle.textContent = T('relicPowerTitle');
+    ui.relicPowerDesc.textContent = T('relicPowerDesc');
+    ui.relicGuardTitle.textContent = T('relicGuardTitle');
+    ui.relicGuardDesc.textContent = T('relicGuardDesc');
+    ui.relicFocusTitle.textContent = T('relicFocusTitle');
+    ui.relicFocusDesc.textContent = T('relicFocusDesc');
+    ui.controlHint.textContent = T('hint');
+
+    ui.relicPowerLv.textContent = `Lv.${meta.relicPower}`;
+    ui.relicGuardLv.textContent = `Lv.${meta.relicGuard}`;
+    ui.relicFocusLv.textContent = `Lv.${meta.relicFocus}`;
+
+    ui.buyPowerBtn.textContent = `${T('buy')} ${powerCost()}💠`;
+    ui.buyGuardBtn.textContent = `${T('buy')} ${guardCost()}💠`;
+    ui.buyFocusBtn.textContent = `${T('buy')} ${focusCost()}💠`;
+
+    ui.buyPowerBtn.disabled = meta.shards < powerCost();
+    ui.buyGuardBtn.disabled = meta.shards < guardCost();
+    ui.buyFocusBtn.disabled = meta.shards < focusCost();
+  }
+
+  function showTitle() {
+    state = STATE.title;
+    ui.titleScreen.classList.remove('hidden');
+    ui.gameOverScreen.classList.add('hidden');
+    ui.hud.classList.add('hidden');
+    updateTitleUI();
+  }
+
+  function resetRunState() {
+    enemies = [];
+    projectiles = [];
+    bursts = [];
+    sparkLines = [];
+    floatingTexts = [];
+    tracePoints = [];
+    chain = [];
+
+    world.time = 0;
+    world.score = 0;
+    world.level = 1;
+    world.xp = 0;
+    world.xpNeed = 36;
+    world.kills = 0;
+    world.wave = 1;
+    world.spawnCd = 0.3;
+    world.spawnBase = 1.12;
+    world.barrier = 0;
+    world.combo = 0;
+    world.comboTimer = 0;
+    world.castCd = Math.max(320, 680 - meta.relicFocus * 36);
+    world.lastCastMs = -9999;
+
+    player.maxHp = 100 + meta.relicGuard * 10;
+    player.hp = player.maxHp;
+    player.damage = 14 + meta.relicPower * 2;
+
+    player.x = width * 0.5;
+    player.y = height * 0.58;
+  }
+
+  function startRun() {
+    resetRunState();
+    state = STATE.play;
+    ui.titleScreen.classList.add('hidden');
+    ui.gameOverScreen.classList.add('hidden');
+    ui.hud.classList.remove('hidden');
+    haptic('impact', 'light');
+    playSfx('click');
+  }
+
+  function endRun() {
+    if (state !== STATE.play) return;
+    state = STATE.gameover;
+    const gain = Math.max(1, Math.floor(world.score / 90) + Math.floor(world.level * 0.5));
+
+    meta.shards += gain;
+    meta.best = Math.max(meta.best, world.score);
+    meta.runs += 1;
+    saveMeta();
+
+    ui.gameOverTitle.textContent = T('runComplete');
+    ui.resultSummary.textContent = tr('resultLine', {
+      score: Math.floor(world.score).toLocaleString(),
+      level: world.level,
+      kills: world.kills
+    });
+    ui.resultShard.textContent = tr('shardGain', { amount: gain });
+    ui.retryBtn.textContent = T('retry');
+    ui.homeBtn.textContent = T('home');
+
+    ui.hud.classList.add('hidden');
+    ui.gameOverScreen.classList.remove('hidden');
+
+    submitScore();
+    refreshBoard();
+    playSfx('fail');
+    haptic('notification', 'error');
+  }
+
+  function buyRelic(kind) {
+    let cost = 0;
+    let key = '';
+    let label = '';
+    if (kind === 'power') { cost = powerCost(); key = 'relicPower'; label = T('relicPowerTitle'); }
+    if (kind === 'guard') { cost = guardCost(); key = 'relicGuard'; label = T('relicGuardTitle'); }
+    if (kind === 'focus') { cost = focusCost(); key = 'relicFocus'; label = T('relicFocusTitle'); }
+
+    if (!key) return;
+    if (meta.shards < cost) {
+      showToast(T('needShard'));
+      return;
+    }
+
+    meta.shards -= cost;
+    meta[key] += 1;
+    saveMeta();
+    updateTitleUI();
+    showToast(tr('toastBought', { name: label }));
+    playSfx('coin');
+    haptic('impact', 'medium');
+  }
+
+  function resize() {
+    dpr = window.devicePixelRatio || 1;
+    width = window.innerWidth;
+    height = window.innerHeight;
+    canvas.width = Math.floor(width * dpr);
+    canvas.height = Math.floor(height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    player.x = width * 0.5;
+    player.y = height * 0.58;
+  }
+
+  function runePositions() {
+    const r = Math.min(width, height) * 0.17;
+    const spin = world.time * 0.42;
+    return runes.map((rn, idx) => {
+      const a = rn.angle + spin + (idx % 2 === 0 ? 0.08 * Math.sin(world.time * 1.3 + idx) : 0);
+      return {
+        id: rn.id,
+        x: player.x + Math.cos(a) * r,
+        y: player.y + Math.sin(a) * r,
+        color: rn.color,
+        glyph: rn.glyph
+      };
+    });
+  }
+
+  function spawnEnemy() {
+    const edge = Math.floor(Math.random() * 4);
+    const margin = 30;
+    let x = 0;
+    let y = 0;
+    if (edge === 0) { x = Math.random() * width; y = -margin; }
+    if (edge === 1) { x = width + margin; y = Math.random() * height; }
+    if (edge === 2) { x = Math.random() * width; y = height + margin; }
+    if (edge === 3) { x = -margin; y = Math.random() * height; }
+
+    const tier = Math.random();
+    let kind = 'skitter';
+    let hp = 20 + world.level * 4;
+    let speed = 52 + world.level * 1.6;
+    let radius = 12;
+    let touch = 10;
+    let color = '#8d5a44';
+
+    if (tier > 0.72 || world.wave > 4) {
+      kind = 'brute';
+      hp = 44 + world.level * 8;
+      speed = 34 + world.level * 1.2;
+      radius = 16;
+      touch = 15;
+      color = '#5a3d2b';
+    }
+    if (tier < 0.2 && world.level > 3) {
+      kind = 'shard';
+      hp = 18 + world.level * 3;
+      speed = 74 + world.level * 1.9;
+      radius = 10;
+      touch = 8;
+      color = '#2f4858';
+    }
+
+    enemies.push({
+      x, y,
+      vx: 0, vy: 0,
+      hp, maxHp: hp,
+      speed,
+      r: radius,
+      touch,
+      kind,
+      color,
+      burn: 0,
+      slow: 0,
+      hitCd: 0
+    });
+  }
+
+  function nearestEnemy() {
+    let pick = null;
+    let best = 9e9;
+    for (let i = 0; i < enemies.length; i++) {
+      const e = enemies[i];
+      const dx = e.x - player.x;
+      const dy = e.y - player.y;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < best) { best = d2; pick = e; }
+    }
+    return pick;
+  }
+
+  function damageEnemy(enemy, dmg) {
+    if (!enemy) return;
+    enemy.hp -= dmg;
+    floatingTexts.push({ x: enemy.x, y: enemy.y - 6, text: `-${Math.round(dmg)}`, life: 0.55, color: '#b84b3b' });
+  }
+
+  function shootProjectile(target, dmg, color) {
+    const dx = target.x - player.x;
+    const dy = target.y - player.y;
+    const d = Math.hypot(dx, dy) || 1;
+    const speed = 560;
+    projectiles.push({
+      x: player.x,
+      y: player.y,
+      vx: (dx / d) * speed,
+      vy: (dy / d) * speed,
+      life: 0.9,
+      dmg,
+      color,
+      target
+    });
+  }
+
+  function aoeDamage(radius, dmg) {
+    bursts.push({ x: player.x, y: player.y, r: 20, max: radius, life: 0.38, color: 'rgba(173,108,59,0.35)' });
+    for (let i = 0; i < enemies.length; i++) {
+      const e = enemies[i];
+      const d = Math.hypot(e.x - player.x, e.y - player.y);
+      if (d <= radius) {
+        damageEnemy(e, dmg * (1 - d / (radius * 1.1)) + 2);
+      }
+    }
+  }
+
+  function voidChain(hits, dmg) {
+    const sorted = [...enemies].sort((a, b) => {
+      const da = (a.x - player.x) ** 2 + (a.y - player.y) ** 2;
+      const db = (b.x - player.x) ** 2 + (b.y - player.y) ** 2;
+      return da - db;
+    }).slice(0, hits);
+
+    if (!sorted.length) return;
+
+    let from = { x: player.x, y: player.y };
+    sorted.forEach((e) => {
+      damageEnemy(e, dmg);
+      sparkLines.push({ x1: from.x, y1: from.y, x2: e.x, y2: e.y, life: 0.2, color: '#7d5ba6' });
+      from = e;
+    });
+  }
+
+  function castSpell(seq) {
+    if (!seq.length) return;
+
+    const nowMs = world.time * 1000;
+    if (nowMs - world.lastCastMs < world.castCd) return;
+    world.lastCastMs = nowMs;
+
+    const base = player.damage + world.level * 1.45 + meta.relicPower * 1.2;
+    const unique = new Set(seq);
+
+    if (seq.length >= 3 && seq[0] === seq[seq.length - 1]) {
+      world.barrier = Math.min(6, world.barrier + 3);
+      player.hp = Math.min(player.maxHp, player.hp + 9 + meta.relicGuard * 2);
+      bursts.push({ x: player.x, y: player.y, r: 34, max: 95, life: 0.45, color: 'rgba(76,149,108,0.38)' });
+      world.score += 12;
+      showToast(T('toastWard'));
+      playSfx('success');
+      haptic('impact', 'medium');
+      return;
+    }
+
+    if (unique.size >= 3) {
+      aoeDamage(150 + seq.length * 18, base * 1.28);
+      world.combo += 1;
+      world.comboTimer = 2.2;
+      world.score += 18;
+      showToast(T('toastNova'));
+      playSfx('whoosh');
+      haptic('impact', 'heavy');
+      return;
+    }
+
+    if (seq.includes(4)) {
+      voidChain(Math.min(5, 2 + seq.length), base * 0.95);
+      world.score += 10;
+      showToast(T('toastChain'));
+      playSfx('click');
+      haptic('selection', 'light');
+      return;
+    }
+
+    const target = nearestEnemy();
+    if (!target) return;
+
+    let damage = base * (1 + 0.2 * Math.max(0, seq.length - 1));
+    if (seq.includes(0) && seq.includes(1)) target.burn = Math.max(target.burn, 2.7);
+    if (seq.includes(2) && seq.includes(3)) target.slow = Math.max(target.slow, 2.4);
+
+    const color = runes[seq[seq.length - 1]].color;
+    shootProjectile(target, damage, color);
+    playSfx('click');
+    haptic('selection', 'light');
+  }
+
+  function levelUp() {
+    world.level += 1;
+    world.score += 45;
+    world.xpNeed = Math.floor(world.xpNeed * 1.3 + 8);
+
+    const step = world.level % 3;
+    if (step === 1) {
+      player.maxHp += 12;
+      player.hp = Math.min(player.maxHp, player.hp + 12);
+      showToast(T('boonVital'));
+    } else if (step === 2) {
+      world.castCd = Math.max(260, world.castCd - 42);
+      showToast(T('boonFocus'));
+    } else {
+      player.damage += 2.3;
+      showToast(T('boonPower'));
+    }
+    playSfx('success');
+  }
+
+  function handleKillsAndLevel() {
+    for (let i = enemies.length - 1; i >= 0; i--) {
+      const e = enemies[i];
+      if (e.hp > 0) continue;
+
+      world.kills += 1;
+      world.score += Math.floor(10 + e.maxHp * 0.75 + world.combo * 1.3);
+      world.xp += 8 + (e.kind === 'brute' ? 4 : 0);
+      enemies.splice(i, 1);
+
+      if (world.kills % 12 === 0) world.wave += 1;
+    }
+
+    while (world.xp >= world.xpNeed) {
+      world.xp -= world.xpNeed;
+      levelUp();
+    }
+  }
+
+  function update(dt) {
+    if (state !== STATE.play) return;
+
+    world.time += dt;
+
+    if (world.barrier > 0) world.barrier = Math.max(0, world.barrier - dt);
+    if (world.comboTimer > 0) {
+      world.comboTimer -= dt;
+      if (world.comboTimer <= 0) world.combo = 0;
+    }
+
+    world.spawnCd -= dt;
+    if (world.spawnCd <= 0) {
+      spawnEnemy();
+      const scale = Math.max(0.35, world.spawnBase - world.level * 0.035 - world.wave * 0.025);
+      world.spawnCd = 0.4 + Math.random() * scale;
+    }
+
+    for (let i = 0; i < enemies.length; i++) {
+      const e = enemies[i];
+      e.hitCd = Math.max(0, e.hitCd - dt);
+      e.burn = Math.max(0, e.burn - dt);
+      e.slow = Math.max(0, e.slow - dt);
+
+      if (e.burn > 0) e.hp -= dt * (8 + world.level * 0.6);
+
+      const dx = player.x - e.x;
+      const dy = player.y - e.y;
+      const dist = Math.hypot(dx, dy) || 1;
+      const speed = e.speed * (e.slow > 0 ? 0.48 : 1);
+      e.vx = (dx / dist) * speed;
+      e.vy = (dy / dist) * speed;
+      e.x += e.vx * dt;
+      e.y += e.vy * dt;
+
+      if (dist < player.r + e.r + 2 && e.hitCd <= 0) {
+        e.hitCd = 0.8;
+        if (world.barrier > 0) {
+          e.hp -= (10 + player.damage * 0.5);
+          bursts.push({ x: e.x, y: e.y, r: 8, max: 30, life: 0.22, color: 'rgba(76,149,108,0.35)' });
+        } else {
+          player.hp -= e.touch;
+          floatingTexts.push({ x: player.x, y: player.y - 14, text: `-${e.touch}`, life: 0.5, color: '#b84b3b' });
+          haptic('impact', 'light');
+        }
+      }
+    }
+
+    for (let i = projectiles.length - 1; i >= 0; i--) {
+      const p = projectiles[i];
+      p.life -= dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      if (p.life <= 0) { projectiles.splice(i, 1); continue; }
+
+      for (let j = 0; j < enemies.length; j++) {
+        const e = enemies[j];
+        const d = Math.hypot(e.x - p.x, e.y - p.y);
+        if (d < e.r + 5) {
+          damageEnemy(e, p.dmg);
+          bursts.push({ x: p.x, y: p.y, r: 6, max: 24, life: 0.16, color: 'rgba(47,72,88,0.35)' });
+          projectiles.splice(i, 1);
+          break;
+        }
+      }
+    }
+
+    for (let i = bursts.length - 1; i >= 0; i--) {
+      const b = bursts[i];
+      b.life -= dt;
+      b.r += (b.max - b.r) * 0.18;
+      if (b.life <= 0) bursts.splice(i, 1);
+    }
+
+    for (let i = sparkLines.length - 1; i >= 0; i--) {
+      sparkLines[i].life -= dt;
+      if (sparkLines[i].life <= 0) sparkLines.splice(i, 1);
+    }
+
+    for (let i = floatingTexts.length - 1; i >= 0; i--) {
+      floatingTexts[i].life -= dt;
+      floatingTexts[i].y -= 26 * dt;
+      if (floatingTexts[i].life <= 0) floatingTexts.splice(i, 1);
+    }
+
+    handleKillsAndLevel();
+
+    world.score += dt * (1 + world.level * 0.25 + world.wave * 0.12);
+
+    if (player.hp <= 0) {
+      player.hp = 0;
+      endRun();
+    }
+
+    const hpRate = Math.max(0, player.hp / player.maxHp);
+    const xpRate = Math.max(0, Math.min(1, world.xp / world.xpNeed));
+    ui.hpFill.style.width = `${(hpRate * 100).toFixed(1)}%`;
+    ui.xpFill.style.width = `${(xpRate * 100).toFixed(1)}%`;
+    ui.hudScore.textContent = `${T('score')} ${Math.floor(world.score).toLocaleString()}`;
+    ui.hudLevel.textContent = `Lv ${world.level}`;
+    ui.hudWave.textContent = `${T('wave')} ${world.wave}`;
+  }
+
+  function drawBackground() {
+    const g = ctx.createLinearGradient(0, 0, 0, height);
+    g.addColorStop(0, '#f3ead7');
+    g.addColorStop(0.55, '#dfccb0');
+    g.addColorStop(1, '#c5ab83');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, width, height);
+
+    ctx.save();
+    ctx.globalAlpha = 0.13;
+    for (let i = 0; i < 22; i++) {
+      const t = world.time * (0.09 + i * 0.01);
+      const x = ((i * 93 + Math.sin(t) * 80) % (width + 120)) - 40;
+      const y = ((i * 47 + Math.cos(t * 0.7) * 120) % (height + 120)) - 40;
+      ctx.fillStyle = i % 2 ? '#8f6d56' : '#f5efde';
+      ctx.beginPath();
+      ctx.arc(x, y, 2 + (i % 3), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawArena() {
+    const radius = Math.min(width, height) * 0.17;
+    ctx.save();
+
+    const rg = ctx.createRadialGradient(player.x, player.y, 20, player.x, player.y, radius + 78);
+    rg.addColorStop(0, 'rgba(255,245,220,0.75)');
+    rg.addColorStop(1, 'rgba(80,55,40,0.08)');
+    ctx.fillStyle = rg;
+    ctx.beginPath();
+    ctx.arc(player.x, player.y, radius + 80, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = 'rgba(47,36,50,0.25)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(player.x, player.y, radius + 5, 0, Math.PI * 2);
+    ctx.stroke();
+
+    const rp = runePositions();
+    rp.forEach((r, idx) => {
+      const isActive = chain.includes(idx);
+      ctx.fillStyle = isActive ? r.color : 'rgba(255,255,255,0.8)';
+      ctx.strokeStyle = r.color;
+      ctx.lineWidth = isActive ? 4 : 2;
+      ctx.beginPath();
+      ctx.arc(r.x, r.y, isActive ? 18 : 15, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = isActive ? '#fff' : '#3d2d2a';
+      ctx.font = 'bold 18px serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(r.glyph, r.x, r.y + 1);
+    });
+
+    if (tracePoints.length > 1) {
+      ctx.strokeStyle = '#2f4858';
+      ctx.lineWidth = 4;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      ctx.globalAlpha = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(tracePoints[0].x, tracePoints[0].y);
+      for (let i = 1; i < tracePoints.length; i++) ctx.lineTo(tracePoints[i].x, tracePoints[i].y);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+
+    if (world.barrier > 0) {
+      ctx.strokeStyle = 'rgba(76,149,108,0.8)';
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.arc(player.x, player.y, player.r + 14 + Math.sin(world.time * 9) * 2.4, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    const core = ctx.createRadialGradient(player.x - 5, player.y - 9, 5, player.x, player.y, player.r + 22);
+    core.addColorStop(0, '#fff7e6');
+    core.addColorStop(0.45, '#ad6c3b');
+    core.addColorStop(1, '#5a3d2b');
+    ctx.fillStyle = core;
+    ctx.beginPath();
+    ctx.arc(player.x, player.y, player.r + 6, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#fff5e3';
+    ctx.font = 'bold 15px serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('⚒', player.x, player.y + 1);
+
+    ctx.restore();
+  }
+
+  function drawEntities() {
+    ctx.save();
+
+    for (let i = 0; i < sparkLines.length; i++) {
+      const s = sparkLines[i];
+      ctx.strokeStyle = s.color;
+      ctx.globalAlpha = Math.max(0, s.life * 4);
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(s.x1, s.y1);
+      ctx.lineTo(s.x2, s.y2);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    for (let i = 0; i < bursts.length; i++) {
+      const b = bursts[i];
+      ctx.fillStyle = b.color;
+      ctx.globalAlpha = Math.max(0, b.life * 2.4);
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    for (let i = 0; i < projectiles.length; i++) {
+      const p = projectiles[i];
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    for (let i = 0; i < enemies.length; i++) {
+      const e = enemies[i];
+      const ratio = Math.max(0, e.hp / e.maxHp);
+
+      ctx.fillStyle = e.color;
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (e.slow > 0) {
+        ctx.strokeStyle = 'rgba(47,72,88,0.7)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, e.r + 4, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      if (e.burn > 0) {
+        ctx.strokeStyle = 'rgba(184,75,59,0.8)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, e.r + 7, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = 'rgba(47,36,50,0.25)';
+      ctx.fillRect(e.x - e.r, e.y - e.r - 10, e.r * 2, 4);
+      ctx.fillStyle = '#89c07f';
+      ctx.fillRect(e.x - e.r, e.y - e.r - 10, e.r * 2 * ratio, 4);
+    }
+
+    for (let i = 0; i < floatingTexts.length; i++) {
+      const ft = floatingTexts[i];
+      ctx.globalAlpha = Math.max(0, ft.life * 2);
+      ctx.fillStyle = ft.color;
+      ctx.font = 'bold 13px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(ft.text, ft.x, ft.y);
+    }
+
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  function drawOverlay() {
+    if (state !== STATE.play) return;
+    if (world.combo > 1) {
+      ctx.fillStyle = 'rgba(47,36,50,0.85)';
+      ctx.font = 'bold 20px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(`COMBO x${world.combo}`, width * 0.5, 124);
+    }
+
+    const cd = Math.max(0, (world.castCd - (world.time * 1000 - world.lastCastMs)) / world.castCd);
+    const cw = 120;
+    const cx = width * 0.5 - cw / 2;
+    const cy = height - 26;
+    ctx.fillStyle = 'rgba(47,36,50,0.22)';
+    ctx.fillRect(cx, cy, cw, 8);
+    ctx.fillStyle = '#2f4858';
+    ctx.fillRect(cx, cy, cw * (1 - cd), 8);
+  }
+
+  function render() {
+    drawBackground();
+    drawArena();
+    drawEntities();
+    drawOverlay();
+  }
+
+  function frame(now) {
+    const dt = Math.min(0.033, (now - lastFrame) / 1000);
+    lastFrame = now;
+    update(dt);
+    render();
+    requestAnimationFrame(frame);
+  }
+
+  function addRuneByPointer(x, y) {
+    const rp = runePositions();
+    for (let i = 0; i < rp.length; i++) {
+      const r = rp[i];
+      const d = Math.hypot(x - r.x, y - r.y);
+      if (d <= 24) {
+        if (chain.length === 0 || chain[chain.length - 1] !== i) {
+          if (chain.length < 4) {
+            chain.push(i);
+            playSfx('pop');
+            haptic('selection', 'light');
+          }
+        }
+      }
+    }
+  }
+
+  function pointFromEvent(ev) {
+    const rect = canvas.getBoundingClientRect();
+    let x = 0;
+    let y = 0;
+    if (ev.touches && ev.touches[0]) {
+      x = ev.touches[0].clientX - rect.left;
+      y = ev.touches[0].clientY - rect.top;
+    } else {
+      x = ev.clientX - rect.left;
+      y = ev.clientY - rect.top;
+    }
+    return { x, y };
+  }
+
+  function onPointerDown(ev) {
+    const p = pointFromEvent(ev);
+    pointerX = p.x;
+    pointerY = p.y;
+
+    if (state === STATE.play) {
+      drawing = true;
+      tracePoints = [p];
+      chain = [];
+      addRuneByPointer(p.x, p.y);
+      ev.preventDefault();
+      return;
+    }
+  }
+
+  function onPointerMove(ev) {
+    const p = pointFromEvent(ev);
+    pointerX = p.x;
+    pointerY = p.y;
+
+    if (!drawing || state !== STATE.play) return;
+    tracePoints.push(p);
+    if (tracePoints.length > 32) tracePoints.shift();
+    addRuneByPointer(p.x, p.y);
+    ev.preventDefault();
+  }
+
+  function onPointerUp(ev) {
+    if (state !== STATE.play || !drawing) return;
+    drawing = false;
+    castSpell(chain.slice());
+    chain = [];
+    tracePoints = [];
+    ev.preventDefault();
+  }
+
+  function bindEvents() {
+    window.addEventListener('resize', resize);
+
+    canvas.addEventListener('pointerdown', onPointerDown, { passive: false });
+    canvas.addEventListener('pointermove', onPointerMove, { passive: false });
+    window.addEventListener('pointerup', onPointerUp, { passive: false });
+
+    ui.startBtn.addEventListener('click', startRun);
+    ui.retryBtn.addEventListener('click', startRun);
+    ui.homeBtn.addEventListener('click', () => {
+      updateTitleUI();
+      showTitle();
+    });
+
+    ui.buyPowerBtn.addEventListener('click', () => buyRelic('power'));
+    ui.buyGuardBtn.addEventListener('click', () => buyRelic('guard'));
+    ui.buyFocusBtn.addEventListener('click', () => buyRelic('focus'));
+
+    window.addEventListener('beforeunload', saveMeta);
+  }
+
+  function initText() {
+    ui.gameOverTitle.textContent = T('runComplete');
+    ui.retryBtn.textContent = T('retry');
+    ui.homeBtn.textContent = T('home');
+  }
+
+  function initSound() {
+    try {
+      if (window.SoundManager) {
+        sound = new window.SoundManager();
+        if (typeof sound.loadSFX === 'function') {
+          sound.loadSFX('click', '../assets/audio/click.wav');
+          sound.loadSFX('pop', '../assets/audio/pop.wav');
+          sound.loadSFX('clear', '../assets/audio/clear.wav');
+          sound.loadSFX('gameover', '../assets/audio/gameover.wav');
+        }
+      }
+    } catch (_) {
+      sound = null;
+    }
+  }
+
+  function init() {
+    try {
+      if (window.TG && typeof window.TG.init === 'function') window.TG.init();
+    } catch (_) {}
+
+    loadMeta();
+    initSound();
+    initText();
+    bindEvents();
+    resize();
+    updateTitleUI();
+    refreshBoard();
+    requestAnimationFrame(frame);
+  }
+
+  init();
+})();
+</script>
+<script src="../cross-promo.js"></script>
+</body>
+</html>

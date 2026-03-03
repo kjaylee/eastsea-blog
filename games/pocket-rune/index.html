@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<title>Pocket Rune — 포켓 룬</title>
+<link rel="manifest" href="manifest.webmanifest"/>
+<meta name="theme-color" content="#0a0a1a"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;overflow:hidden;background:#0a0a1a;font-family:'Segoe UI',system-ui,sans-serif;color:#e0e0e0;user-select:none;-webkit-user-select:none}
+body{display:flex;flex-direction:column;align-items:center;justify-content:center}
+canvas{display:none}
+#app{width:100%;max-width:480px;height:100%;position:relative;overflow:hidden;display:flex;flex-direction:column}
+.screen{display:none;flex-direction:column;align-items:center;justify-content:center;height:100%;width:100%;padding:16px;position:absolute;top:0;left:0}
+.screen.active{display:flex}
+/* Title */
+#title-screen{background:linear-gradient(180deg,#0a0a1a 0%,#1a0a2e 50%,#0a0a1a 100%)}
+#title-screen h1{font-size:2.8em;background:linear-gradient(135deg,#00ffff,#ff00ff,#ffff00);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;text-shadow:none;margin-bottom:8px;letter-spacing:2px}
+#title-screen .subtitle{color:#888;font-size:1em;margin-bottom:32px}
+.btn{background:linear-gradient(135deg,#00ffff22,#ff00ff22);border:1px solid #00ffff88;color:#00ffff;padding:14px 40px;font-size:1.1em;border-radius:8px;cursor:pointer;transition:all .2s;font-family:inherit;margin:6px}
+.btn:hover,.btn:active{background:linear-gradient(135deg,#00ffff44,#ff00ff44);border-color:#00ffff;transform:scale(1.04)}
+.btn-small{padding:8px 16px;font-size:.85em}
+.stats-line{color:#666;font-size:.8em;margin-top:24px}
+/* HUD */
+#game-screen{flex-direction:column;padding:0;justify-content:flex-start}
+#hud{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#0d0d20;border-bottom:1px solid #222;width:100%;flex-shrink:0;z-index:10}
+#hud .hp-bar{flex:1;height:18px;background:#1a1a2e;border-radius:9px;margin:0 10px;position:relative;overflow:hidden;border:1px solid #333}
+#hud .hp-fill{height:100%;background:linear-gradient(90deg,#ff004488,#ff0044);border-radius:9px;transition:width .4s}
+#hud .hp-text{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:.7em;color:#fff;font-weight:bold;text-shadow:0 0 4px #000}
+.hud-icon{font-size:1.2em}
+#hud-energy{color:#ffff00;font-weight:bold;font-size:.9em}
+#hud-floor{color:#888;font-size:.75em}
+#hud-block{color:#4488ff;font-size:.8em;font-weight:bold}
+/* Battle area */
+#battle-area{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;overflow:hidden;width:100%}
+#enemy-zone{display:flex;justify-content:center;gap:16px;flex-wrap:wrap;padding:16px;min-height:160px;align-items:center}
+.enemy-card{background:#1a1a2e;border:1px solid #444;border-radius:10px;padding:12px;min-width:110px;text-align:center;position:relative;transition:all .3s}
+.enemy-card.dead{opacity:.2;transform:scale(.8)}
+.enemy-card .e-name{font-size:.8em;color:#ff6688;margin-bottom:4px}
+.enemy-card .e-hp{font-size:.75em;color:#aaa}
+.enemy-card .e-hp-bar{width:100%;height:6px;background:#333;border-radius:3px;margin:4px 0;overflow:hidden}
+.enemy-card .e-hp-fill{height:100%;background:#ff4466;border-radius:3px;transition:width .3s}
+.enemy-card .e-intent{font-size:.7em;color:#ffaa44;margin-top:4px;padding:3px 6px;background:#ffaa4418;border-radius:4px}
+.enemy-card .e-block{font-size:.65em;color:#4488ff;margin-top:2px}
+.enemy-card .e-emoji{font-size:2em;display:block;margin:4px 0}
+#msg-area{text-align:center;padding:8px;min-height:36px;font-size:.8em;color:#aaa;overflow:hidden}
+/* Hand */
+#hand-zone{width:100%;padding:8px 6px 12px;display:flex;justify-content:center;gap:6px;flex-wrap:nowrap;overflow-x:auto;flex-shrink:0;-webkit-overflow-scrolling:touch}
+.card{background:linear-gradient(180deg,#1a1a3e,#0d0d24);border:1.5px solid #444;border-radius:10px;padding:10px 8px;min-width:80px;max-width:90px;text-align:center;cursor:pointer;transition:all .2s;flex-shrink:0;position:relative}
+.card:hover,.card:active{transform:translateY(-6px);border-color:#00ffff}
+.card.disabled{opacity:.35;pointer-events:none}
+.card .c-cost{position:absolute;top:4px;left:8px;font-size:.7em;color:#ffff00;font-weight:bold}
+.card .c-emoji{font-size:1.6em;display:block;margin:6px 0 2px}
+.card .c-name{font-size:.65em;color:#ccc;font-weight:bold;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card .c-desc{font-size:.55em;color:#999;margin-top:3px;line-height:1.3}
+.card .c-element{position:absolute;top:4px;right:6px;font-size:.6em}
+.card[data-el="fire"]{border-color:#ff4400aa}
+.card[data-el="ice"]{border-color:#00aaffaa}
+.card[data-el="lightning"]{border-color:#ffff00aa}
+.card[data-el="shadow"]{border-color:#aa44ffaa}
+.card[data-el="arcane"]{border-color:#ff44ffaa}
+/* End Turn */
+#action-bar{display:flex;justify-content:center;padding:6px 0 8px;flex-shrink:0;gap:8px}
+#end-turn-btn{background:#ff00ff22;border:1px solid #ff00ff88;color:#ff00ff;padding:10px 28px;border-radius:8px;font-size:.9em;cursor:pointer;font-family:inherit;transition:all .2s}
+#end-turn-btn:hover{background:#ff00ff44}
+/* Reward */
+#reward-screen .reward-cards{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin:20px 0}
+#reward-screen .card{min-width:100px;max-width:120px}
+/* Game Over */
+#gameover-screen h2{font-size:2em;margin-bottom:8px}
+#gameover-screen .result{font-size:1.1em;color:#aaa;margin-bottom:20px}
+/* Damage flash */
+@keyframes flash-red{0%{background:#ff000044}100%{background:transparent}}
+.flash-dmg{animation:flash-red .3s}
+@keyframes float-up{0%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(-40px)}}
+.float-num{position:absolute;font-weight:bold;font-size:1.1em;pointer-events:none;animation:float-up .8s forwards;z-index:99}
+/* Combo banner */
+@keyframes combo-in{0%{opacity:0;transform:scale(.5)}50%{opacity:1;transform:scale(1.15)}100%{transform:scale(1)}}
+#combo-banner{position:absolute;top:40%;left:50%;transform:translate(-50%,-50%);font-size:1.4em;font-weight:bold;color:#ffff00;text-shadow:0 0 20px #ffff0088;pointer-events:none;z-index:100;display:none}
+#combo-banner.show{display:block;animation:combo-in .5s}
+/* Map */
+#map-screen{padding:20px}
+#map-screen h3{color:#00ffff;margin-bottom:16px}
+.map-nodes{display:flex;flex-direction:column;gap:8px;align-items:center;width:100%}
+.map-row{display:flex;gap:10px;justify-content:center}
+.map-node{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.2em;border:2px solid #333;cursor:pointer;transition:all .2s}
+.map-node.current{border-color:#00ffff;box-shadow:0 0 12px #00ffff66}
+.map-node.cleared{opacity:.4;border-color:#444}
+.map-node.available{border-color:#ff00ff;cursor:pointer}
+.map-node.available:hover{transform:scale(1.15);box-shadow:0 0 10px #ff00ff66}
+.map-node.locked{opacity:.2;pointer-events:none}
+/* Rest */
+#rest-screen{text-align:center}
+#rest-screen .heal-amt{font-size:2em;color:#44ff44;margin:16px 0}
+/* Relic display */
+#relics-bar{display:flex;gap:4px;padding:4px 12px;font-size:1em;flex-wrap:wrap;min-height:24px}
+.relic-icon{cursor:help;transition:transform .2s}
+.relic-icon:hover{transform:scale(1.3)}
+/* Tooltip */
+#tooltip{position:fixed;background:#1a1a3eee;border:1px solid #00ffffaa;border-radius:8px;padding:10px 14px;font-size:.75em;color:#ddd;max-width:220px;pointer-events:none;z-index:200;display:none;line-height:1.4}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- TITLE -->
+  <div id="title-screen" class="screen active">
+    <h1>POCKET RUNE</h1>
+    <div class="subtitle">룬 카드를 조합해 던전을 돌파하는 5분 덱런</div>
+    <button class="btn" onclick="startRun()">⚔️ 던전 입장</button>
+    <button class="btn btn-small" onclick="showHelp()" style="margin-top:8px">📖 도움말</button>
+    <div class="stats-line" id="best-stats"></div>
+  </div>
+  <!-- HELP -->
+  <div id="help-screen" class="screen">
+    <h2 style="color:#00ffff;margin-bottom:16px">📖 도움말</h2>
+    <div style="text-align:left;max-width:380px;font-size:.85em;line-height:1.8;color:#bbb;max-height:70vh;overflow-y:auto;padding:8px">
+      <b style="color:#ffff00">⚡ 에너지</b>: 매 턴 3 에너지. 카드마다 1~2 소모.<br>
+      <b style="color:#ff4466">⚔️ 공격</b>: 적에게 대미지. 적 클릭으로 타겟 지정.<br>
+      <b style="color:#4488ff">🛡️ 방어</b>: 블록 획득. 턴 종료 시 사라짐.<br>
+      <b style="color:#ff00ff">🔮 룬 조합</b>: 같은 원소 카드 2장+ 한 턴에 사용 → 보너스!<br><br>
+      <b style="color:#ff4400">🔥 화염x2</b>: 전체 적 3 화상<br>
+      <b style="color:#00aaff">❄️ 빙결x2</b>: 적 1턴 동결<br>
+      <b style="color:#ffff00">⚡ 번개x2</b>: 전체 적 5 대미지<br>
+      <b style="color:#aa44ff">🌑 그림자x2</b>: HP 6 흡수<br>
+      <b style="color:#ff44ff">✨ 비전x2</b>: 카드 2장 추가 드로우<br><br>
+      <b style="color:#44ff44">🏕️ 휴식</b>: 체력 30% 회복<br>
+      <b style="color:#ffaa00">🎁 보상</b>: 전투 승리 시 카드 1장 선택<br><br>
+      <b>조작</b>: 터치/클릭 또는 1~5키(카드), E(턴 종료), Tab(적 전환)<br>
+    </div>
+    <button class="btn btn-small" onclick="showScreen('title-screen')" style="margin-top:16px">돌아가기</button>
+  </div>
+  <!-- GAME -->
+  <div id="game-screen" class="screen">
+    <div id="hud">
+      <span class="hud-icon">❤️</span>
+      <div class="hp-bar"><div class="hp-fill" id="hp-fill"></div><div class="hp-text" id="hp-text"></div></div>
+      <span id="hud-block">🛡️ 0</span>
+      <span id="hud-energy">⚡ 3/3</span>
+      <span id="hud-floor"></span>
+    </div>
+    <div id="relics-bar"></div>
+    <div id="battle-area">
+      <div id="enemy-zone"></div>
+      <div id="combo-banner"></div>
+      <div id="msg-area"></div>
+    </div>
+    <div id="hand-zone"></div>
+    <div id="action-bar">
+      <button id="end-turn-btn" onclick="endTurn()">턴 종료 [E]</button>
+    </div>
+  </div>
+  <!-- REWARD -->
+  <div id="reward-screen" class="screen">
+    <h3 style="color:#ffaa00">🎁 카드 보상</h3>
+    <p style="color:#888;font-size:.85em;margin:8px 0">1장을 선택하세요 (또는 건너뛰기)</p>
+    <div class="reward-cards" id="reward-cards"></div>
+    <button class="btn btn-small" onclick="skipReward()">건너뛰기</button>
+  </div>
+  <!-- REST -->
+  <div id="rest-screen" class="screen">
+    <h3 style="color:#44ff44">🏕️ 휴식</h3>
+    <div class="heal-amt" id="heal-amt"></div>
+    <button class="btn" onclick="afterRest()">계속</button>
+  </div>
+  <!-- GAME OVER -->
+  <div id="gameover-screen" class="screen">
+    <h2 id="go-title"></h2>
+    <div class="result" id="go-result"></div>
+    <button class="btn" onclick="startRun()">다시 도전</button>
+    <button class="btn btn-small" onclick="showScreen('title-screen')">타이틀로</button>
+  </div>
+  <div id="tooltip"></div>
+</div>
+
+<script>
+'use strict';
+/* ═══════════════════════════════════════════════
+   POCKET RUNE — 5분 로그라이크 덱빌더
+   ═══════════════════════════════════════════════ */
+
+// ── Audio ──
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let actx = null;
+function initAudio(){if(!actx)actx=new AudioCtx()}
+function sfx(freq,dur=.12,type='square',vol=.15){
+  if(!actx)return;
+  try{
+    const o=actx.createOscillator(),g=actx.createGain();
+    o.type=type;o.frequency.value=freq;
+    g.gain.setValueAtTime(vol,actx.currentTime);
+    g.gain.exponentialRampToValueAtTime(.001,actx.currentTime+dur);
+    o.connect(g);g.connect(actx.destination);
+    o.start();o.stop(actx.currentTime+dur);
+  }catch(e){}
+}
+function sfxHit(){sfx(200,.1,'sawtooth',.2)}
+function sfxBlock(){sfx(400,.08,'triangle',.12)}
+function sfxCombo(){sfx(600,.25,'sine',.2);setTimeout(()=>sfx(800,.2,'sine',.15),100)}
+function sfxHeal(){sfx(500,.15,'sine',.12);setTimeout(()=>sfx(700,.15,'sine',.1),80)}
+function sfxDraw(){sfx(900,.06,'triangle',.08)}
+function sfxDeath(){sfx(120,.4,'sawtooth',.25)}
+function sfxWin(){sfx(523,.15,'sine',.2);setTimeout(()=>sfx(659,.15,'sine',.2),120);setTimeout(()=>sfx(784,.3,'sine',.2),240)}
+
+// ── Data ──
+const EL={fire:'🔥',ice:'❄️',lightning:'⚡',shadow:'🌑',arcane:'✨'};
+const EL_COLORS={fire:'#ff4400',ice:'#00aaff',lightning:'#ffff00',shadow:'#aa44ff',arcane:'#ff44ff'};
+const EL_KEYS=Object.keys(EL);
+
+function makeCard(id,name,cost,type,element,value,desc,emoji){
+  return{id,name,cost,type,element,value,desc,emoji};
+}
+// Starter deck
+const STARTER_DECK=[
+  makeCard('strike','타격',1,'attack',null,6,'6 대미지','⚔️'),
+  makeCard('strike','타격',1,'attack',null,6,'6 대미지','⚔️'),
+  makeCard('strike','타격',1,'attack',null,6,'6 대미지','⚔️'),
+  makeCard('strike','타격',1,'attack',null,6,'6 대미지','⚔️'),
+  makeCard('guard','수비',1,'defend',null,5,'5 블록','🛡️'),
+  makeCard('guard','수비',1,'defend',null,5,'5 블록','🛡️'),
+  makeCard('guard','수비',1,'defend',null,5,'5 블록','🛡️'),
+  makeCard('guard','수비',1,'defend',null,5,'5 블록','🛡️'),
+  makeCard('fire_bolt','화염탄',1,'attack','fire',4,'4 대미지 🔥','🔥'),
+  makeCard('ice_shard','빙결편',1,'attack','ice',4,'4 대미지 ❄️','❄️'),
+];
+
+// Card pool for rewards
+const CARD_POOL=[
+  makeCard('heavy_strike','강타',2,'attack',null,12,'12 대미지','🗡️'),
+  makeCard('iron_wall','철벽',2,'defend',null,10,'10 블록','🏰'),
+  makeCard('fire_bolt','화염탄',1,'attack','fire',4,'4 대미지','🔥'),
+  makeCard('fire_wave','화염파',1,'attack','fire',3,'전체 3 대미지','🌋'),
+  makeCard('inferno','인페르노',2,'attack','fire',9,'9 대미지','☄️'),
+  makeCard('ice_shard','빙결편',1,'attack','ice',4,'4 대미지','❄️'),
+  makeCard('frost_armor','빙결갑',1,'defend','ice',6,'6 블록','🧊'),
+  makeCard('blizzard','블리자드',2,'attack','ice',3,'전체 3+동결','🌨️'),
+  makeCard('spark','스파크',1,'attack','lightning',5,'5 대미지','⚡'),
+  makeCard('chain_bolt','연쇄번개',1,'attack','lightning',3,'전체 3 대미지','🌩️'),
+  makeCard('thunderstrike','썬더스트라이크',2,'attack','lightning',10,'10 대미지','⛈️'),
+  makeCard('shadow_cut','그림자베기',1,'attack','shadow',5,'5 대미지+흡혈2','🗡️'),
+  makeCard('dark_cloak','암흑외투',1,'defend','shadow',5,'5 블록','🦇'),
+  makeCard('void_drain','공허흡수',2,'attack','shadow',4,'4 대미지+흡혈4','🌀'),
+  makeCard('arcane_bolt','비전탄',1,'attack','arcane',5,'5 대미지','💫'),
+  makeCard('mana_shield','마나보호막',1,'defend','arcane',4,'4 블록+드로우1','🔮'),
+  makeCard('arcane_surge','비전쇄도',2,'attack','arcane',8,'8 대미지','⭐'),
+  makeCard('quick_slash','속공',0,'attack',null,3,'3 대미지','💨'),
+  makeCard('bash','강타',2,'attack',null,8,'8 대미지+2 취약','🔨'),
+  makeCard('twin_strike','쌍검',1,'attack',null,4,'4x2 대미지','⚔️'),
+];
+
+// Enemies by floor
+const ENEMY_DATA={
+  1:[
+    {name:'슬라임',emoji:'🟢',hp:14,moves:[{type:'attack',value:5},{type:'attack',value:7},{type:'defend',value:4}]},
+    {name:'고블린',emoji:'👺',hp:18,moves:[{type:'attack',value:7},{type:'attack',value:5},{type:'buff',value:2}]},
+    {name:'박쥐',emoji:'🦇',hp:10,moves:[{type:'attack',value:4},{type:'attack',value:6}]},
+    {name:'버섯',emoji:'🍄',hp:20,moves:[{type:'attack',value:3},{type:'defend',value:6},{type:'attack',value:5}]},
+  ],
+  2:[
+    {name:'해골병사',emoji:'💀',hp:26,moves:[{type:'attack',value:8},{type:'defend',value:6},{type:'attack',value:10}]},
+    {name:'레이스',emoji:'👻',hp:22,moves:[{type:'attack',value:9},{type:'attack',value:6},{type:'buff',value:3}]},
+    {name:'미이라',emoji:'🧟',hp:30,moves:[{type:'attack',value:6},{type:'attack',value:6},{type:'defend',value:8}]},
+    {name:'다크엘프',emoji:'🧝',hp:24,moves:[{type:'attack',value:11},{type:'defend',value:5},{type:'attack',value:7}]},
+  ],
+  3:[
+    {name:'악마',emoji:'😈',hp:36,moves:[{type:'attack',value:12},{type:'buff',value:4},{type:'attack',value:14}]},
+    {name:'가고일',emoji:'🗿',hp:40,moves:[{type:'defend',value:10},{type:'attack',value:13},{type:'attack',value:10}]},
+    {name:'리치',emoji:'🧙',hp:34,moves:[{type:'attack',value:10},{type:'buff',value:3},{type:'attack',value:15}]},
+    {name:'화염마',emoji:'🔥',hp:32,moves:[{type:'attack',value:14},{type:'attack',value:9},{type:'attack',value:11}]},
+  ],
+  boss1:{name:'고블린 킹',emoji:'👑',hp:48,moves:[{type:'attack',value:10},{type:'buff',value:3},{type:'attack',value:14},{type:'defend',value:8}]},
+  boss2:{name:'리치 로드',emoji:'☠️',hp:72,moves:[{type:'attack',value:12},{type:'attack',value:8},{type:'buff',value:4},{type:'attack',value:16}]},
+  boss3:{name:'고대 드래곤',emoji:'🐉',hp:100,moves:[{type:'attack',value:15},{type:'defend',value:12},{type:'attack',value:20},{type:'buff',value:5}]},
+};
+
+// Relics
+const RELIC_DATA=[
+  {id:'burning_ring',emoji:'💍',name:'화염의 반지',desc:'매 턴 시작 시 전체 적 1 대미지'},
+  {id:'ice_amulet',emoji:'📿',name:'빙결 부적',desc:'매 3턴 적 1턴 동결'},
+  {id:'lucky_coin',emoji:'🪙',name:'행운의 동전',desc:'턴 시작 시 50% 확률 에너지+1'},
+  {id:'healing_herb',emoji:'🌿',name:'치유 허브',desc:'전투 종료 시 HP 3 회복'},
+  {id:'sharp_blade',emoji:'🔪',name:'날카로운 검',desc:'공격 대미지 +1'},
+  {id:'iron_shield',emoji:'🛡️',name:'강철 방패',desc:'매 턴 블록 2 자동 획득'},
+];
+
+// ── State ──
+let G={};
+function resetState(){
+  G={
+    deck:[],discard:[],hand:[],exhaust:[],
+    hp:60,maxHp:60,block:0,energy:0,maxEnergy:3,
+    floor:1,encounter:0,turn:0,
+    enemies:[],targetIdx:0,
+    relics:[],
+    playedElements:{},
+    totalDmgDealt:0,totalKills:0,
+    runActive:false,
+    vulnerable:{},// enemy idx -> turns
+    frozen:{},
+    enemyStr:{},// enemy idx -> bonus
+    burnDmg:{},
+  };
+}
+
+// ── Screens ──
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+// ── Save/Load ──
+function saveBest(){
+  const b=JSON.parse(localStorage.getItem('pr_best')||'{}');
+  const score=G.totalKills*10+G.floor*100+G.totalDmgDealt;
+  if(!b.score||score>b.score){
+    b.score=score;b.floor=G.floor;b.kills=G.totalKills;b.dmg=G.totalDmgDealt;
+    b.wins=(b.wins||0)+(G.floor>3?1:0);
+    localStorage.setItem('pr_best',JSON.stringify(b));
+  } else if(G.floor>3){
+    b.wins=(b.wins||0)+1;
+    localStorage.setItem('pr_best',JSON.stringify(b));
+  }
+}
+function showBestStats(){
+  const b=JSON.parse(localStorage.getItem('pr_best')||'{}');
+  const el=document.getElementById('best-stats');
+  if(b.score)el.textContent=`🏆 최고: ${b.score}점 | 층:${b.floor} 처치:${b.kills} 승리:${b.wins||0}회`;
+  else el.textContent='첫 도전을 시작하세요!';
+}
+
+// ── Run Start ──
+function startRun(){
+  initAudio();
+  resetState();
+  G.deck=STARTER_DECK.map(c=>({...c,uid:uid()}));
+  G.runActive=true;
+  shuffle(G.deck);
+  nextEncounter();
+}
+let _uid=0;function uid(){return++_uid}
+
+function shuffle(arr){for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]]}return arr}
+
+// ── Encounter Flow ──
+function nextEncounter(){
+  G.encounter++;
+  // Floor structure: 3 fights + 1 boss per floor, rest after floor
+  if(G.encounter>4){
+    G.floor++;G.encounter=1;
+    if(G.floor>3){winRun();return}
+    // Rest between floors
+    doRest();
+    return;
+  }
+  spawnEnemies();
+  startBattle();
+}
+
+function spawnEnemies(){
+  G.enemies=[];G.targetIdx=0;G.vulnerable={};G.frozen={};G.enemyStr={};G.burnDmg={};
+  const f=G.floor;
+  if(G.encounter===4){
+    // Boss
+    const bk='boss'+f;
+    const bd=ENEMY_DATA[bk];
+    G.enemies.push({...bd,maxHp:bd.hp,moveIdx:0,block:0});
+  } else {
+    // 1-2 regular enemies
+    const pool=ENEMY_DATA[f];
+    const count=G.encounter===1?1:(Math.random()<0.5?1:2);
+    for(let i=0;i<count;i++){
+      const t=pool[Math.floor(Math.random()*pool.length)];
+      const hpVar=Math.floor(t.hp*(0.9+Math.random()*0.2));
+      G.enemies.push({...t,hp:hpVar,maxHp:hpVar,moveIdx:Math.floor(Math.random()*t.moves.length),block:0});
+    }
+  }
+}
+
+function startBattle(){
+  showScreen('game-screen');
+  G.discard.push(...G.hand);G.hand=[];
+  G.block=0;G.turn=0;
+  G.playedElements={};
+  startPlayerTurn();
+}
+
+// ── Turn ──
+function startPlayerTurn(){
+  G.turn++;
+  G.block=0;
+  G.energy=G.maxEnergy;
+  G.playedElements={};
+  // Relic: iron_shield
+  if(hasRelic('iron_shield'))G.block+=2;
+  // Relic: lucky_coin
+  if(hasRelic('lucky_coin')&&Math.random()<0.5)G.energy++;
+  // Relic: burning_ring
+  if(hasRelic('burning_ring')){
+    G.enemies.forEach((e,i)=>{if(e.hp>0){e.hp-=1;if(e.hp<=0)killEnemy(i)}});
+  }
+  // Relic: ice_amulet
+  if(hasRelic('ice_amulet')&&G.turn%3===0){
+    G.enemies.forEach((e,i)=>{if(e.hp>0)G.frozen[i]=1});
+  }
+  drawCards(5);
+  updateUI();
+  setMsg(`턴 ${G.turn} — 카드를 사용하세요`);
+}
+
+function drawCards(n){
+  for(let i=0;i<n;i++){
+    if(G.deck.length===0){
+      G.deck=shuffle([...G.discard]);G.discard=[];
+    }
+    if(G.deck.length===0)break;
+    G.hand.push(G.deck.pop());
+    sfxDraw();
+  }
+}
+
+function endTurn(){
+  if(!G.runActive)return;
+  initAudio();
+  // Check combos
+  checkCombos();
+  // Enemy turn
+  setTimeout(()=>enemyTurn(),300);
+}
+
+function checkCombos(){
+  let comboed=false;
+  for(const el of EL_KEYS){
+    const count=G.playedElements[el]||0;
+    if(count>=2){
+      comboed=true;
+      triggerCombo(el);
+    }
+  }
+  if(comboed)sfxCombo();
+}
+
+function triggerCombo(el){
+  const banner=document.getElementById('combo-banner');
+  let text='';
+  switch(el){
+    case'fire':
+      text=`🔥 화염 콤보! 전체 3 화상`;
+      G.enemies.forEach((e,i)=>{if(e.hp>0){e.hp-=3;G.burnDmg[i]=(G.burnDmg[i]||0)+2;if(e.hp<=0)killEnemy(i)}});
+      break;
+    case'ice':
+      text=`❄️ 빙결 콤보! 적 동결`;
+      G.enemies.forEach((e,i)=>{if(e.hp>0)G.frozen[i]=1});
+      break;
+    case'lightning':
+      text=`⚡ 번개 콤보! 전체 5 대미지`;
+      G.enemies.forEach((e,i)=>{if(e.hp>0){dealDmgToEnemy(i,5);if(G.enemies[i].hp<=0)killEnemy(i)}});
+      break;
+    case'shadow':
+      text=`🌑 그림자 콤보! HP 6 흡수`;
+      G.hp=Math.min(G.maxHp,G.hp+6);
+      G.enemies.forEach((e,i)=>{if(e.hp>0){dealDmgToEnemy(i,2);if(G.enemies[i].hp<=0)killEnemy(i)}});
+      break;
+    case'arcane':
+      text=`✨ 비전 콤보! 카드 2장 드로우`;
+      drawCards(2);
+      break;
+  }
+  banner.textContent=text;
+  banner.className='show';
+  setTimeout(()=>banner.className='',1200);
+  if(allEnemiesDead()){setTimeout(()=>battleWon(),400);return}
+  updateUI();
+}
+
+function enemyTurn(){
+  if(!G.runActive||allEnemiesDead())return;
+  setMsg('적의 턴...');
+  let delay=0;
+  G.enemies.forEach((e,i)=>{
+    if(e.hp<=0)return;
+    // Burn damage
+    if(G.burnDmg[i]>0){
+      e.hp-=G.burnDmg[i];
+      G.burnDmg[i]=Math.max(0,G.burnDmg[i]-1);
+      if(e.hp<=0){killEnemy(i);return}
+    }
+    // Frozen skip
+    if(G.frozen[i]>0){G.frozen[i]--;e.moveIdx=(e.moveIdx+1)%e.moves.length;return}
+    // Clear enemy block
+    e.block=0;
+    const move=e.moves[e.moveIdx];
+    const str=G.enemyStr[i]||0;
+    setTimeout(()=>{
+      switch(move.type){
+        case'attack':{
+          let dmg=move.value+str;
+          const vuln=G.vulnerable[i]||0;
+          if(vuln>0){G.vulnerable[i]--}
+          // Apply damage to player
+          let remaining=dmg;
+          if(G.block>0){
+            if(G.block>=remaining){G.block-=remaining;remaining=0;sfxBlock()}
+            else{remaining-=G.block;G.block=0}
+          }
+          if(remaining>0){G.hp-=remaining;sfxHit();flashHud()}
+          if(G.hp<=0){gameOver();return}
+          break;
+        }
+        case'defend':
+          e.block+=move.value;
+          break;
+        case'buff':
+          G.enemyStr[i]=(G.enemyStr[i]||0)+move.value;
+          break;
+      }
+      e.moveIdx=(e.moveIdx+1)%e.moves.length;
+      updateUI();
+    },delay);
+    delay+=350;
+  });
+  setTimeout(()=>{
+    if(G.hp<=0)return;
+    G.discard.push(...G.hand);G.hand=[];
+    startPlayerTurn();
+  },delay+300);
+}
+
+// ── Card Play ──
+function playCard(handIdx){
+  if(!G.runActive)return;
+  initAudio();
+  const card=G.hand[handIdx];
+  if(!card||card.cost>G.energy)return;
+  G.energy-=card.cost;
+  G.hand.splice(handIdx,1);
+
+  // Track element
+  if(card.element){G.playedElements[card.element]=(G.playedElements[card.element]||0)+1}
+
+  const ti=getTargetIdx();
+  switch(card.type){
+    case'attack':{
+      if(card.id==='twin_strike'){
+        dealDmgToEnemy(ti,card.value);
+        if(G.enemies[ti]&&G.enemies[ti].hp>0)dealDmgToEnemy(ti,card.value);
+      } else if(card.id==='fire_wave'||card.id==='chain_bolt'){
+        G.enemies.forEach((e,i)=>{if(e.hp>0)dealDmgToEnemy(i,card.value)});
+      } else if(card.id==='blizzard'){
+        G.enemies.forEach((e,i)=>{if(e.hp>0){dealDmgToEnemy(i,card.value);G.frozen[i]=1}});
+      } else {
+        let dmg=card.value;
+        if(hasRelic('sharp_blade'))dmg+=1;
+        dealDmgToEnemy(ti,dmg);
+      }
+      // Lifesteal
+      if(card.id==='shadow_cut')G.hp=Math.min(G.maxHp,G.hp+2);
+      if(card.id==='void_drain')G.hp=Math.min(G.maxHp,G.hp+4);
+      // Bash vulnerability
+      if(card.id==='bash')G.vulnerable[ti]=(G.vulnerable[ti]||0)+2;
+      sfxHit();
+      break;
+    }
+    case'defend':{
+      G.block+=card.value;
+      if(card.id==='mana_shield')drawCards(1);
+      sfxBlock();
+      break;
+    }
+  }
+  G.discard.push(card);
+
+  // Check deaths
+  G.enemies.forEach((e,i)=>{if(e.hp<=0&&!e.dead)killEnemy(i)});
+
+  if(allEnemiesDead()){
+    checkCombos();
+    setTimeout(()=>battleWon(),500);
+  } else {
+    updateUI();
+  }
+}
+
+function dealDmgToEnemy(idx,dmg){
+  const e=G.enemies[idx];
+  if(!e||e.hp<=0)return;
+  let remaining=dmg;
+  if(e.block>0){
+    if(e.block>=remaining){e.block-=remaining;remaining=0}
+    else{remaining-=e.block;e.block=0}
+  }
+  e.hp=Math.max(0,e.hp-remaining);
+  G.totalDmgDealt+=remaining;
+  floatNumber(idx,-remaining);
+}
+
+function killEnemy(idx){
+  const e=G.enemies[idx];
+  if(e.dead)return;
+  e.dead=true;e.hp=0;G.totalKills++;
+  sfxDeath();
+  // Auto-target next alive
+  if(G.targetIdx===idx)autoTarget();
+}
+
+function allEnemiesDead(){return G.enemies.every(e=>e.hp<=0)}
+
+function getTargetIdx(){
+  if(G.enemies[G.targetIdx]&&G.enemies[G.targetIdx].hp>0)return G.targetIdx;
+  autoTarget();return G.targetIdx;
+}
+function autoTarget(){
+  for(let i=0;i<G.enemies.length;i++){if(G.enemies[i].hp>0){G.targetIdx=i;return}}
+}
+
+// ── Battle Won ──
+function battleWon(){
+  sfxWin();
+  // Relic: healing_herb
+  if(hasRelic('healing_herb'))G.hp=Math.min(G.maxHp,G.hp+3);
+  // Offer relic on boss
+  if(G.encounter===4){
+    offerRelic();
+    return;
+  }
+  showReward();
+}
+
+function showReward(){
+  const pool=CARD_POOL.filter(c=>true);
+  shuffle(pool);
+  const choices=pool.slice(0,3);
+  const container=document.getElementById('reward-cards');
+  container.innerHTML='';
+  choices.forEach((c,i)=>{
+    const div=createCardEl(c,i,true);
+    div.onclick=()=>{
+      G.deck.push({...c,uid:uid()});
+      sfxDraw();
+      nextEncounter();
+    };
+    container.appendChild(div);
+  });
+  showScreen('reward-screen');
+}
+function skipReward(){nextEncounter()}
+
+function offerRelic(){
+  // Simple: pick a random relic not owned
+  const available=RELIC_DATA.filter(r=>!G.relics.find(x=>x.id===r.id));
+  if(available.length===0){showReward();return}
+  const relic=available[Math.floor(Math.random()*available.length)];
+  G.relics.push(relic);
+  setMsg(`유물 획득: ${relic.emoji} ${relic.name}`);
+  setTimeout(()=>showReward(),800);
+}
+
+function hasRelic(id){return G.relics.some(r=>r.id===id)}
+
+// ── Rest ──
+function doRest(){
+  const heal=Math.floor(G.maxHp*0.3);
+  G.hp=Math.min(G.maxHp,G.hp+heal);
+  document.getElementById('heal-amt').textContent=`❤️ +${heal} HP (${G.hp}/${G.maxHp})`;
+  sfxHeal();
+  showScreen('rest-screen');
+}
+function afterRest(){nextEncounter()}
+
+// ── Win/Lose ──
+function winRun(){
+  G.runActive=false;
+  saveBest();
+  document.getElementById('go-title').textContent='🎉 던전 클리어!';
+  document.getElementById('go-title').style.color='#ffff00';
+  const score=G.totalKills*10+G.floor*100+G.totalDmgDealt;
+  document.getElementById('go-result').innerHTML=
+    `점수: <b style="color:#00ffff">${score}</b><br>처치: ${G.totalKills} | 대미지: ${G.totalDmgDealt} | 층: ${G.floor}`;
+  showScreen('gameover-screen');
+}
+function gameOver(){
+  G.runActive=false;
+  saveBest();
+  document.getElementById('go-title').textContent='💀 패배';
+  document.getElementById('go-title').style.color='#ff4466';
+  const score=G.totalKills*10+G.floor*100+G.totalDmgDealt;
+  document.getElementById('go-result').innerHTML=
+    `점수: <b style="color:#00ffff">${score}</b><br>처치: ${G.totalKills} | 대미지: ${G.totalDmgDealt} | 도달: ${G.floor}층 ${G.encounter}전`;
+  showScreen('gameover-screen');
+}
+
+// ── UI Rendering ──
+function updateUI(){
+  // HP
+  const pct=Math.max(0,G.hp/G.maxHp*100);
+  document.getElementById('hp-fill').style.width=pct+'%';
+  document.getElementById('hp-text').textContent=`${G.hp}/${G.maxHp}`;
+  document.getElementById('hud-block').textContent=`🛡️ ${G.block}`;
+  document.getElementById('hud-energy').textContent=`⚡ ${G.energy}/${G.maxEnergy}`;
+  document.getElementById('hud-floor').textContent=`${G.floor}F-${G.encounter}`;
+
+  // Relics
+  const rb=document.getElementById('relics-bar');
+  rb.innerHTML=G.relics.map(r=>`<span class="relic-icon" title="${r.name}: ${r.desc}">${r.emoji}</span>`).join('');
+
+  // Enemies
+  const ez=document.getElementById('enemy-zone');
+  ez.innerHTML='';
+  G.enemies.forEach((e,i)=>{
+    const div=document.createElement('div');
+    div.className='enemy-card'+(e.hp<=0?' dead':'')+(i===G.targetIdx&&e.hp>0?' targeted':'');
+    if(i===G.targetIdx&&e.hp>0)div.style.borderColor='#00ffff';
+    const hpPct=Math.max(0,e.hp/e.maxHp*100);
+    const move=e.moves[e.moveIdx];
+    const intentText=e.hp>0?getIntentText(move,i):'';
+    const frozenTag=G.frozen[i]>0?'<span style="color:#00aaff;font-size:.65em"> ❄️동결</span>':'';
+    const burnTag=(G.burnDmg[i]||0)>0?`<span style="color:#ff4400;font-size:.65em"> 🔥${G.burnDmg[i]}</span>`:'';
+    const strTag=(G.enemyStr[i]||0)>0?`<span style="color:#ff8800;font-size:.65em"> 💪+${G.enemyStr[i]}</span>`:'';
+    div.innerHTML=`
+      <span class="e-emoji">${e.emoji}</span>
+      <div class="e-name">${e.name}${frozenTag}${burnTag}${strTag}</div>
+      <div class="e-hp-bar"><div class="e-hp-fill" style="width:${hpPct}%"></div></div>
+      <div class="e-hp">${e.hp}/${e.maxHp}${e.block>0?` 🛡️${e.block}`:''}</div>
+      ${intentText?`<div class="e-intent">${intentText}</div>`:''}
+    `;
+    div.onclick=()=>{if(e.hp>0){G.targetIdx=i;updateUI()}};
+    ez.appendChild(div);
+  });
+
+  // Hand
+  const hz=document.getElementById('hand-zone');
+  hz.innerHTML='';
+  G.hand.forEach((c,i)=>{
+    const div=createCardEl(c,i,false);
+    if(c.cost>G.energy)div.classList.add('disabled');
+    div.onclick=()=>playCard(i);
+    hz.appendChild(div);
+  });
+}
+
+function createCardEl(c,idx,isReward){
+  const div=document.createElement('div');
+  div.className='card';
+  if(c.element)div.setAttribute('data-el',c.element);
+  const elIcon=c.element?EL[c.element]:'';
+  div.innerHTML=`
+    <span class="c-cost">${c.cost}⚡</span>
+    ${elIcon?`<span class="c-element">${elIcon}</span>`:''}
+    <span class="c-emoji">${c.emoji}</span>
+    <span class="c-name">${c.name}</span>
+    <span class="c-desc">${c.desc}</span>
+  `;
+  return div;
+}
+
+function getIntentText(move,idx){
+  const str=G.enemyStr[idx]||0;
+  switch(move.type){
+    case'attack':return`⚔️ ${move.value+str}`;
+    case'defend':return`🛡️ ${move.value}`;
+    case'buff':return`💪 강화`;
+    default:return'';
+  }
+}
+
+function setMsg(txt){document.getElementById('msg-area').textContent=txt}
+
+function flashHud(){
+  const el=document.getElementById('hud');
+  el.classList.remove('flash-dmg');
+  void el.offsetWidth;
+  el.classList.add('flash-dmg');
+}
+
+function floatNumber(enemyIdx,value){
+  const zone=document.getElementById('enemy-zone');
+  const cards=zone.querySelectorAll('.enemy-card');
+  if(!cards[enemyIdx])return;
+  const span=document.createElement('span');
+  span.className='float-num';
+  span.style.color=value<0?'#ff4466':'#44ff44';
+  span.textContent=value<0?value:'+'+value;
+  const rect=cards[enemyIdx].getBoundingClientRect();
+  const pRect=zone.getBoundingClientRect();
+  span.style.left=(rect.left-pRect.left+rect.width/2-10)+'px';
+  span.style.top=(rect.top-pRect.top)+'px';
+  zone.appendChild(span);
+  setTimeout(()=>span.remove(),800);
+}
+
+// ── Help ──
+function showHelp(){showScreen('help-screen')}
+
+// ── Keyboard ──
+document.addEventListener('keydown',e=>{
+  if(!G.runActive)return;
+  const k=e.key;
+  if(k>='1'&&k<='9'){const i=parseInt(k)-1;if(i<G.hand.length)playCard(i)}
+  if(k==='e'||k==='E')endTurn();
+  if(k==='Tab'){e.preventDefault();cycleTarget()}
+});
+function cycleTarget(){
+  let next=(G.targetIdx+1)%G.enemies.length;
+  let tries=0;
+  while(G.enemies[next].hp<=0&&tries<G.enemies.length){next=(next+1)%G.enemies.length;tries++}
+  G.targetIdx=next;updateUI();
+}
+
+// ── Init ──
+showBestStats();
+</script>
+</body>
+</html>

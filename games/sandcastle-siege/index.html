@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<title>Sandcastle Siege</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#87CEEB;font-family:'Segoe UI',system-ui,sans-serif;touch-action:none;user-select:none}
+canvas{display:block;width:100%;height:100%}
+#ui-overlay{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
+#hud{position:absolute;top:12px;left:12px;right:12px;display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none}
+.hud-panel{background:rgba(255,255,255,0.85);backdrop-filter:blur(6px);border-radius:12px;padding:8px 14px;font-size:14px;font-weight:600;color:#2c1810;box-shadow:0 2px 8px rgba(0,0,0,0.15)}
+#phase-banner{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:32px;font-weight:800;color:#fff;text-shadow:0 3px 8px rgba(0,0,0,0.4);opacity:0;transition:opacity 0.4s;pointer-events:none}
+#phase-banner.show{opacity:1}
+#toolbar{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);display:flex;gap:8px;pointer-events:auto}
+.tool-btn{width:56px;height:56px;border-radius:14px;border:3px solid rgba(255,255,255,0.6);background:rgba(255,255,255,0.8);backdrop-filter:blur(4px);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:22px;cursor:pointer;transition:all 0.2s;box-shadow:0 2px 8px rgba(0,0,0,0.15)}
+.tool-btn span{font-size:9px;font-weight:700;color:#2c1810;margin-top:1px}
+.tool-btn.active{border-color:#FF6B35;background:rgba(255,107,53,0.25);transform:scale(1.08)}
+.tool-btn:active{transform:scale(0.95)}
+#game-over-screen,#start-screen{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,0,0.5);pointer-events:auto;z-index:10}
+#game-over-screen.hidden,#start-screen.hidden{display:none}
+.screen-title{font-size:36px;font-weight:800;color:#fff;text-shadow:0 3px 10px rgba(0,0,0,0.4);margin-bottom:8px}
+.screen-sub{font-size:18px;color:#ffe4b5;margin-bottom:24px}
+.screen-btn{padding:14px 36px;border-radius:16px;border:none;font-size:18px;font-weight:700;cursor:pointer;transition:all 0.2s;box-shadow:0 4px 12px rgba(0,0,0,0.2)}
+.screen-btn:active{transform:scale(0.95)}
+.btn-primary{background:linear-gradient(135deg,#FF6B35,#FF8C42);color:#fff}
+.btn-secondary{background:rgba(255,255,255,0.9);color:#2c1810;margin-top:10px}
+#sand-counter{position:absolute;bottom:80px;left:50%;transform:translateX(-50%);pointer-events:none}
+.sand-amount{background:rgba(210,180,140,0.9);backdrop-filter:blur(4px);border-radius:20px;padding:6px 18px;font-size:15px;font-weight:700;color:#5c3a1e}
+</style>
+</head>
+<body>
+<canvas id="gc"></canvas>
+<div id="ui-overlay">
+  <div id="hud">
+    <div class="hud-panel" id="wave-info">🌊 Wave 1</div>
+    <div class="hud-panel" id="castle-hp">🏰 100%</div>
+    <div class="hud-panel" id="score-display">⭐ 0</div>
+  </div>
+  <div id="phase-banner"></div>
+  <div id="sand-counter"><div class="sand-amount" id="sand-amount">🪣 Sand: 30</div></div>
+  <div id="toolbar">
+    <div class="tool-btn active" data-tool="wall" id="btn-wall">🧱<span>WALL</span></div>
+    <div class="tool-btn" data-tool="tower" id="btn-tower">🗼<span>TOWER</span></div>
+    <div class="tool-btn" data-tool="moat" id="btn-moat">🌊<span>MOAT</span></div>
+    <div class="tool-btn" data-tool="packed" id="btn-packed">🪨<span>PACKED</span></div>
+    <div class="tool-btn" data-tool="repair" id="btn-repair">🔧<span>FIX</span></div>
+  </div>
+  <div id="start-screen">
+    <div class="screen-title">🏖️ Sandcastle Siege</div>
+    <div class="screen-sub">Build your castle. Defend against the tide!</div>
+    <button class="screen-btn btn-primary" id="btn-start">Start Building</button>
+  </div>
+  <div id="game-over-screen" class="hidden">
+    <div class="screen-title" id="go-title">💀 Castle Fallen!</div>
+    <div class="screen-sub" id="go-sub">Wave 1 — Score: 0</div>
+    <button class="screen-btn btn-primary" id="btn-retry">Try Again</button>
+  </div>
+</div>
+<script>
+(function(){
+"use strict";
+const C=document.getElementById("gc"),ctx=C.getContext("2d");
+let W,H,COLS,ROWS,CELL;
+const GRID_BOTTOM_RATIO=0.82;
+const SAND_COLORS={empty:"#f5deb3",wall:"#d2a679",tower:"#b8860b",moat:"#4db8d9",packed:"#8B7355",castle:"#DAA520",damaged:"#c97a4a"};
+let grid=[],castleCell={r:0,c:0},phase="start",wave=1,score=0,sand=30,castleHP=100;
+let selectedTool="wall",buildTimer=0,BUILD_TIME=15,waveTimer=0,WAVE_TIME=20;
+let waves=[],particles=[],splashes=[];
+let animFrame=0,lastTime=0;
+
+function resize(){
+  W=C.width=C.clientWidth*devicePixelRatio;
+  H=C.height=C.clientHeight*devicePixelRatio;
+  CELL=Math.floor(Math.min(W/20,H/28));
+  COLS=Math.floor(W/CELL);
+  ROWS=Math.floor((H*GRID_BOTTOM_RATIO)/CELL);
+  if(phase==="start")initGrid();
+}
+window.addEventListener("resize",resize);
+
+function initGrid(){
+  grid=[];
+  for(let r=0;r<ROWS;r++){
+    grid[r]=[];
+    for(let c=0;c<COLS;c++){
+      grid[r][c]={type:"empty",hp:0,maxHP:0,wet:0};
+    }
+  }
+  castleCell={r:Math.floor(ROWS*0.45),c:Math.floor(COLS/2)};
+  let cc=castleCell;
+  for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){
+    let rr=cc.r+dr,rc=cc.c+dc;
+    if(rr>=0&&rr<ROWS&&rc>=0&&rc<COLS){
+      grid[rr][rc]={type:"castle",hp:5,maxHP:5,wet:0};
+    }
+  }
+}
+
+function startGame(){
+  document.getElementById("start-screen").classList.add("hidden");
+  document.getElementById("game-over-screen").classList.add("hidden");
+  wave=1;score=0;sand=30;castleHP=100;
+  initGrid();
+  startBuildPhase();
+}
+
+function startBuildPhase(){
+  phase="build";
+  buildTimer=BUILD_TIME;
+  showBanner("🏗️ BUILD PHASE");
+  updateHUD();
+}
+
+function startWavePhase(){
+  phase="wave";
+  waveTimer=WAVE_TIME;
+  waves=[];
+  let numWaves=2+wave;
+  for(let i=0;i<numWaves;i++){
+    waves.push({
+      y:-CELL*(2+i*3),
+      speed:1.2+wave*0.3+Math.random()*0.5,
+      height:CELL*(1.5+wave*0.2),
+      strength:0.4+wave*0.15,
+      x:0,w:W
+    });
+  }
+  showBanner("🌊 WAVE "+wave+" INCOMING!");
+  updateHUD();
+}
+
+function showBanner(text){
+  const b=document.getElementById("phase-banner");
+  b.textContent=text;
+  b.classList.add("show");
+  setTimeout(()=>b.classList.remove("show"),2000);
+}
+
+function updateHUD(){
+  document.getElementById("wave-info").textContent="🌊 Wave "+wave;
+  document.getElementById("castle-hp").textContent="🏰 "+Math.max(0,Math.round(castleHP))+"%";
+  document.getElementById("score-display").textContent="⭐ "+score;
+  document.getElementById("sand-amount").textContent="🪣 Sand: "+sand;
+  
+  const tb=document.getElementById("toolbar");
+  if(phase==="build")tb.style.display="flex";
+  else if(phase==="wave"){
+    // Only show repair tool during wave
+    tb.style.display="flex";
+  }else tb.style.display="none";
+}
+
+function placeSand(col,row){
+  if(row<0||row>=ROWS||col<0||col>=COLS)return;
+  let cell=grid[row][col];
+  
+  if(phase==="build"){
+    if(cell.type==="castle")return;
+    if(selectedTool==="wall"&&sand>=1){
+      if(cell.type!=="empty"&&cell.type!=="moat")return;
+      grid[row][col]={type:"wall",hp:3,maxHP:3,wet:0};
+      sand-=1;
+    }else if(selectedTool==="tower"&&sand>=3){
+      if(cell.type!=="empty")return;
+      grid[row][col]={type:"tower",hp:6,maxHP:6,wet:0};
+      sand-=3;
+    }else if(selectedTool==="moat"&&sand>=1){
+      if(cell.type!=="empty")return;
+      grid[row][col]={type:"moat",hp:99,maxHP:99,wet:1};
+      sand-=1;
+    }else if(selectedTool==="packed"&&sand>=2){
+      if(cell.type!=="empty"&&cell.type!=="moat")return;
+      grid[row][col]={type:"packed",hp:8,maxHP:8,wet:0};
+      sand-=2;
+    }
+  }else if(phase==="wave"&&selectedTool==="repair"){
+    if((cell.type==="wall"||cell.type==="tower"||cell.type==="packed")&&cell.hp<cell.maxHP&&sand>=1){
+      cell.hp=Math.min(cell.maxHP,cell.hp+2);
+      sand-=1;
+      addParticle(col*CELL+CELL/2,row*CELL+CELL/2,"#FFD700",8);
+    }
+  }
+  updateHUD();
+}
+
+function addParticle(x,y,color,count){
+  for(let i=0;i<count;i++){
+    particles.push({
+      x:x,y:y,
+      vx:(Math.random()-0.5)*4,
+      vy:-Math.random()*5-2,
+      life:1,decay:0.02+Math.random()*0.02,
+      size:2+Math.random()*3,
+      color:color
+    });
+  }
+}
+
+function addSplash(x,y){
+  for(let i=0;i<6;i++){
+    splashes.push({
+      x:x+Math.random()*40-20,
+      y:y,
+      vy:-Math.random()*6-3,
+      vx:(Math.random()-0.5)*4,
+      life:1,
+      size:3+Math.random()*4
+    });
+  }
+}
+
+function update(dt){
+  if(phase==="build"){
+    buildTimer-=dt;
+    if(buildTimer<=0)startWavePhase();
+  }else if(phase==="wave"){
+    // Move waves
+    let allPassed=true;
+    for(let w of waves){
+      w.y+=w.speed*dt*60;
+      if(w.y<H)allPassed=false;
+      // Check collision with grid cells
+      let wTop=w.y;
+      let wBot=w.y+w.height;
+      for(let r=0;r<ROWS;r++){
+        let cellTop=r*CELL;
+        let cellBot=(r+1)*CELL;
+        if(wBot>cellTop&&wTop<cellBot){
+          for(let c=0;c<COLS;c++){
+            let cell=grid[r][c];
+            if(cell.type==="moat"){
+              // Moat absorbs wave energy
+              w.speed*=0.97;
+              w.strength*=0.95;
+              cell.wet=Math.min(1,cell.wet+0.1);
+              continue;
+            }
+            if(cell.type==="wall"||cell.type==="tower"||cell.type==="packed"||cell.type==="castle"){
+              let dmg=w.strength*dt*2;
+              cell.hp-=dmg;
+              cell.wet=Math.min(1,cell.wet+dt*0.5);
+              if(Math.random()<0.05)addSplash(c*CELL+CELL/2,r*CELL);
+              if(cell.hp<=0){
+                if(cell.type==="castle"){
+                  castleHP-=12;
+                  addParticle(c*CELL+CELL/2,r*CELL+CELL/2,"#DAA520",12);
+                  cell.hp=0.1;// Keep castle visible but damaged
+                }else{
+                  addParticle(c*CELL+CELL/2,r*CELL+CELL/2,SAND_COLORS[cell.type],10);
+                  grid[r][c]={type:"empty",hp:0,maxHP:0,wet:Math.min(1,cell.wet)};
+                  w.strength*=0.7;// Wall absorbed some energy
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    // Check game over
+    if(castleHP<=0){
+      phase="gameover";
+      document.getElementById("go-title").textContent="💀 Castle Fallen!";
+      document.getElementById("go-sub").textContent="Survived to Wave "+wave+" — Score: "+score;
+      document.getElementById("game-over-screen").classList.remove("hidden");
+      return;
+    }
+    // Wave passed
+    if(allPassed){
+      score+=wave*100+Math.round(castleHP);
+      sand+=5+wave*2;// Reward sand
+      wave++;
+      if(wave>20){
+        phase="gameover";
+        document.getElementById("go-title").textContent="🏆 Victory!";
+        document.getElementById("go-sub").textContent="All 20 waves survived! Score: "+score;
+        document.getElementById("game-over-screen").classList.remove("hidden");
+        return;
+      }
+      // Repair some castle HP between waves
+      castleHP=Math.min(100,castleHP+5);
+      startBuildPhase();
+    }
+    updateHUD();
+  }
+  // Update particles
+  for(let i=particles.length-1;i>=0;i--){
+    let p=particles[i];
+    p.x+=p.vx;p.y+=p.vy;
+    p.vy+=0.2;
+    p.life-=p.decay;
+    if(p.life<=0)particles.splice(i,1);
+  }
+  for(let i=splashes.length-1;i>=0;i--){
+    let s=splashes[i];
+    s.x+=s.vx;s.y+=s.vy;
+    s.vy+=0.3;
+    s.life-=0.03;
+    if(s.life<=0)splashes.splice(i,1);
+  }
+  // Dry cells gradually
+  for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
+    if(grid[r][c].wet>0&&grid[r][c].type!=="moat")grid[r][c].wet=Math.max(0,grid[r][c].wet-dt*0.05);
+  }
+}
+
+function draw(){
+  // Sky gradient
+  let skyGrad=ctx.createLinearGradient(0,0,0,H);
+  skyGrad.addColorStop(0,"#4A90D9");
+  skyGrad.addColorStop(0.5,"#87CEEB");
+  skyGrad.addColorStop(0.85,"#F5DEB3");
+  skyGrad.addColorStop(1,"#D2B48C");
+  ctx.fillStyle=skyGrad;
+  ctx.fillRect(0,0,W,H);
+  
+  // Draw beach sand base
+  ctx.fillStyle="#F5DEB3";
+  ctx.fillRect(0,CELL*0.5,W,ROWS*CELL+CELL);
+  
+  // Sand texture dots
+  ctx.fillStyle="rgba(210,180,140,0.3)";
+  for(let i=0;i<80;i++){
+    let sx=(animFrame*0.1+i*137.5)%W;
+    let sy=CELL+(i*89.3)%(ROWS*CELL);
+    ctx.beginPath();ctx.arc(sx,sy,1.5,0,Math.PI*2);ctx.fill();
+  }
+  
+  // Draw grid cells
+  for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
+    let cell=grid[r][c];
+    let x=c*CELL,y=r*CELL;
+    if(cell.type==="empty")continue;
+    
+    let baseColor=SAND_COLORS[cell.type]||"#F5DEB3";
+    // Wet darkening
+    if(cell.wet>0&&cell.type!=="moat"){
+      ctx.fillStyle=blendColor(baseColor,"#6B4226",cell.wet*0.4);
+    }else{
+      ctx.fillStyle=baseColor;
+    }
+    // Damage indication
+    if(cell.type!=="moat"&&cell.type!=="empty"&&cell.hp<cell.maxHP*0.5){
+      ctx.fillStyle=blendColor(ctx.fillStyle,SAND_COLORS.damaged,0.5);
+    }
+    
+    if(cell.type==="tower"){
+      // Tower: taller block
+      ctx.fillStyle=SAND_COLORS.tower;
+      let tH=CELL*1.4;
+      roundRect(ctx,x+2,y+CELL-tH+2,CELL-4,tH-4,4);
+      ctx.fill();
+      // Battlement
+      ctx.fillStyle="#9B7B3A";
+      for(let b=0;b<3;b++){
+        ctx.fillRect(x+4+b*(CELL/3),y+CELL-tH-2,CELL/5,6);
+      }
+    }else if(cell.type==="moat"){
+      ctx.fillStyle=`rgba(77,184,217,${0.5+Math.sin(animFrame*0.05+c)*0.2})`;
+      ctx.fillRect(x,y,CELL,CELL);
+      // Water ripples
+      ctx.strokeStyle="rgba(255,255,255,0.3)";
+      ctx.lineWidth=1;
+      ctx.beginPath();
+      ctx.moveTo(x,y+CELL/2+Math.sin(animFrame*0.08+c)*3);
+      ctx.quadraticCurveTo(x+CELL/2,y+CELL/2+Math.cos(animFrame*0.08+c)*4,x+CELL,y+CELL/2+Math.sin(animFrame*0.08+c+1)*3);
+      ctx.stroke();
+    }else if(cell.type==="castle"){
+      // Castle core
+      let alpha=Math.max(0.3,cell.hp/cell.maxHP);
+      ctx.fillStyle=`rgba(218,165,32,${alpha})`;
+      roundRect(ctx,x+1,y+1,CELL-2,CELL-2,3);
+      ctx.fill();
+      // Flag on center
+      if(r===castleCell.r&&c===castleCell.c){
+        ctx.fillStyle="#8B0000";
+        ctx.fillRect(x+CELL/2-1,y-CELL*0.5,2,CELL*0.6);
+        ctx.fillStyle="#FF4444";
+        let flagWave=Math.sin(animFrame*0.1)*3;
+        ctx.beginPath();
+        ctx.moveTo(x+CELL/2+1,y-CELL*0.5);
+        ctx.lineTo(x+CELL/2+CELL*0.4+flagWave,y-CELL*0.35);
+        ctx.lineTo(x+CELL/2+1,y-CELL*0.2);
+        ctx.fill();
+      }
+    }else{
+      // Wall / Packed
+      roundRect(ctx,x+1,y+1,CELL-2,CELL-2,3);
+      ctx.fill();
+      // HP bar
+      if(cell.hp<cell.maxHP){
+        let ratio=cell.hp/cell.maxHP;
+        ctx.fillStyle="rgba(0,0,0,0.3)";
+        ctx.fillRect(x+2,y+CELL-5,CELL-4,3);
+        ctx.fillStyle=ratio>0.5?"#4CAF50":ratio>0.25?"#FF9800":"#F44336";
+        ctx.fillRect(x+2,y+CELL-5,(CELL-4)*ratio,3);
+      }
+    }
+  }
+  
+  // Draw waves
+  if(phase==="wave"){
+    for(let w of waves){
+      let grad=ctx.createLinearGradient(0,w.y,0,w.y+w.height);
+      grad.addColorStop(0,"rgba(30,144,255,0.0)");
+      grad.addColorStop(0.3,"rgba(30,144,255,0.6)");
+      grad.addColorStop(0.5,"rgba(65,105,225,0.7)");
+      grad.addColorStop(1,"rgba(30,144,255,0.0)");
+      ctx.fillStyle=grad;
+      
+      // Wavy top edge
+      ctx.beginPath();
+      ctx.moveTo(0,w.y+w.height);
+      for(let x=0;x<=W;x+=8){
+        let waveY=w.y+Math.sin(x*0.02+animFrame*0.12)*CELL*0.4;
+        ctx.lineTo(x,waveY);
+      }
+      ctx.lineTo(W,w.y+w.height);
+      ctx.closePath();
+      ctx.fill();
+      
+      // Foam
+      ctx.fillStyle="rgba(255,255,255,0.5)";
+      for(let x=0;x<W;x+=12){
+        let foamY=w.y+Math.sin(x*0.025+animFrame*0.12)*CELL*0.4-3;
+        ctx.beginPath();ctx.arc(x,foamY,3+Math.random()*2,0,Math.PI*2);ctx.fill();
+      }
+    }
+  }
+  
+  // Ocean at bottom
+  let oceanY=ROWS*CELL;
+  let oceanGrad=ctx.createLinearGradient(0,oceanY,0,H);
+  oceanGrad.addColorStop(0,"#2E86C1");
+  oceanGrad.addColorStop(1,"#1B4F72");
+  ctx.fillStyle=oceanGrad;
+  ctx.fillRect(0,oceanY,W,H-oceanY);
+  // Shore waves
+  ctx.strokeStyle="rgba(255,255,255,0.4)";
+  ctx.lineWidth=2;
+  for(let i=0;i<3;i++){
+    ctx.beginPath();
+    for(let x=0;x<=W;x+=10){
+      let sy=oceanY+i*8+Math.sin(x*0.015+animFrame*0.06+i)*5;
+      if(x===0)ctx.moveTo(x,sy);else ctx.lineTo(x,sy);
+    }
+    ctx.stroke();
+  }
+  
+  // Particles
+  for(let p of particles){
+    ctx.globalAlpha=p.life;
+    ctx.fillStyle=p.color;
+    ctx.beginPath();ctx.arc(p.x,p.y,p.size,0,Math.PI*2);ctx.fill();
+  }
+  // Splashes
+  for(let s of splashes){
+    ctx.globalAlpha=s.life;
+    ctx.fillStyle="rgba(173,216,230,0.8)";
+    ctx.beginPath();ctx.arc(s.x,s.y,s.size,0,Math.PI*2);ctx.fill();
+  }
+  ctx.globalAlpha=1;
+  
+  // Build timer
+  if(phase==="build"){
+    let timerText=Math.ceil(buildTimer)+"s";
+    ctx.fillStyle="rgba(0,0,0,0.5)";
+    ctx.font=`bold ${CELL}px sans-serif`;
+    ctx.textAlign="center";
+    ctx.fillText("⏱️ "+timerText,W/2,ROWS*CELL+CELL*1.5);
+  }
+}
+
+function roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);
+  ctx.closePath();
+}
+
+function blendColor(c1,c2,t){
+  let r1=parseInt(c1.slice(1,3),16),g1=parseInt(c1.slice(3,5),16),b1=parseInt(c1.slice(5,7),16);
+  let r2=parseInt(c2.slice(1,3),16),g2=parseInt(c2.slice(3,5),16),b2=parseInt(c2.slice(5,7),16);
+  let r=Math.round(r1+(r2-r1)*t),g=Math.round(g1+(g2-g1)*t),b=Math.round(b1+(b2-b1)*t);
+  return `rgb(${r},${g},${b})`;
+}
+
+function gameLoop(time){
+  let dt=Math.min((time-lastTime)/1000,0.05);
+  lastTime=time;
+  animFrame++;
+  update(dt);
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+// Input handling
+let isDragging=false;
+function getGridPos(e){
+  let rect=C.getBoundingClientRect();
+  let x,y;
+  if(e.touches){x=e.touches[0].clientX;y=e.touches[0].clientY;}
+  else{x=e.clientX;y=e.clientY;}
+  let cx=(x-rect.left)/rect.width*W;
+  let cy=(y-rect.top)/rect.height*H;
+  return{c:Math.floor(cx/CELL),r:Math.floor(cy/CELL)};
+}
+
+C.addEventListener("pointerdown",(e)=>{
+  isDragging=true;
+  let p=getGridPos(e);
+  placeSand(p.c,p.r);
+});
+C.addEventListener("pointermove",(e)=>{
+  if(!isDragging)return;
+  let p=getGridPos(e);
+  placeSand(p.c,p.r);
+});
+C.addEventListener("pointerup",()=>isDragging=false);
+C.addEventListener("pointercancel",()=>isDragging=false);
+
+// Toolbar
+document.querySelectorAll(".tool-btn").forEach(btn=>{
+  btn.addEventListener("click",(e)=>{
+    e.stopPropagation();
+    document.querySelectorAll(".tool-btn").forEach(b=>b.classList.remove("active"));
+    btn.classList.add("active");
+    selectedTool=btn.dataset.tool;
+  });
+});
+
+// During wave phase, auto-select repair
+let origTool="wall";
+setInterval(()=>{
+  if(phase==="wave"){
+    if(selectedTool!=="repair"){
+      origTool=selectedTool;
+      selectedTool="repair";
+      document.querySelectorAll(".tool-btn").forEach(b=>b.classList.remove("active"));
+      document.getElementById("btn-repair").classList.add("active");
+    }
+  }else if(phase==="build"){
+    if(selectedTool==="repair"){
+      selectedTool=origTool;
+      document.querySelectorAll(".tool-btn").forEach(b=>b.classList.remove("active"));
+      document.getElementById("btn-"+origTool).classList.add("active");
+    }
+  }
+},500);
+
+document.getElementById("btn-start").addEventListener("click",startGame);
+document.getElementById("btn-retry").addEventListener("click",startGame);
+
+resize();
+requestAnimationFrame(gameLoop);
+})();
+</script>
+</body>
+</html>

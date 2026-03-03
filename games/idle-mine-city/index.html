@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<title>Idle Mine City</title>
+<meta name="description" content="Place miners, gather resources, build your city!">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="data:application/json,%7B%22name%22%3A%22Idle%20Mine%20City%22%2C%22short_name%22%3A%22MineCty%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%231a1a2e%22%2C%22theme_color%22%3A%22%23f5c518%22%7D">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#1a1a2e;font-family:'Segoe UI',system-ui,sans-serif;touch-action:none;user-select:none}
+#app{width:100%;height:100%;display:flex;flex-direction:column}
+#top-bar{background:#12121f;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #2a2a4e;flex-shrink:0}
+.res{display:flex;align-items:center;gap:4px;font-size:13px;font-weight:600}
+.res-iron{color:#a8b4c0}.res-gold{color:#f5c518}.res-crystal{color:#b388ff}
+.res-icon{font-size:16px}
+#game-area{flex:1;position:relative;overflow:hidden}
+canvas{display:block;width:100%;height:100%}
+#bottom-panel{background:#12121f;border-top:1px solid #2a2a4e;flex-shrink:0;max-height:45vh;overflow-y:auto}
+#tabs{display:flex;border-bottom:1px solid #2a2a4e}
+.tab{flex:1;padding:8px;text-align:center;font-size:12px;font-weight:600;color:#666;cursor:pointer;border:none;background:transparent;transition:all .15s}
+.tab.active{color:#f5c518;border-bottom:2px solid #f5c518}
+#tab-content{padding:8px}
+.build-item{display:flex;align-items:center;justify-content:space-between;padding:8px;margin-bottom:4px;background:#1e1e38;border-radius:6px;border:1px solid #2a2a4e}
+.build-item:active{background:#2a2a4e}
+.bi-info{flex:1}
+.bi-name{color:#e0e0e0;font-size:13px;font-weight:600}
+.bi-desc{color:#888;font-size:11px;margin-top:2px}
+.bi-cost{display:flex;gap:8px;margin-top:4px}
+.bi-cost span{font-size:11px}
+.bi-btn{padding:6px 14px;border:1px solid #f5c518;background:transparent;color:#f5c518;font-size:12px;font-weight:600;border-radius:4px;cursor:pointer;white-space:nowrap}
+.bi-btn:disabled{opacity:.3;cursor:default}
+.bi-btn:not(:disabled):active{background:#f5c518;color:#1a1a2e}
+.bi-icon{font-size:24px;margin-right:10px}
+.bi-count{color:#f5c518;font-size:11px;margin-left:8px}
+#stats{color:#999;font-size:12px;padding:8px}
+#stats div{margin-bottom:4px}
+#stats span{color:#e0e0e0}
+.rate{color:#4a7c59!important;font-size:11px}
+#prestige-bar{text-align:center;padding:12px}
+#prestige-btn{padding:10px 28px;border:2px solid #f5c518;background:transparent;color:#f5c518;font-size:14px;font-weight:700;border-radius:8px;cursor:pointer}
+#prestige-btn:active{background:#f5c518;color:#1a1a2e}
+#offline-popup{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#1e1e38;border:2px solid #f5c518;border-radius:12px;padding:20px;text-align:center;z-index:10;min-width:260px}
+#offline-popup h3{color:#f5c518;margin-bottom:8px}
+#offline-popup p{color:#ccc;font-size:13px;margin-bottom:4px}
+#offline-popup button{margin-top:12px;padding:8px 24px;border:1px solid #f5c518;background:#f5c518;color:#1a1a2e;font-weight:600;border-radius:6px;cursor:pointer}
+.hidden{display:none!important}
+#multiplier{position:absolute;top:8px;right:8px;background:rgba(74,124,89,.3);color:#4a7c59;padding:4px 10px;border-radius:12px;font-size:11px;font-weight:600}
+</style>
+</head>
+<body>
+<div id="app">
+ <div id="top-bar">
+  <div class="res res-iron"><span class="res-icon">⛏️</span><span id="r-iron">0</span></div>
+  <div class="res res-gold"><span class="res-icon">🪙</span><span id="r-gold">0</span></div>
+  <div class="res res-crystal"><span class="res-icon">💎</span><span id="r-crystal">0</span></div>
+ </div>
+ <div id="game-area">
+  <canvas id="gc"></canvas>
+  <div id="multiplier">×1.0</div>
+ </div>
+ <div id="bottom-panel">
+  <div id="tabs">
+   <button class="tab active" data-tab="build">Build</button>
+   <button class="tab" data-tab="upgrade">Upgrade</button>
+   <button class="tab" data-tab="stats">Stats</button>
+  </div>
+  <div id="tab-content"></div>
+ </div>
+</div>
+<div id="offline-popup" class="hidden">
+ <h3>⛏️ Welcome back!</h3>
+ <p id="offline-time"></p>
+ <p id="offline-earned"></p>
+ <button onclick="closeOffline()">Collect</button>
+</div>
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const C=$('gc'),X=C.getContext('2d');
+
+// Colors
+const BG='#1a1a2e',PANEL='#12121f',GOLD='#f5c518',GREEN='#4a7c59',
+      IRON_C='#a8b4c0',GOLD_C='#f5c518',CRYS_C='#b388ff',
+      GROUND='#2d2d4a',ROCK='#3a3a5e',DARK='#151528';
+
+// Audio
+let audioCtx;
+function initAudio(){if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)()}
+function sfx(f,d,t,v){
+ if(!audioCtx)return;
+ const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+ o.type=t||'sine';o.frequency.value=f;
+ g.gain.setValueAtTime(v||.06,audioCtx.currentTime);
+ g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+d);
+ o.connect(g);g.connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+d);
+}
+function sfxBuild(){sfx(440,.1);sfx(660,.12,'triangle',.04)}
+function sfxUpgrade(){sfx(523,.1);sfx(784,.15,'sine',.05)}
+function sfxPrestige(){sfx(261,.2);setTimeout(()=>sfx(523,.2),100);setTimeout(()=>sfx(784,.3),200)}
+
+// Game state
+let res={iron:0,gold:0,crystal:0};
+let buildings={};
+let upgrades={};
+let prestige={level:0,multiplier:1};
+let totalEarned={iron:0,gold:0,crystal:0};
+let lastTick=Date.now();
+let particles=[];
+let activeTab='build';
+
+// Building definitions
+const BLDG_DEFS=[
+ {id:'miner',name:'Iron Miner',icon:'⛏️',desc:'Produces iron automatically',
+  baseCost:{iron:0,gold:0,crystal:0},costScale:1.15,
+  production:{iron:1,gold:0,crystal:0},category:'build'},
+ {id:'goldmine',name:'Gold Mine',icon:'🏔️',desc:'Extracts gold from deep veins',
+  baseCost:{iron:50,gold:0,crystal:0},costScale:1.18,
+  production:{iron:0,gold:0.5,crystal:0},category:'build'},
+ {id:'crystalcave',name:'Crystal Cave',icon:'🔮',desc:'Grows crystals over time',
+  baseCost:{iron:200,gold:100,crystal:0},costScale:1.22,
+  production:{iron:0,gold:0,crystal:0.2},category:'build'},
+ {id:'smelter',name:'Smelter',icon:'🔥',desc:'Doubles iron miner output',
+  baseCost:{iron:100,gold:50,crystal:0},costScale:1.3,
+  production:{iron:0,gold:0,crystal:0},mult:{miner:2},category:'build'},
+ {id:'bank',name:'Gold Bank',icon:'🏦',desc:'Doubles gold mine output',
+  baseCost:{iron:300,gold:150,crystal:10},costScale:1.3,
+  production:{iron:0,gold:0,crystal:0},mult:{goldmine:2},category:'build'},
+ {id:'lab',name:'Crystal Lab',icon:'🧪',desc:'Doubles crystal cave output',
+  baseCost:{iron:500,gold:300,crystal:50},costScale:1.35,
+  production:{iron:0,gold:0,crystal:0},mult:{crystalcave:2},category:'build'},
+ {id:'warehouse',name:'Warehouse',icon:'🏭',desc:'+10% all production',
+  baseCost:{iron:400,gold:200,crystal:30},costScale:1.4,
+  production:{iron:0,gold:0,crystal:0},globalMult:0.1,category:'build'},
+ {id:'cityhall',name:'City Hall',icon:'🏛️',desc:'+25% all + unlock prestige',
+  baseCost:{iron:2000,gold:1000,crystal:200},costScale:1.5,
+  production:{iron:0,gold:0,crystal:0},globalMult:0.25,category:'build'}
+];
+
+// Upgrade defs
+const UPG_DEFS=[
+ {id:'pickaxe1',name:'Steel Pickaxe',desc:'Iron miners +50%',cost:{iron:200,gold:50,crystal:0},effect:{miner:1.5}},
+ {id:'pickaxe2',name:'Diamond Pickaxe',desc:'Iron miners +100%',cost:{iron:1000,gold:200,crystal:50},effect:{miner:2},req:'pickaxe1'},
+ {id:'goldpan',name:'Gold Panning',desc:'Gold mines +50%',cost:{iron:500,gold:200,crystal:20},effect:{goldmine:1.5}},
+ {id:'crystalseed',name:'Crystal Seeds',desc:'Crystal caves +75%',cost:{iron:800,gold:400,crystal:100},effect:{crystalcave:1.75}},
+ {id:'automation',name:'Automation',desc:'All production +30%',cost:{iron:2000,gold:1000,crystal:150},effect:{_global:1.3}},
+ {id:'deepdrill',name:'Deep Drilling',desc:'All production +50%',cost:{iron:5000,gold:2500,crystal:500},effect:{_global:1.5},req:'automation'}
+];
+
+function getBldgCost(def,count){
+ const s=Math.pow(def.costScale,count);
+ return{
+  iron:Math.ceil(def.baseCost.iron*s)+(count===0&&def.baseCost.iron===0?0:Math.ceil(10*s)),
+  gold:Math.ceil(def.baseCost.gold*s),
+  crystal:Math.ceil(def.baseCost.crystal*s)
+ };
+}
+
+function canAfford(cost){
+ return res.iron>=cost.iron&&res.gold>=cost.gold&&res.crystal>=cost.crystal;
+}
+function spend(cost){
+ res.iron-=cost.iron;res.gold-=cost.gold;res.crystal-=cost.crystal;
+}
+
+function getProductionRates(){
+ let rates={iron:0,gold:0,crystal:0};
+ let bldgMults={};
+ let globalMult=1;
+
+ // Building multipliers
+ BLDG_DEFS.forEach(d=>{
+  const c=buildings[d.id]||0;
+  if(d.mult&&c>0){
+   Object.keys(d.mult).forEach(k=>{
+    bldgMults[k]=(bldgMults[k]||1)*Math.pow(d.mult[k],c);
+   });
+  }
+  if(d.globalMult&&c>0)globalMult+=d.globalMult*c;
+ });
+
+ // Upgrade multipliers
+ UPG_DEFS.forEach(d=>{
+  if(!upgrades[d.id])return;
+  Object.keys(d.effect).forEach(k=>{
+   if(k==='_global')globalMult*=d.effect[k];
+   else bldgMults[k]=(bldgMults[k]||1)*d.effect[k];
+  });
+ });
+
+ // Base production
+ BLDG_DEFS.forEach(d=>{
+  const c=buildings[d.id]||0;
+  if(c===0)return;
+  const m=bldgMults[d.id]||1;
+  rates.iron+=d.production.iron*c*m;
+  rates.gold+=d.production.gold*c*m;
+  rates.crystal+=d.production.crystal*c*m;
+ });
+
+ // Global + prestige
+ const totalMult=globalMult*prestige.multiplier;
+ rates.iron*=totalMult;
+ rates.gold*=totalMult;
+ rates.crystal*=totalMult;
+
+ return{rates,totalMult};
+}
+
+function fmt(n){
+ if(n>=1e12)return(n/1e12).toFixed(1)+'T';
+ if(n>=1e9)return(n/1e9).toFixed(1)+'B';
+ if(n>=1e6)return(n/1e6).toFixed(1)+'M';
+ if(n>=1e3)return(n/1e3).toFixed(1)+'K';
+ return Math.floor(n).toString();
+}
+
+function buildBuilding(id){
+ initAudio();
+ const def=BLDG_DEFS.find(d=>d.id===id);
+ const count=buildings[id]||0;
+ const cost=getBldgCost(def,count);
+ if(!canAfford(cost))return;
+ spend(cost);
+ buildings[id]=(buildings[id]||0)+1;
+ sfxBuild();
+ // Particle burst on canvas
+ spawnBuildParticles(id);
+ renderTab();
+ save();
+}
+
+function buyUpgrade(id){
+ initAudio();
+ const def=UPG_DEFS.find(d=>d.id===id);
+ if(upgrades[id])return;
+ if(def.req&&!upgrades[def.req])return;
+ if(!canAfford(def.cost))return;
+ spend(def.cost);
+ upgrades[id]=true;
+ sfxUpgrade();
+ renderTab();
+ save();
+}
+
+function doPrestige(){
+ initAudio();
+ const ch=(buildings['cityhall']||0);
+ if(ch<1)return;
+ prestige.level++;
+ prestige.multiplier=1+prestige.level*0.5;
+ // Reset buildings and upgrades, keep prestige
+ buildings={};upgrades={};
+ res={iron:0,gold:0,crystal:0};
+ totalEarned={iron:0,gold:0,crystal:0};
+ sfxPrestige();
+ renderTab();
+ save();
+}
+
+function spawnBuildParticles(id){
+ const cx=W/2,cy=H/2;
+ for(let i=0;i<12;i++){
+  const a=Math.random()*Math.PI*2;
+  particles.push({x:cx,y:cy,vx:Math.cos(a)*2,vy:Math.sin(a)*2-1,life:40,color:GOLD});
+ }
+}
+
+// Tabs
+document.querySelectorAll('.tab').forEach(t=>{
+ t.addEventListener('click',()=>{
+  document.querySelectorAll('.tab').forEach(t2=>t2.classList.remove('active'));
+  t.classList.add('active');
+  activeTab=t.dataset.tab;
+  renderTab();
+ });
+});
+
+function renderTab(){
+ const tc=$('tab-content');
+ if(activeTab==='build'){
+  let html='';
+  BLDG_DEFS.forEach(d=>{
+   const count=buildings[d.id]||0;
+   const cost=getBldgCost(d,count);
+   const ok=canAfford(cost);
+   html+=`<div class="build-item">
+    <span class="bi-icon">${d.icon}</span>
+    <div class="bi-info">
+     <div class="bi-name">${d.name}<span class="bi-count">×${count}</span></div>
+     <div class="bi-desc">${d.desc}</div>
+     <div class="bi-cost">
+      ${cost.iron?`<span class="res-iron">⛏️${fmt(cost.iron)}</span>`:''}
+      ${cost.gold?`<span class="res-gold">🪙${fmt(cost.gold)}</span>`:''}
+      ${cost.crystal?`<span class="res-crystal">💎${fmt(cost.crystal)}</span>`:''}
+     </div>
+    </div>
+    <button class="bi-btn" onclick="buildBuilding('${d.id}')" ${ok?'':'disabled'}>Build</button>
+   </div>`;
+  });
+  tc.innerHTML=html;
+ } else if(activeTab==='upgrade'){
+  let html='';
+  UPG_DEFS.forEach(d=>{
+   if(upgrades[d.id]){
+    html+=`<div class="build-item" style="opacity:.5"><span class="bi-icon">✅</span>
+     <div class="bi-info"><div class="bi-name">${d.name}</div><div class="bi-desc">${d.desc}</div></div>
+     <button class="bi-btn" disabled>Done</button></div>`;
+    return;
+   }
+   if(d.req&&!upgrades[d.req])return;
+   const ok=canAfford(d.cost);
+   html+=`<div class="build-item">
+    <span class="bi-icon">⬆️</span>
+    <div class="bi-info">
+     <div class="bi-name">${d.name}</div>
+     <div class="bi-desc">${d.desc}</div>
+     <div class="bi-cost">
+      ${d.cost.iron?`<span class="res-iron">⛏️${fmt(d.cost.iron)}</span>`:''}
+      ${d.cost.gold?`<span class="res-gold">🪙${fmt(d.cost.gold)}</span>`:''}
+      ${d.cost.crystal?`<span class="res-crystal">💎${fmt(d.cost.crystal)}</span>`:''}
+     </div>
+    </div>
+    <button class="bi-btn" onclick="buyUpgrade('${d.id}')" ${ok?'':'disabled'}>Buy</button>
+   </div>`;
+  });
+  if((buildings['cityhall']||0)>=1){
+   html+=`<div id="prestige-bar"><button id="prestige-btn" onclick="doPrestige()">⭐ Prestige (Level ${prestige.level+1})</button>
+   <p style="color:#888;font-size:11px;margin-top:6px">Reset buildings for ×${(1+(prestige.level+1)*0.5).toFixed(1)} permanent multiplier</p></div>`;
+  }
+  tc.innerHTML=html;
+ } else {
+  const {rates,totalMult}=getProductionRates();
+  tc.innerHTML=`<div id="stats">
+   <div>⛏️ Iron/s: <span>${rates.iron.toFixed(1)}</span></div>
+   <div>🪙 Gold/s: <span>${rates.gold.toFixed(1)}</span></div>
+   <div>💎 Crystal/s: <span>${rates.crystal.toFixed(1)}</span></div>
+   <div>──────────</div>
+   <div>Global Multiplier: <span>×${totalMult.toFixed(2)}</span></div>
+   <div>Prestige Level: <span>${prestige.level}</span></div>
+   <div>Total Buildings: <span>${Object.values(buildings).reduce((a,b)=>a+b,0)}</span></div>
+   <div>──────────</div>
+   <div>Total Iron: <span>${fmt(totalEarned.iron)}</span></div>
+   <div>Total Gold: <span>${fmt(totalEarned.gold)}</span></div>
+   <div>Total Crystal: <span>${fmt(totalEarned.crystal)}</span></div>
+  </div>`;
+ }
+}
+
+// Canvas rendering
+let W,H,dpr;
+function resize(){
+ const area=$('game-area');
+ dpr=Math.min(window.devicePixelRatio||1,2);
+ W=area.clientWidth;H=area.clientHeight;
+ C.width=W*dpr;C.height=H*dpr;
+ C.style.width=W+'px';C.style.height=H+'px';
+ X.setTransform(dpr,0,0,dpr,0,0);
+}
+window.addEventListener('resize',resize);
+
+function drawCity(){
+ // Sky gradient
+ const skyG=X.createLinearGradient(0,0,0,H);
+ skyG.addColorStop(0,'#0f0f24');skyG.addColorStop(0.6,'#1a1a2e');skyG.addColorStop(1,'#252545');
+ X.fillStyle=skyG;X.fillRect(0,0,W,H);
+
+ // Stars
+ const t=Date.now()/1000;
+ for(let i=0;i<30;i++){
+  const sx=(i*137.5+50)%W, sy=(i*73.3+20)%(H*0.5);
+  const bright=0.3+0.3*Math.sin(t+i);
+  X.fillStyle=`rgba(245,197,24,${bright})`;
+  X.fillRect(sx,sy,1.5,1.5);
+ }
+
+ const groundY=H*0.7;
+ // Ground
+ const gndG=X.createLinearGradient(0,groundY,0,H);
+ gndG.addColorStop(0,'#2d2d4a');gndG.addColorStop(1,'#1a1a2e');
+ X.fillStyle=gndG;X.fillRect(0,groundY,W,H-groundY);
+
+ // Underground layers
+ X.fillStyle='#252040';X.fillRect(0,groundY+20,W,H);
+ X.fillStyle='#201a38';X.fillRect(0,groundY+50,W,H);
+
+ // Draw buildings on skyline
+ const totalB=Object.values(buildings).reduce((a,b)=>a+b,0);
+ const bldgList=BLDG_DEFS.filter(d=>(buildings[d.id]||0)>0);
+
+ // Miner shafts underground
+ const minerCount=buildings['miner']||0;
+ for(let i=0;i<Math.min(minerCount,12);i++){
+  const mx=30+i*(W-60)/12;
+  X.fillStyle=IRON_C+'44';
+  X.fillRect(mx,groundY+5,8,30);
+  X.fillStyle=IRON_C;
+  X.fillRect(mx-2,groundY+2,12,4);
+  // Animated pickaxe
+  if(Math.sin(t*3+i)>0){
+   X.fillStyle=IRON_C+'88';X.fillRect(mx+8,groundY+15+Math.sin(t*4+i)*3,6,2);
+  }
+ }
+
+ // Gold mines
+ const goldCount=buildings['goldmine']||0;
+ for(let i=0;i<Math.min(goldCount,8);i++){
+  const gx=20+i*(W-40)/8;
+  const gy=groundY+35;
+  X.fillStyle=GOLD+'33';X.fillRect(gx,gy,14,20);
+  X.fillStyle=GOLD;X.fillRect(gx+2,gy+2,10,3);
+  // Gold sparkle
+  if(Math.sin(t*2+i*1.5)>0.5){
+   X.fillStyle=GOLD;X.fillRect(gx+4+Math.sin(t*5+i)*4,gy+10,3,3);
+  }
+ }
+
+ // Crystal caves
+ const crystalCount=buildings['crystalcave']||0;
+ for(let i=0;i<Math.min(crystalCount,6);i++){
+  const cx=40+i*(W-80)/6;
+  const cy=groundY+55;
+  X.fillStyle=CRYS_C+'22';
+  X.beginPath();X.moveTo(cx,cy+15);X.lineTo(cx+6,cy);X.lineTo(cx+12,cy+15);X.fill();
+  X.fillStyle=CRYS_C+'66';
+  X.beginPath();X.moveTo(cx+2,cy+15);X.lineTo(cx+6,cy+3);X.lineTo(cx+10,cy+15);X.fill();
+  // Pulse
+  const pulse=0.3+0.3*Math.sin(t*1.5+i);
+  X.fillStyle=`rgba(179,136,255,${pulse})`;X.fillRect(cx+4,cy+5,4,4);
+ }
+
+ // Above-ground buildings
+ let bx=15;
+ const drawBuilding=(icon,count,color,w,h)=>{
+  for(let i=0;i<Math.min(count,5);i++){
+   if(bx+w>W-10)return;
+   X.fillStyle=color+'44';
+   X.fillRect(bx,groundY-h,w,h);
+   X.strokeStyle=color+'88';X.lineWidth=1;
+   X.strokeRect(bx,groundY-h,w,h);
+   // Windows
+   for(let wy=groundY-h+5;wy<groundY-5;wy+=10){
+    for(let wx=bx+3;wx<bx+w-3;wx+=8){
+     X.fillStyle=GOLD+'44';X.fillRect(wx,wy,4,4);
+    }
+   }
+   bx+=w+6;
+  }
+ };
+
+ drawBuilding('🔥',buildings['smelter']||0,'#ff6633',20,25);
+ drawBuilding('🏦',buildings['bank']||0,GOLD,24,30);
+ drawBuilding('🧪',buildings['lab']||0,CRYS_C,18,28);
+ drawBuilding('🏭',buildings['warehouse']||0,GREEN,28,22);
+ if((buildings['cityhall']||0)>0){
+  const chx=W/2-20;
+  X.fillStyle=GOLD+'33';X.fillRect(chx,groundY-45,40,45);
+  X.strokeStyle=GOLD;X.lineWidth=2;X.strokeRect(chx,groundY-45,40,45);
+  // Dome
+  X.beginPath();X.arc(chx+20,groundY-45,12,Math.PI,0);X.fillStyle=GOLD+'55';X.fill();
+  X.strokeStyle=GOLD;X.stroke();
+  // Flag
+  const flagWave=Math.sin(t*3)*3;
+  X.fillStyle=GOLD;X.fillRect(chx+18,groundY-60,2,15);
+  X.fillStyle=GOLD+'88';X.beginPath();X.moveTo(chx+20,groundY-60);
+  X.lineTo(chx+30+flagWave,groundY-57);X.lineTo(chx+20,groundY-54);X.fill();
+ }
+
+ // Resource floating numbers
+ particles.forEach(p=>{
+  X.globalAlpha=p.life/p.maxLife;
+  X.fillStyle=p.color;
+  X.font='bold 12px sans-serif';X.textAlign='center';
+  X.fillText(p.text||'●',p.x,p.y);
+ });
+ X.globalAlpha=1;
+
+ // Ground line
+ X.strokeStyle=GREEN+'66';X.lineWidth=2;
+ X.beginPath();X.moveTo(0,groundY);X.lineTo(W,groundY);X.stroke();
+}
+
+// Production tick
+function tick(dtSec){
+ const {rates,totalMult}=getProductionRates();
+ res.iron+=rates.iron*dtSec;
+ res.gold+=rates.gold*dtSec;
+ res.crystal+=rates.crystal*dtSec;
+ totalEarned.iron+=rates.iron*dtSec;
+ totalEarned.gold+=rates.gold*dtSec;
+ totalEarned.crystal+=rates.crystal*dtSec;
+
+ // Spawn resource particles occasionally
+ if(rates.iron>0&&Math.random()<0.05){
+  particles.push({x:Math.random()*W,y:H*0.7,vx:0,vy:-0.5,life:60,maxLife:60,color:IRON_C,text:'+'+fmt(rates.iron)});
+ }
+ if(rates.gold>0&&Math.random()<0.03){
+  particles.push({x:Math.random()*W,y:H*0.72,vx:0,vy:-0.5,life:60,maxLife:60,color:GOLD_C,text:'+'+fmt(rates.gold)});
+ }
+ if(rates.crystal>0&&Math.random()<0.02){
+  particles.push({x:Math.random()*W,y:H*0.75,vx:0,vy:-0.5,life:60,maxLife:60,color:CRYS_C,text:'+'+fmt(rates.crystal)});
+ }
+
+ $('multiplier').textContent='×'+totalMult.toFixed(1);
+}
+
+function updateUI(){
+ $('r-iron').textContent=fmt(res.iron);
+ $('r-gold').textContent=fmt(res.gold);
+ $('r-crystal').textContent=fmt(res.crystal);
+}
+
+// Save/Load
+function save(){
+ const data={res,buildings,upgrades,prestige,totalEarned,lastTick:Date.now()};
+ try{localStorage.setItem('imc_save',JSON.stringify(data))}catch(e){}
+}
+function load(){
+ try{
+  const raw=localStorage.getItem('imc_save');
+  if(!raw)return false;
+  const data=JSON.parse(raw);
+  res=data.res||res;
+  buildings=data.buildings||buildings;
+  upgrades=data.upgrades||upgrades;
+  prestige=data.prestige||prestige;
+  totalEarned=data.totalEarned||totalEarned;
+  // Offline earnings
+  if(data.lastTick){
+   const elapsed=(Date.now()-data.lastTick)/1000;
+   if(elapsed>60){
+    const {rates}=getProductionRates();
+    const offlineRate=0.5; // 50% offline efficiency
+    const earned={
+     iron:rates.iron*elapsed*offlineRate,
+     gold:rates.gold*elapsed*offlineRate,
+     crystal:rates.crystal*elapsed*offlineRate
+    };
+    if(earned.iron>0||earned.gold>0||earned.crystal>0){
+     res.iron+=earned.iron;res.gold+=earned.gold;res.crystal+=earned.crystal;
+     totalEarned.iron+=earned.iron;totalEarned.gold+=earned.gold;totalEarned.crystal+=earned.crystal;
+     showOfflinePopup(elapsed,earned);
+    }
+   }
+  }
+  return true;
+ }catch(e){return false}
+}
+
+function showOfflinePopup(elapsed,earned){
+ const h=Math.floor(elapsed/3600),m=Math.floor((elapsed%3600)/60);
+ $('offline-time').textContent=`You were away ${h>0?h+'h ':''}${m}m`;
+ $('offline-earned').innerHTML=
+  `⛏️ ${fmt(earned.iron)} &nbsp; 🪙 ${fmt(earned.gold)} &nbsp; 💎 ${fmt(earned.crystal)}`;
+ $('offline-popup').classList.remove('hidden');
+}
+function closeOffline(){$('offline-popup').classList.add('hidden')}
+
+// Tap to mine (early game)
+C.addEventListener('click',e=>{
+ initAudio();
+ const rect=C.getBoundingClientRect();
+ const cx=e.clientX-rect.left, cy=e.clientY-rect.top;
+ // Tap mining: give 1 iron per tap
+ res.iron+=1*prestige.multiplier;
+ totalEarned.iron+=1*prestige.multiplier;
+ sfx(300+Math.random()*200,.05,'triangle',.04);
+ particles.push({x:cx,y:cy,vx:0,vy:-1,life:30,maxLife:30,color:IRON_C,text:'+1'});
+});
+
+// Main loop
+let lastFrame=performance.now();
+function loop(now){
+ const dtFrame=(now-lastFrame)/1000;
+ lastFrame=now;
+
+ const dtTick=Math.min(dtFrame,1);
+ tick(dtTick);
+
+ // Update particles
+ particles.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.life--});
+ particles=particles.filter(p=>p.life>0);
+
+ drawCity();
+ updateUI();
+
+ // Auto-save every 30s
+ if(Math.floor(now/30000)!==Math.floor((now-dtFrame*1000)/30000))save();
+
+ // Refresh build buttons
+ if(Math.floor(now/500)!==Math.floor((now-dtFrame*1000)/500))renderTab();
+
+ requestAnimationFrame(loop);
+}
+
+// Init
+resize();
+load();
+renderTab();
+
+// Telegram WebApp
+if(window.Telegram&&Telegram.WebApp){Telegram.WebApp.ready();Telegram.WebApp.expand()}
+
+// First miner is free
+if(!buildings['miner']){
+ buildings['miner']=1;
+ save();
+ renderTab();
+}
+
+requestAnimationFrame(loop);
+
+// Save on exit
+window.addEventListener('beforeunload',save);
+document.addEventListener('visibilitychange',()=>{if(document.hidden)save()});
+</script>
+</body>
+</html>

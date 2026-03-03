@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<title>Magnet Dash</title>
+<meta name="description" content="Toggle magnetic polarity to attract and repel through physics puzzles!">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="data:application/json,%7B%22name%22%3A%22Magnet%20Dash%22%2C%22short_name%22%3A%22MagnetDash%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%230d1b2a%22%2C%22theme_color%22%3A%22%23ff6b35%22%7D">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#0d1b2a;font-family:'Segoe UI',system-ui,sans-serif;touch-action:none;user-select:none}
+canvas{display:block;width:100%;height:100%}
+#ui{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
+#hud{position:absolute;top:12px;left:12px;right:12px;display:flex;justify-content:space-between;align-items:center;color:#7ecef4;font-size:14px;font-weight:600;text-shadow:0 1px 4px rgba(0,0,0,.6)}
+#polarity-indicator{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);padding:8px 24px;border-radius:20px;font-size:18px;font-weight:700;letter-spacing:2px;transition:all .2s}
+.pol-n{background:rgba(255,107,53,.25);color:#ff6b35;border:2px solid #ff6b35}
+.pol-s{background:rgba(126,206,244,.25);color:#7ecef4;border:2px solid #7ecef4}
+#menu,#complete{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(13,27,42,.95);pointer-events:auto}
+#menu h1{font-size:42px;color:#ff6b35;margin-bottom:8px;text-shadow:0 0 20px rgba(255,107,53,.4)}
+#menu .sub{color:#7ecef4;font-size:14px;margin-bottom:32px;opacity:.8}
+.btn{padding:12px 36px;border:2px solid #ff6b35;background:transparent;color:#ff6b35;font-size:16px;font-weight:600;border-radius:8px;cursor:pointer;pointer-events:auto;margin:6px;transition:all .15s}
+.btn:hover,.btn:active{background:#ff6b35;color:#0d1b2a}
+.btn-s{border-color:#7ecef4;color:#7ecef4}
+.btn-s:hover,.btn-s:active{background:#7ecef4;color:#0d1b2a}
+#complete h2{color:#ff6b35;font-size:28px;margin-bottom:6px}
+#complete p{color:#7ecef4;font-size:14px;margin-bottom:20px}
+.hidden{display:none!important}
+#stage-announce{position:absolute;top:40%;left:50%;transform:translate(-50%,-50%);color:#ff6b35;font-size:36px;font-weight:700;opacity:0;transition:opacity .3s;text-shadow:0 0 20px rgba(255,107,53,.5);pointer-events:none}
+#instructions{position:absolute;bottom:60px;left:50%;transform:translateX(-50%);color:#7ecef4;font-size:12px;opacity:.7;text-align:center;pointer-events:none;max-width:300px}
+</style>
+</head>
+<body>
+<canvas id="gc"></canvas>
+<div id="ui">
+ <div id="hud"><span id="stage-label">Stage 1/10</span><span id="timer">0.0s</span></div>
+ <div id="polarity-indicator" class="pol-n">N</div>
+ <div id="stage-announce"></div>
+ <div id="instructions">Tap/Space to toggle polarity<br>Arrow keys or swipe to move</div>
+ <div id="menu">
+  <h1>⚡ Magnet Dash</h1>
+  <p class="sub">Toggle polarity. Attract &amp; repel. Reach the goal.</p>
+  <button class="btn" onclick="startGame()">Play</button>
+ </div>
+ <div id="complete" class="hidden">
+  <h2>🏆 All Stages Clear!</h2>
+  <p id="total-time"></p>
+  <button class="btn" onclick="startGame()">Replay</button>
+  <button class="btn btn-s" onclick="showMenu()">Menu</button>
+ </div>
+</div>
+<script>
+'use strict';
+const C=document.getElementById('gc'),X=C.getContext('2d');
+const $=id=>document.getElementById(id);
+let W,H,dpr,TILE,scale;
+const DEEP='#0d1b2a',NAVY2='#162d44',ORANGE='#ff6b35',ICE='#7ecef4',WHITE='#e8f0f8';
+const GRAVITY=0.45,FRICTION=0.88,JUMP_VEL=-9,MOVE_SPD=0.6,MAX_VX=4.5;
+const MAGNET_RANGE=160,MAGNET_FORCE=0.35;
+
+// Audio
+let audioCtx;
+function initAudio(){if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)()}
+function playTone(f,d,t,v){
+ if(!audioCtx)return;
+ const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+ o.type=t||'square';o.frequency.value=f;
+ g.gain.setValueAtTime(v||.12,audioCtx.currentTime);
+ g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+d);
+ o.connect(g);g.connect(audioCtx.destination);
+ o.start();o.stop(audioCtx.currentTime+d);
+}
+function sfxToggle(pol){playTone(pol?880:440,.15,'square',.1);playTone(pol?1100:550,.1,'sine',.06)}
+function sfxJump(){playTone(330,.1,'triangle',.1);playTone(440,.08,'triangle',.08)}
+function sfxGoal(){playTone(523,.15,'sine',.15);setTimeout(()=>playTone(659,.15,'sine',.12),100);setTimeout(()=>playTone(784,.3,'sine',.1),200)}
+function sfxDeath(){playTone(200,.3,'sawtooth',.1);playTone(150,.4,'sawtooth',.08)}
+
+// State
+let state='menu',player={},polarity=1,stageIdx=0,stageTime=0,totalTime=0,deathCount=0;
+let keys={},touchStartX=0,touchStartY=0,touchDX=0,touchDY=0,tapped=false;
+let blocks=[],goals=[],spikes=[],particles=[];
+let stageAnnounceTimer=0;
+
+// Stage definitions: {w,h, player:[x,y], goal:[x,y], blocks:[[x,y,w,h,type]], spikes:[[x,y,w,h]]}
+// type: 0=solid, 1=magN(orange,attract same/repel diff), 2=magS(blue)
+const STAGES=[
+ // Stage 1: Simple intro - one magnet block to cross a gap
+ {w:20,h:12,p:[2,9],g:[17,9],
+  b:[[0,10,8,2,0],[12,10,8,2,0],[5,6,2,1,1],[9,8,2,1,2]],
+  s:[[8,11,4,1]]},
+ // Stage 2: Vertical climb with magnets
+ {w:16,h:16,p:[2,13],g:[13,2],
+  b:[[0,14,6,2,0],[4,11,3,1,1],[10,14,6,2,0],[12,10,3,1,2],[2,8,3,1,0],[7,7,2,1,1],[12,6,3,1,0],[8,4,3,1,2],[11,3,5,1,0]],
+  s:[[6,15,4,1]]},
+ // Stage 3: Moving through magnet corridor
+ {w:24,h:10,p:[2,7],g:[21,7],
+  b:[[0,8,5,2,0],[5,4,1,1,1],[8,8,3,2,0],[10,4,1,1,2],[13,8,3,2,0],[15,4,1,1,1],[18,8,6,2,0],[20,5,1,1,2]],
+  s:[[5,9,3,1],[16,9,2,1]]},
+ // Stage 4: Ceiling magnets
+ {w:20,h:12,p:[2,9],g:[17,2],
+  b:[[0,10,6,2,0],[3,1,2,1,1],[8,10,4,2,0],[8,1,2,1,2],[14,10,6,2,0],[14,1,2,1,1],[16,6,4,1,0],[17,1,2,1,0]],
+  s:[[6,11,2,1],[12,11,2,1]]},
+ // Stage 5: Zigzag with alternating magnets
+ {w:20,h:14,p:[2,11],g:[17,2],
+  b:[[0,12,5,2,0],[3,9,3,1,1],[8,12,4,2,0],[8,7,2,1,2],[14,10,3,1,0],[14,5,2,1,1],[16,3,4,1,0],[10,3,2,1,2]],
+  s:[[5,13,3,1],[12,13,2,1]]},
+ // Stage 6: Magnet slingshot
+ {w:24,h:12,p:[2,9],g:[21,2],
+  b:[[0,10,4,2,0],[6,7,2,2,1],[10,10,3,2,0],[14,5,2,2,2],[18,10,3,2,0],[18,3,2,1,1],[20,3,4,1,0]],
+  s:[[4,11,2,1],[13,11,2,1],[21,11,3,1]]},
+ // Stage 7: Gauntlet of magnets
+ {w:28,h:10,p:[2,7],g:[25,7],
+  b:[[0,8,4,2,0],[4,3,1,1,1],[7,8,3,2,0],[9,3,1,1,2],[12,8,3,2,0],[14,3,1,1,1],[17,8,3,2,0],[19,3,1,1,2],[22,8,6,2,0]],
+  s:[[4,9,3,1],[10,9,2,1],[15,9,2,1],[20,9,2,1]]},
+ // Stage 8: Vertical maze
+ {w:16,h:20,p:[2,17],g:[13,2],
+  b:[[0,18,5,2,0],[3,15,2,1,1],[8,18,4,2,0],[8,14,2,1,2],[12,16,4,2,0],[2,12,3,1,0],[5,10,2,1,1],[10,11,3,1,0],[10,8,2,1,2],[13,9,3,1,0],[4,7,3,1,0],[2,5,2,1,1],[8,5,2,1,2],[12,4,4,1,0],[12,2,4,1,0]],
+  s:[[5,19,3,1],[12,19,2,1]]},
+ // Stage 9: Precision platforming
+ {w:28,h:14,p:[2,11],g:[25,2],
+  b:[[0,12,4,2,0],[5,10,2,1,1],[8,12,2,2,0],[10,8,2,1,2],[13,12,2,2,0],[15,6,2,1,1],[18,10,2,2,0],[20,5,2,1,2],[22,8,2,2,0],[24,3,4,1,0]],
+  s:[[4,13,1,1],[7,13,1,1],[12,14,1,1],[17,13,1,1],[22,13,1,1]]},
+ // Stage 10: Final challenge
+ {w:30,h:16,p:[2,13],g:[27,2],
+  b:[[0,14,4,2,0],[4,10,2,1,1],[7,14,2,2,0],[8,8,2,1,2],[11,14,2,2,0],[11,6,2,1,1],[14,12,2,2,0],[16,5,2,1,2],[18,14,2,2,0],[18,9,2,1,1],[21,14,2,2,0],[21,4,2,1,2],[24,11,2,2,0],[24,3,2,1,1],[26,3,4,1,0]],
+  s:[[4,15,3,1],[9,15,2,1],[13,15,1,1],[17,15,1,1],[20,15,1,1],[23,15,1,1]]}
+];
+
+function resize(){
+ dpr=Math.min(window.devicePixelRatio||1,2);
+ W=window.innerWidth;H=window.innerHeight;
+ C.width=W*dpr;C.height=H*dpr;
+ C.style.width=W+'px';C.style.height=H+'px';
+ X.setTransform(dpr,0,0,dpr,0,0);
+}
+window.addEventListener('resize',resize);
+
+function loadStage(idx){
+ const s=STAGES[idx];
+ TILE=Math.min(Math.floor(W/s.w),Math.floor((H-40)/s.h));
+ if(TILE<16)TILE=16;
+ const offX=(W-s.w*TILE)/2, offY=(H-s.h*TILE)/2+10;
+ player={x:s.p[0]*TILE+offX,y:s.p[1]*TILE+offY,vx:0,vy:0,w:TILE*.8,h:TILE*.9,onGround:false,dead:false};
+ polarity=1;
+ blocks=s.b.map(b=>({x:b[0]*TILE+offX,y:b[1]*TILE+offY,w:b[2]*TILE,h:b[3]*TILE,type:b[4]}));
+ goals=[{x:s.g[0]*TILE+offX,y:s.g[1]*TILE+offY,w:TILE,h:TILE}];
+ spikes=(s.s||[]).map(sp=>({x:sp[0]*TILE+offX,y:sp[1]*TILE+offY,w:sp[2]*TILE,h:sp[3]*TILE}));
+ particles=[];
+ stageTime=0;
+ updateHUD();
+ announceStage(idx+1);
+}
+
+function announceStage(n){
+ const el=$('stage-announce');
+ el.textContent='Stage '+n;
+ el.style.opacity='1';
+ stageAnnounceTimer=90;
+}
+
+function updateHUD(){
+ $('stage-label').textContent='Stage '+(stageIdx+1)+'/10';
+ $('timer').textContent=stageTime.toFixed(1)+'s';
+ const pi=$('polarity-indicator');
+ pi.textContent=polarity===1?'N':'S';
+ pi.className=polarity===1?'pol-n':'pol-s';
+}
+
+function startGame(){
+ initAudio();
+ $('menu').classList.add('hidden');
+ $('complete').classList.add('hidden');
+ state='play';stageIdx=0;totalTime=0;deathCount=0;
+ loadStage(0);
+}
+function showMenu(){
+ state='menu';
+ $('menu').classList.remove('hidden');
+ $('complete').classList.add('hidden');
+}
+
+function togglePolarity(){
+ polarity=polarity===1?-1:1;
+ sfxToggle(polarity===1);
+ updateHUD();
+ // Burst particles
+ for(let i=0;i<8;i++){
+  const a=Math.random()*Math.PI*2;
+  particles.push({x:player.x+player.w/2,y:player.y+player.h/2,
+   vx:Math.cos(a)*3,vy:Math.sin(a)*3,life:30,
+   color:polarity===1?ORANGE:ICE});
+ }
+}
+
+// Input
+document.addEventListener('keydown',e=>{
+ keys[e.code]=true;
+ if(e.code==='Space'&&state==='play'){e.preventDefault();togglePolarity()}
+ if(e.code==='ArrowUp'&&state==='play'&&player.onGround){e.preventDefault();player.vy=JUMP_VEL;player.onGround=false;sfxJump()}
+});
+document.addEventListener('keyup',e=>keys[e.code]=false);
+
+C.addEventListener('touchstart',e=>{
+ e.preventDefault();
+ const t=e.touches[0];
+ touchStartX=t.clientX;touchStartY=t.clientY;
+ touchDX=0;touchDY=0;tapped=true;
+},{passive:false});
+C.addEventListener('touchmove',e=>{
+ e.preventDefault();
+ const t=e.touches[0];
+ touchDX=t.clientX-touchStartX;
+ touchDY=t.clientY-touchStartY;
+ if(Math.abs(touchDX)>10||Math.abs(touchDY)>10)tapped=false;
+},{passive:false});
+C.addEventListener('touchend',e=>{
+ e.preventDefault();
+ if(state==='play'){
+  if(tapped){togglePolarity()}
+  else if(touchDY<-40&&player.onGround){player.vy=JUMP_VEL;player.onGround=false;sfxJump()}
+ }
+ touchDX=0;touchDY=0;
+},{passive:false});
+
+function rectCollide(a,b){
+ return a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
+}
+
+function update(dt){
+ if(state!=='play')return;
+ if(player.dead){
+  if(player.deadTimer-->0)return;
+  loadStage(stageIdx);return;
+ }
+
+ stageTime+=dt/60;
+ if(stageAnnounceTimer>0){stageAnnounceTimer--;if(stageAnnounceTimer===0)$('stage-announce').style.opacity='0'}
+
+ // Movement input
+ let moveX=0;
+ if(keys['ArrowLeft']||keys['KeyA'])moveX=-1;
+ if(keys['ArrowRight']||keys['KeyD'])moveX=1;
+ if(Math.abs(touchDX)>15)moveX=touchDX>0?1:-1;
+
+ player.vx+=moveX*MOVE_SPD;
+ player.vx*=FRICTION;
+ if(Math.abs(player.vx)<0.1)player.vx=0;
+ if(player.vx>MAX_VX)player.vx=MAX_VX;
+ if(player.vx<-MAX_VX)player.vx=-MAX_VX;
+ player.vy+=GRAVITY;
+
+ // Magnetic forces
+ blocks.forEach(b=>{
+  if(b.type===0)return;
+  const bCx=b.x+b.w/2,bCy=b.y+b.h/2;
+  const pCx=player.x+player.w/2,pCy=player.y+player.h/2;
+  const dx=bCx-pCx,dy=bCy-pCy;
+  const dist=Math.sqrt(dx*dx+dy*dy);
+  if(dist>MAGNET_RANGE||dist<1)return;
+  const blockPol=b.type===1?1:-1;
+  const samePol=polarity===blockPol;
+  // Same polarity = repel, different = attract
+  const force=MAGNET_FORCE*(1-dist/MAGNET_RANGE)*(MAGNET_RANGE/Math.max(dist,20));
+  const dir=samePol?-1:1;
+  const nx=dx/dist,ny=dy/dist;
+  player.vx+=nx*force*dir;
+  player.vy+=ny*force*dir;
+
+  // Magnetic field particles
+  if(Math.random()<0.15){
+   const ang=Math.atan2(dy,dx);
+   particles.push({x:pCx+Math.cos(ang)*20,y:pCy+Math.sin(ang)*20,
+    vx:Math.cos(ang)*dir*2,vy:Math.sin(ang)*dir*2,life:20,
+    color:b.type===1?ORANGE:ICE});
+  }
+ });
+
+ // Move X
+ player.x+=player.vx;
+ player.onGround=false;
+ blocks.forEach(b=>{
+  if(!rectCollide(player,b))return;
+  if(player.vx>0){player.x=b.x-player.w;player.vx=0}
+  else if(player.vx<0){player.x=b.x+b.w;player.vx=0}
+ });
+
+ // Move Y
+ player.y+=player.vy;
+ blocks.forEach(b=>{
+  if(!rectCollide(player,b))return;
+  if(player.vy>0){player.y=b.y-player.h;player.vy=0;player.onGround=true}
+  else if(player.vy<0){player.y=b.y+b.h;player.vy=0}
+ });
+
+ // Fall out of bounds
+ if(player.y>H+50){die();return}
+
+ // Spikes
+ const pRect={x:player.x+2,y:player.y+2,w:player.w-4,h:player.h-4};
+ for(const sp of spikes){if(rectCollide(pRect,sp)){die();return}}
+
+ // Goal check
+ for(const g of goals){
+  if(rectCollide(player,g)){
+   sfxGoal();
+   totalTime+=stageTime;
+   stageIdx++;
+   if(stageIdx>=10){
+    state='complete';
+    $('complete').classList.remove('hidden');
+    $('total-time').textContent='Total: '+totalTime.toFixed(1)+'s | Deaths: '+deathCount;
+    // Save best
+    const best=localStorage.getItem('md_best');
+    if(!best||totalTime<parseFloat(best))localStorage.setItem('md_best',totalTime.toFixed(1));
+   } else {
+    loadStage(stageIdx);
+   }
+   return;
+  }
+ }
+
+ // Particles
+ particles.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.life--});
+ particles=particles.filter(p=>p.life>0);
+
+ updateHUD();
+}
+
+function die(){
+ player.dead=true;player.deadTimer=40;deathCount++;
+ sfxDeath();
+ for(let i=0;i<15;i++){
+  const a=Math.random()*Math.PI*2;
+  particles.push({x:player.x+player.w/2,y:player.y+player.h/2,
+   vx:Math.cos(a)*(2+Math.random()*3),vy:Math.sin(a)*(2+Math.random()*3),
+   life:40,color:Math.random()>.5?ORANGE:ICE});
+ }
+}
+
+function draw(){
+ X.fillStyle=DEEP;X.fillRect(0,0,W,H);
+
+ // Grid bg
+ X.strokeStyle='rgba(126,206,244,0.04)';X.lineWidth=1;
+ for(let gx=0;gx<W;gx+=TILE){X.beginPath();X.moveTo(gx,0);X.lineTo(gx,H);X.stroke()}
+ for(let gy=0;gy<H;gy+=TILE){X.beginPath();X.moveTo(0,gy);X.lineTo(W,gy);X.stroke()}
+
+ if(state==='play'||state==='complete'){
+  // Blocks
+  blocks.forEach(b=>{
+   if(b.type===0){
+    X.fillStyle=NAVY2;X.fillRect(b.x,b.y,b.w,b.h);
+    X.strokeStyle='rgba(126,206,244,0.15)';X.lineWidth=1;X.strokeRect(b.x,b.y,b.w,b.h);
+   } else {
+    const col=b.type===1?ORANGE:ICE;
+    X.fillStyle=col+'22';X.fillRect(b.x,b.y,b.w,b.h);
+    X.strokeStyle=col;X.lineWidth=2;X.strokeRect(b.x,b.y,b.w,b.h);
+    // Polarity label
+    X.fillStyle=col;X.font='bold '+Math.max(10,TILE*.5)+'px monospace';X.textAlign='center';X.textBaseline='middle';
+    X.fillText(b.type===1?'N':'S',b.x+b.w/2,b.y+b.h/2);
+    // Glow
+    const grad=X.createRadialGradient(b.x+b.w/2,b.y+b.h/2,0,b.x+b.w/2,b.y+b.h/2,MAGNET_RANGE);
+    grad.addColorStop(0,col+'15');grad.addColorStop(1,col+'00');
+    X.fillStyle=grad;X.fillRect(b.x+b.w/2-MAGNET_RANGE,b.y+b.h/2-MAGNET_RANGE,MAGNET_RANGE*2,MAGNET_RANGE*2);
+   }
+  });
+
+  // Spikes
+  spikes.forEach(sp=>{
+   X.fillStyle='#cc3333';
+   const n=Math.floor(sp.w/(TILE/2));
+   for(let i=0;i<n;i++){
+    const sx=sp.x+i*(sp.w/n),sw=sp.w/n;
+    X.beginPath();X.moveTo(sx,sp.y+sp.h);X.lineTo(sx+sw/2,sp.y);X.lineTo(sx+sw,sp.y+sp.h);X.fill();
+   }
+  });
+
+  // Goal
+  goals.forEach(g=>{
+   const pulse=Math.sin(Date.now()/300)*0.3+0.7;
+   X.fillStyle=`rgba(255,107,53,${pulse*0.3})`;X.fillRect(g.x,g.y,g.w,g.h);
+   X.strokeStyle=ORANGE;X.lineWidth=2;X.strokeRect(g.x,g.y,g.w,g.h);
+   X.fillStyle=ORANGE;X.font='bold '+Math.max(12,TILE*.6)+'px sans-serif';X.textAlign='center';X.textBaseline='middle';
+   X.fillText('★',g.x+g.w/2,g.y+g.h/2);
+  });
+
+  // Player
+  if(!player.dead){
+   const pc=polarity===1?ORANGE:ICE;
+   X.fillStyle=pc;
+   X.fillRect(player.x,player.y,player.w,player.h);
+   // Face
+   X.fillStyle=DEEP;
+   const ex=player.w*0.2,ey=player.h*0.25,es=player.w*0.12;
+   X.fillRect(player.x+ex,player.y+ey,es,es);
+   X.fillRect(player.x+player.w-ex-es,player.y+ey,es,es);
+   // Polarity label on player
+   X.fillStyle=DEEP;X.font='bold '+Math.max(8,player.w*.4)+'px monospace';X.textAlign='center';X.textBaseline='middle';
+   X.fillText(polarity===1?'N':'S',player.x+player.w/2,player.y+player.h*0.65);
+   // Magnet arc indicator
+   X.strokeStyle=pc+'44';X.lineWidth=1;
+   X.beginPath();X.arc(player.x+player.w/2,player.y+player.h/2,20+Math.sin(Date.now()/200)*5,0,Math.PI*2);X.stroke();
+  }
+
+  // Particles
+  particles.forEach(p=>{
+   X.globalAlpha=p.life/40;
+   X.fillStyle=p.color;
+   X.fillRect(p.x-2,p.y-2,4,4);
+  });
+  X.globalAlpha=1;
+ }
+}
+
+function loop(){
+ update(1);draw();
+ requestAnimationFrame(loop);
+}
+
+resize();
+// Telegram WebApp
+if(window.Telegram&&Telegram.WebApp){Telegram.WebApp.ready();Telegram.WebApp.expand()}
+loop();
+</script>
+</body>
+</html>

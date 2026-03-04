@@ -1,5 +1,6 @@
 # eastsea tools index (markdown)
 
+- [기프트카드 브레이키지 손익 계산기](./gift-card-breakage-profit-calculator/) — 기프트카드 브레이키지율, 환전 마진, 수수료, 운영비, 플로트 이자수익을 반영해 월 순효과, ROI, 회수기간, 손익분기 브레이키지율을 계산합니다.
 - [배틀패스 부착률 ROI 계산기](./battle-pass-attach-rate-roi-calculator/) — 배틀패스 부착률 개선이 순증 구매자, 리텐션 가치, 월 순효과, ROI, 회수기간, 손익분기 부착률에 미치는 영향을 계산합니다.
 - [Apple Search Ads CPT·LTV ROI 계산기](./apple-search-ads-cpt-ltv-roi-calculator/) — Apple Search Ads의 CPT·퍼널 전환율·구독 LTV를 반영해 월 순이익, ROI, 회수기간, 손익분기 CPT를 계산합니다.
 - [모바일 광고 빈도 캡 ROI 계산기](./mobile-ad-frequency-cap-roi-calculator/) — 광고 노출수 조정 시 광고이익 변화와 리텐션 개선 가치를 합산해 월 순효과, ROI, 회수기간, 손익분기 목표 노출수를 계산합니다.

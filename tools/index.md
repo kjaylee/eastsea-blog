@@ -1,5 +1,6 @@
 # eastsea tools index (markdown)
 
+- [API 크레딧팩 Breakage ROI 계산기](./api-credit-pack-breakage-roi-calculator/) — 크레딧팩 채택률, breakage, 충당금, 운영비를 반영해 월 순효과·ROI·회수기간·손익분기 채택률을 계산합니다.
 - [숨은 유니코드 문자 탐지기](./unicode-invisible-char-detector/) — Zero-width/NBSP/BOM/BiDi 제어문자를 탐지해 위치·개수를 보여주고, 옵션별 정리 후 최근 스캔 이력을 저장합니다.
 - [점자 변환기](./braille-translator/) — 영문 텍스트를 유니코드 점자로 변환하거나 점자를 다시 문자로 복원하고 최근 변환 기록을 저장합니다.
 - [NATO 음성 철자 변환기](./nato-phonetic-translator/) — 일반 텍스트를 NATO 음성 철자(Alpha·Bravo...)로 변환하거나 다시 문자로 복원하고 최근 변환 기록을 저장합니다.

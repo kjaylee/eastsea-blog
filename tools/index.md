@@ -1,5 +1,6 @@
 # eastsea tools index (markdown)
 
+- [크리에이터 멤버십 이탈 방지 ROI 계산기](./creator-membership-churn-reduction-roi-calculator/) — 멤버십 이탈률 개선 프로그램의 유지 멤버 수, 기간 순이익, ROI, 회수기간, 손익분기 목표 이탈률을 계산합니다.
 - [제휴 쿠키 윈도우 ROI 계산기](./affiliate-cookie-window-roi-calculator/) — 쿠키 어트리뷰션 기간(예: 7일→30일) 확장 시 추가 주문, 월 순이익, ROI, 회수기간, 손익분기 전환율을 계산합니다.
 - [UGC 화이트리스팅 부착률 ROI 계산기](./ugc-whitelisting-attach-rate-roi-calculator/) — 화이트리스팅 권리 부착률 개선 시 순증 딜, 월 순효과, ROI, 회수기간, 손익분기 부착률을 계산합니다.
 - [API 크레딧팩 Breakage ROI 계산기](./api-credit-pack-breakage-roi-calculator/) — 크레딧팩 채택률, breakage, 충당금, 운영비를 반영해 월 순효과·ROI·회수기간·손익분기 채택률을 계산합니다.

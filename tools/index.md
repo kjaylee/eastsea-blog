@@ -4,6 +4,7 @@
 - [배송 보호 부착률 ROI 계산기](./shipping-protection-attach-rate-roi-calculator/) — 배송 보호(보험) 부착률 상승이 보호 주문 수, 월 순이익, ROI, 회수기간, 손익분기 부착률에 미치는 영향을 계산합니다.
 - [연장 보증 부착률 수익 계산기](./extended-warranty-attach-rate-profit-calculator/) — 연장 보증(제품 보호 플랜) 부착률 개선이 만드는 추가 계약 수, 순매출, 공헌이익, 월 순이익, ROI, 손익분기 부착률을 계산합니다.
 - [기프트카드 브레이키지 손익 계산기](./gift-card-breakage-profit-calculator/) — 기프트카드 브레이키지율, 환전 마진, 수수료, 운영비, 플로트 이자수익을 반영해 월 순효과, ROI, 회수기간, 손익분기 브레이키지율을 계산합니다.
+- [크로스셀 추천 ROI 계산기](./cross-sell-recommendation-roi-calculator/) — 추천 위젯의 노출률·부착률·원가·환불률·운영비를 반영해 월 순이익, ROI, 회수기간, 손익분기 부착률과 AOV 상승을 계산합니다.
 - [배틀패스 부착률 ROI 계산기](./battle-pass-attach-rate-roi-calculator/) — 배틀패스 부착률 개선이 순증 구매자, 리텐션 가치, 월 순효과, ROI, 회수기간, 손익분기 부착률에 미치는 영향을 계산합니다.
 - [Apple Search Ads CPT·LTV ROI 계산기](./apple-search-ads-cpt-ltv-roi-calculator/) — Apple Search Ads의 CPT·퍼널 전환율·구독 LTV를 반영해 월 순이익, ROI, 회수기간, 손익분기 CPT를 계산합니다.
 - [모바일 광고 빈도 캡 ROI 계산기](./mobile-ad-frequency-cap-roi-calculator/) — 광고 노출수 조정 시 광고이익 변화와 리텐션 개선 가치를 합산해 월 순효과, ROI, 회수기간, 손익분기 목표 노출수를 계산합니다.

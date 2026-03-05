@@ -12,6 +12,7 @@
 - [사기 방지 ROI 계산기](./fraud-prevention-roi-calculator/) — 사기 주문 차단으로 절감되는 손실과 오탐 손실, 운영비를 반영해 월 순효과, ROI, 회수기간, 손익분기 차단율을 계산합니다.
 - [한정 할인 오퍼 수익 계산기](./limited-time-offer-profit-calculator/) — 한정 할인 오퍼의 전환율 상승, 할인율, 운영비를 반영해 월 순이익, ROI, 회수기간, 손익분기 전환율을 계산합니다.
 - [API 최소 커밋 + 오버리지 손익 계산기](./api-minimum-commit-overage-profit-calculator/) — 종량제 고객을 최소 커밋 + 오버리지 모델로 전환할 때 월 순이익, ROI, 회수기간, 손익분기 최소 커밋 금액을 계산합니다.
+- [마이크로 SaaS 런칭 수익 계산기](./micro-saas-launch-profit-calculator/) — 방문·트라이얼·유료 전환과 고정비/마케팅/수수료/변동비를 반영해 MRR, 월 순이익, 12개월 ROI, 회수기간, 손익분기 유료 고객 수를 계산합니다.
 - [뉴스레터 스폰서 Fill Rate ROI 계산기](./newsletter-sponsor-fill-rate-roi-calculator/) — 뉴스레터 스폰서 슬롯의 현재/목표 Fill Rate, 슬롯 단가, 운영비를 반영해 기간 순이익, ROI, 회수기간, 손익분기 Fill Rate를 계산합니다.
 - [크리에이터 멤버십 이탈 방지 ROI 계산기](./creator-membership-churn-reduction-roi-calculator/) — 멤버십 이탈률 개선 프로그램의 유지 멤버 수, 기간 순이익, ROI, 회수기간, 손익분기 목표 이탈률을 계산합니다.
 - [제휴 쿠키 윈도우 ROI 계산기](./affiliate-cookie-window-roi-calculator/) — 쿠키 어트리뷰션 기간(예: 7일→30일) 확장 시 추가 주문, 월 순이익, ROI, 회수기간, 손익분기 전환율을 계산합니다.

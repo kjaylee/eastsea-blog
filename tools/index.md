@@ -12,6 +12,7 @@
 - [광고 제거 업그레이드 ROI 계산기](./ad-free-upgrade-roi-calculator/) — 광고 제거 부착률, 가격, 광고 손실, 플랫폼 수수료를 반영해 월 순이익, ROI, 회수기간, 손익분기 부착률을 계산합니다.
 - [사기 방지 ROI 계산기](./fraud-prevention-roi-calculator/) — 사기 주문 차단으로 절감되는 손실과 오탐 손실, 운영비를 반영해 월 순효과, ROI, 회수기간, 손익분기 차단율을 계산합니다.
 - [한정 할인 오퍼 수익 계산기](./limited-time-offer-profit-calculator/) — 한정 할인 오퍼의 전환율 상승, 할인율, 운영비를 반영해 월 순이익, ROI, 회수기간, 손익분기 전환율을 계산합니다.
+- [브랜드 라이선싱 로열티 수익 계산기](./brand-licensing-royalty-profit-calculator/) — 예상 매출·로열티율·최소 보장·선급금 회수를 반영해 기간 로열티 순이익, ROI, 손익분기 매출을 계산합니다.
 - [API 최소 커밋 + 오버리지 손익 계산기](./api-minimum-commit-overage-profit-calculator/) — 종량제 고객을 최소 커밋 + 오버리지 모델로 전환할 때 월 순이익, ROI, 회수기간, 손익분기 최소 커밋 금액을 계산합니다.
 - [마이크로 SaaS 런칭 수익 계산기](./micro-saas-launch-profit-calculator/) — 방문·트라이얼·유료 전환과 고정비/마케팅/수수료/변동비를 반영해 MRR, 월 순이익, 12개월 ROI, 회수기간, 손익분기 유료 고객 수를 계산합니다.
 - [뉴스레터 스폰서 Fill Rate ROI 계산기](./newsletter-sponsor-fill-rate-roi-calculator/) — 뉴스레터 스폰서 슬롯의 현재/목표 Fill Rate, 슬롯 단가, 운영비를 반영해 기간 순이익, ROI, 회수기간, 손익분기 Fill Rate를 계산합니다.

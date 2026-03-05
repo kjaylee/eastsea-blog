@@ -7,6 +7,7 @@
 - [Apple Search Ads CPT·LTV ROI 계산기](./apple-search-ads-cpt-ltv-roi-calculator/) — Apple Search Ads의 CPT·퍼널 전환율·구독 LTV를 반영해 월 순이익, ROI, 회수기간, 손익분기 CPT를 계산합니다.
 - [모바일 광고 빈도 캡 ROI 계산기](./mobile-ad-frequency-cap-roi-calculator/) — 광고 노출수 조정 시 광고이익 변화와 리텐션 개선 가치를 합산해 월 순효과, ROI, 회수기간, 손익분기 목표 노출수를 계산합니다.
 - [광고 제거 업그레이드 ROI 계산기](./ad-free-upgrade-roi-calculator/) — 광고 제거 부착률, 가격, 광고 손실, 플랫폼 수수료를 반영해 월 순이익, ROI, 회수기간, 손익분기 부착률을 계산합니다.
+- [사기 방지 ROI 계산기](./fraud-prevention-roi-calculator/) — 사기 주문 차단으로 절감되는 손실과 오탐 손실, 운영비를 반영해 월 순효과, ROI, 회수기간, 손익분기 차단율을 계산합니다.
 - [한정 할인 오퍼 수익 계산기](./limited-time-offer-profit-calculator/) — 한정 할인 오퍼의 전환율 상승, 할인율, 운영비를 반영해 월 순이익, ROI, 회수기간, 손익분기 전환율을 계산합니다.
 - [API 최소 커밋 + 오버리지 손익 계산기](./api-minimum-commit-overage-profit-calculator/) — 종량제 고객을 최소 커밋 + 오버리지 모델로 전환할 때 월 순이익, ROI, 회수기간, 손익분기 최소 커밋 금액을 계산합니다.
 - [뉴스레터 스폰서 Fill Rate ROI 계산기](./newsletter-sponsor-fill-rate-roi-calculator/) — 뉴스레터 스폰서 슬롯의 현재/목표 Fill Rate, 슬롯 단가, 운영비를 반영해 기간 순이익, ROI, 회수기간, 손익분기 Fill Rate를 계산합니다.

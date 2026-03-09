@@ -1,5 +1,6 @@
 # eastsea tools index (markdown)
 
+- [아마존 FBA 수익 계산기](./amazon-fba-profit-calculator/) — 판매가, referral fee, FBA fee, ACoS, 반품, 보관비를 반영해 월 순이익, 손익분기 판매량, 손익분기 ACoS, 목표 마진 판매가를 계산합니다.
 - [체크아웃 BNPL 수수료 손익 계산기](./checkout-bnpl-fee-profit-calculator/) — BNPL 도입 시 전환율·객단가 상승과 수수료·대손·운영비를 함께 반영해 월 순효과, 연간 ROI, 회수기간, 손익분기 전환 상승폭을 계산합니다.
 - [배송 보호 부착률 ROI 계산기](./shipping-protection-attach-rate-roi-calculator/) — 배송 보호(보험) 부착률 상승이 보호 주문 수, 월 순이익, ROI, 회수기간, 손익분기 부착률에 미치는 영향을 계산합니다.
 - [오더 범프 부착률 수익 계산기](./order-bump-attach-rate-profit-calculator/) — 체크아웃 오더 범프 부착률 상승이 추가 주문 수, 월 순이익, ROI, 회수기간, 손익분기 부착률에 미치는 영향을 계산합니다.

@@ -10,6 +10,7 @@
 - [크로스셀 추천 ROI 계산기](./cross-sell-recommendation-roi-calculator/) — 추천 위젯의 노출률·부착률·원가·환불률·운영비를 반영해 월 순이익, ROI, 회수기간, 손익분기 부착률과 AOV 상승을 계산합니다.
 - [배틀패스 부착률 ROI 계산기](./battle-pass-attach-rate-roi-calculator/) — 배틀패스 부착률 개선이 순증 구매자, 리텐션 가치, 월 순효과, ROI, 회수기간, 손익분기 부착률에 미치는 영향을 계산합니다.
 - [Apple Search Ads CPT·LTV ROI 계산기](./apple-search-ads-cpt-ltv-roi-calculator/) — Apple Search Ads의 CPT·퍼널 전환율·구독 LTV를 반영해 월 순이익, ROI, 회수기간, 손익분기 CPT를 계산합니다.
+- [앱 프라이버시 제출 도우미](./app-privacy-disclosure-wizard/) — 한 번의 질문지로 App Store Privacy Details, Google Play Data safety, third-party SDK disclosures 초안을 정리하고 Apple/Google 제출 요약과 JSON·Markdown export를 생성합니다.
 - [모바일 광고 빈도 캡 ROI 계산기](./mobile-ad-frequency-cap-roi-calculator/) — 광고 노출수 조정 시 광고이익 변화와 리텐션 개선 가치를 합산해 월 순효과, ROI, 회수기간, 손익분기 목표 노출수를 계산합니다.
 - [광고 제거 업그레이드 ROI 계산기](./ad-free-upgrade-roi-calculator/) — 광고 제거 부착률, 가격, 광고 손실, 플랫폼 수수료를 반영해 월 순이익, ROI, 회수기간, 손익분기 부착률을 계산합니다.
 - [사기 방지 ROI 계산기](./fraud-prevention-roi-calculator/) — 사기 주문 차단으로 절감되는 손실과 오탐 손실, 운영비를 반영해 월 순효과, ROI, 회수기간, 손익분기 차단율을 계산합니다.

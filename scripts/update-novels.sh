@@ -231,12 +231,12 @@ cat > "$NOVELS_DIR/index.html" <<'HTML_HEADER'
 HTML_HEADER
 
 # Generate novel cards
-echo "$METADATA" | jq -c 'group_by(.series) | .[]' | while IFS= read -r group; do
-    series=$(echo "$group" | jq -r '.[0].series')
-    author=$(echo "$group" | jq -r '.[0].author')
+echo "$METADATA" | jq -c 'group_by(.slug) | .[]' | while IFS= read -r group; do
+    series=$(echo "$group" | jq -r 'map(select(.series != "")) | sort_by(.series|length) | last.series // "Unknown Series"')
+    author=$(echo "$group" | jq -r 'map(select(.author != "")) | sort_by(.author|length) | last.author // "Unknown"')
     episodes=$(echo "$group" | jq -c '. | sort_by(.episode) | reverse | .[0:3]')
     episode_count=$(echo "$group" | jq 'length')
-    explicit_slug=$(echo "$group" | jq -r '.[0].slug // empty')
+    explicit_slug=$(echo "$group" | jq -r 'map(select(.slug != "")) | .[0].slug // empty')
     if [ -n "$explicit_slug" ]; then
         series_slug="$explicit_slug"
     else
@@ -265,7 +265,7 @@ CARD
                         <!-- Auto-generated card -->
                     </p>
                     <div class="episodes">
-                        <h3 style="font-size: 1em; color: #666; margin-bottom: 10px;">최신 ${episode_count}화</h3>
+                        <h3 style="font-size: 1em; color: #666; margin-bottom: 10px;">총 ${episode_count}화</h3>
 CARD
 
     # Add episode items (max 3)
@@ -461,10 +461,10 @@ SERIES_HTML
 
 # Generate seriesData JavaScript object
 first=true
-echo "$METADATA" | jq -c 'group_by(.series) | .[]' | while IFS= read -r group; do
-    series=$(echo "$group" | jq -r '.[0].series')
-    author=$(echo "$group" | jq -r '.[0].author')
-    explicit_slug=$(echo "$group" | jq -r '.[0].slug // empty')
+echo "$METADATA" | jq -c 'group_by(.slug) | .[]' | while IFS= read -r group; do
+    series=$(echo "$group" | jq -r 'map(select(.series != "")) | sort_by(.series|length) | last.series // "Unknown Series"')
+    author=$(echo "$group" | jq -r 'map(select(.author != "")) | sort_by(.author|length) | last.author // "Unknown"')
+    explicit_slug=$(echo "$group" | jq -r 'map(select(.slug != "")) | .[0].slug // empty')
     
     if [ -n "$explicit_slug" ]; then
         series_slug="$explicit_slug"
@@ -574,6 +574,14 @@ for ep in data:
             'totalEpisodes': 0,
             'latestDate': ''
         }
+
+    # Prefer richer canonical metadata when later episodes have better labels
+    if series and len(series) > len(novels[slug].get('title', '')):
+        novels[slug]['title'] = series
+    if ep.get('author') and len(ep.get('author', '')) > len(novels[slug].get('author', '')):
+        novels[slug]['author'] = ep.get('author')
+    if ep.get('genre') and len(ep.get('genre', [])) > len(novels[slug].get('genre', [])):
+        novels[slug]['genre'] = ep.get('genre', [])
     
     # Add episode (format matches manifest expectations)
     novels[slug]['episodes'].append({

@@ -610,9 +610,14 @@ fi
 
 # Sync to MiniPC (novels.eastsea.xyz serving directory)
 echo "📡 Syncing to MiniPC (novels.eastsea.xyz)..."
-MINIPC_HOST="${MINIPC_HOST:-<INTERNAL_IP>}"
+MINIPC_HOST="${MINIPC_HOST:-100.80.169.94}"
 MINIPC_USER="${MINIPC_USER:-spritz}"
-if rsync -azq --delete "$NOVELS_DIR/" "${MINIPC_USER}@${MINIPC_HOST}:/var/www/novels/" 2>/dev/null; then
+if rsync -azq --delete \
+    --chmod=Du=rwx,Dgo=rx,Fu=rw,Fgo=r \
+    "$NOVELS_DIR/" "${MINIPC_USER}@${MINIPC_HOST}:/var/www/novels/" 2>/dev/null; then
+    ssh -o BatchMode=yes -o ConnectTimeout=8 "${MINIPC_USER}@${MINIPC_HOST}" \
+        'find /var/www/novels -type d -exec chmod 755 {} + && find /var/www/novels -type f -exec chmod 644 {} +' \
+        >/dev/null 2>&1 || true
     echo "✅ MiniPC sync complete"
 else
     echo "⚠️ MiniPC sync failed (will retry next run)"

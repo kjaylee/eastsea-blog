@@ -1,5 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const { calculate, presetMap, presets } = require('./calculator.js');
 
@@ -193,5 +195,38 @@ test('TC-10 break-even search returns sane fallback', () => {
 
   assert.equal(error, '');
   assert.equal(result.breakEvenUnitPrice, null);
+});
+
+test('summary includes required clipboard fields', () => {
+  const { result, error } = calculate(baseInput, { lang: 'en' });
+
+  assert.equal(error, '');
+  assert.match(result.summary, /Unit price: 35\.00 × 1/);
+  assert.match(result.summary, /Etsy fee total: 4\.25/);
+  assert.match(result.summary, /Payout after Etsy fees: 35\.74/);
+  assert.match(result.summary, /Net profit: 18\.74/);
+  assert.match(result.summary, /Net margin: 46\.86%/);
+  assert.match(result.summary, /Break-even unit price: 14\.29/);
+  assert.match(result.summary, /Max discount before loss: 59\.17%/);
+});
+
+test('TC-11 discovery integration exists exactly once for Etsy', () => {
+  const toolDir = __dirname;
+  const repoRoot = path.resolve(toolDir, '..', '..');
+  const targetSlug = 'etsy-fee-profit-calculator';
+  const htmlIndex = fs.readFileSync(path.join(repoRoot, 'tools', 'index.html'), 'utf8');
+  const markdownIndex = fs.readFileSync(path.join(repoRoot, 'tools', 'index.md'), 'utf8');
+
+  assert.equal((htmlIndex.match(new RegExp(targetSlug, 'g')) || []).length, 1, 'index.html should contain the Etsy slug exactly once');
+  assert.equal((markdownIndex.match(new RegExp(targetSlug, 'g')) || []).length, 1, 'index.md should contain the Etsy slug exactly once');
+
+  const manifest = JSON.parse(fs.readFileSync(path.join(repoRoot, 'tools', 'manifest.json'), 'utf8'));
+  const matches = manifest.tools.filter((entry) => entry.slug === targetSlug);
+  assert.equal(matches.length, 1, 'manifest.json should contain exactly one Etsy manifest entry');
+  assert.equal(matches[0].url, '/tools/etsy-fee-profit-calculator/');
+
+  const toolEntries = fs.readdirSync(path.join(repoRoot, 'tools'), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && entry.name === targetSlug);
+  assert.equal(toolEntries.length, 1, 'tools/ should contain exactly one Etsy directory');
 });
 

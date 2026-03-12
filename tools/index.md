@@ -2,6 +2,10 @@
 
 - [아마존 FBA 수익 계산기](./amazon-fba-profit-calculator/) — 판매가, referral fee, FBA fee, ACoS, 반품, 보관비를 반영해 월 순이익, 손익분기 판매량, 손익분기 ACoS, 목표 마진 판매가를 계산합니다.
 - [Etsy 수수료·순이익 계산기](./etsy-fee-profit-calculator/) — 리스팅 수수료, 6.5% 거래 수수료, 결제 처리, 오프사이트 광고, 원가/포장/배송비를 반영해 주문당 순이익, 손익분기 판매가, 적자 전 최대 할인율을 계산합니다.
+- [Patreon 순수령액 계산기](./patreon-net-revenue-calculator/) — 월간 멤버, 이번 기간 청구된 연간 멤버, 일회성 구매를 반영해 Patreon 수수료·결제 처리·정산 드래그 이후 총 수수료와 순수령액을 계산합니다.
+- [Gumroad 순수익 계산기](./gumroad-net-revenue-calculator/) — 직접/프로필 판매와 Discover 판매를 분리해 Gumroad의 10% + $0.50 direct fee, 30% Discover fee, payout drag 이후 순수익과 건당 take-home 차이를 계산합니다.
+- [Itch.io 순수익 계산기](./itchio-net-revenue-calculator/) — 최소 가격, 평균 추가 지불액, open revenue share, 결제 수수료를 반영해 itch.io 실제 순수익, 실효 차감률, 목표 순수익 달성 최소 가격을 계산합니다.
+- [Substack 뉴스레터 순수익 계산기](./substack-newsletter-revenue-calculator/) — 이번 기간에 실제 청구된 월간·연간·파운딩 구독자를 넣어 Substack 10%, Stripe 수수료, 반복 결제 드래그 이후 뉴스레터 순수익과 실효 차감률을 계산합니다.
 - [체크아웃 BNPL 수수료 손익 계산기](./checkout-bnpl-fee-profit-calculator/) — BNPL 도입 시 전환율·객단가 상승과 수수료·대손·운영비를 함께 반영해 월 순효과, 연간 ROI, 회수기간, 손익분기 전환 상승폭을 계산합니다.
 - [배송 보호 부착률 ROI 계산기](./shipping-protection-attach-rate-roi-calculator/) — 배송 보호(보험) 부착률 상승이 보호 주문 수, 월 순이익, ROI, 회수기간, 손익분기 부착률에 미치는 영향을 계산합니다.
 - [오더 범프 부착률 수익 계산기](./order-bump-attach-rate-profit-calculator/) — 체크아웃 오더 범프 부착률 상승이 추가 주문 수, 월 순이익, ROI, 회수기간, 손익분기 부착률에 미치는 영향을 계산합니다.

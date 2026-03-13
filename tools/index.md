@@ -1,9 +1,19 @@
 # eastsea tools index (markdown)
 
 - [아마존 FBA 수익 계산기](./amazon-fba-profit-calculator/) — 판매가, referral fee, FBA fee, ACoS, 반품, 보관비를 반영해 월 순이익, 손익분기 판매량, 손익분기 ACoS, 목표 마진 판매가를 계산합니다.
+- [Discogs 수수료·순이익 계산기](./discogs-fee-profit-calculator/) — Discogs 마켓플레이스 수수료 8%, Discogs Payments(Stripe) 또는 PayPal 결제 수수료, 배송 손익을 반영해 레코드·CD 판매 순수익, 손익분기 판매가, ROI를 계산합니다.
+- [Depop 수수료·순이익 계산기](./depop-fee-profit-calculator/) — 미국 Depop 신규 리스팅 기본값(판매 수수료 0%)과 legacy 10% 판매 수수료, boosted listing, 배송 방식, 판매세 추정을 반영해 주문당 순이익, 손익분기 상품가, 적자 전 최대 boost 수수료율을 계산합니다.
 - [Etsy 수수료·순이익 계산기](./etsy-fee-profit-calculator/) — 리스팅 수수료, 6.5% 거래 수수료, 결제 처리, 오프사이트 광고, 원가/포장/배송비를 반영해 주문당 순이익, 손익분기 판매가, 적자 전 최대 할인율을 계산합니다.
+- [eBay 수수료·순이익 계산기](./ebay-fee-profit-calculator/) — 최종 거래가 수수료, 주문당 수수료, promoted listings, buyer shipping, 판매세 추정을 반영해 주문당 순이익, 손익분기 판매가, 적자 전 최대 광고율을 계산합니다.
+- [Fiverr 셀러 수수료 계산기](./fiverr-seller-fee-calculator/) — 완료 주문 수, 평균 주문 금액, 팁, 출금 방법, 추가 정산 드래그를 반영해 Fiverr 20% 수수료 이후 실제 순수익, 실효 차감률, 건당 순수익을 계산합니다.
+- [Poshmark 수수료·순이익 계산기](./poshmark-fee-profit-calculator/) — 미국 Poshmark 기본 수수료(15달러 미만 $2.95, 15달러 이상 20%), 오퍼 할인, 셀러 부담 배송 할인, 원가/포장비를 반영해 주문당 순이익, 손익분기 리스트 가격, 적자 전 최대 오퍼 할인율을 계산합니다.
 - [Patreon 순수령액 계산기](./patreon-net-revenue-calculator/) — 월간 멤버, 이번 기간 청구된 연간 멤버, 일회성 구매를 반영해 Patreon 수수료·결제 처리·정산 드래그 이후 총 수수료와 순수령액을 계산합니다.
+- [Ko-fi 수수료 계산기](./ko-fi-fee-calculator/) — Ko-fi Free와 Contributor 모드, tips·memberships·shop·monthly payments·commissions 유형별 서비스 수수료와 결제 처리 수수료를 반영해 실제 실수령액, 목표 순이익 달성 평균 결제금액, 손익분기 거래량을 계산합니다.
+- [Buy Me a Coffee 수수료 계산기](./buy-me-a-coffee-fee-calculator/) — Buy Me a Coffee 5% 플랫폼 수수료, Stripe 카드 수수료, 0.5% payout drag, 후원자 부담 카드 수수료 설정, 보상 원가를 반영해 실제 순수령액과 손익분기 평균 후원 금액을 계산합니다.
 - [Gumroad 순수익 계산기](./gumroad-net-revenue-calculator/) — 직접/프로필 판매와 Discover 판매를 분리해 Gumroad의 10% + $0.50 direct fee, 30% Discover fee, payout drag 이후 순수익과 건당 take-home 차이를 계산합니다.
+- [Twitch Revenue Calculator](./twitch-revenue-calculator/) — Tier 1/2/3 구독, Prime Gaming 구독, 비트, 광고 수익, 기타 수입을 합산해 월·연간 트위치 스트리머 예상 수익, 수익원별 구성 비중, 구독자당 평균 수익을 계산합니다.
+- [Udemy Instructor Revenue Calculator](./udemy-instructor-revenue-calculator/) — 쿠폰(97%), 오가닉(37%), 제휴(25%), Udemy Business 분당 요율 4가지 채널을 반영해 강사 월간 순수익, 채널별 수익 비중, 연간 예상 수익을 계산합니다.
+- [Lemon Squeezy Fee Calculator](./lemon-squeezy-fee-calculator/) — Lemon Squeezy의 기본 5%, 국제 결제·PayPal·구독 가산, 정산 방식별 수수료를 반영해 주문당 순수익, 기간 순수익, 목표 순수익 달성 판매가를 계산합니다.
 - [Itch.io 순수익 계산기](./itchio-net-revenue-calculator/) — 최소 가격, 평균 추가 지불액, open revenue share, 결제 수수료를 반영해 itch.io 실제 순수익, 실효 차감률, 목표 순수익 달성 최소 가격을 계산합니다.
 - [Substack 뉴스레터 순수익 계산기](./substack-newsletter-revenue-calculator/) — 이번 기간에 실제 청구된 월간·연간·파운딩 구독자를 넣어 Substack 10%, Stripe 수수료, 반복 결제 드래그 이후 뉴스레터 순수익과 실효 차감률을 계산합니다.
 - [체크아웃 BNPL 수수료 손익 계산기](./checkout-bnpl-fee-profit-calculator/) — BNPL 도입 시 전환율·객단가 상승과 수수료·대손·운영비를 함께 반영해 월 순효과, 연간 ROI, 회수기간, 손익분기 전환 상승폭을 계산합니다.
@@ -15,6 +25,7 @@
 - [배틀패스 부착률 ROI 계산기](./battle-pass-attach-rate-roi-calculator/) — 배틀패스 부착률 개선이 순증 구매자, 리텐션 가치, 월 순효과, ROI, 회수기간, 손익분기 부착률에 미치는 영향을 계산합니다.
 - [Apple Search Ads CPT·LTV ROI 계산기](./apple-search-ads-cpt-ltv-roi-calculator/) — Apple Search Ads의 CPT·퍼널 전환율·구독 LTV를 반영해 월 순이익, ROI, 회수기간, 손익분기 CPT를 계산합니다.
 - [App Store Subscription Proceeds Calculator](./app-store-subscription-proceeds-calculator/) — 70%/85% proceeds 버킷, 월간/연간 청구 수량, VAT·환불·활성 구독자 지원비를 반영해 앱스토어 실수령액, blended proceeds rate, 85% 버킷 uplift, 손익분기 총청구액을 계산합니다.
+- [App Store Small Business Program Calculator](./app-store-small-business-program-calculator/) — App Store Small Business Program의 prior-year/current-year proceeds, associated accounts, $1M threshold runway, forecast cross month, 15% vs 30% cash impact를 계산합니다.
 - [앱 프라이버시 제출 도우미](./app-privacy-disclosure-wizard/) — 한 번의 질문지로 App Store Privacy Details, Google Play Data safety, third-party SDK disclosures 초안을 정리하고 Apple/Google 제출 요약과 JSON·Markdown export를 생성합니다.
 - [모바일 광고 빈도 캡 ROI 계산기](./mobile-ad-frequency-cap-roi-calculator/) — 광고 노출수 조정 시 광고이익 변화와 리텐션 개선 가치를 합산해 월 순효과, ROI, 회수기간, 손익분기 목표 노출수를 계산합니다.
 - [광고 제거 업그레이드 ROI 계산기](./ad-free-upgrade-roi-calculator/) — 광고 제거 부착률, 가격, 광고 손실, 플랫폼 수수료를 반영해 월 순이익, ROI, 회수기간, 손익분기 부착률을 계산합니다.
@@ -44,3 +55,6 @@
 - [식물 물주기 추적기](./plant-watering-tracker/) — 식물별 물주기 주기와 마지막 물 준 날짜를 저장하고 오늘/지연/예정 상태를 자동 분류해 관리합니다.
 - [다운로드 시간 계산기](./download-time-calculator/) — 파일 용량/회선 속도/실효 효율을 반영해 다운로드·업로드 예상 소요 시간과 완료 시각을 계산합니다.
 - [복약 간격 계산기](./medication-interval-tracker/) — 마지막 복용 시각과 복약 간격으로 다음 복용 시간·남은 시간·하루 복용 횟수를 계산하고 기록을 저장합니다.
+- [VAT·GST 마진 계산기](./vat-gst-margin-calculator/) — VAT/GST 포함 판매가에서 세금, 결제 수수료, 환불률, 주문당 원가, 월 고정비를 제거해 실제 순이익률, 손익분기 주문 수, 목표 마진 달성 판매가를 계산합니다.
+- [Merchant of Record vs Direct Billing Profit Calculator](./merchant-of-record-vs-direct-billing-profit-calculator/) — VAT/GST, 환불, 결제 수수료, 차지백, 세무·컴플라이언스 비용과 MoR 수수료를 함께 반영해 직접 결제 대비 실수령액, 월 델타, 연간 ROI, 손익분기 MoR 수수료율을 계산합니다.
+- [PayPal Fee Calculator](./paypal-fee-calculator/) — 구매자가 보내는 총액 기준 PayPal 수수료, 실제 실수령액, 목표 순수령액을 받기 위해 요청해야 할 금액, 상품/배송/기타비 반영 후 판매자 이익과 손익분기 매출을 계산합니다.

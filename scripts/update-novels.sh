@@ -612,23 +612,35 @@ echo "✅ manifest.json generated"
 if [ "${AUTO_COMMIT:-true}" = "true" ]; then
     echo "📤 Committing changes..."
     cd "$NOVELS_DIR/.."
-    git add novels/index.html novels/series.html novels/manifest.json
-    git commit -m "Auto-update: Novel index, series, and manifest [$(date +%Y-%m-%d)]" || echo "✓ No changes to commit"
+    git add novels/
+    git commit -m "Auto-update: Novel episode + index/series/manifest [$(date +%Y-%m-%d)]" || echo "✓ No changes to commit"
 fi
 
 # Sync to MiniPC (novels.eastsea.xyz serving directory)
 echo "📡 Syncing to MiniPC (novels.eastsea.xyz)..."
 MINIPC_HOST="${MINIPC_HOST:-100.80.169.94}"
 MINIPC_USER="${MINIPC_USER:-spritz}"
+MINIPC_CONNECT_TIMEOUT="${MINIPC_CONNECT_TIMEOUT:-8}"
+MINIPC_IO_TIMEOUT="${MINIPC_IO_TIMEOUT:-20}"
+SSH_SYNC_OPTS=(
+    -o BatchMode=yes
+    -o ConnectTimeout="${MINIPC_CONNECT_TIMEOUT}"
+    -o ConnectionAttempts=1
+)
+RSYNC_RSH="ssh ${SSH_SYNC_OPTS[*]}"
 if rsync -azq --delete \
+    --contimeout="${MINIPC_CONNECT_TIMEOUT}" \
+    --timeout="${MINIPC_IO_TIMEOUT}" \
+    -e "${RSYNC_RSH}" \
     --chmod=Du=rwx,Dgo=rx,Fu=rw,Fgo=r \
-    "$NOVELS_DIR/" "${MINIPC_USER}@${MINIPC_HOST}:/var/www/novels/" 2>/dev/null; then
-    ssh -o BatchMode=yes -o ConnectTimeout=8 "${MINIPC_USER}@${MINIPC_HOST}" \
+    "$NOVELS_DIR/" "${MINIPC_USER}@${MINIPC_HOST}:/var/www/novels/" >/dev/null 2>&1; then
+    ssh "${SSH_SYNC_OPTS[@]}" "${MINIPC_USER}@${MINIPC_HOST}" \
         'find /var/www/novels -type d -exec chmod 755 {} + && find /var/www/novels -type f -exec chmod 644 {} +' \
         >/dev/null 2>&1 || true
     echo "✅ MiniPC sync complete"
 else
-    echo "⚠️ MiniPC sync failed (will retry next run)"
+    sync_status=$?
+    echo "⚠️ MiniPC sync failed or timed out (rsync exit ${sync_status}; will retry next run)"
 fi
 
 echo "🎉 Novel publishing system updated successfully!"

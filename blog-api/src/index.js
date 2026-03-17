@@ -222,7 +222,7 @@ export default {
           const dateMatch = slug.match(/^(\d{4}-\d{2}-\d{2})-(.+)$/);
           if (dateMatch) {
             const [, datePrefix, rest] = dateMatch;
-            const keywords = rest.split('-').filter(w => w.length >= 3);
+            const keywords = rest.split('-').filter(w => w.length >= 2);
             if (keywords.length > 0) {
               // Strategy: try all keywords → first+last → each keyword alone
               const attempts = [

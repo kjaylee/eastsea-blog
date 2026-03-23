@@ -9,7 +9,7 @@
 - [eBay 수수료·순이익 계산기](./ebay-fee-profit-calculator/) — 최종 거래가 수수료, 주문당 수수료, promoted listings, buyer shipping, 판매세 추정을 반영해 주문당 순이익, 손익분기 판매가, 적자 전 최대 광고율을 계산합니다.
 - [Eventbrite Fee Calculator](./eventbrite-fee-calculator/) — Eventbrite의 공개 미국 유료 티켓 수수료(3.7% + $1.79, 2.9% processing)를 기준으로 buyer-pays vs organizer-covers, 참석자 결제 총액, 주최자 실수령액, 손익분기 티켓 가격을 계산합니다.
 - [Fiverr 셀러 수수료 계산기](./fiverr-seller-fee-calculator/) — 완료 주문 수, 평균 주문 금액, 팁, 출금 방법, 추가 정산 드래그를 반영해 Fiverr 20% 수수료 이후 실제 순수익, 실효 차감률, 건당 순수익을 계산합니다.
-- [Freelancer.com Fee Calculator](./freelancer-com-fee-calculator/) — 고정가 10% 또는 최소 $5, 시급 10%, recruiter 15%, referred employer 0%, quote promo 3%, 공식 출금 수수료를 반영해 실제 실수령액과 목표 순수익 달성 추가 청구액을 계산합니다.
+- [Freelancer.com Fee Calculator](./freelancer-com-fee-calculator/) — 고정가 10% 또는 최소 $5, 시급 10%, 초과 지급액·보너스 10%를 반영해 실제 실수령액, 순이익, 손익분기 총청구액, 목표 순이익용 총청구액을 계산합니다.
 - [Upwork 프리랜서 수수료 계산기](./upwork-freelancer-fee-calculator/) — 일반 계약 0%~15% 수수료, Direct Contracts 5%/0%, 보너스, 공식 출금 수수료를 반영해 실제 실수령액과 목표 순수익 달성 필요 청구액을 계산합니다.
 - [Poshmark 수수료·순이익 계산기](./poshmark-fee-profit-calculator/) — 미국 Poshmark 기본 수수료(15달러 미만 $2.95, 15달러 이상 20%), 오퍼 할인, 셀러 부담 배송 할인, 원가/포장비를 반영해 주문당 순이익, 손익분기 리스트 가격, 적자 전 최대 오퍼 할인율을 계산합니다.
 - [Patreon 순수령액 계산기](./patreon-net-revenue-calculator/) — 월간 멤버, 이번 기간 청구된 연간 멤버, 일회성 구매를 반영해 Patreon 수수료·결제 처리·정산 드래그 이후 총 수수료와 순수령액을 계산합니다.
@@ -24,6 +24,8 @@
 - [Twitch Revenue Calculator](./twitch-revenue-calculator/) — Tier 1/2/3 구독, Prime Gaming 구독, 비트, 광고 수익, 기타 수입을 합산해 월·연간 트위치 스트리머 예상 수익, 수익원별 구성 비중, 구독자당 평균 수익을 계산합니다.
 - [Udemy Instructor Revenue Calculator](./udemy-instructor-revenue-calculator/) — 쿠폰(97%), 오가닉(37%), 제휴(25%), Udemy Business 분당 요율 4가지 채널을 반영해 강사 월간 순수익, 채널별 수익 비중, 연간 예상 수익을 계산합니다.
 - [Lemon Squeezy Fee Calculator](./lemon-squeezy-fee-calculator/) — Lemon Squeezy의 기본 5%, 국제 결제·PayPal·구독 가산, 정산 방식별 수수료를 반영해 주문당 순수익, 기간 순수익, 목표 순수익 달성 판매가를 계산합니다.
+- [Memberful Fee Calculator](./memberful-fee-calculator/) — Memberful Standard $49/월 + 4.9%, Stripe 처리 수수료, 환불, 기타 고정비를 반영해 월 순이익과 손익분기 매출을 계산합니다.
+- [Sellfy Pricing Calculator](./sellfy-pricing-calculator/) — Sellfy Starter/Business/Premium의 구독비, Stripe·PayPal 처리 수수료, 2% overage planning model, 환불, 주문당 전달 원가를 반영해 연간 순이익과 업그레이드 손익분기 매출을 계산합니다.
 - [Itch.io 순수익 계산기](./itchio-net-revenue-calculator/) — 최소 가격, 평균 추가 지불액, open revenue share, 결제 수수료를 반영해 itch.io 실제 순수익, 실효 차감률, 목표 순수익 달성 최소 가격을 계산합니다.
 - [Indiegogo Fee Calculator](./indiegogo-fee-calculator/) — 현재 Indiegogo 5% 플랫폼 수수료, 3% + 0.20 결제 수수료, fixed funding 목표 미달 시 0 정산 규칙을 반영해 실제 순수령액과 목표 순수익 달성에 필요한 총 펀딩액을 계산합니다.
 - [Substack 뉴스레터 순수익 계산기](./substack-newsletter-revenue-calculator/) — 이번 기간에 실제 청구된 월간·연간·파운딩 구독자를 넣어 Substack 10%, Stripe 수수료, 반복 결제 드래그 이후 뉴스레터 순수익과 실효 차감률을 계산합니다.
@@ -48,6 +50,7 @@
 - [마이크로 SaaS 런칭 수익 계산기](./micro-saas-launch-profit-calculator/) — 방문·트라이얼·유료 전환과 고정비/마케팅/수수료/변동비를 반영해 MRR, 월 순이익, 12개월 ROI, 회수기간, 손익분기 유료 고객 수를 계산합니다.
 - [뉴스레터 스폰서 Fill Rate ROI 계산기](./newsletter-sponsor-fill-rate-roi-calculator/) — 뉴스레터 스폰서 슬롯의 현재/목표 Fill Rate, 슬롯 단가, 운영비를 반영해 기간 순이익, ROI, 회수기간, 손익분기 Fill Rate를 계산합니다.
 - [크리에이터 멤버십 이탈 방지 ROI 계산기](./creator-membership-churn-reduction-roi-calculator/) — 멤버십 이탈률 개선 프로그램의 유지 멤버 수, 기간 순이익, ROI, 회수기간, 손익분기 목표 이탈률을 계산합니다.
+- [크리에이터 멤버십 플랫폼 수수료 비교기](./creator-membership-platform-fee-comparator/) — Direct Stripe, Patreon, Substack, App Store 구독의 수수료와 실수령액을 비교하고 같은 순수익을 만들기 위한 목표 가격까지 계산합니다.
 - [인앱 팁 Jar 수익 계산기](./in-app-tip-jar-profit-calculator/) — 팁 노출률·전환율·평균 팁·수수료를 반영해 월 순이익, 연간 ROI, 회수기간, 손익분기 전환율을 계산합니다.
 - [제휴 쿠키 윈도우 ROI 계산기](./affiliate-cookie-window-roi-calculator/) — 쿠키 어트리뷰션 기간(예: 7일→30일) 확장 시 추가 주문, 월 순이익, ROI, 회수기간, 손익분기 전환율을 계산합니다.
 - [UGC 화이트리스팅 부착률 ROI 계산기](./ugc-whitelisting-attach-rate-roi-calculator/) — 화이트리스팅 권리 부착률 개선 시 순증 딜, 월 순효과, ROI, 회수기간, 손익분기 부착률을 계산합니다.
@@ -70,3 +73,9 @@
 - [VAT·GST 마진 계산기](./vat-gst-margin-calculator/) — VAT/GST 포함 판매가에서 세금, 결제 수수료, 환불률, 주문당 원가, 월 고정비를 제거해 실제 순이익률, 손익분기 주문 수, 목표 마진 달성 판매가를 계산합니다.
 - [Merchant of Record vs Direct Billing Profit Calculator](./merchant-of-record-vs-direct-billing-profit-calculator/) — VAT/GST, 환불, 결제 수수료, 차지백, 세무·컴플라이언스 비용과 MoR 수수료를 함께 반영해 직접 결제 대비 실수령액, 월 델타, 연간 ROI, 손익분기 MoR 수수료율을 계산합니다.
 - [PayPal Fee Calculator](./paypal-fee-calculator/) — 구매자가 보내는 총액 기준 PayPal 수수료, 실제 실수령액, 목표 순수령액을 받기 위해 요청해야 할 금액, 상품/배송/기타비 반영 후 판매자 이익과 손익분기 매출을 계산합니다.
+- [Mercari Seller Fee Calculator](./mercari-fee-calculator/) — Mercari 공개 수수료 기준(판매 수수료 10%, buyer-paid shipping 포함, 기본 결제수수료 0, Direct Deposit $0 / Instant Pay $3 배분 가능)으로 실수령액, 순이익, 손익분기 판매가, 목표 순이익 달성 판매가를 계산합니다.
+- [Whatnot Seller Fee Calculator](./whatnot-seller-fee-calculator/) — Whatnot 미국 기준 공개 수수료 베이스라인(표준 8%, Electronics 5%, Coins & Money 4%, processing 2.9% + $0.30)을 바탕으로 commission, payout after fees, 순이익, 손익분기 판매가를 계산합니다.
+
+- [BMI + 체지방률 계산기](./bmi-bfp-calculator/) — BMI와 미국 해군식 체지방률(US Navy Method)을 함께 계산해 체지방량, 제지방량, 건강 체중 범위를 확인합니다.
+- [CAGR 계산기](./cagr-calculator/) — 초기값, 최종값, 기간을 기준으로 CAGR, 누적수익률, 실질 성장률, 두 배 도달 시간, 목표 시나리오를 계산합니다.
+- [모기지 추가 상환 계산기](./mortgage-extra-payment-calculator/) — 월 추가 납입과 연간 목돈 상환이 주택담보대출 이자 절감과 상환기간 단축에 얼마나 도움이 되는지 계산합니다.

@@ -165,7 +165,32 @@ Then modify the card generation to include:
 - [ ] Mobile app integration
 - [ ] Multi-language support
 
+## Formula Calculator Scaffold
+
+### Purpose
+`tool-formula-scaffold.py` generates a static calculator bundle from a formula-based `tool.config.json`.
+
+### Output
+Given one config, it writes:
+- `index.html`
+- `app.js`
+- `app.test.js`
+
+### Example
+```bash
+cd /Users/kjaylee/.openclaw/workspace
+python3 eastsea-blog/scripts/tool-formula-scaffold.py \
+  --config eastsea-blog/tools/app-store-subscription-proceeds-calculator/tool.config.json \
+  --outdir tmp/tool-formula-scaffold-smoke/app-store-subscription-proceeds-calculator \
+  --force
+```
+
+### Notes
+- v1 supports **formula-based number inputs only**.
+- It does **not** mutate `manifest.json` or `_data/tools-list.json`.
+- Safe overwrite requires `--force`.
+
 ---
 
-**Last Updated:** 2026-02-06  
-**Maintainer:** OpenClaw Agent (Subagent: novel-publish-system)
+**Last Updated:** 2026-03-23  
+**Maintainer:** OpenClaw Agent (Subagent: tool-formula-scaffold)

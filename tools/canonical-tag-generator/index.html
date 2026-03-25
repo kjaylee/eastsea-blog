@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>캐노니컬 태그 생성기 | Canonical Tag Generator</title>
+  <meta name="description" content="여러 URL을 입력하면 SEO용 canonical URL을 정규화하고 <link rel="canonical"> 태그를 생성합니다.">
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    :root{--bg:#fff;--bg2:#f6f7fb;--text:#1f2937;--muted:#6b7280;--card:#fff;--border:#e5e7eb;--accent:#6366f1;--ok:#10b981;--warn:#f59e0b}
+    [data-theme="dark"]{--bg:#111827;--bg2:#0f172a;--text:#f3f4f6;--muted:#9ca3af;--card:#1f2937;--border:#374151;--accent:#818cf8}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Noto Sans KR',sans-serif;background:var(--bg2);color:var(--text);padding:20px;min-height:100vh}
+    .container{max-width:980px;margin:0 auto}
+    h1{text-align:center;font-size:1.9rem;background:linear-gradient(135deg,#6366f1,#22c55e);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:6px}
+    .sub{text-align:center;color:var(--muted);margin-bottom:24px;font-size:.95rem}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:16px}
+    label{display:block;font-size:.82rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:6px}
+    textarea{width:100%;padding:12px;border:1px solid var(--border);border-radius:10px;background:var(--bg);color:var(--text);font-family:ui-monospace,Menlo,monospace;font-size:.88rem;resize:vertical;min-height:180px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    .option{display:flex;align-items:center;gap:8px;font-size:.9rem;margin-bottom:8px}
+    .btn{padding:9px 14px;border:none;border-radius:8px;cursor:pointer;font-weight:700;font-size:.85rem}
+    .btn.primary{background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff}
+    .btn.gray{background:var(--bg2);color:var(--text);border:1px solid var(--border)}
+    .output{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px;font-family:ui-monospace,Menlo,monospace;font-size:.88rem;white-space:pre-wrap;line-height:1.55;min-height:160px}
+    table{width:100%;border-collapse:collapse;font-size:.85rem}
+    th{background:var(--bg2);padding:10px 12px;text-align:left;font-weight:700;font-size:.78rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);border-bottom:2px solid var(--border)}
+    td{padding:8px 12px;border-bottom:1px solid var(--border);word-break:break-all}
+    .top-btn{position:fixed;top:14px;width:40px;height:40px;border:1px solid var(--border);border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--card);text-decoration:none;font-size:1.1rem}
+    .home{left:14px}.theme{right:14px;cursor:pointer;border:1px solid var(--border)}
+    @media(max-width:820px){.grid{grid-template-columns:1fr}}
+  </style>
+  <script src="/assets/analytics.js"></script>
+</head>
+<body>
+  <a class="top-btn home" href="/">🏠</a>
+  <button class="top-btn theme" onclick="toggleTheme()">🌓</button>
+  <div class="container">
+    <h1>🔗 캐노니컬 태그 생성기</h1>
+    <p class="sub">URL을 정규화하고 canonical 태그를 생성합니다. UTM 제거, 슬래시 정리, HTTPS 강제 지원.</p>
+
+    <div class="card grid">
+      <div>
+        <label>URL 목록 (줄바꿈)</label>
+        <textarea id="urlInput" placeholder="https://example.com/page?utm_source=google\nhttps://example.com/page/" oninput="build()"></textarea>
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn primary" onclick="build()">생성</button>
+          <button class="btn gray" onclick="loadSample()">샘플</button>
+          <button class="btn gray" onclick="clearAll()">초기화</button>
+        </div>
+      </div>
+      <div>
+        <label>정규화 옵션</label>
+        <div class="option"><input type="checkbox" id="forceHttps" checked onchange="build()"><span>HTTPS 강제</span></div>
+        <div class="option"><input type="checkbox" id="lowerHost" checked onchange="build()"><span>호스트 소문자화</span></div>
+        <div class="option"><input type="checkbox" id="stripFragment" checked onchange="build()"><span>프래그먼트(#) 제거</span></div>
+        <div class="option"><input type="checkbox" id="stripUtm" checked onchange="build()"><span>UTM/트래킹 파라미터 제거</span></div>
+        <div class="option"><input type="checkbox" id="trimSlash" onchange="build()"><span>끝 슬래시 제거</span></div>
+        <div class="option"><input type="checkbox" id="sortParams" checked onchange="build()"><span>쿼리 파라미터 정렬</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <label>canonical 태그 출력</label>
+      <div class="output" id="output"></div>
+      <div style="margin-top:10px"><button class="btn gray" onclick="copyText()">복사</button></div>
+    </div>
+
+    <div class="card">
+      <label>URL 매핑 테이블</label>
+      <table>
+        <thead><tr><th>원본 URL</th><th>Canonical URL</th></tr></thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    const TRACKING_PARAMS = ['utm_source','utm_medium','utm_campaign','utm_term','utm_content','gclid','fbclid','igshid','mc_cid','mc_eid'];
+
+    function build(){
+      const urls = document.getElementById('urlInput').value.split(/\n+/).map(s=>s.trim()).filter(Boolean);
+      const opts = {
+        forceHttps: document.getElementById('forceHttps').checked,
+        lowerHost: document.getElementById('lowerHost').checked,
+        stripFragment: document.getElementById('stripFragment').checked,
+        stripUtm: document.getElementById('stripUtm').checked,
+        trimSlash: document.getElementById('trimSlash').checked,
+        sortParams: document.getElementById('sortParams').checked
+      };
+
+      const rows = urls.map(u => {
+        try { return {raw:u, canon: normalize(u, opts)}; }
+        catch(e){ return {raw:u, canon:'(URL 오류)'}; }
+      });
+
+      document.getElementById('output').textContent = rows.map(r => r.canon.startsWith('(')
+        ? `# ${r.raw} => ${r.canon}`
+        : `<link rel="canonical" href="${r.canon}" />`).join('\n');
+
+      document.getElementById('tableBody').innerHTML = rows.map(r => `<tr><td>${esc(r.raw)}</td><td>${esc(r.canon)}</td></tr>`).join('');
+    }
+
+    function normalize(url, opts){
+      const u = new URL(url);
+      if (opts.forceHttps) u.protocol = 'https:';
+      if (opts.lowerHost) u.hostname = u.hostname.toLowerCase();
+      if (opts.stripFragment) u.hash = '';
+      if (opts.stripUtm) {
+        TRACKING_PARAMS.forEach(p => u.searchParams.delete(p));
+      }
+      if (opts.sortParams) {
+        const params = [...u.searchParams.entries()].sort((a,b)=>a[0].localeCompare(b[0]));
+        u.search = '';
+        params.forEach(([k,v]) => u.searchParams.append(k,v));
+      }
+      let path = u.pathname;
+      if (opts.trimSlash && path.length>1 && path.endsWith('/')) {
+        path = path.slice(0,-1);
+      }
+      u.pathname = path;
+      return u.toString();
+    }
+
+    function loadSample(){
+      document.getElementById('urlInput').value = `https://Example.com/Page/?utm_source=google&utm_medium=cpc\nhttps://example.com/page#section\nhttp://example.com/page/?b=2&a=1\nhttps://example.com/page/?fbclid=AAA`;
+      build();
+    }
+
+    function clearAll(){
+      document.getElementById('urlInput').value = '';
+      document.getElementById('output').textContent = '';
+      document.getElementById('tableBody').innerHTML = '';
+    }
+
+    function copyText(){
+      navigator.clipboard.writeText(document.getElementById('output').textContent);
+    }
+
+    function esc(s){
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    function toggleTheme(){
+      const t = document.documentElement.getAttribute('data-theme')==='dark' ? '' : 'dark';
+      document.documentElement.setAttribute('data-theme',t);
+      localStorage.setItem('theme',t);
+    }
+    if (localStorage.getItem('theme')==='dark') document.documentElement.setAttribute('data-theme','dark');
+  </script>
+</body>
+</html>

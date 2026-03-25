@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CORS 헤더 빌더 | CORS Header Builder</title>
+  <meta name="description" content="Access-Control-Allow-* 헤더를 쉽게 생성하고, Express/Nginx/Apache 예시를 제공합니다.">
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    :root{--bg:#fff;--bg2:#f6f7fb;--text:#1f2937;--muted:#6b7280;--card:#fff;--border:#e5e7eb;--accent:#6366f1;--ok:#10b981;--warn:#f59e0b;--err:#ef4444}
+    [data-theme="dark"]{--bg:#111827;--bg2:#0f172a;--text:#f3f4f6;--muted:#9ca3af;--card:#1f2937;--border:#374151;--accent:#818cf8}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Noto Sans KR',sans-serif;background:var(--bg2);color:var(--text);padding:20px;min-height:100vh}
+    .container{max-width:980px;margin:0 auto}
+    h1{text-align:center;font-size:1.9rem;background:linear-gradient(135deg,#6366f1,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:6px}
+    .sub{text-align:center;color:var(--muted);margin-bottom:24px;font-size:.95rem}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px}
+    label{display:block;font-size:.82rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:6px}
+    input[type="text"],textarea,select{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--bg);color:var(--text);font-size:.9rem}
+    textarea{min-height:86px;font-family:ui-monospace,Menlo,monospace;resize:vertical;line-height:1.5}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .switch{display:flex;align-items:center;gap:8px;margin-top:4px;font-size:.9rem}
+    .switch input{width:18px;height:18px}
+    .btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+    .btn{padding:9px 14px;border:none;border-radius:8px;cursor:pointer;font-weight:700;font-size:.85rem}
+    .btn.primary{background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff}
+    .btn.gray{background:var(--bg2);color:var(--text);border:1px solid var(--border)}
+    .output{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px;font-family:ui-monospace,Menlo,monospace;font-size:.88rem;white-space:pre-wrap;line-height:1.55;min-height:120px}
+    .warn{border-left:4px solid var(--warn);padding:10px 12px;background:#fffbeb;border-radius:10px;color:#92400e;margin-top:10px;font-size:.85rem}
+    [data-theme="dark"] .warn{background:#451a03;color:#fcd34d}
+    .top-btn{position:fixed;top:14px;width:40px;height:40px;border:1px solid var(--border);border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--card);text-decoration:none;font-size:1.1rem}
+    .home{left:14px}.theme{right:14px;cursor:pointer;border:1px solid var(--border)}
+    @media(max-width:820px){.grid{grid-template-columns:1fr}.row{grid-template-columns:1fr}}
+  </style>
+  <script src="/assets/analytics.js"></script>
+</head>
+<body>
+  <a class="top-btn home" href="/">🏠</a>
+  <button class="top-btn theme" onclick="toggleTheme()">🌓</button>
+  <div class="container">
+    <h1>🛡️ CORS 헤더 빌더</h1>
+    <p class="sub">Access-Control-Allow-* 헤더를 생성하고, Express/Nginx/Apache 예시를 확인하세요.</p>
+
+    <div class="grid">
+      <div class="card">
+        <label>허용 Origin (줄바꿈 또는 콤마)</label>
+        <textarea id="origins" placeholder="https://example.com\nhttps://app.example.com" oninput="build()"></textarea>
+
+        <div class="row" style="margin-top:12px">
+          <div>
+            <label>허용 Method</label>
+            <textarea id="methods" oninput="build()">GET,POST,PUT,PATCH,DELETE,OPTIONS</textarea>
+          </div>
+          <div>
+            <label>허용 Headers</label>
+            <textarea id="headers" oninput="build()">Content-Type,Authorization</textarea>
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:12px">
+          <div>
+            <label>Max-Age (초)</label>
+            <input type="text" id="maxage" value="86400" oninput="build()">
+          </div>
+          <div>
+            <label>Vary</label>
+            <input type="text" id="vary" value="Origin" oninput="build()">
+          </div>
+        </div>
+
+        <div class="switch"><input type="checkbox" id="cred" onchange="build()"><span>Credentials 허용 (쿠키/인증)</span></div>
+        <div class="switch"><input type="checkbox" id="preflight" checked onchange="build()"><span>Preflight(OPTIONS) 응답 포함</span></div>
+
+        <div class="btn-row">
+          <button class="btn primary" onclick="build()">헤더 생성</button>
+          <button class="btn gray" onclick="resetAll()">초기화</button>
+        </div>
+
+        <div id="warning" class="warn" style="display:none"></div>
+      </div>
+
+      <div class="card">
+        <label>생성된 CORS 헤더</label>
+        <div class="output" id="headerOut"></div>
+        <div class="btn-row">
+          <button class="btn gray" onclick="copyText('headerOut')">헤더 복사</button>
+        </div>
+
+        <label style="margin-top:14px">Express 미들웨어</label>
+        <div class="output" id="expressOut"></div>
+        <div class="btn-row">
+          <button class="btn gray" onclick="copyText('expressOut')">Express 코드 복사</button>
+        </div>
+
+        <label style="margin-top:14px">Nginx 설정</label>
+        <div class="output" id="nginxOut"></div>
+        <div class="btn-row">
+          <button class="btn gray" onclick="copyText('nginxOut')">Nginx 코드 복사</button>
+        </div>
+
+        <label style="margin-top:14px">Apache 설정</label>
+        <div class="output" id="apacheOut"></div>
+        <div class="btn-row">
+          <button class="btn gray" onclick="copyText('apacheOut')">Apache 코드 복사</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function build(){
+      const origins = parseList(document.getElementById('origins').value);
+      const methods = parseList(document.getElementById('methods').value);
+      const headers = parseList(document.getElementById('headers').value);
+      const maxAge = document.getElementById('maxage').value.trim();
+      const vary = document.getElementById('vary').value.trim();
+      const cred = document.getElementById('cred').checked;
+      const preflight = document.getElementById('preflight').checked;
+
+      const allowOrigin = origins.length ? (origins.length===1 ? origins[0] : origins.join(',')) : '*';
+      const allowMethods = methods.length ? methods.join(',') : 'GET,POST,PUT,PATCH,DELETE,OPTIONS';
+      const allowHeaders = headers.length ? headers.join(',') : 'Content-Type,Authorization';
+
+      let headerText = `Access-Control-Allow-Origin: ${allowOrigin}\n`;
+      headerText += `Access-Control-Allow-Methods: ${allowMethods}\n`;
+      headerText += `Access-Control-Allow-Headers: ${allowHeaders}\n`;
+      if (cred) headerText += `Access-Control-Allow-Credentials: true\n`;
+      if (maxAge) headerText += `Access-Control-Max-Age: ${maxAge}\n`;
+      if (vary) headerText += `Vary: ${vary}\n`;
+
+      if (preflight) headerText += `\n# Preflight (OPTIONS) 응답 시 204/200과 함께 위 헤더를 포함`;
+
+      document.getElementById('headerOut').textContent = headerText.trim();
+
+      // warnings
+      const warning = document.getElementById('warning');
+      if (cred && allowOrigin==='*') {
+        warning.style.display = 'block';
+        warning.textContent = 'Credentials를 허용하는 경우 Access-Control-Allow-Origin에 * 를 사용할 수 없습니다. 실제 Origin을 명시하거나 요청 Origin을 동적으로 반영하세요.';
+      } else if (origins.length>1 && !preflight) {
+        warning.style.display = 'block';
+        warning.textContent = 'Origin이 여러 개인 경우 서버에서 요청 Origin을 검사하고 허용된 경우에만 반환해야 합니다.';
+      } else {
+        warning.style.display = 'none';
+      }
+
+      // Express
+      const express = `const allowedOrigins = ${JSON.stringify(origins.length?origins:['*'], null, 2)};
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (!origin) return next();
+  if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+  res.setHeader('Access-Control-Allow-Methods', '${allowMethods}');
+  res.setHeader('Access-Control-Allow-Headers', '${allowHeaders}');
+  ${cred ? "res.setHeader('Access-Control-Allow-Credentials', 'true');" : ""}
+  ${maxAge ? "res.setHeader('Access-Control-Max-Age', '"+maxAge+"');" : ""}
+  ${vary ? "res.setHeader('Vary', '"+vary+"');" : ""}
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});`;
+      document.getElementById('expressOut').textContent = express;
+
+      // Nginx
+      const nginx = `# Nginx (location 블록 안)
+add_header 'Access-Control-Allow-Origin' '${allowOrigin}' always;
+add_header 'Access-Control-Allow-Methods' '${allowMethods}' always;
+add_header 'Access-Control-Allow-Headers' '${allowHeaders}' always;
+${cred ? "add_header 'Access-Control-Allow-Credentials' 'true' always;" : ''}
+${maxAge ? "add_header 'Access-Control-Max-Age' '"+maxAge+"' always;" : ''}
+${vary ? "add_header 'Vary' '"+vary+"' always;" : ''}
+if ($request_method = OPTIONS) { return 204; }`;
+      document.getElementById('nginxOut').textContent = nginx;
+
+      // Apache
+      const apache = `# Apache (VirtualHost 또는 .htaccess)
+Header always set Access-Control-Allow-Origin "${allowOrigin}"
+Header always set Access-Control-Allow-Methods "${allowMethods}"
+Header always set Access-Control-Allow-Headers "${allowHeaders}"
+${cred ? "Header always set Access-Control-Allow-Credentials \"true\"" : ''}
+${maxAge ? "Header always set Access-Control-Max-Age \""+maxAge+"\"" : ''}
+${vary ? "Header always set Vary \""+vary+"\"" : ''}
+RewriteCond %{REQUEST_METHOD} OPTIONS
+RewriteRule ^(.*)$ $1 [R=204,L]`;
+      document.getElementById('apacheOut').textContent = apache;
+    }
+
+    function parseList(text){
+      return text.split(/[\n,]+/).map(s=>s.trim()).filter(Boolean);
+    }
+
+    function copyText(id){
+      const text = document.getElementById(id).textContent;
+      navigator.clipboard.writeText(text);
+    }
+
+    function resetAll(){
+      document.getElementById('origins').value='';
+      document.getElementById('methods').value='GET,POST,PUT,PATCH,DELETE,OPTIONS';
+      document.getElementById('headers').value='Content-Type,Authorization';
+      document.getElementById('maxage').value='86400';
+      document.getElementById('vary').value='Origin';
+      document.getElementById('cred').checked=false;
+      document.getElementById('preflight').checked=true;
+      build();
+    }
+
+    function toggleTheme(){
+      const t = document.documentElement.getAttribute('data-theme')==='dark' ? '' : 'dark';
+      document.documentElement.setAttribute('data-theme',t);
+      localStorage.setItem('theme',t);
+    }
+    if (localStorage.getItem('theme')==='dark') document.documentElement.setAttribute('data-theme','dark');
+    build();
+  </script>
+</body>
+</html>

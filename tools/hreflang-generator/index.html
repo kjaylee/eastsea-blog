@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hreflang 태그 생성기 | Hreflang Generator</title>
+  <meta name="description" content="다국어/다지역 웹사이트를 위한 hreflang 태그를 생성합니다. x-default 포함, CSV/HTML 출력 지원.">
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    :root{--bg:#fff;--bg2:#f6f7fb;--text:#1f2937;--muted:#6b7280;--card:#fff;--border:#e5e7eb;--accent:#6366f1;--ok:#10b981;--warn:#f59e0b;--err:#ef4444}
+    [data-theme="dark"]{--bg:#111827;--bg2:#0f172a;--text:#f3f4f6;--muted:#9ca3af;--card:#1f2937;--border:#374151;--accent:#818cf8}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Noto Sans KR',sans-serif;background:var(--bg2);color:var(--text);padding:20px;min-height:100vh}
+    .container{max-width:920px;margin:0 auto}
+    h1{text-align:center;font-size:1.9rem;background:linear-gradient(135deg,#6366f1,#22c55e);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:6px}
+    .sub{text-align:center;color:var(--muted);margin-bottom:24px;font-size:.95rem}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:16px}
+    label{display:block;font-size:.82rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:6px}
+    input[type="text"],select{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--bg);color:var(--text);font-size:.9rem}
+    .row{display:grid;grid-template-columns:1.2fr 1.2fr .2fr;gap:10px;align-items:center}
+    .btn{padding:9px 14px;border:none;border-radius:8px;cursor:pointer;font-weight:700;font-size:.85rem}
+    .btn.primary{background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff}
+    .btn.gray{background:var(--bg2);color:var(--text);border:1px solid var(--border)}
+    .btn.red{background:#ef4444;color:#fff}
+    .output{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px;font-family:ui-monospace,Menlo,monospace;font-size:.88rem;white-space:pre-wrap;line-height:1.55;min-height:120px}
+    table{width:100%;border-collapse:collapse;font-size:.85rem}
+    th{background:var(--bg2);padding:10px 12px;text-align:left;font-weight:700;font-size:.78rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);border-bottom:2px solid var(--border)}
+    td{padding:8px 12px;border-bottom:1px solid var(--border)}
+    .note{color:var(--muted);font-size:.82rem;margin-top:8px}
+    .top-btn{position:fixed;top:14px;width:40px;height:40px;border:1px solid var(--border);border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--card);text-decoration:none;font-size:1.1rem}
+    .home{left:14px}.theme{right:14px;cursor:pointer;border:1px solid var(--border)}
+    @media(max-width:760px){.row{grid-template-columns:1fr 1fr 44px}}
+  </style>
+  <script src="/assets/analytics.js"></script>
+</head>
+<body>
+  <a class="top-btn home" href="/">🏠</a>
+  <button class="top-btn theme" onclick="toggleTheme()">🌓</button>
+  <div class="container">
+    <h1>🌐 hreflang 태그 생성기</h1>
+    <p class="sub">다국어/다지역 사이트용 hreflang link 태그를 빠르게 생성합니다.</p>
+
+    <div class="card">
+      <label>페이지 기본 URL (canonical)</label>
+      <input type="text" id="baseUrl" placeholder="https://example.com/page" oninput="build()">
+      <div class="note">각 언어 URL은 이 기본 URL과 다를 수 있습니다.</div>
+    </div>
+
+    <div class="card">
+      <label>언어/지역 매핑</label>
+      <div id="rows"></div>
+      <div style="margin-top:10px">
+        <button class="btn primary" onclick="addRow()">+ 언어 추가</button>
+        <button class="btn gray" onclick="loadSample()">샘플 불러오기</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <label>옵션</label>
+      <div class="row" style="grid-template-columns:1fr 1fr">
+        <div>
+          <label>x-default URL</label>
+          <input type="text" id="xDefault" placeholder="https://example.com/" oninput="build()">
+        </div>
+        <div>
+          <label>출력 방식</label>
+          <select id="outputType" onchange="build()">
+            <option value="html">HTML &lt;link&gt;</option>
+            <option value="sitemap">Sitemap XML</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <label>생성된 hreflang 태그</label>
+      <div class="output" id="output"></div>
+      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn gray" onclick="copyText()">복사</button>
+        <button class="btn gray" onclick="downloadCSV()">CSV 다운로드</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <label>미리보기 테이블</label>
+      <table>
+        <thead><tr><th>hreflang</th><th>URL</th></tr></thead>
+        <tbody id="previewBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    const SAMPLE = [
+      {lang:'en', region:'US', url:'https://example.com/en-us/page'},
+      {lang:'en', region:'GB', url:'https://example.com/en-gb/page'},
+      {lang:'ko', region:'KR', url:'https://example.com/ko-kr/page'},
+      {lang:'ja', region:'JP', url:'https://example.com/ja-jp/page'}
+    ];
+
+    function addRow(lang='', region='', url=''){
+      const row = document.createElement('div');
+      row.className='row';
+      row.innerHTML = `
+        <input type="text" placeholder="lang (예: en)" value="${lang}" oninput="build()">
+        <input type="text" placeholder="URL" value="${url}" oninput="build()">
+        <button class="btn red" onclick="this.parentElement.remove(); build();">✕</button>
+      `;
+      row.dataset.region = region;
+      // inject region via placeholder if provided
+      if (region) row.querySelectorAll('input')[0].value = lang+'-'+region;
+      document.getElementById('rows').appendChild(row);
+      build();
+    }
+
+    function getRows(){
+      const list = [];
+      document.querySelectorAll('#rows .row').forEach(r => {
+        const langField = r.querySelectorAll('input')[0].value.trim();
+        const urlField = r.querySelectorAll('input')[1].value.trim();
+        if (!langField || !urlField) return;
+        const code = langField.replace('_','-').toLowerCase();
+        list.push({code, url:urlField});
+      });
+      return list;
+    }
+
+    function build(){
+      const rows = getRows();
+      const outputType = document.getElementById('outputType').value;
+      const xDef = document.getElementById('xDefault').value.trim();
+
+      let html = '';
+      if (outputType === 'html') {
+        html = rows.map(r => `<link rel="alternate" hreflang="${r.code}" href="${r.url}" />`).join('\n');
+        if (xDef) html += `\n<link rel="alternate" hreflang="x-default" href="${xDef}" />`;
+      } else {
+        html = rows.map(r => `  <xhtml:link rel="alternate" hreflang="${r.code}" href="${r.url}" />`).join('\n');
+        if (xDef) html += `\n  <xhtml:link rel="alternate" hreflang="x-default" href="${xDef}" />`;
+      }
+
+      document.getElementById('output').textContent = html || '입력된 데이터가 없습니다.';
+      document.getElementById('previewBody').innerHTML = rows.map(r => `<tr><td>${r.code}</td><td>${r.url}</td></tr>`).join('') + (xDef ? `<tr><td>x-default</td><td>${xDef}</td></tr>`:'');
+    }
+
+    function loadSample(){
+      document.getElementById('rows').innerHTML='';
+      SAMPLE.forEach(s => addRow(s.lang+'-'+s.region, '', s.url));
+      document.getElementById('xDefault').value = 'https://example.com/page';
+      document.getElementById('baseUrl').value = 'https://example.com/page';
+      build();
+    }
+
+    function copyText(){
+      navigator.clipboard.writeText(document.getElementById('output').textContent);
+    }
+
+    function downloadCSV(){
+      const rows = getRows();
+      const xDef = document.getElementById('xDefault').value.trim();
+      const data = [['hreflang','url'],...rows.map(r=>[r.code,r.url])];
+      if (xDef) data.push(['x-default',xDef]);
+      const csv = data.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
+      const blob = new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'hreflang.csv';
+      a.click();
+    }
+
+    function toggleTheme(){
+      const t = document.documentElement.getAttribute('data-theme')==='dark' ? '' : 'dark';
+      document.documentElement.setAttribute('data-theme',t);
+      localStorage.setItem('theme',t);
+    }
+    if (localStorage.getItem('theme')==='dark') document.documentElement.setAttribute('data-theme','dark');
+
+    // init
+    addRow('en-US','', '');
+    addRow('ko-KR','', '');
+  </script>
+</body>
+</html>

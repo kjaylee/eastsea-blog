@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conventional Commit Builder | 커밋 메시지 생성기</title>
+    <meta name="description" content="Conventional Commits 형식에 맞는 Git 커밋 메시지를 인터랙티브하게 작성하세요. CHANGELOG 미리보기 포함.">
+    <meta name="keywords" content="conventional commits, git commit message, commitlint, semver, changelog generator, git commit builder">
+    <meta property="og:title" content="Conventional Commit Builder">
+    <meta property="og:description" content="Conventional Commits 형식의 Git 커밋 메시지를 인터랙티브하게 작성합니다.">
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        :root{--bg:#fff;--bg2:#f8f9fa;--text:#212529;--text2:#6c757d;--accent:#0ea5e9;--border:#dee2e6;--shadow:rgba(0,0,0,.08);--card:#fff;--code-bg:#0f172a;--code-text:#e2e8f0}
+        [data-theme="dark"]{--bg:#0a0f1e;--bg2:#111827;--text:#e5e7eb;--text2:#9ca3af;--border:#1f2937;--shadow:rgba(0,0,0,.5);--card:#111827;--code-bg:#030712;--code-text:#e2e8f0}
+        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Noto Sans KR',sans-serif;background:var(--bg2);color:var(--text);padding:20px;min-height:100vh;transition:all .3s}
+        .container{max-width:1050px;margin:0 auto}
+        header{text-align:center;margin-bottom:28px}
+        h1{font-size:1.9rem;background:linear-gradient(135deg,#0ea5e9,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:8px}
+        .subtitle{color:var(--text2);font-size:.95rem}
+        .theme-toggle{position:fixed;top:15px;right:15px;background:var(--card);border:1px solid var(--border);border-radius:50%;width:40px;height:40px;cursor:pointer;font-size:1.2rem;display:flex;align-items:center;justify-content:center;z-index:10;transition:all .2s}
+        .home-btn{position:fixed;top:15px;left:15px;text-decoration:none;background:var(--card);border:1px solid var(--border);border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;z-index:10;transition:all .2s}
+        .home-btn:hover,.theme-toggle:hover{transform:scale(1.1)}
+        .grid{display:grid;grid-template-columns:400px 1fr;gap:20px}
+        .panel{background:var(--card);border-radius:12px;padding:20px;box-shadow:0 2px 10px var(--shadow);margin-bottom:16px}
+        .panel h2{font-size:1rem;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+        .field{margin-bottom:14px}
+        label{display:block;font-size:.8rem;font-weight:700;margin-bottom:5px;color:var(--text2);text-transform:uppercase;letter-spacing:.6px}
+        input[type=text],select,textarea{width:100%;padding:9px 12px;border:2px solid var(--border);border-radius:8px;font-size:.9rem;background:var(--bg);color:var(--text);transition:border .2s;font-family:inherit}
+        input[type=text]:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
+        .type-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:4px}
+        .type-btn{padding:10px 8px;border:2px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);cursor:pointer;font-size:.82rem;font-weight:600;transition:all .2s;display:flex;flex-direction:column;align-items:center;gap:3px}
+        .type-btn:hover{border-color:var(--accent)}
+        .type-btn.active{border-color:var(--accent);background:rgba(14,165,233,.1);color:var(--accent)}
+        .type-emoji{font-size:1.3rem}
+        .type-name{font-size:.78rem}
+        .type-desc{font-size:.68rem;color:var(--text2);font-weight:normal}
+        .scope-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+        .chip{padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:var(--bg);font-size:.78rem;cursor:pointer;transition:all .2s}
+        .chip:hover,.chip.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+        .breaking-toggle{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;border:2px solid var(--border);cursor:pointer;transition:all .2s}
+        .breaking-toggle:hover{border-color:#ef4444}
+        .breaking-toggle.on{border-color:#ef4444;background:rgba(239,68,68,.08)}
+        .toggle-slider{width:40px;height:22px;border-radius:11px;background:var(--border);position:relative;transition:background .2s}
+        .toggle-slider::after{content:'';position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .2s}
+        .breaking-toggle.on .toggle-slider{background:#ef4444}
+        .breaking-toggle.on .toggle-slider::after{transform:translateX(18px)}
+        .breaking-label{font-size:.9rem;font-weight:600}
+        .commit-preview{font-family:'SF Mono',Monaco,Menlo,Consolas,monospace;font-size:.88rem;line-height:1.7;padding:16px;border-radius:10px;background:var(--code-bg);color:var(--code-text);white-space:pre-wrap;word-break:break-all;min-height:80px}
+        .commit-line{margin:0}
+        .c-type{color:#38bdf8}
+        .c-scope{color:#a78bfa}
+        .c-breaking-bang{color:#f87171}
+        .c-desc{color:#e2e8f0}
+        .c-body{color:#94a3b8}
+        .c-footer{color:#fbbf24}
+        .validation{padding:10px 14px;border-radius:8px;font-size:.82rem;margin-top:12px;display:flex;align-items:flex-start;gap:8px}
+        .validation.ok{background:rgba(16,185,129,.1);color:#10b981;border:1px solid rgba(16,185,129,.3)}
+        .validation.err{background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.3)}
+        .validation.warn{background:rgba(245,158,11,.1);color:#d97706;border:1px solid rgba(245,158,11,.3)}
+        .btn-row{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+        .btn{padding:9px 18px;border:none;border-radius:8px;cursor:pointer;font-size:.88rem;font-weight:600;transition:all .2s;display:flex;align-items:center;gap:6px}
+        .btn-primary{background:linear-gradient(135deg,#0ea5e9,#8b5cf6);color:#fff}
+        .btn-primary:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(14,165,233,.3)}
+        .btn-secondary{background:var(--bg2);color:var(--text);border:1px solid var(--border)}
+        .btn-secondary:hover{background:var(--border)}
+        .semver-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:.78rem;font-weight:700}
+        .badge-major{background:#fef2f2;color:#dc2626}
+        .badge-minor{background:#ecfdf5;color:#059669}
+        .badge-patch{background:#eff6ff;color:#2563eb}
+        .badge-none{background:var(--bg2);color:var(--text2)}
+        [data-theme="dark"] .badge-major{background:#450a0a;color:#fca5a5}
+        [data-theme="dark"] .badge-minor{background:#052e16;color:#6ee7b7}
+        [data-theme="dark"] .badge-patch{background:#0c1a4e;color:#93c5fd}
+        .changelog-section{margin-bottom:14px}
+        .changelog-section h3{font-size:.85rem;font-weight:700;margin-bottom:8px;color:var(--text2)}
+        .changelog-item{padding:8px 12px;background:var(--bg2);border-radius:6px;margin-bottom:6px;font-size:.85rem;border-left:3px solid var(--accent)}
+        .char-count{font-size:.75rem;color:var(--text2);text-align:right;margin-top:3px}
+        .char-count.warn{color:#d97706}
+        .char-count.err{color:#ef4444}
+        .toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:10px 24px;border-radius:8px;font-size:.88rem;opacity:0;transition:opacity .3s;z-index:100;pointer-events:none}
+        .toast.show{opacity:1}
+        @media(max-width:800px){.grid{grid-template-columns:1fr}h1{font-size:1.4rem}}
+    </style>
+    <script src="/assets/analytics.js"></script>
+</head>
+<body>
+<a href="/" class="home-btn" title="도구 목록">🏠</a>
+<button class="theme-toggle" onclick="toggleTheme()" title="테마">🌓</button>
+<div class="container">
+    <header>
+        <h1>📝 Conventional Commit Builder</h1>
+        <p class="subtitle">커밋 타입, 스코프, 설명을 입력하면 표준 커밋 메시지를 자동 생성합니다</p>
+    </header>
+
+    <div class="grid">
+        <div>
+            <div class="panel">
+                <h2>🏷️ 커밋 타입 선택</h2>
+                <div class="type-grid" id="typeGrid"></div>
+            </div>
+
+            <div class="panel">
+                <h2>🔧 커밋 세부 설정</h2>
+                <div class="field">
+                    <label>Scope (선택)</label>
+                    <input type="text" id="scope" placeholder="예: auth, ui, api, core" maxlength="30" oninput="updateScopeChips();generate()">
+                    <div class="scope-chips" id="scopeChips"></div>
+                </div>
+                <div class="field">
+                    <label>Description <span style="color:#ef4444">*</span></label>
+                    <input type="text" id="description" placeholder="변경 사항을 간결하게 설명" maxlength="100" oninput="generate()">
+                    <div class="char-count" id="descCount">0 / 72</div>
+                </div>
+                <div class="field">
+                    <label>Body (선택 — 상세 설명)</label>
+                    <textarea id="body" rows="3" placeholder="변경 이유, 영향 범위 등 추가 설명을 입력하세요" oninput="generate()"></textarea>
+                </div>
+                <div class="field">
+                    <label>Footer (선택 — 이슈 참조)</label>
+                    <input type="text" id="footer" placeholder="예: Closes #123, Refs #456" oninput="generate()">
+                </div>
+                <div class="field">
+                    <label>Breaking Change</label>
+                    <div class="breaking-toggle" id="breakingToggle" onclick="toggleBreaking()">
+                        <div class="toggle-slider" id="toggleSlider"></div>
+                        <span class="breaking-label" id="breakingLabel">비호환 변경 없음</span>
+                    </div>
+                </div>
+                <div class="field" id="breakingDescField" style="display:none">
+                    <label>Breaking Change 설명</label>
+                    <input type="text" id="breakingDesc" placeholder="비호환 변경 사항을 설명하세요" oninput="generate()">
+                </div>
+            </div>
+        </div>
+
+        <div>
+            <div class="panel">
+                <h2>👁️ 커밋 미리보기</h2>
+                <div class="commit-preview" id="commitPreview"><span style="color:#475569">← 왼쪽에서 입력을 시작하세요</span></div>
+                <div id="validation"></div>
+                <div class="btn-row">
+                    <button class="btn btn-primary" onclick="copyCommit()">📋 복사</button>
+                    <button class="btn btn-secondary" onclick="resetForm()">🔄 초기화</button>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h2>📊 SemVer 영향</h2>
+                <div id="semverInfo" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+                    <span class="semver-badge badge-none" id="semverBadge">—</span>
+                    <span id="semverExplain" style="font-size:.85rem;color:var(--text2)">커밋 타입을 선택하세요</span>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h2>📋 CHANGELOG 프리뷰</h2>
+                <div id="changelogPreview">
+                    <div style="color:var(--text2);font-size:.85rem">커밋 내용이 여기에 CHANGELOG 형식으로 표시됩니다</div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h2>📚 Conventional Commits 규칙</h2>
+                <div style="font-size:.82rem;line-height:1.8;color:var(--text2)">
+                    <div style="background:var(--code-bg);color:var(--code-text);padding:10px;border-radius:8px;font-family:monospace;margin-bottom:10px">&lt;type&gt;[scope]: &lt;description&gt;<br>[body]<br>[footer]</div>
+                    <ul style="padding-left:18px">
+                        <li><strong style="color:var(--text)">fix</strong>: PATCH 버전 자동 증가</li>
+                        <li><strong style="color:var(--text)">feat</strong>: MINOR 버전 자동 증가</li>
+                        <li><strong style="color:var(--text)">BREAKING CHANGE</strong>: MAJOR 버전 증가</li>
+                        <li>scope는 소괄호로 감싸기 <code style="color:#38bdf8">feat(auth):</code></li>
+                        <li>description은 소문자로 시작, 마침표 없이</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const TYPES = [
+    { name:'feat', emoji:'✨', desc:'새 기능', semver:'minor', color:'#0ea5e9' },
+    { name:'fix', emoji:'🐛', desc:'버그 수정', semver:'patch', color:'#10b981' },
+    { name:'docs', emoji:'📚', desc:'문서 변경', semver:'none', color:'#a78bfa' },
+    { name:'style', emoji:'💄', desc:'포맷팅', semver:'none', color:'#f472b6' },
+    { name:'refactor', emoji:'♻️', desc:'리팩토링', semver:'none', color:'#fb923c' },
+    { name:'test', emoji:'🧪', desc:'테스트 추가', semver:'none', color:'#34d399' },
+    { name:'chore', emoji:'🔧', desc:'빌드/툴링', semver:'none', color:'#64748b' },
+    { name:'perf', emoji:'⚡', desc:'성능 개선', semver:'patch', color:'#fbbf24' },
+    { name:'ci', emoji:'🤖', desc:'CI 설정', semver:'none', color:'#6366f1' },
+    { name:'build', emoji:'🏗️', desc:'빌드 시스템', semver:'none', color:'#94a3b8' },
+    { name:'revert', emoji:'⏪', desc:'커밋 되돌리기', semver:'patch', color:'#ef4444' },
+    { name:'release', emoji:'🚀', desc:'릴리스', semver:'none', color:'#f59e0b' },
+];
+
+const SCOPE_SUGGESTIONS = ['api', 'ui', 'auth', 'db', 'core', 'config', 'deps', 'docs'];
+
+let selectedType = null;
+let isBreaking = false;
+
+function initTypeGrid() {
+    const grid = document.getElementById('typeGrid');
+    grid.innerHTML = TYPES.map(t => `
+        <button class="type-btn" id="type-${t.name}" onclick="selectType('${t.name}')">
+            <span class="type-emoji">${t.emoji}</span>
+            <span class="type-name">${t.name}</span>
+            <span class="type-desc">${t.desc}</span>
+        </button>
+    `).join('');
+}
+
+function selectType(name) {
+    selectedType = name;
+    document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(`type-${name}`).classList.add('active');
+    generate();
+}
+
+function updateScopeChips() {
+    const val = document.getElementById('scope').value.toLowerCase();
+    const chips = document.getElementById('scopeChips');
+    chips.innerHTML = SCOPE_SUGGESTIONS
+        .filter(s => !val || s.startsWith(val))
+        .map(s => `<span class="chip${s===val?' active':''}" onclick="setScope('${s}')">${s}</span>`)
+        .join('');
+}
+
+function setScope(s) {
+    document.getElementById('scope').value = s;
+    updateScopeChips();
+    generate();
+}
+
+function toggleBreaking() {
+    isBreaking = !isBreaking;
+    const tog = document.getElementById('breakingToggle');
+    const lbl = document.getElementById('breakingLabel');
+    const field = document.getElementById('breakingDescField');
+    tog.classList.toggle('on', isBreaking);
+    lbl.textContent = isBreaking ? '⚠️ 비호환 변경 (BREAKING CHANGE)' : '비호환 변경 없음';
+    field.style.display = isBreaking ? 'block' : 'none';
+    generate();
+}
+
+function generate() {
+    const type = selectedType;
+    const scope = document.getElementById('scope').value.trim();
+    const desc = document.getElementById('description').value.trim();
+    const body = document.getElementById('body').value.trim();
+    const footer = document.getElementById('footer').value.trim();
+    const breakingDesc = document.getElementById('breakingDesc').value.trim();
+
+    // Char counter
+    const descEl = document.getElementById('descCount');
+    const descLen = desc.length;
+    descEl.textContent = `${descLen} / 72`;
+    descEl.className = 'char-count' + (descLen > 72 ? ' err' : descLen > 50 ? ' warn' : '');
+
+    // Build commit
+    const preview = document.getElementById('commitPreview');
+    if (!type && !desc) {
+        preview.innerHTML = '<span style="color:#475569">← 왼쪽에서 입력을 시작하세요</span>';
+        updateSemver(null);
+        updateChangelog(null);
+        return;
+    }
+
+    let line1 = '';
+    let html1 = '';
+    if (type) {
+        line1 += type;
+        html1 += `<span class="c-type">${type}</span>`;
+        if (scope) {
+            line1 += `(${scope})`;
+            html1 += `(<span class="c-scope">${escHtml(scope)}</span>)`;
+        }
+        if (isBreaking) {
+            line1 += '!';
+            html1 += '<span class="c-breaking-bang">!</span>';
+        }
+        line1 += ': ';
+        html1 += ': ';
+    }
+    line1 += desc;
+    html1 += `<span class="c-desc">${escHtml(desc)}</span>`;
+
+    let fullText = line1;
+    let fullHtml = `<p class="commit-line">${html1}</p>`;
+
+    if (body) {
+        fullText += '\n\n' + body;
+        fullHtml += `\n<p class="commit-line"> </p><p class="commit-line c-body">${escHtml(body).replace(/\n/g,'<br>')}</p>`;
+    }
+
+    const footerParts = [];
+    if (isBreaking && breakingDesc) {
+        footerParts.push(`BREAKING CHANGE: ${breakingDesc}`);
+    }
+    if (footer) footerParts.push(footer);
+    if (footerParts.length) {
+        const footerStr = footerParts.join('\n');
+        fullText += '\n\n' + footerStr;
+        fullHtml += `\n<p class="commit-line"> </p><p class="commit-line c-footer">${escHtml(footerStr).replace(/\n/g,'<br>')}</p>`;
+    }
+
+    preview.innerHTML = fullHtml;
+
+    // Validation
+    validateCommit(type, desc, isBreaking);
+    updateSemver(type);
+    updateChangelog({ type, scope, desc, body, footer, isBreaking, breakingDesc });
+}
+
+function validateCommit(type, desc, breaking) {
+    const valEl = document.getElementById('validation');
+    const errors = [];
+    const warns = [];
+
+    if (!type) errors.push('커밋 타입을 선택하세요');
+    if (!desc) errors.push('Description은 필수입니다');
+    if (desc && desc[0] === desc[0].toUpperCase() && desc[0] !== desc[0].toLowerCase()) {
+        warns.push('Description은 소문자로 시작하는 것을 권장합니다');
+    }
+    if (desc && desc.endsWith('.')) warns.push('Description 끝에 마침표를 사용하지 않는 것이 관례입니다');
+    if (desc.length > 72) errors.push('Description이 72자를 초과합니다 (현재: ' + desc.length + '자)');
+
+    if (errors.length) {
+        valEl.innerHTML = `<div class="validation err">❌ ${errors.join(' · ')}</div>`;
+    } else if (warns.length) {
+        valEl.innerHTML = `<div class="validation warn">⚠️ ${warns.join(' · ')}</div>`;
+    } else if (type && desc) {
+        valEl.innerHTML = `<div class="validation ok">✅ 유효한 Conventional Commit 형식입니다</div>`;
+    } else {
+        valEl.innerHTML = '';
+    }
+}
+
+function updateSemver(type) {
+    const badge = document.getElementById('semverBadge');
+    const explain = document.getElementById('semverExplain');
+    if (isBreaking) {
+        badge.className = 'semver-badge badge-major';
+        badge.textContent = '🔴 MAJOR';
+        explain.textContent = '비호환 변경 — 주 버전(MAJOR) 증가: 1.0.0 → 2.0.0';
+        return;
+    }
+    const t = TYPES.find(x => x.name === type);
+    if (!t) {
+        badge.className = 'semver-badge badge-none';
+        badge.textContent = '—';
+        explain.textContent = '커밋 타입을 선택하세요';
+        return;
+    }
+    if (t.semver === 'minor') {
+        badge.className = 'semver-badge badge-minor';
+        badge.textContent = '🟢 MINOR';
+        explain.textContent = '새 기능 추가 — 부 버전(MINOR) 증가: 1.0.0 → 1.1.0';
+    } else if (t.semver === 'patch') {
+        badge.className = 'semver-badge badge-patch';
+        badge.textContent = '🔵 PATCH';
+        explain.textContent = '버그 수정/개선 — 패치 버전(PATCH) 증가: 1.0.0 → 1.0.1';
+    } else {
+        badge.className = 'semver-badge badge-none';
+        badge.textContent = '⚪ No Change';
+        explain.textContent = '이 커밋은 버전 번호에 영향을 주지 않습니다';
+    }
+}
+
+function updateChangelog(commit) {
+    const el = document.getElementById('changelogPreview');
+    if (!commit || (!commit.type && !commit.desc)) {
+        el.innerHTML = '<div style="color:var(--text2);font-size:.85rem">커밋 내용이 CHANGELOG 형식으로 표시됩니다</div>';
+        return;
+    }
+    const today = new Date().toISOString().split('T')[0];
+    const typeMap = {
+        feat: '✨ Features', fix: '🐛 Bug Fixes', docs: '📚 Documentation',
+        style: '💄 Styles', refactor: '♻️ Code Refactoring', test: '🧪 Tests',
+        chore: '🔧 Chores', perf: '⚡ Performance', ci: '🤖 CI', build: '🏗️ Build',
+        revert: '⏪ Reverts', release: '🚀 Releases'
+    };
+    const section = typeMap[commit.type] || commit.type;
+    const scopeStr = commit.scope ? ` **${commit.scope}**:` : '';
+    const breakingStr = commit.isBreaking ? '\n  > ⚠️ **BREAKING CHANGE**: ' + (commit.breakingDesc || '비호환 변경') : '';
+    const bodyStr = commit.body ? `\n  ${commit.body}` : '';
+
+    el.innerHTML = `
+        <div style="font-family:monospace;font-size:.82rem;line-height:1.8;padding:12px;background:var(--code-bg);color:var(--code-text);border-radius:8px">
+<span style="color:#fbbf24">## [Unreleased] - ${today}</span>
+
+<span style="color:#34d399">### ${escHtml(section)}</span>
+
+<span style="color:#e2e8f0">- [<span style="color:#38bdf8">commit</span>]${escHtml(scopeStr)} ${escHtml(commit.desc)}</span>${commit.isBreaking ? `\n<span style="color:#f87171">  > ⚠️ BREAKING CHANGE: ${escHtml(commit.breakingDesc||'비호환 변경')}</span>` : ''}${commit.body ? `\n<span style="color:#94a3b8">  ${escHtml(commit.body)}</span>` : ''}
+        </div>
+    `;
+}
+
+function copyCommit() {
+    const type = selectedType;
+    const scope = document.getElementById('scope').value.trim();
+    const desc = document.getElementById('description').value.trim();
+    const body = document.getElementById('body').value.trim();
+    const footer = document.getElementById('footer').value.trim();
+    const breakingDesc = document.getElementById('breakingDesc').value.trim();
+
+    if (!type || !desc) { showToast('⚠️ 타입과 설명을 먼저 입력하세요'); return; }
+
+    let text = type;
+    if (scope) text += `(${scope})`;
+    if (isBreaking) text += '!';
+    text += ': ' + desc;
+    if (body) text += '\n\n' + body;
+    const footerParts = [];
+    if (isBreaking && breakingDesc) footerParts.push(`BREAKING CHANGE: ${breakingDesc}`);
+    if (footer) footerParts.push(footer);
+    if (footerParts.length) text += '\n\n' + footerParts.join('\n');
+
+    navigator.clipboard.writeText(text).then(() => showToast('📋 커밋 메시지 복사됨!'));
+}
+
+function resetForm() {
+    selectedType = null;
+    isBreaking = false;
+    document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'));
+    ['scope','description','body','footer','breakingDesc'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('breakingToggle').classList.remove('on');
+    document.getElementById('breakingLabel').textContent = '비호환 변경 없음';
+    document.getElementById('breakingDescField').style.display = 'none';
+    generate();
+    updateScopeChips();
+}
+
+function escHtml(s) {
+    return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+function toggleTheme() {
+    const d = document.documentElement;
+    d.dataset.theme = d.dataset.theme === 'dark' ? '' : 'dark';
+    localStorage.setItem('theme', d.dataset.theme);
+}
+
+(function() {
+    if (localStorage.getItem('theme') === 'dark') document.documentElement.dataset.theme = 'dark';
+    initTypeGrid();
+    updateScopeChips();
+    generate();
+})();
+</script>
+</body>
+</html>

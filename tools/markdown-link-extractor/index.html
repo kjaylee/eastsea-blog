@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>마크다운 링크 추출기 | Markdown Link Extractor</title>
+  <meta name="description" content="마크다운 텍스트에서 모든 링크를 추출하고 분석합니다. 인라인 링크, 참조 링크, 이미지, 자동 링크를 구분하여 CSV로 내보낼 수 있습니다.">
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    :root{--bg:#fff;--bg2:#f6f7fb;--text:#1f2937;--muted:#6b7280;--card:#fff;--border:#e5e7eb;--accent:#6366f1;--ok:#10b981;--err:#ef4444}
+    [data-theme="dark"]{--bg:#111827;--bg2:#0f172a;--text:#f3f4f6;--muted:#9ca3af;--card:#1f2937;--border:#374151;--accent:#818cf8}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Noto Sans KR',sans-serif;background:var(--bg2);color:var(--text);padding:20px;min-height:100vh}
+    .container{max-width:900px;margin:0 auto}
+    h1{text-align:center;font-size:1.9rem;background:linear-gradient(135deg,#8b5cf6,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:6px}
+    .sub{text-align:center;color:var(--muted);margin-bottom:24px;font-size:.95rem}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:16px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    label{display:block;font-size:.82rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:6px}
+    textarea{width:100%;padding:12px;border:1px solid var(--border);border-radius:10px;background:var(--bg);color:var(--text);font-family:ui-monospace,Menlo,monospace;font-size:.88rem;resize:vertical;min-height:260px;line-height:1.6}
+    textarea:focus{outline:none;border-color:var(--accent)}
+    .btn-row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+    .btn{padding:9px 16px;border:none;border-radius:8px;cursor:pointer;font-weight:700;font-size:.88rem}
+    .btn.primary{background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff}
+    .btn.gray{background:var(--bg2);color:var(--text);border:1px solid var(--border)}
+    .btn.green{background:#10b981;color:#fff}
+    .stats{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+    .stat{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px 14px;text-align:center;min-width:90px}
+    .stat-num{font-size:1.4rem;font-weight:800;color:var(--accent)}
+    .stat-label{font-size:.72rem;color:var(--muted);margin-top:2px}
+    table{width:100%;border-collapse:collapse;font-size:.85rem}
+    th{background:var(--bg2);padding:10px 12px;text-align:left;font-weight:700;font-size:.78rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);border-bottom:2px solid var(--border)}
+    td{padding:8px 12px;border-bottom:1px solid var(--border);vertical-align:top;word-break:break-all}
+    tr:last-child td{border-bottom:none}
+    tr:hover td{background:var(--bg2)}
+    .type-badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:.72rem;font-weight:700}
+    .type-inline{background:#dbeafe;color:#1e40af}
+    .type-ref{background:#fef3c7;color:#92400e}
+    .type-image{background:#d1fae5;color:#065f46}
+    .type-auto{background:#ede9fe;color:#4c1d95}
+    [data-theme="dark"] .type-inline{background:#1e3a8a;color:#93c5fd}
+    [data-theme="dark"] .type-ref{background:#78350f;color:#fcd34d}
+    .type-html{background:#fee2e2;color:#991b1b}
+    [data-theme="dark"] .type-html{background:#7f1d1d;color:#fca5a5}
+    [data-theme="dark"] .type-image{background:#064e3b;color:#6ee7b7}
+    [data-theme="dark"] .type-auto{background:#2e1065;color:#c4b5fd}
+    .empty{text-align:center;padding:40px;color:var(--muted)}
+    .filter-row{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center}
+    .filter-btn{padding:5px 12px;border:1px solid var(--border);border-radius:20px;cursor:pointer;font-size:.8rem;background:var(--bg);color:var(--text)}
+    .filter-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+    .url-link{color:var(--accent);text-decoration:none;max-width:300px;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom}
+    .url-link:hover{text-decoration:underline}
+    .top-btn{position:fixed;top:14px;width:40px;height:40px;border:1px solid var(--border);border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--card);text-decoration:none;font-size:1.1rem}
+    .home{left:14px}.theme{right:14px;cursor:pointer;border:1px solid var(--border)}
+    .sample{font-size:.78rem;color:var(--accent);cursor:pointer;text-decoration:underline;margin-left:8px}
+    @media(max-width:700px){.grid{grid-template-columns:1fr}}
+  </style>
+  <script src="/assets/analytics.js"></script>
+</head>
+<body>
+  <a class="top-btn home" href="/">🏠</a>
+  <button class="top-btn theme" onclick="toggleTheme()">🌓</button>
+  <div class="container">
+    <h1>🔗 마크다운 링크 추출기</h1>
+    <p class="sub">마크다운 텍스트에서 인라인·참조·이미지·자동 링크를 추출하고 CSV로 내보냅니다</p>
+
+    <div class="card">
+      <label>마크다운 입력 <span class="sample" onclick="loadSample()">샘플 불러오기</span></label>
+      <textarea id="mdInput" placeholder="마크다운을 붙여넣으세요..." oninput="extract()"></textarea>
+      <div class="btn-row">
+        <button class="btn primary" onclick="extract()">추출</button>
+        <button class="btn gray" onclick="clearAll()">초기화</button>
+        <button class="btn green" onclick="exportCSV()" id="csvBtn" style="display:none">CSV 다운로드</button>
+      </div>
+    </div>
+
+    <div class="card" id="resultCard" style="display:none">
+      <div class="stats" id="statsDiv"></div>
+      <div class="filter-row" id="filterRow"></div>
+      <div style="overflow-x:auto">
+        <table id="linksTable">
+          <thead><tr>
+            <th>#</th><th>유형</th><th>텍스트</th><th>URL</th><th>제목/설명</th>
+          </tr></thead>
+          <tbody id="linksBody"></tbody>
+        </table>
+      </div>
+      <div class="empty" id="emptyMsg" style="display:none">추출된 링크가 없습니다.</div>
+    </div>
+  </div>
+
+  <script>
+    const SAMPLE = `# 마크다운 링크 예시
+
+## 인라인 링크
+[Google](https://www.google.com)
+[GitHub](https://github.com "깃헙 홈페이지")
+[문서 보기](./docs/guide.md)
+
+## 이미지
+![로고](https://example.com/logo.png "사이트 로고")
+![배너](/assets/banner.jpg)
+
+## 참조 링크
+[OpenAI][1]
+[Anthropic][claude]
+
+[1]: https://openai.com "OpenAI 홈페이지"
+[claude]: https://anthropic.com
+
+## 자동 링크
+<https://www.example.com>
+<user@example.com>
+
+## HTML 링크
+<a href="https://legacy.example.com">레거시 링크</a>
+
+## 일반 텍스트 URL
+Visit https://raw-url.example.com for more info.
+`;
+
+    let allLinks = [];
+    let activeFilter = 'all';
+
+    function loadSample() {
+      document.getElementById('mdInput').value = SAMPLE;
+      extract();
+    }
+
+    function extract() {
+      const md = document.getElementById('mdInput').value;
+      if (!md.trim()) { document.getElementById('resultCard').style.display='none'; return; }
+      allLinks = parseLinks(md);
+      renderResults();
+    }
+
+    function parseLinks(md) {
+      const links = [];
+
+      // 1. Inline images: ![alt](url "title")
+      const imgRx = /!\[([^\]]*)\]\(([^)]+)\)/g;
+      let m;
+      while ((m = imgRx.exec(md)) !== null) {
+        const parts = parseUrlTitle(m[2]);
+        links.push({type:'image', text:m[1], url:parts.url, title:parts.title, pos:m.index});
+      }
+
+      // 2. Inline links: [text](url "title") — skip already matched images
+      const linkRx = /(?<!!)\[([^\]]+)\]\(([^)]+)\)/g;
+      while ((m = linkRx.exec(md)) !== null) {
+        const parts = parseUrlTitle(m[2]);
+        links.push({type:'inline', text:m[1], url:parts.url, title:parts.title, pos:m.index});
+      }
+
+      // 3. Reference-style links: [text][ref] and definitions [ref]: url "title"
+      const defs = {};
+      const defRx = /^\s*\[([^\]]+)\]:\s*(\S+)(?:\s+"([^"]*)")?/gm;
+      while ((m = defRx.exec(md)) !== null) {
+        defs[m[1].toLowerCase()] = {url:m[2], title:m[3]||''};
+      }
+      const refRx = /(?<!!)\[([^\]]+)\]\[([^\]]*)\]/g;
+      while ((m = refRx.exec(md)) !== null) {
+        const key = (m[2]||m[1]).toLowerCase();
+        const def = defs[key];
+        if (def) links.push({type:'ref', text:m[1], url:def.url, title:def.title, pos:m.index});
+      }
+      // Shortcut refs: [text] where text matches a def
+      const shortRx = /(?<!!)\[([^\]]+)\](?!\(|\[)/g;
+      while ((m = shortRx.exec(md)) !== null) {
+        const key = m[1].toLowerCase();
+        const def = defs[key];
+        if (def) links.push({type:'ref', text:m[1], url:def.url, title:def.title+' (단축 참조)', pos:m.index});
+      }
+
+      // 4. Autolinks: <url> or <email>
+      const autoRx = /<(https?:\/\/[^>]+|[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>/g;
+      while ((m = autoRx.exec(md)) !== null) {
+        links.push({type:'auto', text:m[1], url:m[1], title:'', pos:m.index});
+      }
+
+      // 5. HTML anchor tags
+      const htmlRx = /<a\s[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+      while ((m = htmlRx.exec(md)) !== null) {
+        links.push({type:'html', text:m[2].replace(/<[^>]+>/g,'').trim(), url:m[1], title:'', pos:m.index});
+      }
+
+      // 6. Bare URLs (not already caught)
+      const bareRx = /(?<![(\[<"'])https?:\/\/[^\s<>"')]+/g;
+      while ((m = bareRx.exec(md)) !== null) {
+        links.push({type:'bare', text:m[0], url:m[0], title:'', pos:m.index});
+      }
+
+      // Dedupe by url+type+pos
+      const seen = new Set();
+      return links.filter(l => {
+        const k = l.type+'|'+l.url+'|'+l.pos;
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      }).sort((a,b) => a.pos-b.pos);
+    }
+
+    function parseUrlTitle(raw) {
+      raw = raw.trim();
+      const titleM = raw.match(/^(\S+)\s+"([^"]*)"$/) || raw.match(/^(\S+)\s+'([^']*)'$/);
+      if (titleM) return {url:titleM[1], title:titleM[2]};
+      return {url:raw, title:''};
+    }
+
+    function renderResults() {
+      const card = document.getElementById('resultCard');
+      card.style.display = '';
+
+      const types = ['all','inline','image','ref','auto','html','bare'];
+      const typeNames = {all:'전체',inline:'인라인',image:'이미지',ref:'참조',auto:'자동',html:'HTML',bare:'노출 URL'};
+      const counts = {};
+      types.forEach(t => counts[t] = t==='all' ? allLinks.length : allLinks.filter(l=>l.type===t).length);
+
+      // Stats
+      document.getElementById('statsDiv').innerHTML = types.filter(t => counts[t]>0||t==='all').map(t => `
+        <div class="stat">
+          <div class="stat-num">${counts[t]}</div>
+          <div class="stat-label">${typeNames[t]}</div>
+        </div>`).join('');
+
+      // Filter buttons
+      document.getElementById('filterRow').innerHTML = types
+        .filter(t => counts[t]>0||t==='all')
+        .map(t => `<button class="filter-btn${activeFilter===t?' active':''}" onclick="setFilter('${t}')">${typeNames[t]} ${counts[t]}</button>`).join('');
+
+      renderTable();
+      document.getElementById('csvBtn').style.display = allLinks.length ? '' : 'none';
+    }
+
+    function setFilter(f) {
+      activeFilter = f;
+      renderResults();
+    }
+
+    function renderTable() {
+      const filtered = activeFilter==='all' ? allLinks : allLinks.filter(l=>l.type===activeFilter);
+      const tbody = document.getElementById('linksBody');
+      const empty = document.getElementById('emptyMsg');
+      const table = document.getElementById('linksTable');
+
+      if (!filtered.length) {
+        table.style.display='none'; empty.style.display='';
+        return;
+      }
+      table.style.display=''; empty.style.display='none';
+
+      const typeCls = {inline:'type-inline',image:'type-image',ref:'type-ref',auto:'type-auto',html:'type-html',bare:'type-auto'};
+      const typeLabel = {inline:'인라인',image:'이미지',ref:'참조',auto:'자동',html:'HTML 태그',bare:'노출 URL'};
+      tbody.innerHTML = filtered.map((l,i) => `<tr>
+        <td>${i+1}</td>
+        <td><span class="type-badge ${typeCls[l.type]||''}">${typeLabel[l.type]||l.type}</span></td>
+        <td>${escHtml(l.text).slice(0,60)}</td>
+        <td><a class="url-link" href="${escHtml(l.url)}" target="_blank" rel="noopener" title="${escHtml(l.url)}">${escHtml(l.url)}</a></td>
+        <td style="color:var(--muted)">${escHtml(l.title)}</td>
+      </tr>`).join('');
+    }
+
+    function exportCSV() {
+      const header = ['#','유형','텍스트','URL','제목'];
+      const rows = allLinks.map((l,i) => [i+1,l.type,l.text,l.url,l.title].map(v=>'"'+String(v).replace(/"/g,'""')+'"'));
+      const csv = [header,...rows].map(r=>r.join(',')).join('\n');
+      const blob = new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'markdown-links.csv';
+      a.click();
+    }
+
+    function clearAll() {
+      document.getElementById('mdInput').value = '';
+      document.getElementById('resultCard').style.display = 'none';
+      allLinks = [];
+    }
+
+    function escHtml(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function toggleTheme() {
+      const t = document.documentElement.getAttribute('data-theme')==='dark' ? '' : 'dark';
+      document.documentElement.setAttribute('data-theme',t);
+      localStorage.setItem('theme',t);
+    }
+    if (localStorage.getItem('theme')==='dark') document.documentElement.setAttribute('data-theme','dark');
+  </script>
+</body>
+</html>

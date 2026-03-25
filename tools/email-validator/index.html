@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>이메일 유효성 검사기 | Email Validator</title>
+  <meta name="description" content="RFC 5321/5322 표준에 따라 이메일 주소의 유효성을 검사합니다. 형식, 도메인, 특수문자, 길이 등을 상세히 분석합니다.">
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    :root{--bg:#fff;--bg2:#f6f7fb;--text:#1f2937;--muted:#6b7280;--card:#fff;--border:#e5e7eb;--accent:#6366f1;--ok:#10b981;--warn:#f59e0b;--err:#ef4444}
+    [data-theme="dark"]{--bg:#111827;--bg2:#0f172a;--text:#f3f4f6;--muted:#9ca3af;--card:#1f2937;--border:#374151;--accent:#818cf8}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Noto Sans KR',sans-serif;background:var(--bg2);color:var(--text);padding:20px;min-height:100vh}
+    .container{max-width:760px;margin:0 auto}
+    h1{text-align:center;font-size:1.9rem;background:linear-gradient(135deg,#6366f1,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:6px}
+    .sub{text-align:center;color:var(--muted);margin-bottom:24px;font-size:.95rem}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:16px}
+    .input-row{display:flex;gap:10px;margin-bottom:0}
+    input[type="text"]{flex:1;padding:12px 16px;border:2px solid var(--border);border-radius:10px;background:var(--bg);color:var(--text);font-size:1rem;transition:border-color .2s}
+    input[type="text"]:focus{outline:none;border-color:var(--accent)}
+    .btn{padding:12px 20px;border:none;border-radius:10px;cursor:pointer;font-weight:700;font-size:.95rem;white-space:nowrap}
+    .btn.primary{background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff}
+    .result-badge{display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border-radius:50px;font-weight:700;font-size:1.1rem;margin-bottom:16px}
+    .result-badge.ok{background:#d1fae5;color:#065f46}
+    .result-badge.err{background:#fee2e2;color:#991b1b}
+    [data-theme="dark"] .result-badge.ok{background:#064e3b;color:#6ee7b7}
+    [data-theme="dark"] .result-badge.err{background:#7f1d1d;color:#fca5a5}
+    .checks{display:grid;gap:8px}
+    .check-row{display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-radius:10px;font-size:.9rem}
+    .check-row.pass{background:#f0fdf4;border:1px solid #bbf7d0}
+    .check-row.fail{background:#fef2f2;border:1px solid #fecaca}
+    .check-row.warn{background:#fffbeb;border:1px solid #fde68a}
+    [data-theme="dark"] .check-row.pass{background:#052e16;border-color:#14532d}
+    [data-theme="dark"] .check-row.fail{background:#450a0a;border-color:#7f1d1d}
+    [data-theme="dark"] .check-row.warn{background:#451a03;border-color:#78350f}
+    .check-icon{font-size:1.1rem;flex-shrink:0;margin-top:1px}
+    .check-info{flex:1}
+    .check-label{font-weight:600;margin-bottom:2px}
+    .check-desc{color:var(--muted);font-size:.82rem}
+    .parts{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+    .part{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px}
+    .part-label{font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:4px}
+    .part-value{font-family:ui-monospace,monospace;font-size:.95rem;word-break:break-all}
+    .examples{margin-top:12px}
+    .example-grid{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+    .example-btn{padding:5px 12px;border:1px solid var(--border);border-radius:20px;cursor:pointer;font-size:.82rem;background:var(--bg);color:var(--text);transition:background .15s}
+    .example-btn:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+    .section-title{font-size:.85rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:10px}
+    .top-btn{position:fixed;top:14px;width:40px;height:40px;border:1px solid var(--border);border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--card);text-decoration:none;font-size:1.1rem}
+    .home{left:14px}.theme{right:14px;cursor:pointer;border:1px solid var(--border)}
+    .hidden{display:none}
+    @media(max-width:600px){.parts{grid-template-columns:1fr}.input-row{flex-direction:column}}
+  </style>
+  <script src="/assets/analytics.js"></script>
+</head>
+<body>
+  <a class="top-btn home" href="/">🏠</a>
+  <button class="top-btn theme" onclick="toggleTheme()">🌓</button>
+  <div class="container">
+    <h1>✉️ 이메일 유효성 검사기</h1>
+    <p class="sub">RFC 5321/5322 기반 이메일 주소 검증 — 로컬파트, 도메인, 특수문자, 길이 등 상세 분석</p>
+
+    <div class="card">
+      <div class="input-row">
+        <input type="text" id="emailInput" placeholder="example@domain.com" oninput="autoValidate()" onkeydown="if(event.key==='Enter')validate()">
+        <button class="btn primary" onclick="validate()">검사</button>
+      </div>
+    </div>
+
+    <div class="card hidden" id="resultCard">
+      <div id="resultBadge"></div>
+      <div class="section-title">구성 분석</div>
+      <div class="parts" id="partsDiv"></div>
+      <div style="margin-top:16px">
+        <div class="section-title">규칙 검사</div>
+        <div class="checks" id="checksDiv"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">예시 이메일</div>
+      <div class="examples">
+        <div style="font-size:.82rem;color:var(--muted);margin-bottom:4px">✅ 유효</div>
+        <div class="example-grid" id="validExamples"></div>
+      </div>
+      <div class="examples" style="margin-top:12px">
+        <div style="font-size:.82rem;color:var(--muted);margin-bottom:4px">❌ 무효</div>
+        <div class="example-grid" id="invalidExamples"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const VALID_EXAMPLES = [
+      'user@example.com','john.doe@company.org','user+tag@gmail.com',
+      'user123@sub.domain.co.uk','first_last@example.net','"quoted user"@example.com',
+      'user@[192.168.1.1]','very.unusual.email@example.com'
+    ];
+    const INVALID_EXAMPLES = [
+      'plainaddress','@missinglocal.com','user@','user @example.com',
+      'user@@example.com','user@-domain.com','user@domain..com',
+      'a'.repeat(65)+'@example.com','user@'+('a'.repeat(64)+'.').repeat(4)+'com'
+    ];
+
+    function loadExamples() {
+      document.getElementById('validExamples').innerHTML = VALID_EXAMPLES.map(e =>
+        `<button class="example-btn" onclick="setAndValidate('${e.replace(/'/g,"\\'")}') ">${e}</button>`).join('');
+      document.getElementById('invalidExamples').innerHTML = INVALID_EXAMPLES.map(e => {
+        const label = e.length > 30 ? e.slice(0,27)+'...' : e;
+        return `<button class="example-btn" onclick="setAndValidate('${e.replace(/'/g,"\\'")}') ">${label}</button>`;
+      }).join('');
+    }
+
+    function setAndValidate(email) {
+      document.getElementById('emailInput').value = email;
+      validate();
+    }
+
+    let autoTimer;
+    function autoValidate() {
+      clearTimeout(autoTimer);
+      autoTimer = setTimeout(validate, 300);
+    }
+
+    function validate() {
+      const raw = document.getElementById('emailInput').value.trim();
+      if (!raw) { document.getElementById('resultCard').classList.add('hidden'); return; }
+      const result = analyzeEmail(raw);
+      render(raw, result);
+    }
+
+    function analyzeEmail(email) {
+      const checks = [];
+      let valid = true;
+
+      // Split at last @ (local can contain @ in quoted strings but simplified)
+      const atIdx = email.lastIndexOf('@');
+      if (atIdx < 0) {
+        checks.push({id:'at',label:'@ 기호 존재',pass:false,desc:'이메일에 @ 기호가 반드시 있어야 합니다.'});
+        return {valid:false,checks,local:'',domain:''};
+      }
+      checks.push({id:'at',label:'@ 기호 존재',pass:true,desc:'@ 기호 확인됨'});
+
+      const local = email.slice(0,atIdx);
+      const domain = email.slice(atIdx+1);
+
+      // LOCAL PART checks
+      // Length: 1-64
+      const localOk = local.length >= 1 && local.length <= 64;
+      checks.push({id:'local_len',label:'로컬파트 길이 (1–64자)',pass:localOk,
+        desc:`현재 길이: ${local.length}자. RFC 5321: 최대 64자.`});
+      if (!localOk) valid = false;
+
+      // No leading/trailing dot
+      const dotEdge = local.startsWith('.') || local.endsWith('.');
+      checks.push({id:'dot_edge',label:'로컬파트 앞뒤 점(.) 없음',pass:!dotEdge,
+        desc:dotEdge?'로컬파트는 .으로 시작하거나 끝날 수 없습니다.':'로컬파트 앞뒤 점 없음 ✓'});
+      if (dotEdge) valid = false;
+
+      // No consecutive dots
+      const consec = local.includes('..');
+      checks.push({id:'consec_dot',label:'연속 점(..) 없음',pass:!consec,
+        desc:consec?'로컬파트에 연속된 점(..)이 있으면 안 됩니다.':'연속 점 없음 ✓'});
+      if (consec) valid = false;
+
+      // No spaces (unless quoted)
+      const isQuoted = local.startsWith('"') && local.endsWith('"');
+      const hasSpace = !isQuoted && local.includes(' ');
+      checks.push({id:'space',label:'공백 없음 (따옴표 없는 경우)',pass:!hasSpace,
+        desc:hasSpace?'따옴표 없는 로컬파트에 공백을 포함할 수 없습니다.':(isQuoted?'따옴표로 묶인 로컬파트 — 공백 허용':'공백 없음 ✓')});
+      if (hasSpace) valid = false;
+
+      // Valid characters
+      const allowedLocal = isQuoted
+        ? /^"[^"\\]*"$/.test(local)
+        : /^[a-zA-Z0-9!#$%&'*+/=?^_`{|}~.-]+$/.test(local);
+      checks.push({id:'local_chars',label:'로컬파트 허용 문자',pass:allowedLocal,
+        desc:allowedLocal?'RFC 허용 문자만 사용':'허용되지 않는 문자가 포함되어 있습니다.'});
+      if (!allowedLocal) valid = false;
+
+      // DOMAIN checks
+      // IP literal
+      const isIPLiteral = /^\[[\d.]+\]$/.test(domain) || /^\[IPv6:[^\]]+\]$/i.test(domain);
+      if (!isIPLiteral) {
+        // Domain length
+        const domLenOk = domain.length >= 1 && domain.length <= 255;
+        checks.push({id:'dom_len',label:'도메인 길이 (1–255자)',pass:domLenOk,
+          desc:`현재 길이: ${domain.length}자`});
+        if (!domLenOk) valid = false;
+
+        // Has dot
+        const hasDot = domain.includes('.');
+        checks.push({id:'dom_dot',label:'도메인에 점(.) 존재',pass:hasDot,
+          desc:hasDot?'TLD 구분자 확인됨':'도메인에 . 이 있어야 합니다 (예: example.com)'});
+        if (!hasDot) valid = false;
+
+        // No leading/trailing hyphen per label
+        const labels = domain.split('.');
+        const hyphenEdge = labels.some(l => l.startsWith('-') || l.endsWith('-'));
+        checks.push({id:'hyphen',label:'도메인 레이블 앞뒤 하이픈 없음',pass:!hyphenEdge,
+          desc:hyphenEdge?'도메인 레이블은 하이픈(-)으로 시작하거나 끝날 수 없습니다.':'하이픈 위치 정상 ✓'});
+        if (hyphenEdge) valid = false;
+
+        // Empty labels (consecutive dots)
+        const emptyLabel = labels.some(l => l.length === 0);
+        checks.push({id:'empty_label',label:'빈 도메인 레이블 없음',pass:!emptyLabel,
+          desc:emptyLabel?'도메인에 연속된 점(..)이 있습니다.':'도메인 레이블 정상 ✓'});
+        if (emptyLabel) valid = false;
+
+        // TLD exists (≥2 chars, alpha only)
+        const tld = labels[labels.length-1];
+        const tldOk = /^[a-zA-Z]{2,}$/.test(tld);
+        checks.push({id:'tld',label:'유효한 TLD',pass:tldOk,
+          desc:tldOk?`TLD "${tld}" 형식 정상`:`TLD "${tld}"이(가) 유효하지 않습니다 (영문 2자 이상)`});
+        if (!tldOk) valid = false;
+
+        // Domain chars
+        const domCharsOk = /^[a-zA-Z0-9.-]+$/.test(domain);
+        checks.push({id:'dom_chars',label:'도메인 허용 문자',pass:domCharsOk,
+          desc:domCharsOk?'도메인에 허용 문자만 사용됨':'도메인에 허용되지 않는 문자가 포함됨'});
+        if (!domCharsOk) valid = false;
+      } else {
+        checks.push({id:'ip_literal',label:'IP 리터럴 주소',pass:true,warn:true,
+          desc:`IP 리터럴 형식은 RFC 상 허용되지만 실제 사용은 드뭅니다: ${domain}`});
+      }
+
+      // Total length
+      const totalOk = email.length <= 254;
+      checks.push({id:'total_len',label:'전체 이메일 길이 (최대 254자)',pass:totalOk,
+        desc:`현재 길이: ${email.length}자. RFC 5321 최대: 254자.`});
+      if (!totalOk) valid = false;
+
+      return {valid, checks, local, domain};
+    }
+
+    function render(raw, result) {
+      const card = document.getElementById('resultCard');
+      card.classList.remove('hidden');
+
+      // Badge
+      document.getElementById('resultBadge').innerHTML = result.valid
+        ? '<div class="result-badge ok">✅ 유효한 이메일 주소</div>'
+        : '<div class="result-badge err">❌ 유효하지 않은 이메일 주소</div>';
+
+      // Parts
+      document.getElementById('partsDiv').innerHTML = `
+        <div class="part">
+          <div class="part-label">로컬파트 (Local Part)</div>
+          <div class="part-value">${escHtml(result.local) || '<span style="color:var(--muted)">(없음)</span>'}</div>
+        </div>
+        <div class="part">
+          <div class="part-label">도메인 (Domain)</div>
+          <div class="part-value">${escHtml(result.domain) || '<span style="color:var(--muted)">(없음)</span>'}</div>
+        </div>`;
+
+      // Checks
+      document.getElementById('checksDiv').innerHTML = result.checks.map(c => {
+        const cls = c.pass ? (c.warn ? 'warn' : 'pass') : 'fail';
+        const icon = c.pass ? (c.warn ? '⚠️' : '✅') : '❌';
+        return `<div class="check-row ${cls}">
+          <div class="check-icon">${icon}</div>
+          <div class="check-info">
+            <div class="check-label">${c.label}</div>
+            <div class="check-desc">${escHtml(c.desc)}</div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    function escHtml(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    function toggleTheme() {
+      const t = document.documentElement.getAttribute('data-theme') === 'dark' ? '' : 'dark';
+      document.documentElement.setAttribute('data-theme', t);
+      localStorage.setItem('theme', t);
+    }
+
+    (function init() {
+      if (localStorage.getItem('theme') === 'dark') document.documentElement.setAttribute('data-theme','dark');
+      loadExamples();
+    })();
+  </script>
+</body>
+</html>

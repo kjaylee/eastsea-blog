@@ -93,3 +93,8 @@
 - [모기지 추가 상환 계산기](./mortgage-extra-payment-calculator/) — 월 추가 납입과 연간 목돈 상환이 주택담보대출 이자 절감과 상환기간 단축에 얼마나 도움이 되는지 계산합니다.
 
 - [JSON ↔ YAML 변환기](./json-yaml-converter/) — JSON과 YAML을 실시간 양방향 변환합니다. 에러 라인 표시, 2/4 스페이스 들여쓰기 선택, 복사·다운로드·드래그앤드롭 파일 업로드 지원.
+- [Stan Store Fee Calculator](./stan-store-fee-calculator/) — Stan Creator / Creator Pro 플랜 비용, 결제 처리 수수료, 해외 카드 uplift, 제휴 커미션, 환불, 주문당 변동비를 반영해 월 실수령액과 손익분기 주문 수를 계산합니다.
+- [Thinkific Fee Calculator](./thinkific-fee-calculator/) — Thinkific Basic / Start / Grow 플랜 비용, 결제 처리 수수료, 추가 플랫폼 fee 가정, 환불, 판매당 지원비를 반영해 실제 순수익과 목표 순수익 달성 필요 매출을 계산합니다.
+- [Ghost Membership Revenue Calculator](./ghost-membership-revenue-calculator/) — Ghost 월간·연간 멤버십 갱신 결제 건수와 Stripe 수수료, 플랜 비용, perks 비용, 운영 고정비를 반영해 청구월 기준 실수령액과 손익분기 갱신 수를 계산합니다.
+- [API Batch Processing Savings Calculator](./api-batch-processing-savings-calculator/) — 단건 호출과 배치 처리의 API 호출 수, API 비용, 대기 시간, 구현비 회수기간을 비교해 월 절감액을 계산합니다.
+- [App Pricing Localization Margin Calculator](./app-pricing-localization-margin-calculator/) — 기준 USD 앱 가격을 현지 통화 가격으로 변환한 뒤 VAT/GST, 스토어 수수료, 환불률, 지원비를 반영해 순마진과 목표 마진 달성 최소 가격을 계산합니다.

@@ -32,6 +32,7 @@
 - [Indiegogo Fee Calculator](./indiegogo-fee-calculator/) — 현재 Indiegogo 5% 플랫폼 수수료, 3% + 0.20 결제 수수료, fixed funding 목표 미달 시 0 정산 규칙을 반영해 실제 순수령액과 목표 순수익 달성에 필요한 총 펀딩액을 계산합니다.
 - [Substack 뉴스레터 순수익 계산기](./substack-newsletter-revenue-calculator/) — 이번 기간에 실제 청구된 월간·연간·파운딩 구독자를 넣어 Substack 10%, Stripe 수수료, 반복 결제 드래그 이후 뉴스레터 순수익과 실효 차감률을 계산합니다.
 - [Substack Fee Calculator | 서브스택 수수료 계산기](./substack-fee-calculator/) — Substack 플랫폼 수수료, 결제 처리 수수료, 반복 결제 드래그, 환불을 반영해 실수령액과 목표 월 순수익 달성 필요 유료 구독자 수를 계산합니다.
+- [beehiiv Boosts Payback Calculator](./beehiiv-boosts-payback-calculator/) — Boosts CPA, paid conversion, 구독 가격, 결제 수수료를 반영해 payback months와 목표 payback 기준 최대 CPA를 계산합니다.
 - [체크아웃 BNPL 수수료 손익 계산기](./checkout-bnpl-fee-profit-calculator/) — BNPL 도입 시 전환율·객단가 상승과 수수료·대손·운영비를 함께 반영해 월 순효과, 연간 ROI, 회수기간, 손익분기 전환 상승폭을 계산합니다.
 - [배송 보호 부착률 ROI 계산기](./shipping-protection-attach-rate-roi-calculator/) — 배송 보호(보험) 부착률 상승이 보호 주문 수, 월 순이익, ROI, 회수기간, 손익분기 부착률에 미치는 영향을 계산합니다.
 - [오더 범프 부착률 수익 계산기](./order-bump-attach-rate-profit-calculator/) — 체크아웃 오더 범프 부착률 상승이 추가 주문 수, 월 순이익, ROI, 회수기간, 손익분기 부착률에 미치는 영향을 계산합니다.

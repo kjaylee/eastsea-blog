@@ -18,7 +18,6 @@
 - [Poshmark 수수료·순이익 계산기](./poshmark-fee-profit-calculator/) — 미국 Poshmark 기본 수수료(15달러 미만 $2.95, 15달러 이상 20%), 오퍼 할인, 셀러 부담 배송 할인, 원가/포장비를 반영해 주문당 순이익, 손익분기 리스트 가격, 적자 전 최대 오퍼 할인율을 계산합니다.
 - [Patreon 순수령액 계산기](./patreon-net-revenue-calculator/) — 월간 멤버, 이번 기간 청구된 연간 멤버, 일회성 구매를 반영해 Patreon 수수료·결제 처리·정산 드래그 이후 총 수수료와 순수령액을 계산합니다.
 - [Payhip Fee Calculator](./payhip-fee-calculator/) — Payhip Free·Plus·Pro 플랜 수수료와 결제 처리 수수료를 합산해 건당 실수령액, 월 순수익, 목표 순수익 판매가, 업그레이드 손익분기 매출을 계산합니다.
-- [PeoplePerHour Fee Calculator](./peopleperhour-fee-calculator/) — PeoplePerHour 프리랜서 수수료(첫 £250: 20% → 다음 £4,750: 7.5% → £5,000 초과: 3.5%)를 반영해 인보이스별 순이익, 실효 수수료율, 인보이스 후 누적 청구액을 계산합니다.
 - [Kajabi Fee Calculator](./kajabi-fee-calculator/) — Kajabi Basic·Growth·Pro 플랜 비용과 Kajabi Payments·Stripe·PayPal 수수료를 반영해 월 순수익, 목표 판매가, 업그레이드 손익분기 매출을 계산합니다.
 - [Podia Fee Calculator](./podia-fee-calculator/) — Podia Mover 5% transaction fee, Shaker 0%, Stripe/PayPal 처리 수수료, tax fee drag, 고정 월비용을 반영해 월 순수익과 Shaker 손익분기 매출을 계산합니다.
 - [Teachers Pay Teachers Seller Fee Calculator](./teachers-pay-teachers-seller-fee-calculator/) — TPT Basic 55% vs Premium 80% 지급률, Basic $0.30/리소스 수수료, Premium의 3달러 미만 주문당 $0.15 규칙을 반영해 연간 순수익과 Premium 손익분기 시점을 계산합니다.

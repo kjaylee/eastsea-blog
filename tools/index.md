@@ -7,6 +7,7 @@
 - [Depop 수수료·순이익 계산기](./depop-fee-profit-calculator/) — 미국 Depop 신규 리스팅 기본값(판매 수수료 0%)과 legacy 10% 판매 수수료, boosted listing, 배송 방식, 판매세 추정을 반영해 주문당 순이익, 손익분기 상품가, 적자 전 최대 boost 수수료율을 계산합니다.
 - [Etsy Fee Calculator | Etsy 수수료 계산기](./etsy-fee-calculator/) — listing fee, 6.5% 거래 수수료, payment processing, Offsite Ads를 반영해 Etsy 총수수료, 수수료 차감 후 payout, 주문당 남는 금액을 계산합니다.
 - [Etsy 수수료·순이익 계산기](./etsy-fee-profit-calculator/) — 리스팅 수수료, 6.5% 거래 수수료, 결제 처리, 오프사이트 광고, 원가/포장/배송비를 반영해 주문당 순이익, 손익분기 판매가, 적자 전 최대 할인율을 계산합니다.
+- [Redbubble Royalty & Profit Calculator](./redbubble-royalty-margin-calculator/) — 아티스트 마진 %를 설정하고 판매당 로열티, 소비자 가격, 마진 효율, 월 수입 예상액을 계산합니다. 10개 상품 기본가 내장, 마진별 비교표 포함.
 - [eBay 수수료·순이익 계산기](./ebay-fee-profit-calculator/) — 최종 거래가 수수료, 주문당 수수료, promoted listings, buyer shipping, 판매세 추정을 반영해 주문당 순이익, 손익분기 판매가, 적자 전 최대 광고율을 계산합니다.
 - [Eventbrite Fee Calculator](./eventbrite-fee-calculator/) — Eventbrite의 공개 미국 유료 티켓 수수료(3.7% + $1.79, 2.9% processing)를 기준으로 buyer-pays vs organizer-covers, 참석자 결제 총액, 주최자 실수령액, 손익분기 티켓 가격을 계산합니다.
 - [Fiverr 셀러 수수료 계산기](./fiverr-seller-fee-calculator/) — 완료 주문 수, 평균 주문 금액, 팁, 출금 방법, 추가 정산 드래그를 반영해 Fiverr 20% 수수료 이후 실제 순수익, 실효 차감률, 건당 순수익을 계산합니다.

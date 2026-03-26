@@ -80,6 +80,7 @@
 - [식물 물주기 추적기](./plant-watering-tracker/) — 식물별 물주기 주기와 마지막 물 준 날짜를 저장하고 오늘/지연/예정 상태를 자동 분류해 관리합니다.
 - [다운로드 시간 계산기](./download-time-calculator/) — 파일 용량/회선 속도/실효 효율을 반영해 다운로드·업로드 예상 소요 시간과 완료 시각을 계산합니다.
 - [복약 간격 계산기](./medication-interval-tracker/) — 마지막 복용 시각과 복약 간격으로 다음 복용 시간·남은 시간·하루 복용 횟수를 계산하고 기록을 저장합니다.
+- [Cash Discount Early Payment Calculator](./cash-discount-early-payment-calculator/) — 적용 가능 인보이스 비중, 채택률, 할인율, 결제 처리비, 운전자본 절감, 대손 감소를 반영해 조기결제 현금할인 프로그램의 월 순효과, ROI, 회수기간, 손익분기 채택률을 계산합니다.
 - [VAT·GST 마진 계산기](./vat-gst-margin-calculator/) — VAT/GST 포함 판매가에서 세금, 결제 수수료, 환불률, 주문당 원가, 월 고정비를 제거해 실제 순이익률, 손익분기 주문 수, 목표 마진 달성 판매가를 계산합니다.
 - [Merchant of Record vs Direct Billing Profit Calculator](./merchant-of-record-vs-direct-billing-profit-calculator/) — VAT/GST, 환불, 결제 수수료, 차지백, 세무·컴플라이언스 비용과 MoR 수수료를 함께 반영해 직접 결제 대비 실수령액, 월 델타, 연간 ROI, 손익분기 MoR 수수료율을 계산합니다.
 - [PayPal Fee Calculator](./paypal-fee-calculator/) — 구매자가 보내는 총액 기준 PayPal 수수료, 실제 실수령액, 목표 순수령액을 받기 위해 요청해야 할 금액, 상품/배송/기타비 반영 후 판매자 이익과 손익분기 매출을 계산합니다.

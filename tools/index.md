@@ -61,6 +61,7 @@
 - [뉴스레터 스폰서 Fill Rate ROI 계산기](./newsletter-sponsor-fill-rate-roi-calculator/) — 뉴스레터 스폰서 슬롯의 현재/목표 Fill Rate, 슬롯 단가, 운영비를 반영해 기간 순이익, ROI, 회수기간, 손익분기 Fill Rate를 계산합니다.
 - [크리에이터 멤버십 이탈 방지 ROI 계산기](./creator-membership-churn-reduction-roi-calculator/) — 멤버십 이탈률 개선 프로그램의 유지 멤버 수, 기간 순이익, ROI, 회수기간, 손익분기 목표 이탈률을 계산합니다.
 - [크리에이터 멤버십 플랫폼 수수료 비교기](./creator-membership-platform-fee-comparator/) — Direct Stripe, Patreon, Substack, App Store 구독의 수수료와 실수령액을 비교하고 같은 순수익을 만들기 위한 목표 가격까지 계산합니다.
+- [Ghost 멤버십 수익 계산기](./ghost-membership-revenue-calculator/) — Ghost 월 비용, 월간/연간 멤버, Stripe 수수료, 환불, 회원 지원비를 반영해 월 환산 순이익, 연 환산 런레이트, 목표 순이익 달성 필요 활성 멤버 수를 계산합니다.
 - [인앱 팁 Jar 수익 계산기](./in-app-tip-jar-profit-calculator/) — 팁 노출률·전환율·평균 팁·수수료를 반영해 월 순이익, 연간 ROI, 회수기간, 손익분기 전환율을 계산합니다.
 - [제휴 쿠키 윈도우 ROI 계산기](./affiliate-cookie-window-roi-calculator/) — 쿠키 어트리뷰션 기간(예: 7일→30일) 확장 시 추가 주문, 월 순이익, ROI, 회수기간, 손익분기 전환율을 계산합니다.
 - [UGC 화이트리스팅 부착률 ROI 계산기](./ugc-whitelisting-attach-rate-roi-calculator/) — 화이트리스팅 권리 부착률 개선 시 순증 딜, 월 순효과, ROI, 회수기간, 손익분기 부착률을 계산합니다.

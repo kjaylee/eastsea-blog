@@ -84,6 +84,7 @@
 - [Merchant of Record vs Direct Billing Profit Calculator](./merchant-of-record-vs-direct-billing-profit-calculator/) — VAT/GST, 환불, 결제 수수료, 차지백, 세무·컴플라이언스 비용과 MoR 수수료를 함께 반영해 직접 결제 대비 실수령액, 월 델타, 연간 ROI, 손익분기 MoR 수수료율을 계산합니다.
 - [PayPal Fee Calculator](./paypal-fee-calculator/) — 구매자가 보내는 총액 기준 PayPal 수수료, 실제 실수령액, 목표 순수령액을 받기 위해 요청해야 할 금액, 상품/배송/기타비 반영 후 판매자 이익과 손익분기 매출을 계산합니다.
 - [Stripe Fee Calculator](./stripe-fee-calculator/) — Stripe 표준 카드 2.9%+$0.30, 해외카드 4.4%+$0.30, Link 2.4%+$0.30, ACH 0.8% capped at $5 기준으로 수수료, 실수령액, 목표 순수령액을 위한 청구 금액을 계산합니다.
+- [Whop Payments Fee Calculator | Whop 수수료 계산기](./whop-payments-fee-calculator/) — Whop Docs 공개 베이스라인(국내 카드 2.7%+$0.30, 해외 +1.5%, FX +1%, ACH 1.5% capped at $5, financing 15%, payout fee)을 반영해 실수령액과 목표 판매가를 계산합니다.
 - [Wise Fee Calculator](./wise-fee-calculator/) — Wise(TransferWise) 공개 수수료 베이스라인으로 bank transfer, debit card, credit card, wire/SWIFT별 수수료, 실수령액, 역산 송금액, 일반 은행 송금 대비 절감액을 계산합니다.
 - [Mercari Seller Fee Calculator](./mercari-fee-calculator/) — Mercari 공개 수수료 기준(판매 수수료 10%, buyer-paid shipping 포함, 기본 결제수수료 0, Direct Deposit $0 / Instant Pay $3 배분 가능)으로 실수령액, 순이익, 손익분기 판매가, 목표 순이익 달성 판매가를 계산합니다.
 - [Whatnot Seller Fee Calculator](./whatnot-seller-fee-calculator/) — Whatnot 미국 기준 공개 수수료 베이스라인(표준 8%, Electronics 5%, Coins & Money 4%, processing 2.9% + $0.30)을 바탕으로 commission, payout after fees, 순이익, 손익분기 판매가를 계산합니다.

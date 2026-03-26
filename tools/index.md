@@ -24,6 +24,7 @@
 - [Teachers Pay Teachers Seller Fee Calculator](./teachers-pay-teachers-seller-fee-calculator/) — TPT Basic 55% vs Premium 80% 지급률, Basic $0.30/리소스 수수료, Premium의 3달러 미만 주문당 $0.15 규칙을 반영해 연간 순수익과 Premium 손익분기 시점을 계산합니다.
 - [Teachable Fee Calculator](./teachable-fee-calculator/) — Starter 7.5% transaction fee, native/custom gateway processing, BackOffice, chargebacks, and Starter-to-higher-plan break-even checkout volume를 계산합니다.
 - [Ko-fi 수수료 계산기](./ko-fi-fee-calculator/) — Ko-fi Free와 Contributor 모드, tips·memberships·shop·monthly payments·commissions 유형별 서비스 수수료와 결제 처리 수수료를 반영해 실제 실수령액, 목표 순이익 달성 평균 결제금액, 손익분기 거래량을 계산합니다.
+- [LaunchPass Fee Calculator](./launchpass-fee-calculator/) — LaunchPass 월 $29 플랜 요금, 3.5% 거래 수수료, Stripe 처리비, 환불 시 남는 수수료 손실, 기타 고정비를 반영해 월 순이익, 손익분기 매출, 목표 순이익 달성 필요 결제 볼륨을 계산합니다.
 - [Buy Me a Coffee 수수료 계산기](./buy-me-a-coffee-fee-calculator/) — Buy Me a Coffee 5% 플랫폼 수수료, Stripe 카드 수수료, 0.5% payout drag, 후원자 부담 카드 수수료 설정, 보상 원가를 반영해 실제 순수령액과 손익분기 평균 후원 금액을 계산합니다.
 - [Gumroad 순수익 계산기](./gumroad-net-revenue-calculator/) — 직접/프로필 판매와 Discover 판매를 분리해 Gumroad의 10% + $0.50 direct fee, 30% Discover fee, payout drag 이후 순수익과 건당 take-home 차이를 계산합니다.
 - [OnlyFans Earnings Calculator](./onlyfans-earnings-calculator/) — OnlyFans 20% 수수료, 환불, 정산 지연, 운영비를 반영해 구독·팁·PPV 수익의 실수령액, 목표 달성 필요 구독자, 손익분기 구독자를 계산합니다.

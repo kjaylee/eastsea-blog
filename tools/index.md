@@ -28,7 +28,7 @@
 - [Gumroad 순수익 계산기](./gumroad-net-revenue-calculator/) — 직접/프로필 판매와 Discover 판매를 분리해 Gumroad의 10% + $0.50 direct fee, 30% Discover fee, payout drag 이후 순수익과 건당 take-home 차이를 계산합니다.
 - [OnlyFans Earnings Calculator](./onlyfans-earnings-calculator/) — OnlyFans 20% 수수료, 환불, 정산 지연, 운영비를 반영해 구독·팁·PPV 수익의 실수령액, 목표 달성 필요 구독자, 손익분기 구독자를 계산합니다.
 - [Twitch Revenue Calculator](./twitch-revenue-calculator/) — Tier 1/2/3 구독, Prime Gaming 구독, 비트, 광고 수익, 기타 수입을 합산해 월·연간 트위치 스트리머 예상 수익, 수익원별 구성 비중, 구독자당 평균 수익을 계산합니다.
-- [Udemy Instructor Revenue Calculator](./udemy-instructor-revenue-calculator/) — 쿠폰(97%), 오가닉(37%), 제휴(25%), Udemy Business 분당 요율 4가지 채널을 반영해 강사 월간 순수익, 채널별 수익 비중, 연간 예상 수익을 계산합니다.
+- [Udemy Instructor Revenue Calculator](./udemy-instructor-revenue-calculator/) — 강사 프로모션 97%, 마켓플레이스 37%, 수정 가능한 파트너 배분율, Udemy Business / Personal Plan 구독 풀 시나리오를 반영해 월 순수익, 채널별 비중, 목표 달성 추가 매출을 계산합니다.
 - [Lemon Squeezy Fee Calculator](./lemon-squeezy-fee-calculator/) — Lemon Squeezy의 기본 5%, 국제 결제·PayPal·구독 가산, 정산 방식별 수수료를 반영해 주문당 순수익, 기간 순수익, 목표 순수익 달성 판매가를 계산합니다.
 - [Memberful Fee Calculator](./memberful-fee-calculator/) — Memberful Standard $49/월 + 4.9%, Stripe 처리 수수료, 환불, 기타 고정비를 반영해 월 순이익과 손익분기 매출을 계산합니다.
 - [Sellfy Pricing Calculator](./sellfy-pricing-calculator/) — Sellfy Starter/Business/Premium의 구독비, Stripe·PayPal 처리 수수료, 2% overage planning model, 환불, 주문당 전달 원가를 반영해 연간 순이익과 업그레이드 손익분기 매출을 계산합니다.

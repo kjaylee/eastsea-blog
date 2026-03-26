@@ -88,6 +88,7 @@
 - [Mercari Seller Fee Calculator](./mercari-fee-calculator/) — Mercari 공개 수수료 기준(판매 수수료 10%, buyer-paid shipping 포함, 기본 결제수수료 0, Direct Deposit $0 / Instant Pay $3 배분 가능)으로 실수령액, 순이익, 손익분기 판매가, 목표 순이익 달성 판매가를 계산합니다.
 - [Whatnot Seller Fee Calculator](./whatnot-seller-fee-calculator/) — Whatnot 미국 기준 공개 수수료 베이스라인(표준 8%, Electronics 5%, Coins & Money 4%, processing 2.9% + $0.30)을 바탕으로 commission, payout after fees, 순이익, 손익분기 판매가를 계산합니다.
 - [TikTok Shop Fee Calculator | 틱톡샵 수수료 계산기](./tiktok-shop-fee-calculator/) — TikTok Shop 주문 금액, 플랫폼 할인, 세금, 수수료율을 반영해 referral fee와 순수령액, 월간 예상 수익을 계산합니다.
+- [YouTube Super Chat Revenue Calculator | 유튜브 슈퍼챗 수익 계산기](./youtube-super-chat-revenue-calculator/) — 월 라이브 횟수, 회당 라이브 조회수, 결제 시청자 비율, 평균 슈퍼챗 금액, 정산비율, 환불, 원천징수를 반영해 월 순수익, 손익분기 유료 메시지 수, 목표 달성 결제 시청자 비율을 계산합니다.
 - [YouTube Title Generator | 유튜브 제목 생성기](./youtube-title-generator/) — topic, primary keyword, audience, tone, format을 조합해 click-ready YouTube 제목 후보를 여러 개 생성하고 바로 복사합니다.
 
 - [BMI + 체지방률 계산기](./bmi-bfp-calculator/) — BMI와 미국 해군식 체지방률(US Navy Method)을 함께 계산해 체지방량, 제지방량, 건강 체중 범위를 확인합니다.

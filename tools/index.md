@@ -32,6 +32,7 @@
 - [Lemon Squeezy Fee Calculator](./lemon-squeezy-fee-calculator/) — Lemon Squeezy의 기본 5%, 국제 결제·PayPal·구독 가산, 정산 방식별 수수료를 반영해 주문당 순수익, 기간 순수익, 목표 순수익 달성 판매가를 계산합니다.
 - [Memberful Fee Calculator](./memberful-fee-calculator/) — Memberful Standard $49/월 + 4.9%, Stripe 처리 수수료, 환불, 기타 고정비를 반영해 월 순이익과 손익분기 매출을 계산합니다.
 - [Sellfy Pricing Calculator](./sellfy-pricing-calculator/) — Sellfy Starter/Business/Premium의 구독비, Stripe·PayPal 처리 수수료, 2% overage planning model, 환불, 주문당 전달 원가를 반영해 연간 순이익과 업그레이드 손익분기 매출을 계산합니다.
+- [SubscribeStar Fee Calculator | SubscribeStar 수수료 계산기](./subscribestar-fee-calculator/) — SubscribeStar 공개 5% 서비스 수수료, creator-vs-subscriber processing model, 국제 거래 가산, rolling reserve, payout drag를 반영해 당월 가용 현금, 경제적 순이익, 손익분기 청구 매출을 계산합니다.
 - [Itch.io 순수익 계산기](./itchio-net-revenue-calculator/) — 최소 가격, 평균 추가 지불액, open revenue share, 결제 수수료를 반영해 itch.io 실제 순수익, 실효 차감률, 목표 순수익 달성 최소 가격을 계산합니다.
 - [Indiegogo Fee Calculator](./indiegogo-fee-calculator/) — 현재 Indiegogo 5% 플랫폼 수수료, 3% + 0.20 결제 수수료, fixed funding 목표 미달 시 0 정산 규칙을 반영해 실제 순수령액과 목표 순수익 달성에 필요한 총 펀딩액을 계산합니다.
 - [Substack 뉴스레터 순수익 계산기](./substack-newsletter-revenue-calculator/) — 이번 기간에 실제 청구된 월간·연간·파운딩 구독자를 넣어 Substack 10%, Stripe 수수료, 반복 결제 드래그 이후 뉴스레터 순수익과 실효 차감률을 계산합니다.

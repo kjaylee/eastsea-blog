@@ -93,3 +93,8 @@
 - [모기지 추가 상환 계산기](./mortgage-extra-payment-calculator/) — 월 추가 납입과 연간 목돈 상환이 주택담보대출 이자 절감과 상환기간 단축에 얼마나 도움이 되는지 계산합니다.
 
 - [JSON ↔ YAML 변환기](./json-yaml-converter/) — JSON과 YAML을 실시간 양방향 변환합니다. 에러 라인 표시, 2/4 스페이스 들여쓰기 선택, 복사·다운로드·드래그앤드롭 파일 업로드 지원.
+- [Sales Demo No-show Cost Calculator](./sales-demo-no-show-cost-calculator/) — 월 예약 데모, 노쇼율, 평균 ARR, 클로즈율을 반영해 노쇼 감소가 회복하는 파이프라인, 총이익, 손익분기 개선폭을 계산합니다.
+- [Online Course Refund Impact Calculator](./online-course-refund-impact-calculator/) — 온라인 코스 환불률 개선이 회복하는 순매출, 순이익, 연환산 효과, 손익분기 환불률을 계산합니다.
+- [Creator Sponsorship Package Margin Calculator](./creator-sponsorship-package-margin-calculator/) — 브랜드딜 패키지 단가, 제작비, 사용권 부가옵션, 매니지먼트 수수료를 반영해 실제 마진과 손익분기 판매량을 계산합니다.
+- [SaaS Implementation Overage Calculator](./saas-implementation-overage-calculator/) — 구축 프로젝트 초과공수의 회수율, 청구단가, 인건비를 반영해 회수매출, 이익 누수, 손익분기 회수율을 계산합니다.
+- [SaaS Onboarding Capacity Planner](./saas-onboarding-capacity-planner/) — 신규 고객 수, 고객당 온보딩 시간, 팀 정원을 반영해 현재 처리 용량, 필요 FTE, 백로그 위험, go-live SLA 충족 여부를 계산합니다.

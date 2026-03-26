@@ -25,6 +25,7 @@
 - [Teachable Fee Calculator](./teachable-fee-calculator/) — Starter 7.5% transaction fee, native/custom gateway processing, BackOffice, chargebacks, and Starter-to-higher-plan break-even checkout volume를 계산합니다.
 - [Ko-fi 수수료 계산기](./ko-fi-fee-calculator/) — Ko-fi Free와 Contributor 모드, tips·memberships·shop·monthly payments·commissions 유형별 서비스 수수료와 결제 처리 수수료를 반영해 실제 실수령액, 목표 순이익 달성 평균 결제금액, 손익분기 거래량을 계산합니다.
 - [Buy Me a Coffee 수수료 계산기](./buy-me-a-coffee-fee-calculator/) — Buy Me a Coffee 5% 플랫폼 수수료, Stripe 카드 수수료, 0.5% payout drag, 후원자 부담 카드 수수료 설정, 보상 원가를 반영해 실제 순수령액과 손익분기 평균 후원 금액을 계산합니다.
+- [Beacons Fee Calculator](./beacons-fee-calculator/) — Beacons Free/Creator 9% seller fee, Creator Plus/Max 0%, Stripe·PayPal 처리 수수료, 환불, affiliate share를 반영해 실제 take-home과 업그레이드 손익분기 매출을 계산합니다.
 - [Gumroad 순수익 계산기](./gumroad-net-revenue-calculator/) — 직접/프로필 판매와 Discover 판매를 분리해 Gumroad의 10% + $0.50 direct fee, 30% Discover fee, payout drag 이후 순수익과 건당 take-home 차이를 계산합니다.
 - [OnlyFans Earnings Calculator](./onlyfans-earnings-calculator/) — OnlyFans 20% 수수료, 환불, 정산 지연, 운영비를 반영해 구독·팁·PPV 수익의 실수령액, 목표 달성 필요 구독자, 손익분기 구독자를 계산합니다.
 - [Twitch Revenue Calculator](./twitch-revenue-calculator/) — Tier 1/2/3 구독, Prime Gaming 구독, 비트, 광고 수익, 기타 수입을 합산해 월·연간 트위치 스트리머 예상 수익, 수익원별 구성 비중, 구독자당 평균 수익을 계산합니다.

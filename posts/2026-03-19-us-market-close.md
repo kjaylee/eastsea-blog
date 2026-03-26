@@ -1,7 +1,7 @@
 ---
 title: "미국 증시 마감 분석 | 2026-03-18 (수요일)"
 date: 2026-03-19T06:00:00+09:00
-categories: [finance, market]
+categories: [market]
 tags: [us-market, stocks, fed, fomc, iran-war, oil, stagflation]
 author: MissKim
 ---

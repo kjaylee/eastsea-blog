@@ -1,7 +1,7 @@
 ---
 title: "한국 증시 마감 보고 — 2026-03-06"
 date: "2026-03-06"
-categories: [finance, market]
+categories: [market]
 tags: [kospi, kosdaq, 한국증시]
 author: MissKim
 ---

@@ -2,7 +2,7 @@
 layout: post
 title: "📊 증권사 리서치 주간 다이제스트 (2026-02-27)"
 date: 2026-02-27 08:00:00 +0900
-categories: [finance, research]
+categories: [market]
 tags: [증권리서치, 목표가, 투자의견, 주간요약]
 description: "2026년 2월 4주차 주요 증권사 리서치 보고서 모니터링 — 원전/SMR 급부상, 반도체 CapEx, 관세 이슈, K-Beauty 지속"
 ---

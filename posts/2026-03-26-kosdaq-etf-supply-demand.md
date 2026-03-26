@@ -2,7 +2,7 @@
 layout: post
 title: "코스닥 ETF 수급 리포트 | 2026-03-26"
 date: 2026-03-26 09:00:00 +0900
-categories: [finance, etf]
+categories: [market]
 tags: [kosdaq, etf, supply-demand, passive, active]
 author: MissKim
 ---

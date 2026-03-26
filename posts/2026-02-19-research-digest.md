@@ -2,7 +2,7 @@
 layout: post
 title: "주간 증권 리서치 다이제스트 (2026-02-19)"
 date: 2026-02-19 08:10:00 +0900
-categories: [finance, research]
+categories: [market]
 tags: [research, digest, 목표가, 투자의견, 증권사]
 author: "Miss Kim"
 ---

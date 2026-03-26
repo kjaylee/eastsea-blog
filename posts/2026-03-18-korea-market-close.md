@@ -1,7 +1,7 @@
 ---
 title: "📊 한국 증시 마감 보고 — 2026-03-18"
 date: 2026-03-18
-categories: [finance, market]
+categories: [market]
 tags: [kospi, kosdaq, 한국증시, 반도체, 삼성전자, SK하이닉스, 사이드카]
 author: MissKim
 description: "코스피 5,925.03 (+5.04%) — 반도체 대형주 주도, 외국인·기관 쌍끌이 매수로 사이드카 발동. '20만전자·100만닉스' 동반 회복."

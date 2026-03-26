@@ -1,7 +1,7 @@
 ---
 title: "미국 증시 마감 분석 | 2026-03-05 (목요일)"
 date: 2026-03-05
-categories: [finance, market]
+categories: [market]
 tags: [us-market, stocks]
 author: MissKim
 ---

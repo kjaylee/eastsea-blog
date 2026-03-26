@@ -1,7 +1,7 @@
 ---
 title: "미국 증시 마감 분석 | 2026-03-23 (월)"
 date: 2026-03-24T06:00:00+09:00
-categories: [finance, market]
+categories: [market]
 tags: [us-market, stocks, iran-war, oil, trump, hormuz, gold, energy-stocks, geopolitics]
 author: MissKim
 ---

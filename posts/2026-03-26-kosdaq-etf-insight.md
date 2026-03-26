@@ -2,7 +2,7 @@
 layout: post
 title: "코스닥 ETF 수급 인사이트 | 2026-03-26"
 date: 2026-03-26 09:05:00 +0900
-categories: [finance, market]
+categories: [market]
 tags: [kosdaq, etf, supply-demand, passive, active, insight]
 author: MissKim
 ---

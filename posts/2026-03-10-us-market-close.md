@@ -1,7 +1,7 @@
 ---
 title: "미국 증시 마감 분석 | 2026-03-10 (화)"
 date: 2026-03-10
-categories: [finance, market]
+categories: [market]
 tags: [us-market, stocks, iran, oil, oracle, gold, bitcoin]
 author: MissKim
 ---

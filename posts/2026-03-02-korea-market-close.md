@@ -1,7 +1,7 @@
 ---
 title: "한국 증시 마감 보고 — 2026-03-02 (삼일절 대체공휴일 휴장)"
 date: 2026-03-02
-categories: [finance, market]
+categories: [market]
 tags: [kospi, kosdaq, 한국증시, 대체공휴일, 이란]
 author: MissKim
 ---

@@ -18,6 +18,7 @@
 - [Upwork 프리랜서 수수료 계산기](./upwork-freelancer-fee-calculator/) — 일반 계약 0%~15% 수수료, Direct Contracts 5%/0%, 보너스, 공식 출금 수수료를 반영해 실제 실수령액과 목표 순수익 달성 필요 청구액을 계산합니다.
 - [Poshmark 수수료·순이익 계산기](./poshmark-fee-profit-calculator/) — 미국 Poshmark 기본 수수료(15달러 미만 $2.95, 15달러 이상 20%), 오퍼 할인, 셀러 부담 배송 할인, 원가/포장비를 반영해 주문당 순이익, 손익분기 리스트 가격, 적자 전 최대 오퍼 할인율을 계산합니다.
 - [Patreon 순수령액 계산기](./patreon-net-revenue-calculator/) — 월간 멤버, 이번 기간 청구된 연간 멤버, 일회성 구매를 반영해 Patreon 수수료·결제 처리·정산 드래그 이후 총 수수료와 순수령액을 계산합니다.
+- [Ghost Membership Fee Calculator](./ghost-membership-fee-calculator/) — Ghost 0% transaction fee 프레이밍, Ghost(Pro) plan cost, Stripe 처리 수수료, 환불, 월간·연간·일회성 매출을 반영해 실제 take-home과 목표 멤버 수를 계산합니다.
 - [Payhip Fee Calculator](./payhip-fee-calculator/) — Payhip Free·Plus·Pro 플랜 수수료와 결제 처리 수수료를 합산해 건당 실수령액, 월 순수익, 목표 순수익 판매가, 업그레이드 손익분기 매출을 계산합니다.
 - [Kajabi Fee Calculator](./kajabi-fee-calculator/) — Kajabi Basic·Growth·Pro 플랜 비용과 Kajabi Payments·Stripe·PayPal 수수료를 반영해 월 순수익, 목표 판매가, 업그레이드 손익분기 매출을 계산합니다.
 - [Podia Fee Calculator](./podia-fee-calculator/) — Podia Mover 5% transaction fee, Shaker 0%, Stripe/PayPal 처리 수수료, tax fee drag, 고정 월비용을 반영해 월 순수익과 Shaker 손익분기 매출을 계산합니다.

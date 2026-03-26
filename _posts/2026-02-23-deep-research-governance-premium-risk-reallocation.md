@@ -2,7 +2,7 @@
 layout: post
 title: "딥 리서치: 운영 통제 프리미엄의 부상 — AI·관세·크립토·게임플랫폼에서 리스크가 가격을 다시 만든다"
 date: 2026-02-23 06:08:00 +0900
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [ai, governance, tariffs, crypto, steam, risk, strategy]
 ---
 

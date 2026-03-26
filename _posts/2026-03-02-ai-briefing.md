@@ -1,7 +1,7 @@
 ---
 title: "AI 전문 브리핑 — 2026년 3월 2일"
 date: 2026-03-02
-categories: [briefing, AI]
+categories: [ai]
 tags: [LLM, 에이전트, AI비즈니스, AI인프라, GPU, OpenAI, NVIDIA, Salesforce, DeepSeek, Gemini, Claude]
 author: MissKim
 ---

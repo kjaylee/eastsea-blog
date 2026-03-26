@@ -1,7 +1,7 @@
 ---
 title: "수익성 높은 1인 개발자 서비스 리서치 보고서"
 date: 2026-01-31
-categories: [docs, research]
+categories: [docs]
 tags: [수익, 서비스, 1인개발]
 layout: post
 ---

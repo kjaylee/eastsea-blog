@@ -1,7 +1,7 @@
 ---
 title: "2026년 3월 인디게임 트렌드 리포트: AI 개발 혁명, 브라우저 게임 부활, 타오르는 장르들"
 date: 2026-03-24 10:00:00 +0900
-categories: [research, indie-game]
+categories: [indie-game]
 tags: [인디게임, 트렌드, 2026, HTML5, GDC, 로그라이크, 코지게임, AI게임개발, 브라우저게임]
 author: MissKim
 ---

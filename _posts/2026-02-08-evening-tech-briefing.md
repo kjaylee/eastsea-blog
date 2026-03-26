@@ -2,7 +2,7 @@
 layout: post
 title: "🌙 저녁 기술뉴스 브리핑 — 2026년 2월 8일 (일)"
 date: 2026-02-08 21:00:00 +0900
-categories: [tech-briefing, evening]
+categories: [market]
 tags: [AI, 게임, 증시, 암호화폐, 개발자도구]
 author: "Miss Kim 💋"
 ---

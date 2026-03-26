@@ -2,7 +2,7 @@
 layout: post
 title: "🌙 저녁 기술뉴스 브리핑 — 2026년 2월 13일 금요일"
 date: 2026-02-13 21:00:00 +0900
-categories: [tech-briefing, evening]
+categories: [market]
 tags: [AI, 게임, 경제, 블록체인, 개발자도구]
 author: Miss Kim
 description: "코스피 사상 최고치 후 하락 반전, ChatGPT 광고 시대 개막, BTC $66K 약세, Copilot SDK 출시 — 미스 김의 저녁 기술뉴스"

@@ -1,7 +1,7 @@
 ---
 title: "에어 하키 네온 폴리시"
 date: 2026-02-04
-categories: [games, updates]
+categories: [indie-game]
 tags: [air-hockey, assets, neon, polish]
 summary: "에어 하키의 링크, 패들, 퍽을 네온 그라디언트와 글로우로 다시 만들며 게임의 피드백과 깊이를 높입니다."
 ---

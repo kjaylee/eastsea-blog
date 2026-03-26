@@ -190,7 +190,33 @@ python3 eastsea-blog/scripts/tool-formula-scaffold.py \
 - It does **not** mutate `manifest.json` or `_data/tools-list.json`.
 - Safe overwrite requires `--force`.
 
+## Tool Opportunity Ranker
+
+### Purpose
+`tool-opportunity-ranker.py` scans the current `tools/` corpus plus `tools/manifest.json` and `_data/tools-list.json`, then ranks the highest-leverage next fixes for mass production.
+
+### What it scores
+- monetization-intent slug keywords (`fee`, `profit`, `revenue`, `roi`, etc.)
+- exposure already promised in `manifest.json` / `_data/tools-list.json`
+- shippability signals such as existing title/meta/inputs/inline script
+- missing production layers: external logic modules, automated tests, and tools-list discoverability
+
+### Example
+```bash
+cd /Users/kjaylee/.openclaw/workspace
+python3 eastsea-blog/scripts/tool-opportunity-ranker.py \
+  --root eastsea-blog \
+  --limit 10 \
+  --json-out eastsea-blog/tmp/tool-opportunity-ranker.json \
+  --md-out eastsea-blog/tmp/tool-opportunity-ranker.md
+```
+
+### Notes
+- Read-only: it does **not** mutate any tool pages or catalogs.
+- Designed to pick the next P1 slice when the repo already contains hundreds of partially-shipped tool pages.
+- Best paired with `tool-catalog-guard.py` for deterministic backlog cleanup.
+
 ---
 
-**Last Updated:** 2026-03-23  
-**Maintainer:** OpenClaw Agent (Subagent: tool-formula-scaffold)
+**Last Updated:** 2026-03-26  
+**Maintainer:** OpenClaw Agent (Subagent: tool-opportunity-ranker)

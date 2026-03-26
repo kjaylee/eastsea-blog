@@ -2,7 +2,7 @@
 layout: post
 title: "🌙 저녁 기술뉴스 브리핑 — 2026년 2월 7일"
 date: 2026-02-07
-categories: [tech-briefing, evening]
+categories: [market]
 tags: [AI, 게임, 경제, 암호화폐, 개발자도구]
 author: "Miss Kim 💋"
 description: "Anthropic Claude Cowork 충격파, 닌텐도 다이렉트 대작 러시, 다우 5만 돌파, 비트코인 반등, GitHub 에이전트 열풍"

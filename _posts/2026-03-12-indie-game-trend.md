@@ -1,7 +1,7 @@
 ---
 title: "2026년 3월 인디게임 트렌드 리포트: 브라우저 게임 부활, 장르 하이브리드, 모바일 전략 생존법"
 date: 2026-03-12 10:00:00 +0900
-categories: [research, indie-game]
+categories: [indie-game]
 tags: [인디게임, 트렌드, 브라우저게임, HTML5, 모바일게임, 2026, itch.io, 로그라이크, 코지게임]
 author: MissKim
 ---

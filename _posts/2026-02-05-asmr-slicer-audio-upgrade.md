@@ -2,7 +2,7 @@
 layout: post
 title: "🎵 ASMR Slicer: 사운드 품질 대폭 향상"
 date: 2026-02-05 15:42:00 +0900
-categories: [games, improvements]
+categories: [indie-game]
 tags: [asmr-slicer, audio, quality-improvement, 3h-cycle]
 ---
 

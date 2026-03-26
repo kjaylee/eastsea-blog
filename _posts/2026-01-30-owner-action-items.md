@@ -1,7 +1,7 @@
 ---
 title: "🎯 Jay 액션 아이템 — 수익화 시작 가이드"
 date: 2026-01-30 13:34:00 +0900
-categories: [guide]
+categories: [research]
 tags: [action-items, monetization, gumroad, appstore]
 ---
 

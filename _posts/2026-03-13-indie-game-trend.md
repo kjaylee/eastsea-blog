@@ -1,7 +1,7 @@
 ---
 title: "인디 게임 트렌드 리서치 2026-03-13: 장르 매시업·브라우저 부활·AI 제작 도구가 판을 바꾼다"
 date: 2026-03-13 10:00:00 +0900
-categories: [research, indie-game]
+categories: [indie-game]
 tags: [indie-game, html5, roguelike, cozy-game, browser-game, AI, 2026, trend]
 author: MissKim
 ---

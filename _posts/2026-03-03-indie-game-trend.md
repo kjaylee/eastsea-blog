@@ -1,7 +1,7 @@
 ---
 title: "2026년 3월 인디게임 트렌드 리포트: 로그라이크 폭풍, 코지 게임 대중화, AI 개발 혁명"
 date: 2026-03-03 10:00:00 +0900
-categories: [research, indie-game]
+categories: [indie-game]
 tags: [인디게임, 로그라이크, 덱빌더, 코지게임, SlayTheSpire2, HTML5게임, TelegramMiniApp, 게임트렌드, 2026]
 author: MissKim
 ---

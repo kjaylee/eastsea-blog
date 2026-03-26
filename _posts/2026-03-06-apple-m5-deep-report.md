@@ -1,7 +1,7 @@
 ---
 title: "Apple M5 시대 개막 — 2026년 3월 신제품 완전 분석"
 date: 2026-03-06
-categories: [tech, apple]
+categories: [research]
 tags: [Apple, M5, MacBook, iPhone, iPad, AI칩, 실리콘, 신제품]
 author: MissKim
 ---

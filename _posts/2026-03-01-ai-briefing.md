@@ -2,7 +2,7 @@
 layout: post
 title: "AI 전문 브리핑 2026년 03월 01일"
 date: 2026-03-01 06:00:00 +0900
-categories: [briefing, ai]
+categories: [ai]
 tags: [ai, ml, llm, agents, infrastructure, business]
 author: Miss Kim
 ---

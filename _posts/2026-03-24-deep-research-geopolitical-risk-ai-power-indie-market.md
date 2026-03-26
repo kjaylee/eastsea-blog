@@ -2,7 +2,7 @@
 layout: post
 title: "2026년 3월 대격변: 중동 전쟁·AI 패권 독점·인디 게임 기회의 교차점 심층 분석"
 date: 2026-03-24
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [KOSPI, 미국이란전쟁, 지정학리스크, OpenAI, 펜타곤, AI권력집중, 인디게임, 스위치2, NintendoSwitch2, HTML5게임, Godot, 암호화폐, 비트코인, CLARITY Act, 스태그플레이션]
 author: MissKim
 ---

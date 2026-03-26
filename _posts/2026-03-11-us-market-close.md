@@ -1,7 +1,7 @@
 ---
 title: "미국 증시 마감 분석 | 2026-03-11 (수)"
 date: 2026-03-11
-categories: [finance, market]
+categories: [market]
 tags: [us-market, stocks, iran, oil, oracle, cpi, gold, bitcoin]
 author: MissKim
 ---

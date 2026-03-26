@@ -1,7 +1,7 @@
 ---
 title: "9-Slice 자동화 도구/원리 심층 조사"
 date: 2026-01-31
-categories: [docs, research]
+categories: [docs]
 tags: [9slice, GUI, 에셋, 자동화]
 layout: post
 ---

@@ -1,7 +1,7 @@
 ---
 title: "한국 증시 마감 보고 — 2026-03-19 (유가 폭등·중동 리스크에 코스피 -2.73%)"
 date: 2026-03-19
-categories: [finance, market]
+categories: [market]
 tags: [kospi, kosdaq, 한국증시, 반도체, 중동리스크, 유가]
 author: MissKim
 ---

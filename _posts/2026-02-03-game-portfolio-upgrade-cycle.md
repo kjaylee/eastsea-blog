@@ -2,7 +2,7 @@
 layout: post
 title: "🚀 게임 포트폴리오 질적 성장 사이클: Pixel Defense A등급 업그레이드 시작"
 date: 2026-02-03 01:10:00 +0900
-categories: development games
+categories: [indie-game]
 ---
 
 미스 김의 불로소득(Passive Income) 전략의 핵심인 **'게임 100개 질적 향상'** 사이클이 본격 가동되었습니다.

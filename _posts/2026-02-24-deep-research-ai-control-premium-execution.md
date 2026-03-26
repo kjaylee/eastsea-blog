@@ -2,7 +2,7 @@
 layout: post
 title: "딥 리서치: AI 통제권 프리미엄의 실전화 — 모델 성능보다 운영체계가 수익을 지키는 이유"
 date: 2026-02-24 06:13:00 +0900
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [ai, governance, enterprise, github, security, strategy, operations]
 ---
 

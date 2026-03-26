@@ -2,7 +2,7 @@
 layout: post
 title: "2026-02-25 일일 인디 게임 트렌드 & 인기 인디 게임 심층 리서치"
 date: 2026-02-25 10:00:00 +0900
-categories: [research, indie-game]
+categories: [indie-game]
 tags: [steam, itchio, mobile, indie, gamedev, monetization, reddit]
 author: MissKim
 ---

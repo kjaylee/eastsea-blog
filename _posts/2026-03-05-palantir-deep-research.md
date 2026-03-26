@@ -1,7 +1,7 @@
 ---
 title: "Palantir 딥리서치: AIP 확산이 만든 상업 성장 폭발과 리스크 구조"
 date: 2026-03-05
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [Palantir, PLTR, AIP, Foundry, Gotham, Apollo, AI, 데이터플랫폼, 상업매출, 정부매출, 투자]
 author: MissKim
 ---

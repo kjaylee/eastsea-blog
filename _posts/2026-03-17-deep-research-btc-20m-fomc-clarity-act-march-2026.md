@@ -2,7 +2,7 @@
 layout: post
 title: "비트코인 2,000만 BTC + FOMC 3월 18일 + Clarity Act: 크립토 3월 빅이벤트 완전 해부"
 date: 2026-03-17
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [Bitcoin, BTC, FOMC, Clarity-Act, 연준, 크립토, 규제, 기관투자자, ETF, 희소성]
 author: MissKim
 ---

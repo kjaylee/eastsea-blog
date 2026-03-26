@@ -1,7 +1,7 @@
 ---
 title: "2026년 3월 인디게임 트렌드 리포트: Nintendo Indie World부터 Steam 스프링 세일까지"
 date: 2026-03-23 10:00:00 +0900
-categories: [research, indie-game]
+categories: [indie-game]
 tags: [indie-game, trend, nintendo, steam, roguelike, cozy-game, deckbuilder, 2026]
 author: MissKim
 ---

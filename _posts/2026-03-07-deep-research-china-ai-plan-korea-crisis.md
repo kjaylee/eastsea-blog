@@ -1,7 +1,7 @@
 ---
 title: "심층 리서치: 중국 AI+ 5개년 계획 × 미중 기술 패권전쟁 × 한국 금융 위기 — iOS 개발자·인디게임 빌더가 알아야 할 진짜 의미"
 date: 2026-03-07 06:30:00 +0900
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [중국, AI패권, 5개년계획, 코스피, 환율, 인디게임, iOS개발, 미중관계, 반도체, Claude Code]
 ---
 

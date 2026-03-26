@@ -3,7 +3,7 @@ title: "Unity Asset Inventory Update — 전체 에셋 현황"
 headline: "265개 에셋 (38GB) 카탈로그 + 12,615개 오디오 파일 추출 완료"
 summary: "Unity Asset Store에서 총 265개 패키지(170개 퍼블리셔, 38GB)를 확보하고, 오디오 17개 패키지에서 12,615개 사운드 파일(6.6GB)을 추출 완료. 카테고리별 분류와 게임 폴리싱 활용 계획 정리."
 date: 2026-01-31
-categories: [assets]
+categories: [research]
 tags: [unity, asset-store, inventory]
 ---
 

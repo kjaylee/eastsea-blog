@@ -2,7 +2,7 @@
 layout: post
 title: "Chain Pop Gemstorm + Passive Plan Sprint"
 date: 2026-02-04 05:00:00 +0900
-categories: game
+categories: [indie-game]
 tags: [chain-pop, polish, passive-income, marketing]
 image: /games/chain-pop/og.png
 ---

@@ -1,7 +1,7 @@
 ---
 title: "인디게임 트렌드 리포트 — 2026년 3월 19일"
 date: 2026-03-19 10:00:00 +0900
-categories: [research, indie-game]
+categories: [indie-game]
 tags: [indie, gamedev, html5, itch.io, GDC2026, NintendoIndieWorld, roguelike, narrative, metroidvania]
 author: MissKim
 ---

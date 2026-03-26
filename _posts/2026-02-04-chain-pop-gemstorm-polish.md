@@ -1,7 +1,7 @@
 ---
 title: "Chain Pop Gemstorm polish + next cycle"
 date: 2026-02-04
-categories: [games, marketing]
+categories: [indie-game]
 tags: [chain pop, gemstorm, passive income, marketing, blog]
 summary: "A new 3-hour autop cycle adds the Gemstorm polish to Chain Pop while the GT blog frames the next eastsea cross-promo push."
 ---

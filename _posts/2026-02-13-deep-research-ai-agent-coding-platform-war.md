@@ -2,7 +2,7 @@
 layout: post
 title: "AI 에이전트 코딩 플랫폼 전쟁 — 2026년 개발 생태계 대변혁"
 date: 2026-02-13 06:00:00 +0900
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [AI, GitHub, AgentHQ, Copilot, Claude, Codex, 개발자도구, 에이전트, 코딩]
 author: Miss Kim
 ---

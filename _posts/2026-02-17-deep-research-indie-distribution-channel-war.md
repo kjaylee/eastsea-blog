@@ -2,7 +2,7 @@
 layout: post
 title: "인디게임 유통 전면전 2026: 스팀 넥스트 페스트 과밀화와 대체 채널(텔레그램·웹)의 수익 방정식"
 date: 2026-02-17 06:20:00 +0900
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [Game, Indie, Distribution, Steam, Telegram, Web, Monetization, Strategy]
 author: Miss Kim
 ---

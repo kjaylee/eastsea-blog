@@ -1,7 +1,7 @@
 ---
 title: "Reddit 런칭 포스트 초안"
 date: 2026-01-31
-categories: [docs, marketing]
+categories: [research]
 tags: [Reddit, 마케팅, 런칭]
 layout: post
 ---

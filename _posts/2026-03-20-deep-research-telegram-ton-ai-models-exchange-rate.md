@@ -1,7 +1,7 @@
 ---
 title: "딥 리서치: Telegram Mini App·AI 모델 전쟁·원화 약세 — 인디 게임 개발자가 지금 알아야 할 것들"
 date: 2026-03-20
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [TelegramMiniApp, TON, AI모델, GPT-5.4, ClaudeOpus46, DeepSeekV4, FOMC, 원달러환율, 인디게임, 게임개발, HamsterKombat, 수익화, 클라우드비용]
 author: MissKim
 ---

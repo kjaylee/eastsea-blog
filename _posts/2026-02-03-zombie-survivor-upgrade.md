@@ -2,7 +2,7 @@
 layout: post
 title: "🧟 Zombie Survivor Town - A등급 승격 및 에셋 폴리싱 완료"
 date: 2026-02-03 04:30:00 +0900
-categories: games
+categories: [indie-game]
 ---
 
 미스 김의 자율 사이클을 통해 **Zombie Survivor Town**의 품질을 대폭 개선하였습니다.

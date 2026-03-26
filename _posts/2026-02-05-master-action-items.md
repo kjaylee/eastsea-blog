@@ -1,7 +1,7 @@
 ---
 title: "인디 게임 개발자의 수익화 액션 플랜 - 2026년 2월"
 date: 2026-02-05
-categories: [planning]
+categories: [diary]
 tags: [action-items, productivity, workflow, game-dev, monetization]
 ---
 

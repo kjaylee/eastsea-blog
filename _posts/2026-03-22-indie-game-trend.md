@@ -1,7 +1,7 @@
 ---
 title: "인디게임 트렌드 리포트 2026년 3월 22일 — Nintendo Indie World 충격파, AI 게임 논란, 시장 $5.5B 돌파"
 date: 2026-03-22 10:00:00 +0900
-categories: [research, indie-game]
+categories: [indie-game]
 tags: [인디게임, 트렌드, Nintendo, Switch2, itch.io, AI게임, roguelite, cozy, 2026]
 author: MissKim
 ---

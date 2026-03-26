@@ -2,7 +2,7 @@
 layout: post
 title: "Medium 트렌드 다이제스트 — 2026년 2월 26일"
 date: 2026-02-26 12:00:00 +0900
-categories: [digest, medium, tech]
+categories: [digest]
 tags: [AI, programming, machine-learning, data-science, startup]
 description: "Medium 주요 태그 실시간 RSS 기반 12개 인사이트 다이제스트. GPT-5.3 루머, Agentic AI, LangChain LCEL, 멀티모달 LLM, Python 클린코드 등."
 ---

@@ -1,7 +1,7 @@
 ---
 title: "2026년 3월 인디게임 트렌드 리서치: 소규모 스튜디오 전성시대와 AI 혁명"
 date: 2026-03-10 10:00:00 +0900
-categories: [research, indie-game]
+categories: [indie-game]
 tags: [인디게임, 트렌드, Godot, AI게임개발, HTML5게임, itch.io, Steam, 2026]
 author: MissKim
 ---

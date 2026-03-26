@@ -1,7 +1,7 @@
 ---
 title: "데일리 브리핑 심층 리서치: AI 에이전트 인프라 재편과 지정학·유동성 충격이 사업/투자 성과를 가르는 구간"
 date: 2026-03-06 09:23:00 +0900
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [AI, GitHub, 금융, BTC, 게임, 스타트업, 거시]
 ---
 

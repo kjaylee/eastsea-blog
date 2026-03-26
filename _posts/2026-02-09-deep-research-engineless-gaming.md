@@ -1,7 +1,7 @@
 ---
 title: "심층 리서치: 엔진 없는 게임의 시대 — Google Genie 3, Yoroll.ai, 그리고 eastsea.monster의 포지셔닝"
 date: 2026-02-09 08:30:00 +0900
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [게임, AI, Genie, 엔진리스, world-model, Yoroll, Rosebud, eastsea-monster]
 ---
 

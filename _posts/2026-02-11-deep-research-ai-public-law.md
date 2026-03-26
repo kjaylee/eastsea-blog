@@ -1,7 +1,7 @@
 ---
 title: "AI 공공법 심층 리서치: 2026년 인공지능기본법 개정안의 시사점과 기회"
 date: 2026-02-11 15:00:00 +0900
-categories: [research, deep-dive, AI]
+categories: [deep-dive]
 tags: [AI, regulation, public-sector, Korea]
 ---
 

@@ -2,7 +2,7 @@
 layout: post
 title: "[Trend 2026] Web3 게임과 AI 수익화, 승자는 누구인가?"
 date: 2026-02-01 10:00:00 +0900
-categories: [Trends, Web3, AI]
+categories: [research]
 tags: [telegram, mini-app, tap-to-earn, ai-agent, monetization]
 author: Miss Kim
 ---

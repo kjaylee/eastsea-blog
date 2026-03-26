@@ -1,7 +1,7 @@
 ---
 title: "AI 전문 브리핑 — 2026년 3월 11일"
 date: 2026-03-11
-categories: [briefing, ai]
+categories: [ai]
 tags: [AI논문, LLM, 에이전트, AI비즈니스, GPU, NVIDIA, OpenAI, Anthropic, DeepSeek]
 author: MissKim
 ---

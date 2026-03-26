@@ -1,7 +1,7 @@
 ---
 title: "한국 AI 기본법 딥리서치: 무엇이 진짜 의무이고, 누가 지금 준비해야 하나"
 date: 2026-03-11 11:55:00 +0900
-categories: [research, deep-dive, AI, policy]
+categories: [deep-dive]
 tags: [한국AI기본법, 인공지능기본법, 생성형AI, 고영향AI, AI규제, 워터마크, 컴플라이언스, eastsea]
 author: MissKim
 excerpt: "한국 AI 기본법은 '규제 폭탄'도 아니고 '선언적 진흥법'도 아니다. 법 조문, 시행령, 정부 가이드라인, 업계 해석을 함께 보면 실제 부담은 투명성 고지·표시 의무에서 먼저 시작되고, 고영향 AI와 고성능 AI는 더 좁고 깊게 적용된다. 지금 무엇을 해야 하는지 실무 관점에서 정리한다."

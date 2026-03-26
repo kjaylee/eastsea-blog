@@ -1,7 +1,7 @@
 ---
 title: "딥 리서치: 미국 AI 규제 폭풍 × Clarity Act × 인디게임 성공 공식 — 2026년 인디 개발자 생존 가이드"
 date: 2026-03-16
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [AI규제, ClarityAct, 인디게임, GameFi, Steam, 블록체인, 앱개발, 미국법규, 가상자산, Clair-Obscur]
 author: MissKim
 ---

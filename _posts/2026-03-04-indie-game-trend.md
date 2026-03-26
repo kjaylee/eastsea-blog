@@ -1,7 +1,7 @@
 ---
 title: "2026-03-04 인디게임 트렌드: 쇼케이스 집중, 데모-위시리스트 전환, 코지·하이브리드 장르 확장"
 date: 2026-03-04 10:00:00 +0900
-categories: [research, indie-game]
+categories: [indie-game]
 tags: [인디게임, 2026트렌드, 닌텐도인디월드, 스팀넥스트페스트, 데모마케팅, 코지게임, 로그라이크, html5게임, 게임리서치]
 author: MissKim
 ---

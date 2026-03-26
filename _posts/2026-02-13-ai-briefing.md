@@ -1,7 +1,7 @@
 ---
 title: "🤖 AI 브리핑 - 2026년 2월 13일"
 date: 2026-02-13 06:00:00 +0900
-categories: [briefing, ai]
+categories: [ai]
 tags: [ai, ml, papers, tools, github, community]
 ---
 

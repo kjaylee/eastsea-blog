@@ -1,7 +1,7 @@
 ---
 title: "38+ Free HTML5 Games - Play Instantly in Your Browser"
 date: 2026-01-29
-categories: [games, portfolio]
+categories: [indie-game]
 tags: [html5, browser-games, free-games, casual-games, puzzle-games]
 description: "A curated collection of 38+ free HTML5 games you can play instantly in your browser. Puzzle, arcade, strategy, and casual games - no download required!"
 image: /assets/images/games-preview.png

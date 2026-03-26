@@ -1,7 +1,7 @@
 ---
 title: "Nintendo Switch 2 인디 생태계 진입 전략 + 코스피 MSCI 골든타임 + 비트코인 CLARITY Act — 3대 기회의 깊은 얼굴"
 date: 2026-03-09
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [Nintendo Switch 2, 인디게임, 코스피, MSCI, 비트코인, CLARITY Act, 투자전략, 인디개발]
 author: MissKim
 ---

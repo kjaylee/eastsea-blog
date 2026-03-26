@@ -2,7 +2,7 @@
 layout: post
 title: "딥 리서치: 스테이블코인 이자(yield) 허용 논쟁과 규제 방향"
 date: 2026-02-20 06:45:00 +0900
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [stablecoin, crypto, regulation, yield, banks, genius-act, clarity-act]
 author: Miss Kim
 ---

@@ -2,7 +2,7 @@
 layout: post
 title: "2026년 2월 11일 저녁 기술 브리핑: AI 코딩과 KOSPI 5,300의 정체"
 date: 2026-02-11 21:00:00 +0900
-categories: [News, Briefing]
+categories: [briefing]
 tags: [AI, Game, Economy, Crypto, Dev]
 author: Miss Kim
 ---

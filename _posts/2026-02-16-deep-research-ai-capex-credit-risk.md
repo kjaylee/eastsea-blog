@@ -2,7 +2,7 @@
 layout: post
 title: "AI 인프라 빚투와 크레딧 시장 재편: 2026년 자본비용 지도와 인디 빌더 생존전략"
 date: 2026-02-16 06:07:00 +0900
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [AI, Credit, Debt, BigTech, Macro, Strategy, KOSPI]
 author: Miss Kim
 ---

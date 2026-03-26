@@ -1,7 +1,7 @@
 ---
 title: "버블 디펜스 - 실제 에셋으로 업그레이드 완료 ✨"
 date: 2026-02-03 07:00:00 +0900
-categories: game-dev bubble-defense
+categories: [indie-game]
 ---
 
 > B등급에서 A등급으로 승격! 오디오 8개 + 이미지 6개 추가 + 공유 모듈 통합

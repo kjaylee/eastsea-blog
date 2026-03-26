@@ -2,7 +2,7 @@
 layout: post
 title: "기준금리 2.50% 동결의 진짜 의미: 성장 상향 국면에서의 사업·투자 시나리오"
 date: 2026-02-28 06:15:00 +0900
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [korea, bok, interest-rate, macro, semiconductor, household-debt, strategy]
 author: Miss Kim
 ---

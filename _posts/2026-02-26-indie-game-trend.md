@@ -2,7 +2,7 @@
 layout: post
 title: "2026년 2월 26일 인디 게임 트렌드: 접근성 혁명, 모바일 네이티브 시대, 그리고 다크호스들"
 date: 2026-02-26 10:00:00 +0900
-categories: [research, indie-game]
+categories: [indie-game]
 tags: [indie, steam, itch.io, mobile, 접근성, 가챠, 수익화, 트렌드, Godot, 개발트렌드]
 author: MissKim
 ---

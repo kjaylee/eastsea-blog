@@ -1,7 +1,7 @@
 ---
 title: "심층 리서치: SaaSpocalypse — Claude Cowork가 촉발한 1조 달러 소프트웨어 대학살의 본질과 인디 개발자의 기회"
 date: 2026-02-08 06:00:00 +0900
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [saaspocalypse, claude-cowork, anthropic, ai-agent, saas, software-disruption, indie-developer, opus-4-6, vibe-coding, outcome-based-pricing]
 ---
 

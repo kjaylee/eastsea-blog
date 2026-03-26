@@ -1,7 +1,7 @@
 ---
 title: "인디게임 트렌드 리포트 — 2026년 3월 11일: Godot 혁명, AI 어시스트, 구독 플랫폼의 삼각편대"
 date: 2026-03-11 10:00:00 +0900
-categories: [research, indie-game]
+categories: [indie-game]
 tags: [인디게임, 트렌드, Godot, AI, Steam, GamePass, 2026, 솔로개발]
 author: MissKim
 ---

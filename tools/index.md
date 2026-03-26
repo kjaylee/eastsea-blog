@@ -9,6 +9,7 @@
 - [Etsy 수수료·순이익 계산기](./etsy-fee-profit-calculator/) — 리스팅 수수료, 6.5% 거래 수수료, 결제 처리, 오프사이트 광고, 원가/포장/배송비를 반영해 주문당 순이익, 손익분기 판매가, 적자 전 최대 할인율을 계산합니다.
 - [Redbubble Royalty & Profit Calculator](./redbubble-royalty-margin-calculator/) — 아티스트 마진 %를 설정하고 판매당 로열티, 소비자 가격, 마진 효율, 월 수입 예상액을 계산합니다. 10개 상품 기본가 내장, 마진별 비교표 포함.
 - [eBay 수수료·순이익 계산기](./ebay-fee-profit-calculator/) — 최종 거래가 수수료, 주문당 수수료, promoted listings, buyer shipping, 판매세 추정을 반영해 주문당 순이익, 손익분기 판매가, 적자 전 최대 광고율을 계산합니다.
+- [Facebook Marketplace Fee & Profit Calculator](./facebook-marketplace-fee-profit-calculator/) — shipped 주문의 10%·최소 $0.80 공개 베이스라인, local pickup 0% 가정, 배송비·원가·포장비·광고비를 반영해 순이익, 손익분기 판매가, 목표 순이익 판매가를 계산합니다.
 - [Eventbrite Fee Calculator](./eventbrite-fee-calculator/) — Eventbrite의 공개 미국 유료 티켓 수수료(3.7% + $1.79, 2.9% processing)를 기준으로 buyer-pays vs organizer-covers, 참석자 결제 총액, 주최자 실수령액, 손익분기 티켓 가격을 계산합니다.
 - [Fiverr 셀러 수수료 계산기](./fiverr-seller-fee-calculator/) — 완료 주문 수, 평균 주문 금액, 팁, 출금 방법, 추가 정산 드래그를 반영해 Fiverr 20% 수수료 이후 실제 순수익, 실효 차감률, 건당 순수익을 계산합니다.
 - [Freelancer.com Fee Calculator](./freelancer-com-fee-calculator/) — 고정가 10% 또는 최소 $5, 시급 10%, 초과 지급액·보너스 10%를 반영해 실제 실수령액, 순이익, 손익분기 총청구액, 목표 순이익용 총청구액을 계산합니다.
@@ -25,6 +26,7 @@
 - [Ko-fi 수수료 계산기](./ko-fi-fee-calculator/) — Ko-fi Free와 Contributor 모드, tips·memberships·shop·monthly payments·commissions 유형별 서비스 수수료와 결제 처리 수수료를 반영해 실제 실수령액, 목표 순이익 달성 평균 결제금액, 손익분기 거래량을 계산합니다.
 - [Buy Me a Coffee 수수료 계산기](./buy-me-a-coffee-fee-calculator/) — Buy Me a Coffee 5% 플랫폼 수수료, Stripe 카드 수수료, 0.5% payout drag, 후원자 부담 카드 수수료 설정, 보상 원가를 반영해 실제 순수령액과 손익분기 평균 후원 금액을 계산합니다.
 - [Gumroad 순수익 계산기](./gumroad-net-revenue-calculator/) — 직접/프로필 판매와 Discover 판매를 분리해 Gumroad의 10% + $0.50 direct fee, 30% Discover fee, payout drag 이후 순수익과 건당 take-home 차이를 계산합니다.
+- [OnlyFans Earnings Calculator](./onlyfans-earnings-calculator/) — OnlyFans 20% 수수료, 환불, 정산 지연, 운영비를 반영해 구독·팁·PPV 수익의 실수령액, 목표 달성 필요 구독자, 손익분기 구독자를 계산합니다.
 - [Twitch Revenue Calculator](./twitch-revenue-calculator/) — Tier 1/2/3 구독, Prime Gaming 구독, 비트, 광고 수익, 기타 수입을 합산해 월·연간 트위치 스트리머 예상 수익, 수익원별 구성 비중, 구독자당 평균 수익을 계산합니다.
 - [Udemy Instructor Revenue Calculator](./udemy-instructor-revenue-calculator/) — 쿠폰(97%), 오가닉(37%), 제휴(25%), Udemy Business 분당 요율 4가지 채널을 반영해 강사 월간 순수익, 채널별 수익 비중, 연간 예상 수익을 계산합니다.
 - [Lemon Squeezy Fee Calculator](./lemon-squeezy-fee-calculator/) — Lemon Squeezy의 기본 5%, 국제 결제·PayPal·구독 가산, 정산 방식별 수수료를 반영해 주문당 순수익, 기간 순수익, 목표 순수익 달성 판매가를 계산합니다.
@@ -93,3 +95,5 @@
 - [모기지 추가 상환 계산기](./mortgage-extra-payment-calculator/) — 월 추가 납입과 연간 목돈 상환이 주택담보대출 이자 절감과 상환기간 단축에 얼마나 도움이 되는지 계산합니다.
 
 - [JSON ↔ YAML 변환기](./json-yaml-converter/) — JSON과 YAML을 실시간 양방향 변환합니다. 에러 라인 표시, 2/4 스페이스 들여쓰기 선택, 복사·다운로드·드래그앤드롭 파일 업로드 지원.
+
+- [TikTok Shop Fee Profit Calculator](./tiktok-shop-fee-profit-calculator/)

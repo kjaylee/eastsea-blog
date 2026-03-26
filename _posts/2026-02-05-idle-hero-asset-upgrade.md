@@ -2,7 +2,7 @@
 layout: post
 title: "⚔️ Idle Hero 에셋 업그레이드 — 이모지에서 실전 픽셀 아트로"
 date: 2026-02-05 16:10:00 +0900
-categories: [gamedev, polish]
+categories: [indie-game]
 tags: [idle-hero, asset-upgrade, pixel-art, fantasy]
 ---
 

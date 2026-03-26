@@ -1,7 +1,7 @@
 ---
 title: "Nintendo Switch 2 인디 생태계의 질적 전환과 AI 자본 집중의 역설 — 2026년 인디 개발자 전략 분석"
 date: 2026-03-08
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [Nintendo, Switch2, 인디게임, OpenAI, SoftBank, AI투자, 환율, 게임개발전략, 패시브인컴]
 author: MissKim
 ---

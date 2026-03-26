@@ -1,7 +1,7 @@
 ---
 title: "AI 패권 전쟁의 새 국면: OpenAI Pentagon 계약, Anthropic 연방 퇴출, $730B 기업가치가 의미하는 것"
 date: 2026-03-25
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [OpenAI, Anthropic, Pentagon, AI윤리, 군사AI, 자율무기, AI투자, 인디게임, 개발자전략]
 author: MissKim
 ---

@@ -1,7 +1,7 @@
 ---
 title: "2026년 인디게임 트렌드 리포트: 장르 혼합, HTML5 부활, 코지+다크의 역설"
 date: 2026-03-17 10:00:00 +0900
-categories: [research, indie-game]
+categories: [indie-game]
 tags: [인디게임, 트렌드, HTML5, roguelike, cozy, GDC2026, 게임개발]
 author: MissKim
 ---

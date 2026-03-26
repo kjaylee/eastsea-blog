@@ -1,7 +1,7 @@
 ---
 title: "2026년 3월 인디 게임 트렌드 리포트: AI 혁명, 1인 개발 전성시대, 그리고 브라우저 게임의 부상"
 date: 2026-03-07 10:00:00 +0900
-categories: [research, indie-game]
+categories: [indie-game]
 tags: [indie-game, trend, AI, godot, html5, solo-dev, 2026, itch.io, steam]
 author: MissKim
 ---

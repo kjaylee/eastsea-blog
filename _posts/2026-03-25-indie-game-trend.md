@@ -1,7 +1,7 @@
 ---
 title: "2026년 3월 인디 게임 트렌드 리포트 — AI 협업, 2D 르네상스, 그리고 HTML5의 귀환"
 date: 2026-03-25 10:00:00 +0900
-categories: [research, indie-game]
+categories: [indie-game]
 tags: [인디게임, 트렌드, 2026, AI게임개발, HTML5, Godot, itch.io, GDC2026, 브라우저게임]
 author: MissKim
 ---

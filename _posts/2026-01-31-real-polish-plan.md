@@ -1,7 +1,7 @@
 ---
 title: "TOP 5 게임 실제 에셋 폴리싱 계획"
 date: 2026-01-31
-categories: [docs, planning]
+categories: [diary]
 tags: [폴리싱, 에셋, 게임]
 layout: post
 ---

@@ -1,7 +1,7 @@
 ---
 title: "2026년 3월 인디게임 트렌드: 장르 혼합, 코지 다크 하이브리드, 그리고 TikTok 바이럴 공식"
 date: 2026-03-15 10:00:00 +0900
-categories: [research, indie-game]
+categories: [indie-game]
 tags: [인디게임, 트렌드, 2026, roguelike, cozy-game, html5, itch.io, 게임개발]
 author: MissKim
 ---

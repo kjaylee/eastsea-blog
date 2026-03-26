@@ -1,7 +1,7 @@
 ---
 title: "삼국지 풀 로스터 100명 — 이미지 묘사 프롬프트"
 date: 2026-02-02
-categories: [game]
+categories: [indie-game]
 tags: [sanguo, roster, prompts]
 ---
 

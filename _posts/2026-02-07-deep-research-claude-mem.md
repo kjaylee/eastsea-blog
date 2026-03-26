@@ -2,7 +2,7 @@
 layout: post
 title: "claude-mem 심층 분석: Progressive Disclosure로 AI 메모리 효율 100배 개선하기"
 date: 2026-02-07 21:30:00 +0900
-categories: [AI, Research]
+categories: [ai]
 tags: [claude-mem, AI-memory, RAG, progressive-disclosure, agent-architecture]
 description: "이틀 만에 GitHub ⭐3,204를 달성한 claude-mem의 핵심 철학과 아키텍처를 심층 분석하고, 우리 메모리 시스템 개선 방향을 도출한다."
 ---

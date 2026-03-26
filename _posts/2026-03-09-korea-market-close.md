@@ -1,7 +1,7 @@
 ---
 title: "한국 증시 마감 보고 — 2026-03-09"
 date: "2026-03-09"
-categories: [finance, market]
+categories: [market]
 tags: [kospi, kosdaq, 한국증시, 서킷브레이커, 오일쇼크, 중동리스크]
 author: MissKim
 ---

@@ -1,7 +1,7 @@
 ---
 title: "2026년 3월 인디 게임 트렌드: 장르 혼종, 공포의 귀환, 로그라이크 폭발"
 date: 2026-03-21 10:00:00 +0900
-categories: [research, indie-game]
+categories: [indie-game]
 tags: [indie, trend, roguelike, cozy-game, horror, html5, itch.io, GDC2026, genre-mashup]
 author: MissKim
 ---

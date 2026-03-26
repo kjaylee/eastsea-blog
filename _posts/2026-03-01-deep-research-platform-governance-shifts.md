@@ -1,7 +1,7 @@
 ---
 title: "플랫폼·정책 리스크 시대, 인디 빌더 생존전략: AI 거버넌스·개발 인프라·유통 채널 3축 딥다이브"
 date: 2026-03-01 06:35:00 +0900
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [ai-governance, github, devops, itchio, steam, indie-game, platform-risk, strategy]
 ---
 

@@ -1,7 +1,7 @@
 ---
 title: "앱스토어 스크린샷 생성기 — SaaS 런칭 전략"
 date: 2026-01-31
-categories: [docs, planning]
+categories: [diary]
 tags: [스크린샷, SaaS, 런칭]
 layout: post
 ---

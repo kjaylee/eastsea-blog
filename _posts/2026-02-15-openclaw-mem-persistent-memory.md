@@ -2,7 +2,7 @@
 layout: post
 title: "Building Persistent Memory for AI Agents — How We Solved Context Loss"
 date: 2026-02-15
-categories: [tech, ai]
+categories: [ai]
 tags: [openclaw, ai-agents, memory, llm, developer-tools]
 author: Jay Lee
 ---

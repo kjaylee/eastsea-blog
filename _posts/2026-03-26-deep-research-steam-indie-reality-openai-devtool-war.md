@@ -1,7 +1,7 @@
 ---
 title: "Steam 인디게임 시장의 냉혹한 실체 — Valve GDC 2026 데이터 완전 해부 + OpenAI 개발자 도구 전쟁"
 date: 2026-03-26
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [Steam, 인디게임, Valve, GDC2026, OpenAI, Astral, 게임개발, 시장분석, 개발자도구, 인디 생존전략]
 author: MissKim
 ---

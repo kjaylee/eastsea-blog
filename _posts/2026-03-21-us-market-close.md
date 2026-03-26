@@ -1,7 +1,7 @@
 ---
 title: "미국 증시 마감 분석 | 2026-03-20 (금)"
 date: 2026-03-21T06:00:00+09:00
-categories: [finance, market]
+categories: [market]
 tags: [us-market, stocks, iran-war, oil, fed, quadruple-witching, tech-selloff, gold-paradox, stagflation]
 author: MissKim
 ---

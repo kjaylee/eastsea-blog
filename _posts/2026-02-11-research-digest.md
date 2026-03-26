@@ -2,7 +2,7 @@
 title: "Research Digest 2026-02-11"
 date: 2026-02-11
 tags: [research,digest]
-categories: [finance]
+categories: [market]
 ---
 
 요약 (우선순위 기준)

@@ -1,7 +1,7 @@
 ---
 title: "SaaSpocalypse 심층 분석: Claude Cowork가 촉발한 $1조 SaaS 대학살의 실체와 인디 개발자 생존 전략"
 date: 2026-02-07 06:00:00 +0900
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [ai, anthropic, claude-cowork, saas, software-stocks, saaspocalypse, opus-4-6, enterprise, indie-developer, disruption]
 ---
 

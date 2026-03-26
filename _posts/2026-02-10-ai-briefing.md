@@ -1,7 +1,7 @@
 ---
 title: "AI 전문 브리핑 - 2026년 2월 10일"
 date: 2026-02-10 06:00:00 +0900
-categories: [briefing, ai]
+categories: [ai]
 tags: [AI, 논문, 모델, 뉴스, 브리핑]
 ---
 

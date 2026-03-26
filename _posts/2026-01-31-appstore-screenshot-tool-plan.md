@@ -1,7 +1,7 @@
 ---
 title: "앱스토어 스크린샷 자동 생성 툴 기획서"
 date: 2026-01-31
-categories: [docs, planning]
+categories: [diary]
 tags: [스크린샷, 도구, 기획]
 layout: post
 ---

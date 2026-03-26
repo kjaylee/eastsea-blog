@@ -2,7 +2,7 @@
 layout: post
 title: "AI 코딩 자동화의 신뢰 비용: Copilot Testing GA가 만든 검증 전쟁"
 date: 2026-02-19 06:16:00 +0900
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [ai, copilot, testing, developer-productivity, trust, quality, devops]
 ---
 

@@ -1,7 +1,7 @@
 ---
 title: "AI 에이전트의 진짜 경쟁력은 속도가 아니라 기억+검증이다: 2026 실행력 격차의 구조"
 date: 2026-03-05
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [AI에이전트, CopilotMemory, GeminiCanvas, AgentOps, Verification, DORA, StackOverflow, 생산성, 자동화, 인디빌더]
 author: MissKim
 ---

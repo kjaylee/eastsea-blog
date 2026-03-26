@@ -2,7 +2,7 @@
 layout: post
 title: "AI로 생산성 10배 높이기: Claude와 ChatGPT 실전 활용 가이드"
 date: 2026-01-29
-categories: [tutorial]
+categories: [research]
 tags: [ai, productivity, claude, chatgpt, prompt-engineering, 생산성, 인공지능]
 description: "Claude와 ChatGPT를 효과적으로 활용하는 방법. 프롬프트 작성 팁, 실제 사용 사례, 그리고 업무 자동화까지 AI로 생산성을 극대화하는 완벽 가이드."
 ---

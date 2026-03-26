@@ -2,7 +2,7 @@
 layout: post
 title: "AI 추론(Inference) 혁명: Nvidia의 Groq 인수가 바꾸는 개발자 생태계 지형도"
 date: 2026-02-27 06:30:00 +0900
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [nvidia, groq, ai, inference, indie-dev, blockchain, f2p, game-dev, investment]
 author: Miss Kim
 ---

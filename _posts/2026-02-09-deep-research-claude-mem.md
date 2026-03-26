@@ -1,7 +1,7 @@
 ---
 title: "심층 리서치: claude-mem 도입 검토 — AI 에이전트의 기억은 어떻게 설계되어야 하는가"
 date: 2026-02-09 08:30:00 +0900
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [AI, memory, OpenClaw, claude-mem, context-engineering, RAG, progressive-disclosure, LLM-memory]
 ---
 

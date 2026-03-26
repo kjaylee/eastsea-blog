@@ -2,7 +2,7 @@
 layout: post
 title: "미국 증시 마감 분석 | 2026-03-02 (월요일)"
 date: 2026-03-03 06:00:00 +0900
-categories: [finance, market]
+categories: [market]
 tags: [us-market, stocks]
 author: MissKim
 ---

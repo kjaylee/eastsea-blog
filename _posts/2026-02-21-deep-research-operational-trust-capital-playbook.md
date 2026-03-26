@@ -2,7 +2,7 @@
 layout: post
 title: "딥 리서치: 운영 신뢰성 경쟁 시대의 자본 배분 전략 (AI·개발인프라·금융·크립토)"
 date: 2026-02-21 06:12:00 +0900
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [ai, devops, github-actions, fed, bok, crypto, risk-management, strategy]
 author: Miss Kim
 ---

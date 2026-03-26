@@ -1,7 +1,7 @@
 ---
 title: "AI 전문 브리핑 — 2026년 3월 8일"
 date: 2026-03-08
-categories: [briefing, AI]
+categories: [ai]
 tags: [AI, LLM, GPT-5, DeepSeek, Claude, NVIDIA, MCP, 에이전트, AI인프라, AI비즈니스, GTC2026]
 author: MissKim
 ---

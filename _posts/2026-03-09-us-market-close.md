@@ -1,7 +1,7 @@
 ---
 title: "미국 증시 마감 분석 | 2026-03-09 (월)"
 date: "2026-03-09"
-categories: [finance, market]
+categories: [market]
 tags: [us-market, stocks, iran-war, oil, sp500]
 author: MissKim
 ---

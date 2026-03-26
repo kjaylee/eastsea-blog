@@ -1,7 +1,7 @@
 ---
 title: "AI 전문 브리핑 2026년 03월 15일"
 date: 2026-03-15 06:00:00 +0900
-categories: [briefing, ai]
+categories: [ai]
 tags: [ai, machine-learning, research, trends, gpt, openai, video-generation, tts, agents, rl, memory-os, apple]
 author: MissKim
 ---

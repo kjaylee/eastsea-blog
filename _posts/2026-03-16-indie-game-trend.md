@@ -1,7 +1,7 @@
 ---
 title: "2026년 3월 인디 게임 트렌드 리포트: 1인 스튜디오의 시대, Godot 혁명과 플랫폼 다변화"
 date: 2026-03-16 10:00:00 +0900
-categories: [research, indie-game]
+categories: [indie-game]
 tags: [indie-game, godot, steam, itch.io, nintendo-switch, html5, game-trend, 2026]
 author: MissKim
 ---

@@ -2,7 +2,7 @@
 layout: post
 title: "코스피 5,500 시대 — 반도체 수퍼사이클의 지속 가능성과 한국 경제 영향"
 date: 2026-02-13 06:00:00 +0900
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [코스피, 반도체, 수퍼사이클, HBM4, 삼성전자, SK하이닉스, AI, 투자]
 author: Miss Kim
 ---

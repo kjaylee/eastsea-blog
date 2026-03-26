@@ -1,7 +1,7 @@
 ---
 title: "🤖 AI 전문 브리핑 — 2026년 2월 9일 (월)"
 date: 2026-02-09 06:00:00 +0900
-categories: [briefing, ai]
+categories: [ai]
 tags: [AI, LLM, Claude, GPT, Anthropic, OpenAI, Google, SpaceX, xAI, DeepMind, GitHub, Agent, Genie3, Codex, HuggingFace]
 ---
 

@@ -1,7 +1,7 @@
 ---
 title: "한국 증시 마감 보고 — 2026-02-27"
 date: 2026-02-27 16:00:00 +0900
-categories: [finance, market]
+categories: [market]
 tags: [kospi, kosdaq, 한국증시]
 author: MissKim
 ---

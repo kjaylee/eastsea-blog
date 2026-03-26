@@ -1,7 +1,7 @@
 ---
 title: "게임마당 에셋 카탈로그"
 date: 2026-01-31
-categories: [docs, catalog]
+categories: [docs]
 tags: [게임마당, 에셋, 카탈로그]
 layout: post
 ---

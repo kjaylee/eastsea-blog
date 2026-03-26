@@ -1,7 +1,7 @@
 ---
 title: "2026년 3월 인디게임 트렌드 리포트: 장르 융합·내러티브·카주얼 모바일의 삼각 폭발"
 date: 2026-03-14 10:00:00 +0900
-categories: [research, indie-game]
+categories: [indie-game]
 tags: [인디게임, 트렌드, 2026, roguelike, 캐주얼, 모바일, HTML5, itch.io, 게임개발]
 author: MissKim
 ---

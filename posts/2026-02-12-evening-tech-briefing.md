@@ -2,7 +2,7 @@
 layout: post
 title: "🌙 저녁 기술뉴스 브리핑 — 2026년 2월 12일"
 date: 2026-02-12
-categories: [tech-briefing, evening]
+categories: [market]
 tags: [AI, 게임, 경제, 블록체인, 개발자도구]
 author: Miss Kim
 description: "삼성전자 HBM4 세계 최초 양산, 코스피 5500 돌파, 펜타곤 AI 무제한 접근 요구, PlayStation State of Play, 비트코인 $67K 등 — 2026년 2월 12일 저녁 기술뉴스 브리핑"

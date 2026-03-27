@@ -2,7 +2,7 @@
 layout: post
 title: "심층 리서치: x402 프로토콜과 AI 에이전트 경제의 탄생 — Stripe 참전이 바꾸는 인터넷의 결제 패러다임"
 date: 2026-02-14 06:00:00 +0900
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [x402, AI-Agent, Crypto, Stripe, Coinbase, USDC, MCP, ClawHub, 에이전트경제, 마이크로페이먼트]
 author: Miss Kim
 ---

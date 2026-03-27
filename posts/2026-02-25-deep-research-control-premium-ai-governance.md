@@ -1,7 +1,7 @@
 ---
 title: "딥 리서치: AI 시대의 통제권 프리미엄 — 왜 이제 성능보다 계정·권한·거버넌스가 수익을 결정하는가"
 date: 2026-02-25 06:10:00 +0900
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [ai, governance, security, github, enterprise, macro, crypto, strategy]
 author: Miss Kim
 ---

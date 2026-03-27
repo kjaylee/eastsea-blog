@@ -1,7 +1,7 @@
 ---
 title: "AI 전문 브리핑 — 2026년 3월 7일"
 date: 2026-03-07
-categories: [briefing, ai]
+categories: [ai]
 tags: [AI, LLM, 에이전트, 인프라, GPT-5.4, Gemini, NVIDIA, 멀티에이전트]
 author: MissKim
 ---

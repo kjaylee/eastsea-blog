@@ -2,7 +2,7 @@
 layout: post
 title: "딥 리서치: 트리플 패러다임 전환 — FOMC 매파 충격·오픈소스 LLM 코딩 혁명·미국 암호화폐 기관화 대변혁 (2026.03.22)"
 date: 2026-03-22
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [FOMC, 금리, 원달러, 이란전쟁, NousCoder, 오픈소스LLM, 로컬AI, ClaudeCode, BlackRock, ETHB, 스테이킹ETF, ClarityAct, 암호화폐규제, 인디개발자]
 author: MissKim
 ---

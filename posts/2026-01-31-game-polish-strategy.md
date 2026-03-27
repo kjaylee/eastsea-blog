@@ -1,7 +1,7 @@
 ---
 title: "East Sea Games — 폴리싱 전략 (TOP 5)"
 date: 2026-01-31
-categories: [docs, strategy]
+categories: [research]
 tags: [게임, 폴리싱, 에셋]
 layout: post
 ---

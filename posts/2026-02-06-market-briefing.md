@@ -2,7 +2,7 @@
 layout: post
 title: "2026-02-06 증시 브리핑"
 date: 2026-02-06 05:00:00 +0900
-categories: market briefing
+categories: [market]
 ---
 
 ## 📊 미국 증시 마감 (2월 5일)

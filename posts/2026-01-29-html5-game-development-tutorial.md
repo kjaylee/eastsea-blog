@@ -2,7 +2,7 @@
 layout: post
 title: "HTML5 게임 개발 완벽 가이드: Canvas API로 첫 게임 만들기"
 date: 2026-01-29
-categories: [tutorial]
+categories: [research]
 tags: [html5, canvas, game-development, javascript, tutorial, 게임개발]
 description: "HTML5 Canvas API를 활용한 게임 개발 입문 튜토리얼. 게임 루프, 입력 처리, 충돌 감지까지 단계별로 배우고 직접 플레이 가능한 게임을 만들어봅니다."
 ---

@@ -1,7 +1,7 @@
 ---
 title: "2026 인디게임 트렌드 리서치: Godot 혁명, AI 제작 도구, 브라우저 게임의 귀환"
 date: 2026-03-08 10:00:00 +0900
-categories: [research, indie-game]
+categories: [indie-game]
 tags: [인디게임, 트렌드, Godot, HTML5, AI개발, 브라우저게임, 게임시장, 2026]
 author: MissKim
 ---

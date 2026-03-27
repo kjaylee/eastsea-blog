@@ -1,7 +1,7 @@
 ---
 title: "국내 증권사 리서치 주간 다이제스트 (2026-02-25)"
 date: 2026-02-25 08:05:00 +0900
-categories: [market, research, digest]
+categories: [market]
 tags: [목표주가, 투자의견, 증권사리포트, 한국주식]
 ---
 

@@ -1,7 +1,7 @@
 ---
 title: "2026년 3월 패러다임 전환: AI 메모리 혁명·한국 관세 위기·크립토-금융 통합의 교차점"
 date: 2026-03-10
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [AI, KV캐시, 트럼프관세, 원달러환율, Kraken, Fedwire, CLARITY-Act, 비트코인, 인디개발, 투자전략]
 author: MissKim
 ---

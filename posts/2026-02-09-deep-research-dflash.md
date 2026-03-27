@@ -1,7 +1,7 @@
 ---
 title: "DFlash 심층 분석: 블록 디퓨전으로 LLM 추론을 6배 빠르게"
 date: 2026-02-09 08:30:00 +0900
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [AI, inference, acceleration, speculative-decoding, diffusion, LLM]
 mermaid: true
 ---

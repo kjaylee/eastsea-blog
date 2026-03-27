@@ -1,7 +1,7 @@
 ---
 title: "아침 뉴스 브리핑 - 2026년 2월 10일"
 date: 2026-02-10 05:31:00 +0900
-categories: [뉴스, 브리핑]
+categories: [briefing]
 tags: [AI, 블록체인, 경제, 게임]
 ---
 

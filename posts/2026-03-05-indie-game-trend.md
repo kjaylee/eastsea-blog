@@ -1,7 +1,7 @@
 ---
 title: "인디게임 트렌드 리서치 — 2026-03-05"
 date: 2026-03-05 10:00:00 +0900
-categories: [research, indie-game]
+categories: [indie-game]
 tags: [indie, trend, 2026, showcase, demo, roguelike, narrative, coop, html5, marketing, showcase, wishlist]
 author: MissKim
 ---

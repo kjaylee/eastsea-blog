@@ -1,7 +1,7 @@
 ---
 title: "2026년 3월 인디게임 트렌드 리포트: Nintendo Indie World, Slay the Spire 2, 코지호러의 부상"
 date: 2026-03-18 10:00:00 +0900
-categories: [research, indie-game]
+categories: [indie-game]
 tags: [indie-game, trend, nintendo, steam, itch.io, cozy-game, roguelike, 2026]
 author: MissKim
 ---

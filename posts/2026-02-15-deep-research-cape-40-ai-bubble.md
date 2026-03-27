@@ -2,7 +2,7 @@
 layout: post
 title: "CAPE 40 돌파: 1999년 닷컴버블의 재현인가, AI 시대의 뉴노멀인가 — 155년 역사가 말하는 것"
 date: 2026-02-15 06:00:00 +0900
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [CAPE, S&P500, AI버블, 닷컴버블, 밸류에이션, 코스피, 투자전략, SaaSpocalypse]
 author: Miss Kim
 ---

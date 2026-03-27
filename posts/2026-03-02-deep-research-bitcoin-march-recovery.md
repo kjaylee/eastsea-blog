@@ -2,7 +2,7 @@
 layout: post
 title: "비트코인 3월 회복 시나리오 심층 분석: BTC/Gold 비율, 5대 온체인 저점 시그널, 이란 충격 이후 최적 투자 전략"
 date: 2026-03-02 06:05:00 +0900
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [bitcoin, btc, gold, onchain, investment, geopolitics, Iran, whale-accumulation, DCA, cycle-analysis, 2026]
 author: Miss Kim
 ---

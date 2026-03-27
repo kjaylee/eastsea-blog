@@ -1,7 +1,7 @@
 ---
 title: "🏆 마일스톤 달성: 게임 100개 + 도구 100개 동시 돌파!"
 date: 2026-02-07
-categories: [milestone, portfolio]
+categories: [diary]
 tags: [html5, games, tools, web-development, achievement]
 description: "단일 HTML 파일 아키텍처로 구현한 105개 게임과 17개 개발 도구 - 브라우저에서 즉시 실행 가능한 웹 애플리케이션 컬렉션"
 image: /assets/images/milestone-100-100.png

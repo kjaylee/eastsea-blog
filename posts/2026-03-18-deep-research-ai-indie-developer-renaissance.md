@@ -2,7 +2,7 @@
 layout: post
 title: "AI 소형 모델 혁명과 인디 개발자 르네상스 — 2026년 3월, 기업 대량 해고가 열어주는 구조적 기회"
 date: 2026-03-18 06:30:00 +0900
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [AI, GPT-5.4-mini, 인디개발자, 대량해고, Block, Dorsey, FOMC, BTC, 텔레그램미니앱, NintendoSwitch2, 소형모델]
 author: MissKim
 ---

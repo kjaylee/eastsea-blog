@@ -1,7 +1,7 @@
 ---
 title: "itch.io 등록 준비 — TOP 5 게임 선별"
 date: 2026-01-31
-categories: [docs, marketing]
+categories: [research]
 tags: [itch.io, 게임배포, 마케팅]
 layout: post
 ---

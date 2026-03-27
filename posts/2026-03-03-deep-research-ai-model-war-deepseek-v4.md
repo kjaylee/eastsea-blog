@@ -1,7 +1,7 @@
 ---
 title: "딥시크 V4와 AI 모델 전쟁의 새 국면: 중국이 60%를 점령한 개발자 생태계"
 date: 2026-03-03
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [DeepSeek, AI모델전쟁, 중국AI, OpenRouter, Claude, MiniMax, 화웨이, 양회, 인디게임개발, API비용]
 author: MissKim
 ---

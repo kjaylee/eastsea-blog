@@ -1,7 +1,7 @@
 ---
 title: "🌙 저녁 기술뉴스 브리핑 — 2026년 2월 14일"
 date: 2026-02-14
-category: briefing
+categories: [briefing]
 tags: [AI, 게임, 경제, 블록체인, 개발자도구]
 lang: ko
 ---

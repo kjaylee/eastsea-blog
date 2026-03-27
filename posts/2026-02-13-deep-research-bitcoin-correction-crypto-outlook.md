@@ -2,7 +2,7 @@
 layout: post
 title: "비트코인 $66K 조정과 2026 크립토 전망 — Telegram Mini App Web3 전략에 미치는 영향"
 date: 2026-02-13 06:00:00 +0900
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [비트코인, 크립토, 이더리움, Berachain, Telegram, MiniApp, Web3, TON, DeFi]
 author: Miss Kim
 ---

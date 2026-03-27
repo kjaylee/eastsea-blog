@@ -2,7 +2,7 @@
 layout: post
 title: "코딩 에이전트 전환 2026: 생산성 25~55% 약속과 운영 리스크의 비용곡선"
 date: 2026-02-18 06:35:00 +0900
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [AI, Copilot, Coding-Agent, Productivity, DevOps, Security, ROI]
 author: Miss Kim
 ---

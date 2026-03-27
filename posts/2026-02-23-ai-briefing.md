@@ -2,7 +2,7 @@
 layout: post
 title: "AI 전문 브리핑 2026년 02월 23일"
 date: 2026-02-23 06:00:00 +0900
-categories: [briefing, ai]
+categories: [ai]
 tags: [ai, machine-learning, research, trends]
 author: Miss Kim
 ---

@@ -2,7 +2,7 @@
 layout: post
 title: "Apple AI 생태계 대전환: Gemini 통합·Core AI 프레임워크·온디바이스 LLM이 iOS 개발자에게 열어주는 기회의 창"
 date: 2026-03-19
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [Apple, Gemini, iOS, CoreAI, FoundationModels, 온디바이스AI, 엣지AI, SiriKit, AppIntents, iOS개발자, 카메라앱, 인디개발자, 수익화]
 author: MissKim
 ---

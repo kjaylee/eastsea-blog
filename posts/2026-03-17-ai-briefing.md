@@ -1,7 +1,7 @@
 ---
 title: "AI 전문 브리핑 2026년 03월 17일"
 date: 2026-03-17 06:00:00 +0900
-categories: [briefing, ai]
+categories: [ai]
 tags: [ai, machine-learning, research, trends, nvidia, gtc2026, llm, tts, video-generation, agentic-ai]
 author: Miss Kim
 ---

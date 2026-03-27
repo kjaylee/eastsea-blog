@@ -3,7 +3,7 @@ title: "유니티 에셋 인벤토리 & 추가 다운로드 가이드"
 headline: "보유 에셋 11개(9.3GB) 분석 + 부족 카테고리별 추천 에셋 34선"
 summary: "현재 보유 중인 Unity Asset Store 에셋 11개를 카테고리별로 분석하고, 51개 HTML5 게임 포트폴리오에서 부족한 에셋 카테고리(2D 캐릭터, 배경/타일셋, 음식 스프라이트, 자연 스프라이트, 캐주얼/레트로 음악)를 파악하여 무료+유료 추천 에셋 34개를 우선순위별로 정리했다."
 date: 2026-01-31
-categories: [assets]
+categories: [research]
 tags: [unity, game-dev, asset-store, 2D, audio, sprites]
 ---
 

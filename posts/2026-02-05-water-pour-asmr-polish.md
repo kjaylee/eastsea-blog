@@ -2,7 +2,7 @@
 layout: post
 title: "💧 Water Pour — ASMR Puzzle Polish & A-Grade Upgrade"
 date: 2026-02-05 14:36 +0900
-categories: games passive-income
+categories: [indie-game]
 tags: water-pour puzzle asmr neon polish
 author: Jay Lee
 description: "Water Pour gets the neon treatment: full audio ASMR, particle effects, wave animations, and Telegram Mini App integration. From C-grade to A-grade polish."

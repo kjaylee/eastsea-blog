@@ -1,7 +1,7 @@
 ---
 title: "삼국지 SNAP — 기획서"
 date: 2026-01-31
-categories: [docs, planning]
+categories: [diary]
 tags: [삼국지, 카드게임, 기획]
 layout: post
 ---

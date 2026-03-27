@@ -2,7 +2,7 @@
 layout: post
 title: "딥 리서치: AI 도입 2막 — 게임·광고·콘텐츠 유통에서 ‘속도’보다 ‘통제권’이 수익을 만든다"
 date: 2026-02-22 06:06:00 +0900
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [ai, game, advertising, governance, cloudflare, copilot, monetization]
 ---
 

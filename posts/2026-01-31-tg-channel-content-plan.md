@@ -1,7 +1,7 @@
 ---
 title: "텔레그램 게임 채널 콘텐츠 계획"
 date: 2026-01-31
-categories: [docs, strategy]
+categories: [research]
 tags: [텔레그램, 채널, 콘텐츠]
 layout: post
 ---

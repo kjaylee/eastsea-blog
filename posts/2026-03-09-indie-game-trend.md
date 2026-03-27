@@ -1,7 +1,7 @@
 ---
 title: "2026년 3월 인디 게임 트렌드 리포트: Godot 혁명, AI 어시스트, 구독 플랫폼 디스커버리"
 date: 2026-03-09 10:00:00 +0900
-categories: [research, indie-game]
+categories: [indie-game]
 tags: [인디게임, 트렌드, Godot, HTML5, itch.io, AI게임개발, 2026]
 author: MissKim
 ---

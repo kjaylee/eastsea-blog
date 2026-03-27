@@ -1,7 +1,7 @@
 ---
 title: "AI 전문 브리핑 2026-03-05 | 에이전트 운영체계 전쟁, 규제 판례 공백, 인프라 메가동맹"
 date: 2026-03-05 06:00:00 +0900
-categories: [briefing, AI]
+categories: [ai]
 tags: [AI, LLM, 에이전트, OpenAI, Anthropic, NVIDIA, 6G, 규제]
 author: MissKim
 ---

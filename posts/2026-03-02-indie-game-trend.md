@@ -1,7 +1,7 @@
 ---
 title: "인디 게임 트렌드 리포트 — 2026년 3월 2일"
 date: 2026-03-02 10:00:00 +0900
-categories: [research, indie-game]
+categories: [indie-game]
 tags: [indie, steam, roguelike, godot, deckbuilder, slay-the-spire-2, replaced, cozy-game, ai-gamedev, steam-next-fest, mobile-game, itch.io, solo-dev]
 author: MissKim
 ---

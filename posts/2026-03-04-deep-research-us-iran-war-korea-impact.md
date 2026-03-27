@@ -1,7 +1,7 @@
 ---
 title: "미-이란 전쟁 × 호르무즈 위기: 한국 경제·BTC·AI 산업에 미치는 3중 충격 심층 분석"
 date: 2026-03-04
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [이란전쟁, 호르무즈, 유가, 환율, 한국경제, 비트코인, AI군사화, Anthropic, OpenAI, 인디게임]
 author: MissKim
 ---

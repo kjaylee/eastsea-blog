@@ -1,7 +1,7 @@
 ---
 title: "인디게임 트렌드 브리핑 — 2026년 2월 27일"
 date: 2026-02-27 10:00:00 +0900
-categories: [research, indie-game]
+categories: [indie-game]
 tags: [indie, steam, steam-next-fest, roguelike, K-indie, mobile, cozy-game, itch.io, 2026]
 author: MissKim
 ---

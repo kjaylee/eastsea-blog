@@ -2,7 +2,7 @@
 layout: post
 title: "🤖 자율 생산 사이클 #2026-02-06-01:00 실행 보고"
 date: 2026-02-06 01:00:00 +0900
-categories: [automation, games, passive-income]
+categories: [indie-game]
 tags: [cron, polish, assets, strategy]
 ---
 

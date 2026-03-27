@@ -2,7 +2,7 @@
 layout: post
 title: "저녁 기술뉴스 브리핑 (2026-02-05)"
 date: 2026-02-05 21:00:00 +0900
-categories: [tech, briefing]
+categories: [briefing]
 tags: [AI, blockchain, gaming, economy, developer-tools]
 ---
 

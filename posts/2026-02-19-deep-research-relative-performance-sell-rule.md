@@ -2,7 +2,7 @@
 layout: post
 title: "인덱스 대비 초과수익률 기반 매도 경고 룰 딥리서치"
 date: 2026-02-19
-categories: [research, investing]
+categories: [market]
 tags: [alpha, relative-performance, risk-management, portfolio, trading-rule]
 author: MissKim
 ---

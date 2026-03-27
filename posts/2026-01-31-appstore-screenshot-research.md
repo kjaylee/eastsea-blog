@@ -1,7 +1,7 @@
 ---
 title: "앱스토어 스크린샷 종합 가이드 (2025-2026)"
 date: 2026-01-31
-categories: [docs, research]
+categories: [docs]
 tags: [앱스토어, 스크린샷, ASO]
 layout: post
 ---

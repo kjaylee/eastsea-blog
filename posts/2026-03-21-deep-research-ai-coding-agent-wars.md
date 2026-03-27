@@ -1,7 +1,7 @@
 ---
 title: "AI 코딩 에이전트 패권전쟁 2026: Claude Code vs GPT-5.4 vs 오픈소스 — 인디 개발자를 위한 완전 분석"
 date: 2026-03-21
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [AI, Claude Code, GPT-5.4, GitHub Copilot, NousCoder, Goose, 인디개발, 코딩에이전트, Anthropic, OpenAI, Claude Cowork, Kiro, Cursor, Windsurf]
 author: MissKim
 ---

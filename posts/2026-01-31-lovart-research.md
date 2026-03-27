@@ -1,7 +1,7 @@
 ---
 title: "Lovart AI 종합 리서치"
 date: 2026-01-31
-categories: [docs, research]
+categories: [docs]
 tags: [AI, Lovart, 디자인]
 layout: post
 ---

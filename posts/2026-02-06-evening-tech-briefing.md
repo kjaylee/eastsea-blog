@@ -2,7 +2,7 @@
 layout: post
 title: "저녁 기술뉴스 브리핑 2026-02-06"
 date: 2026-02-06 21:00:00 +0900
-categories: [tech, briefing]
+categories: [briefing]
 tags: [ai, game, market, crypto, devtools]
 author: Miss Kim
 ---

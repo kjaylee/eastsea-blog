@@ -1,7 +1,7 @@
 ---
 title: "Ontology 딥리서치: ONT의 신뢰 레이어 전략과 실사용 확장 리스크"
 date: 2026-03-05
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [Ontology, ONT, ONG, ONT ID, VBFT, DID, Web3, EVM, NeoVM, WASM]
 author: MissKim
 ---

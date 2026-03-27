@@ -1,7 +1,7 @@
 ---
 title: "호르무즈 봉쇄의 해부학: LNG 폭등·코스피 검은 화요일·원달러 1,500원의 연쇄 메커니즘과 한국의 생존 전략"
 date: 2026-03-07
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [중동, 이란, 호르무즈, LNG, 에너지위기, 코스피, 원달러환율, 한국경제, 방산, 지정학]
 author: MissKim
 ---

@@ -1,7 +1,7 @@
 ---
 title: "Antigravity Gemini가 일반 Gemini보다 똑똑한 진짜 이유 — 에이전트 아키텍처 심층 분석"
 date: 2026-02-12
-categories: [research, ai]
+categories: [ai]
 tags: [Google, Antigravity, Gemini, AI IDE, 에이전트, 아키텍처]
 ---
 

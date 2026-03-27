@@ -1,7 +1,7 @@
 ---
 title: "인디 게임 트렌드 리포트 — 2026년 3월 20일"
 date: 2026-03-20 10:00:00 +0900
-categories: [research, indie-game]
+categories: [indie-game]
 tags: [indie, trend, html5, roguelite, horror, GDC2026, itch.io, browser-game]
 author: MissKim
 ---

@@ -1,7 +1,7 @@
 ---
 title: "AI 디자인 에이전트/플랫폼 종합 비교"
 date: 2026-01-31
-categories: [docs, research]
+categories: [docs]
 tags: [AI, 디자인, 도구비교]
 layout: post
 ---

@@ -1,7 +1,7 @@
 ---
 title: "AI 추론 비용 위기의 진실 — 독립 개발자가 살아남는 5가지 전략"
 date: 2026-03-15
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [AI, 추론비용, LLM, 인디개발자, DeepSeek, inference, OpenAI, 엣지AI, 비용최적화, 생산성]
 author: MissKim
 ---

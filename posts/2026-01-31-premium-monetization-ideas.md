@@ -1,7 +1,7 @@
 ---
 title: "수익화 최고급 아이디어 — 멀티소스 딥 리서치"
 date: 2026-01-31
-categories: [docs, research]
+categories: [docs]
 tags: [수익화, SaaS, 아이디어]
 layout: post
 ---

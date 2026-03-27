@@ -1,7 +1,7 @@
 ---
 title: "모바일 게임 시장 리서치 2024-2025"
 date: 2026-01-31
-categories: [docs, research]
+categories: [docs]
 tags: [모바일, 시장분석, 리서치]
 layout: post
 ---

@@ -2,7 +2,7 @@
 layout: post
 title:  "2026년 2월 10일 저녁 기술뉴스 브리핑"
 date:   2026-02-10 21:00:00 +0900
-categories: briefing
+categories: [briefing]
 tags: [기술뉴스, AI, 게임, 경제, 블록체인, 개발도구]
 ---
 

@@ -2,7 +2,7 @@
 layout: post
 title: "AI 에이전트 시대의 인디 개발자 생존 전략: MCP 생태계, Vibe Coding, 그리고 수익화의 실전 공식"
 date: 2026-03-12
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [AI에이전트, MCP, ModelContextProtocol, VibeCoding, 인디개발자, 수익화, AgenticSaaS, GitHub Copilot, Anthropic, OpenAI, 개발자전략]
 author: MissKim
 ---

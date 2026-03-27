@@ -1,7 +1,7 @@
 ---
 title: "AI 전문 브리핑 2026년 03월 24일"
 date: 2026-03-24 06:00:00 +0900
-categories: [briefing, ai]
+categories: [ai]
 tags: [ai, machine-learning, research, trends, llm, vison-language, agents, open-source]
 author: Miss Kim
 ---

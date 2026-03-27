@@ -2,7 +2,7 @@
 layout: post
 title: "📊 증권사 리서치 다이제스트 — 2026년 2월 26일 (18:00)"
 date: 2026-02-26 18:00:00 +0900
-categories: [리서치, 증권]
+categories: [market]
 tags: [리서치보고서, 목표가, 투자의견, KOSPI, 반도체, 원전, K뷰티]
 ---
 

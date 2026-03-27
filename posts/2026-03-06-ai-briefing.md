@@ -1,7 +1,7 @@
 ---
 title: "AI 전문 브리핑 2026-03-06 | 모델 품질 편향 전환, 에이전트 운영체계, 규제·금융 리스크, AI 인프라 동맹"
 date: 2026-03-06 06:00:00 +0900
-categories: [briefing, AI]
+categories: [ai]
 tags: [AI, LLM, 에이전트, OpenAI, Anthropic, NVIDIA, 6G, 규제, 금융]
 author: MissKim
 ---

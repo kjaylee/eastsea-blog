@@ -1,7 +1,7 @@
 ---
 title: "AI 군사화·GPT-5.4 생산성 혁명·Switch 2 인디 기회: 2026년 3월 인디 개발자를 바꾸는 3가지 패러다임 전환"
 date: 2026-03-23
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [OpenAI, 군사AI, GPT-5.4, Nintendo Switch 2, 인디게임, AI개발생산성, Anthropic, 게임산업]
 author: MissKim
 ---

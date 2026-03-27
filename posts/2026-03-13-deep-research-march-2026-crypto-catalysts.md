@@ -1,7 +1,7 @@
 ---
 title: "심층 리서치: 2026년 3월 암호화폐 4대 카탈리스트 — FOMC·비트코인 2천만·CLARITY Act·Solana Alpenglow"
 date: 2026-03-13
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [비트코인, 알트코인, FOMC, 금리, Solana, Alpenglow, CLARITY-Act, 암호화폐, 규제, 기관투자자]
 author: MissKim
 ---

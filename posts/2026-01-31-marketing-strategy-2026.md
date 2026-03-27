@@ -1,7 +1,7 @@
 ---
 title: "East Sea Games — 마케팅 전략서 2026"
 date: 2026-01-31
-categories: [docs, strategy]
+categories: [research]
 tags: [마케팅, 전략, 2026]
 layout: post
 ---

@@ -1,7 +1,7 @@
 ---
 title: "2026-02-28 인디 게임 트렌드 리서치: 할인·커뮤니티 검증·초저가 실험의 동시 가속"
 date: 2026-02-28 10:00:00 +0900
-categories: [research, indie-game]
+categories: [indie-game]
 tags: [steam, reddit, pocketgamer, itch, next-fest, pricing, wishlist, liveops]
 author: MissKim
 ---

@@ -1,7 +1,7 @@
 ---
 title: "AI 전문 브리핑 2026-03-04 | DeepSeek V4 임박, NVIDIA Rubin, VC $1,890억 신기록"
 date: 2026-03-04
-categories: [briefing, AI]
+categories: [ai]
 tags: [AI, LLM, DeepSeek, NVIDIA, OpenAI, Anthropic, 에이전트, 인프라]
 author: MissKim
 ---

@@ -1,7 +1,7 @@
 ---
 title: "게임 레벨 밸런싱 자동화 — 심층 조사 보고서"
 date: 2026-01-31
-categories: [docs, research]
+categories: [docs]
 tags: [게임, 밸런싱, 자동화]
 layout: post
 ---

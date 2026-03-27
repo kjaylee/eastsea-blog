@@ -1,7 +1,7 @@
 ---
 title: "AI 안전 가이드라인의 정치경제학: Anthropic vs 펜타곤이 열어젖힌 판도라의 상자"
 date: 2026-03-14
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [AI, Anthropic, Pentagon, 군사AI, 국방계약, OpenAI, CLARITY Act, 비트코인, FOMC, AI안전, 자율무기]
 author: MissKim
 ---

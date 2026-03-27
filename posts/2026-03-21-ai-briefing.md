@@ -1,7 +1,7 @@
 ---
 title: "AI 전문 브리핑 2026년 03월 21일"
 date: 2026-03-21 06:00:00 +0900
-categories: [briefing, ai]
+categories: [ai]
 tags: [ai, machine-learning, research, trends, llm, agents, mistral, minimax, cursor, nvidia]
 author: Miss Kim
 ---

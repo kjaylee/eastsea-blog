@@ -1,7 +1,7 @@
 ---
 title: "심층 리서치: AI 코딩 에이전트 전쟁 — Claude Opus 4.6 vs GPT-5.3 Codex, '1인 10억 달러 기업' 시대의 서막"
 date: 2026-02-09 06:00:00 +0900
-categories: [research, deep-dive]
+categories: [deep-dive]
 tags: [ai, claude-opus-4-6, gpt-5-3-codex, coding-agent, developer-productivity, indie-developer, agentic-ai, xcode, cursor, multi-agent, solo-founder]
 ---
 

@@ -10,6 +10,15 @@ MODE="${1:-}"
 WRANGLER_LIST_TIMEOUT="${CF_PAGES_LIST_TIMEOUT:-30}"
 WRANGLER_DEPLOY_TIMEOUT="${CF_PAGES_DEPLOY_TIMEOUT:-210}"
 LOG_TAIL_LINES="${CF_PAGES_LOG_TAIL_LINES:-20}"
+CF_PAGES_MAX_FILES="${CF_PAGES_MAX_FILES:-20000}"
+STAGED_DIR=""
+
+cleanup() {
+  if [[ -n "$STAGED_DIR" && -d "$STAGED_DIR" ]]; then
+    rm -rf "$STAGED_DIR"
+  fi
+}
+trap cleanup EXIT
 
 run_with_timeout() {
   local timeout="$1"
@@ -65,6 +74,72 @@ if tail:
 PY
 }
 
+stage_site_dir() {
+  local stage_dir
+  stage_dir="$(mktemp -d "${TMPDIR:-/tmp}/cf-pages-deploy.XXXXXX")"
+
+  if ! python3 - "$PWD" "$stage_dir" "$CF_PAGES_MAX_FILES" <<'PY'
+from pathlib import Path
+import shutil
+import sys
+
+source = Path(sys.argv[1])
+target = Path(sys.argv[2])
+max_files = int(sys.argv[3])
+
+public_files = [
+    '.nojekyll',
+    'CNAME',
+    '_redirects',
+    'about.html',
+    'ads.txt',
+    'contact.html',
+    'index.html',
+    'posts.json',
+    'privacy.html',
+    'robots.txt',
+    'sitemap.xml',
+    'terms.html',
+    'view.html',
+]
+public_dirs = [
+    '_data',
+    '_posts',
+    'assets',
+    'docs',
+    'games',
+    'hotdeal',
+    'novels',
+    'posts',
+    'static',
+    'tools',
+]
+
+for rel in public_files:
+    src = source / rel
+    if src.is_file():
+        dest = target / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dest)
+
+for rel in public_dirs:
+    src = source / rel
+    if src.is_dir():
+        shutil.copytree(src, target / rel, dirs_exist_ok=True)
+
+file_count = sum(1 for path in target.rglob('*') if path.is_file())
+if file_count > max_files:
+    print(f'STAGED_FILE_LIMIT_EXCEEDED:{file_count}>{max_files}', file=sys.stderr)
+    raise SystemExit(2)
+PY
+  then
+    rm -rf "$stage_dir"
+    return 1
+  fi
+
+  printf '%s\n' "$stage_dir"
+}
+
 is_deployed_head() {
   local deployed_source="$1"
 
@@ -118,6 +193,10 @@ PY
 
 HEAD_SHORT="$(git rev-parse --short HEAD)"
 HEAD_FULL="$(git rev-parse HEAD)"
+WORKTREE_DIRTY="false"
+if [[ -n "$(git status --short --untracked-files=normal | head -n 1)" ]]; then
+  WORKTREE_DIRTY="true"
+fi
 DEPLOYED_SOURCE="$(get_deployed_source)"
 
 echo "DEPLOYED=$DEPLOYED_SOURCE HEAD=$HEAD_SHORT"
@@ -132,16 +211,19 @@ if [[ "$MODE" == "--check" ]]; then
   exit 0
 fi
 
+STAGED_DIR="$(stage_site_dir)"
+
 echo "Deploying to CF Pages..."
 DEPLOY_LOG="$(mktemp)"
 
 if ! run_with_timeout \
   "$WRANGLER_DEPLOY_TIMEOUT" \
   "$DEPLOY_LOG" \
-  npx wrangler pages deploy . \
+  npx wrangler pages deploy "$STAGED_DIR" \
     --project-name="$PROJECT_NAME" \
     --branch="$BRANCH" \
-    --commit-hash="$HEAD_FULL"; then
+    --commit-hash="$HEAD_FULL" \
+    --commit-dirty="$WORKTREE_DIRTY"; then
   print_log_tail "$DEPLOY_LOG" >&2
 
   POST_DEPLOYED_SOURCE="$(get_deployed_source || true)"

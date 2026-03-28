@@ -165,6 +165,66 @@ Then modify the card generation to include:
 - [ ] Mobile app integration
 - [ ] Multi-language support
 
+## Formula Calculator Batch
+
+### Purpose
+`tool-formula-batch.py` scans every `tools/*/tool.config.json` in the repo, reports which generated files (`index.html`, `app.js`, `app.test.js`) are present or missing, and optionally backfills missing files without touching already-present ones.
+
+### Modes
+| Flag | Behaviour |
+|------|-----------|
+| _(none)_ | **dry-run** audit — report only, no writes |
+| `--write-missing` | Write only missing generated files; preserve existing files |
+| `--force` | Write all generated files, overwriting any existing content |
+
+### Options
+| Option | Description |
+|--------|-------------|
+| `--root PATH` | Repo root directory (required) |
+| `--slug SLUG` | Limit to one tool by slug (repeatable) |
+| `--json-out PATH` | Write machine-readable JSON report |
+| `--md-out PATH` | Write Markdown report |
+
+### Examples
+```bash
+# Dry-run audit of all config-driven tools (no writes)
+cd /Users/kjaylee/.openclaw/workspace
+python3 eastsea-blog/scripts/tool-formula-batch.py \
+  --root eastsea-blog
+
+# Dry-run with JSON and Markdown reports
+python3 eastsea-blog/scripts/tool-formula-batch.py \
+  --root eastsea-blog \
+  --json-out eastsea-blog/tmp/batch-report.json \
+  --md-out eastsea-blog/tmp/batch-report.md
+
+# Safe partial backfill — writes only missing generated files
+python3 eastsea-blog/scripts/tool-formula-batch.py \
+  --root eastsea-blog \
+  --write-missing
+
+# Backfill a single tool by slug
+python3 eastsea-blog/scripts/tool-formula-batch.py \
+  --root eastsea-blog \
+  --write-missing \
+  --slug kick-subscription-payout-calculator
+
+# Force overwrite all generated files for two tools
+python3 eastsea-blog/scripts/tool-formula-batch.py \
+  --root eastsea-blog \
+  --force \
+  --slug app-store-subscription-proceeds-calculator \
+  --slug mercari-fee-calculator
+```
+
+### Notes
+- Default is always **dry-run**; pass `--write-missing` or `--force` to modify files.
+- `--write-missing` without `--force` is safe: existing files are never overwritten.
+- Does **not** mutate `manifest.json` or `_data/tools-list.json`.
+- Exit 0 on success, 1 on usage/validation/write error.
+
+---
+
 ## Formula Calculator Scaffold
 
 ### Purpose
@@ -216,7 +276,83 @@ python3 eastsea-blog/scripts/tool-opportunity-ranker.py \
 - Designed to pick the next P1 slice when the repo already contains hundreds of partially-shipped tool pages.
 - Best paired with `tool-catalog-guard.py` for deterministic backlog cleanup.
 
+## Tool Catalog Reconciler
+
+### Purpose
+`tool-catalog-reconciler.py` reconciles the three tool-discovery layers from filesystem truth:
+- `_data/tools-list.json`
+- `tools/manifest.json`
+- `tools/index.html` public count claims
+
+### What it does
+- enumerates filesystem tool slugs under `tools/`
+- repairs or backfills tools-list rows using live page title/meta description
+- normalizes canonical `slug` + `url` fields
+- optionally prunes stale tools-list rows that no longer exist on disk
+- regenerates `tools/manifest.json` with fresh counts, titles, and sizes
+- patches landing-page count copy plus JSON-LD `numberOfItems`
+
+### Example
+```bash
+cd /Users/kjaylee/.openclaw/workspace
+
+# dry-run previews only
+python3 eastsea-blog/scripts/tool-catalog-reconciler.py \
+  --root eastsea-blog \
+  --prune-extra \
+  --json-out eastsea-blog/tmp/tool-catalog-candidates.json \
+  --merge-out eastsea-blog/tmp/tools-list.merged.preview.json \
+  --manifest-out eastsea-blog/tmp/tools.manifest.preview.json \
+  --landing-out eastsea-blog/tmp/tools.index.preview.html
+
+# apply all catalog sync writes after review
+python3 eastsea-blog/scripts/tool-catalog-reconciler.py \
+  --root eastsea-blog \
+  --prune-extra \
+  --write-all
+```
+
+### Notes
+- Default mode is **dry-run**.
+- `--write-all` is shorthand for `--write-tools-list --write-manifest --write-landing-counts`.
+- Use `--prune-extra` when you want `_data/tools-list.json` to match filesystem truth exactly.
+- Best paired with `tool-catalog-guard.py` to verify manifest/count/discoverability drift is gone.
+
+## Tool Analytics Sync
+
+### Purpose
+`tool-analytics-sync.py` audits `tools/*/index.html` for the standard analytics include and can repair missing pages in one pass.
+
+### What it does
+- scans repo tool pages under `tools/*/index.html`
+- treats `/assets/analytics.js` as the compliance invariant
+- defaults to **dry-run** reporting with optional JSON/Markdown outputs
+- injects exactly one analytics include into missing pages when `--write-missing` is passed
+- preserves idempotency by skipping already-compliant pages
+
+### Example
+```bash
+cd /Users/kjaylee/.openclaw/workspace
+
+# dry-run audit
+python3 eastsea-blog/scripts/tool-analytics-sync.py \
+  --root eastsea-blog \
+  --json-out eastsea-blog/tmp/tool-analytics-sync.json \
+  --md-out eastsea-blog/tmp/tool-analytics-sync.md
+
+# repair only missing pages
+python3 eastsea-blog/scripts/tool-analytics-sync.py \
+  --root eastsea-blog \
+  --write-missing
+```
+
+### Notes
+- Injection target is inside `<head>`: before the first `<script>` when present, otherwise before `</head>`.
+- `--slug <slug>` is repeatable for surgical repair on selected tools.
+- If a page has no valid `<head>` section, the tool reports an error and leaves the file untouched.
+- Best paired with `tool-catalog-guard.py` to confirm `tool_missing_analytics_include` is zero.
+
 ---
 
-**Last Updated:** 2026-03-26  
-**Maintainer:** OpenClaw Agent (Subagent: tool-opportunity-ranker)
+**Last Updated:** 2026-03-28  
+**Maintainer:** OpenClaw Agent (Subagent: tool-catalog-reconciler, tool-analytics-sync)

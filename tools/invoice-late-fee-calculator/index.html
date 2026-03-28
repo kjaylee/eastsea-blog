@@ -5,6 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Invoice Late Fee Calculator | 인보이스 연체료 계산기</title>
   <meta name="description" content="인보이스 연체일, 연체이율, 고정 연체수수료를 반영해 총 청구액과 시나리오별 연체 비용을 계산합니다." />
+  <link rel="canonical" href="https://eastsea.monster/tools/invoice-late-fee-calculator/" />
+  <meta property="og:title" content="Invoice Late Fee Calculator | 인보이스 연체료 계산기" />
+  <meta property="og:description" content="인보이스 연체일, 연체이율, 고정 연체수수료를 반영해 총 청구액과 시나리오별 연체 비용을 계산합니다." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://eastsea.monster/tools/invoice-late-fee-calculator/" />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "Invoice Late Fee Calculator",
+    "url": "https://eastsea.monster/tools/invoice-late-fee-calculator/",
+    "description": "Calculate invoice late interest, fixed late fees, and total amount due after a grace period.",
+    "applicationCategory": "FinanceApplication"
+  }
+  </script>
   <style>
     :root{
       --bg:#f4f7fb;--card:#ffffff;--line:#d7e0ef;--text:#132036;--muted:#5f6f8a;--pri:#315efb;--soft:#eef3ff;
@@ -31,7 +46,8 @@
     .btns{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:10px}
     .error{display:none;margin-top:10px;padding:9px 11px;border:1px solid rgba(220,38,38,.5);border-radius:10px;color:var(--bad);font-size:.86rem;background:rgba(220,38,38,.08)}
     .error.show{display:block}
-    textarea{margin-top:10px;min-height:92px;resize:vertical}
+    textarea{margin-top:10px;min-height:112px;resize:vertical}
+    .note{margin-top:10px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--soft);color:var(--muted);font-size:.84rem;line-height:1.45}
     .kpis{display:grid;grid-template-columns:1fr 1fr;gap:8px}
     .kpi{padding:10px;border:1px solid var(--line);border-radius:12px;background:linear-gradient(180deg,var(--card),var(--soft))}
     .k{font-size:.78rem;color:var(--muted);margin-bottom:4px}
@@ -44,8 +60,8 @@
     .up{color:var(--ok)}.mid{color:var(--warn)}.down{color:var(--bad)}
     @media(max-width:920px){.grid{grid-template-columns:1fr}.inputs{grid-template-columns:1fr}}
   </style>
-    <!-- Analytics: GA4 + Clarity -->
-    <script src="/assets/analytics.js"></script>
+  <script src="/assets/analytics.js"></script>
+  <script src="./calculator.js"></script>
 </head>
 <body>
   <main class="wrap">
@@ -72,6 +88,7 @@
           <button class="ghost" id="copyBtn" type="button">요약 복사</button>
           <button id="resetBtn" type="button">기본값 복원</button>
         </div>
+        <div class="note">가정: <strong>고정 연체수수료는 유예기간 이후 최초 1회 발생 가정</strong>입니다. 실제 계약서 조항과 다를 수 있으니 최종 청구 전 확인하세요.</div>
         <div id="error" class="error"></div>
         <textarea id="summary" readonly></textarea>
       </article>
@@ -99,6 +116,7 @@
   </main>
 
   <script>
+    const api = window.InvoiceLateFeeCalculator;
     const $ = (id) => document.getElementById(id);
     const refs = {
       amount: $('amount'), daysLate: $('daysLate'), annualRate: $('annualRate'), grace: $('grace'), fixedFee: $('fixedFee'), feeTax: $('feeTax'),
@@ -107,41 +125,26 @@
       copyBtn: $('copyBtn'), resetBtn: $('resetBtn')
     };
 
-    const defaults = { amount: 5500000, daysLate: 26, annualRate: 12, grace: 3, fixedFee: 100000, feeTax: 10 };
     const won = (n) => new Intl.NumberFormat('ko-KR', { style:'currency', currency:'KRW', maximumFractionDigits:0 }).format(n || 0);
     const fmt = (n, d = 1) => Number(n).toLocaleString('ko-KR', { maximumFractionDigits: d });
 
-    function validate(v){
-      if (!Number.isFinite(v.amount) || v.amount < 0) return '원청구 금액은 0 이상이어야 합니다.';
-      if (!Number.isFinite(v.daysLate) || v.daysLate < 0) return '연체일수는 0 이상이어야 합니다.';
-      if (!Number.isFinite(v.annualRate) || v.annualRate < 0 || v.annualRate > 100) return '연체이율은 0~100 범위여야 합니다.';
-      if (!Number.isFinite(v.grace) || v.grace < 0) return '유예기간은 0 이상이어야 합니다.';
-      if (!Number.isFinite(v.fixedFee) || v.fixedFee < 0) return '고정 연체수수료는 0 이상이어야 합니다.';
-      if (!Number.isFinite(v.feeTax) || v.feeTax < 0 || v.feeTax > 100) return '수수료 부가세율은 0~100 범위여야 합니다.';
-      return '';
-    }
-
-    function compute(v, customDays){
-      const daysLate = Number.isFinite(customDays) ? customDays : v.daysLate;
-      const billableDays = Math.max(0, daysLate - v.grace);
-      const dailyInterest = v.amount * (v.annualRate / 100) / 365;
-      const lateInterest = dailyInterest * billableDays;
-      const feeWithTax = v.fixedFee * (1 + v.feeTax / 100);
-      const totalDue = v.amount + lateInterest + feeWithTax;
-      const burdenRate = v.amount === 0 ? 0 : ((totalDue - v.amount) / v.amount) * 100;
-      return { billableDays, dailyInterest, lateInterest, feeWithTax, totalDue, burdenRate };
-    }
-
-    function render(){
-      const v = {
-        amount:Number(refs.amount.value), daysLate:Number(refs.daysLate.value), annualRate:Number(refs.annualRate.value),
-        grace:Number(refs.grace.value), fixedFee:Number(refs.fixedFee.value), feeTax:Number(refs.feeTax.value)
+    function getInputValues() {
+      return {
+        amount: Number(refs.amount.value),
+        daysLate: Number(refs.daysLate.value),
+        annualRate: Number(refs.annualRate.value),
+        grace: Number(refs.grace.value),
+        fixedFee: Number(refs.fixedFee.value),
+        feeTax: Number(refs.feeTax.value)
       };
-      const err = validate(v);
-      refs.error.classList.toggle('show', !!err);
-      refs.error.textContent = err;
+    }
 
-      if (err){
+    function render() {
+      const { result, error } = api.calculate(getInputValues());
+      refs.error.classList.toggle('show', !!error);
+      refs.error.textContent = error || '';
+
+      if (error) {
         refs.summary.value = '';
         refs.status.textContent = '입력값을 확인하세요';
         refs.scenarioBody.innerHTML = '';
@@ -149,46 +152,33 @@
         return;
       }
 
-      const r = compute(v);
-      refs.billableDays.textContent = `${fmt(r.billableDays,0)}일`;
-      refs.dailyInterest.textContent = won(r.dailyInterest);
-      refs.lateInterest.textContent = won(r.lateInterest);
-      refs.feeWithTax.textContent = won(r.feeWithTax);
-      refs.totalDue.textContent = won(r.totalDue);
-      refs.burdenRate.textContent = `${fmt(r.burdenRate,2)}%`;
-
-      refs.status.innerHTML = r.burdenRate < 1.5
-        ? `<span class="up">●</span> 추가부담이 낮은 편입니다`
-        : r.burdenRate < 4
-          ? `<span class="mid">●</span> 연체비용이 누적되고 있습니다`
-          : `<span class="down">●</span> 연체비용 부담이 큽니다 (회수 우선)`;
-
-      const scenarioDays = [7, 14, 30, 60, 90];
-      refs.scenarioBody.innerHTML = scenarioDays.map((d)=>{
-        const s = compute(v, d);
-        return `<tr><td>${d}일</td><td>${won(s.lateInterest)}</td><td>${won(s.totalDue)}</td></tr>`;
-      }).join('');
-
-      refs.summary.value = [
-        '[인보이스 연체료 요약]',
-        `원청구 금액: ${won(v.amount)}`,
-        `현재 연체일수: ${fmt(v.daysLate,0)}일 (유예 ${fmt(v.grace,0)}일)`,
-        `연체이율: 연 ${fmt(v.annualRate,2)}%`,
-        `누적 연체이자: ${won(r.lateInterest)}`,
-        `연체수수료(부가세 포함): ${won(r.feeWithTax)}`,
-        `최종 청구금액: ${won(r.totalDue)}`,
-        `원금 대비 추가부담률: ${fmt(r.burdenRate,2)}%`
-      ].join('\n');
+      refs.billableDays.textContent = `${fmt(result.billableDays,0)}일`;
+      refs.dailyInterest.textContent = won(result.dailyInterest);
+      refs.lateInterest.textContent = won(result.lateInterest);
+      refs.feeWithTax.textContent = won(result.feeWithTax);
+      refs.totalDue.textContent = won(result.totalDue);
+      refs.burdenRate.textContent = `${fmt(result.burdenRate,2)}%`;
+      refs.status.innerHTML = `<span class="${result.status.tone}">●</span> ${result.status.message}`;
+      refs.summary.value = result.summary;
+      refs.scenarioBody.innerHTML = result.scenarios.map((scenario) => (
+        `<tr><td>${scenario.daysLate}일</td><td>${won(scenario.lateInterest)}</td><td>${won(scenario.totalDue)}</td></tr>`
+      )).join('');
     }
 
     refs.copyBtn.addEventListener('click', async () => {
       if (!refs.summary.value.trim()) return;
-      try { await navigator.clipboard.writeText(refs.summary.value); alert('요약을 복사했습니다.'); }
-      catch { alert('클립보드 권한이 없어 수동 복사가 필요합니다.'); }
+      try {
+        await navigator.clipboard.writeText(refs.summary.value);
+        alert('요약을 복사했습니다.');
+      } catch {
+        alert('클립보드 권한이 없어 수동 복사가 필요합니다.');
+      }
     });
 
     refs.resetBtn.addEventListener('click', () => {
-      Object.entries(defaults).forEach(([k,v]) => refs[k].value = v);
+      Object.entries(api.DEFAULTS).forEach(([key, value]) => {
+        refs[key].value = value;
+      });
       render();
     });
 

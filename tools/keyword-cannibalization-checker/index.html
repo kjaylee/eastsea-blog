@@ -1,0 +1,792 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Keyword Cannibalization Checker | GSC Query Overlap Analyzer</title>
+  <meta
+    name="description"
+    content="Upload a Google Search Console query+page CSV, detect keyword cannibalization locally in the browser, and rank the worst page overlaps with transparent severity scoring."
+  />
+  <meta property="og:title" content="Keyword Cannibalization Checker" />
+  <meta property="og:description" content="Static, privacy-safe GSC query overlap analysis with severity scoring, recommendations, and exports." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://eastsea.monster/tools/keyword-cannibalization-checker/" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Keyword Cannibalization Checker" />
+  <meta name="twitter:description" content="Upload one GSC export and prioritize the worst query-level page collisions in minutes." />
+  <link rel="canonical" href="https://eastsea.monster/tools/keyword-cannibalization-checker/" />
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "Keyword Cannibalization Checker",
+      "applicationCategory": "BusinessApplication",
+      "operatingSystem": "Any",
+      "description": "Upload a Google Search Console query and page export, detect overlap risk locally, and rank the worst keyword cannibalization clusters.",
+      "url": "https://eastsea.monster/tools/keyword-cannibalization-checker/"
+    }
+  </script>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #07111f;
+      --bg-2: #0c172a;
+      --panel: rgba(10, 19, 35, 0.88);
+      --panel-soft: rgba(13, 24, 43, 0.78);
+      --line: rgba(126, 166, 255, 0.18);
+      --line-strong: rgba(126, 166, 255, 0.34);
+      --text: #eff4ff;
+      --muted: #a7b6d5;
+      --accent: #8caeff;
+      --accent-2: #76f0d0;
+      --warn: #ffd8a6;
+      --danger: #ffb1b1;
+      --shadow: 0 28px 80px rgba(0, 0, 0, 0.28);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      min-height: 100%;
+    }
+
+    body {
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(140, 174, 255, 0.18), transparent 30%),
+        radial-gradient(circle at top right, rgba(118, 240, 208, 0.12), transparent 24%),
+        linear-gradient(180deg, #08111e 0%, #09111d 42%, #040812 100%);
+    }
+
+    a { color: inherit; }
+
+    .page {
+      width: min(1280px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 24px 0 48px;
+    }
+
+    .hero {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: flex-start;
+      margin-bottom: 18px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 0.78rem;
+      color: var(--accent-2);
+      margin-bottom: 10px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.9rem, 4vw, 3.1rem);
+      letter-spacing: -0.04em;
+      line-height: 1.02;
+    }
+
+    .lead {
+      margin: 12px 0 0;
+      max-width: 880px;
+      color: var(--muted);
+      line-height: 1.68;
+      font-size: 1rem;
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      min-width: 220px;
+    }
+
+    .chip-link,
+    button,
+    .upload-label,
+    .sample-link {
+      appearance: none;
+      border: 1px solid var(--line-strong);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text);
+      padding: 11px 14px;
+      font: inherit;
+      font-size: 0.92rem;
+      font-weight: 650;
+      cursor: pointer;
+      transition: transform 0.14s ease, border-color 0.14s ease, background 0.14s ease;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    button:hover,
+    .chip-link:hover,
+    .upload-label:hover,
+    .sample-link:hover,
+    .row-select:hover {
+      transform: translateY(-1px);
+      border-color: rgba(140, 174, 255, 0.72);
+      background: rgba(140, 174, 255, 0.12);
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.55;
+      transform: none;
+    }
+
+    .primary {
+      background: linear-gradient(135deg, var(--accent), #aac5ff 70%);
+      border-color: transparent;
+      color: #051222;
+      box-shadow: 0 14px 36px rgba(140, 174, 255, 0.3);
+    }
+
+    .secondary {
+      background: rgba(118, 240, 208, 0.09);
+      border-color: rgba(118, 240, 208, 0.26);
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+      gap: 16px;
+      align-items: start;
+      margin-bottom: 16px;
+    }
+
+    .card {
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.015));
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .card-body {
+      padding: 18px;
+    }
+
+    .section-title {
+      margin: 0 0 10px;
+      font-size: 1rem;
+      letter-spacing: -0.02em;
+    }
+
+    .section-copy,
+    .status-text,
+    .footer-note,
+    .detail-copy,
+    .field-help {
+      color: var(--muted);
+      line-height: 1.6;
+      font-size: 0.92rem;
+    }
+
+    .upload-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: stretch;
+    }
+
+    .dropzone {
+      position: relative;
+      border: 1px dashed rgba(140, 174, 255, 0.32);
+      border-radius: 18px;
+      min-height: 176px;
+      padding: 18px;
+      background: rgba(13, 24, 45, 0.78);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 14px;
+    }
+
+    .dropzone strong {
+      display: block;
+      font-size: 1.03rem;
+      margin-bottom: 6px;
+    }
+
+    .dropzone small {
+      display: block;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .upload-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .upload-label input {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      pointer-events: none;
+      width: 1px;
+      height: 1px;
+    }
+
+    .status-stack {
+      display: grid;
+      gap: 10px;
+    }
+
+    .status-box,
+    .error-box,
+    .empty-box,
+    .detail-box,
+    .help-box,
+    .disclaimer-box {
+      border-radius: 16px;
+      padding: 14px 15px;
+      border: 1px solid var(--line);
+      background: rgba(13, 23, 42, 0.84);
+    }
+
+    .status-box strong,
+    .error-box strong,
+    .empty-box strong,
+    .detail-box strong,
+    .help-box strong,
+    .disclaimer-box strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 0.88rem;
+      letter-spacing: 0.02em;
+    }
+
+    .error-box {
+      border-color: rgba(255, 177, 177, 0.36);
+      background: rgba(96, 23, 31, 0.2);
+      color: #ffd6d6;
+      margin-top: 12px;
+    }
+
+    .controls-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .field {
+      display: grid;
+      gap: 8px;
+    }
+
+    .field label {
+      font-size: 0.86rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .field input,
+    .field textarea,
+    .field select {
+      width: 100%;
+      border-radius: 14px;
+      border: 1px solid rgba(140, 174, 255, 0.22);
+      background: rgba(5, 10, 18, 0.72);
+      color: var(--text);
+      padding: 12px 13px;
+      font: inherit;
+      resize: vertical;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .metric {
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.03);
+      padding: 14px;
+      min-height: 94px;
+    }
+
+    .metric-label {
+      font-size: 0.76rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin-bottom: 9px;
+    }
+
+    .metric-value {
+      font-size: clamp(1.02rem, 2.2vw, 1.38rem);
+      font-weight: 720;
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+    }
+
+    .results-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+
+    .results-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .table-wrap {
+      overflow: auto;
+      border-top: 1px solid var(--line);
+      background: rgba(3, 7, 15, 0.45);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 1120px;
+      font-size: 0.9rem;
+    }
+
+    th,
+    td {
+      border-bottom: 1px solid rgba(140, 174, 255, 0.14);
+      padding: 12px 10px;
+      vertical-align: top;
+      text-align: left;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      background: rgba(12, 19, 35, 0.95);
+      z-index: 1;
+      white-space: nowrap;
+    }
+
+    tbody tr:hover {
+      background: rgba(140, 174, 255, 0.06);
+    }
+
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      word-break: break-word;
+    }
+
+    .num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    .row-select {
+      border: 1px solid var(--line-strong);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text);
+      border-radius: 12px;
+      padding: 8px 10px;
+      width: 100%;
+      justify-content: flex-start;
+      font-weight: 600;
+      text-align: left;
+    }
+
+    .row-select[aria-pressed="true"] {
+      border-color: rgba(118, 240, 208, 0.45);
+      background: rgba(118, 240, 208, 0.12);
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 8px;
+      border-radius: 999px;
+      margin-left: 8px;
+      background: rgba(118, 240, 208, 0.12);
+      border: 1px solid rgba(118, 240, 208, 0.26);
+      color: var(--accent-2);
+      font-size: 0.72rem;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+
+    .list {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted);
+      line-height: 1.6;
+      font-size: 0.92rem;
+    }
+
+    .list li { margin-bottom: 8px; }
+
+    .detail-sub {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 0.86rem;
+      line-height: 1.55;
+    }
+
+    .summary-text {
+      width: 100%;
+      min-height: 128px;
+      border-radius: 16px;
+      border: 1px solid rgba(140, 174, 255, 0.2);
+      background: rgba(6, 10, 18, 0.7);
+      color: var(--text);
+      padding: 14px;
+      font: inherit;
+      line-height: 1.55;
+      resize: vertical;
+    }
+
+    details {
+      border-top: 1px solid var(--line);
+    }
+
+    details:first-of-type {
+      border-top: 0;
+    }
+
+    summary {
+      list-style: none;
+      cursor: pointer;
+      padding: 16px 18px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    summary::-webkit-details-marker { display: none; }
+
+    summary::after {
+      content: '+';
+      color: var(--accent-2);
+      font-size: 1.1rem;
+      flex: 0 0 auto;
+    }
+
+    details[open] summary::after {
+      content: '–';
+    }
+
+    .details-body {
+      padding: 0 18px 18px;
+      color: var(--muted);
+      line-height: 1.65;
+      font-size: 0.93rem;
+    }
+
+    .formula {
+      margin: 12px 0 0;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: rgba(7, 13, 25, 0.86);
+      padding: 14px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      white-space: pre-wrap;
+      line-height: 1.55;
+      font-size: 0.88rem;
+      color: #dce6ff;
+      overflow: auto;
+    }
+
+    .hidden { display: none !important; }
+
+    .footer-note { margin-top: 12px; }
+
+    @media (max-width: 980px) {
+      .hero {
+        flex-direction: column;
+      }
+
+      .hero-actions {
+        width: 100%;
+        justify-content: flex-start;
+      }
+
+      .layout,
+      .upload-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .summary-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 760px) {
+      .page {
+        width: min(100vw - 20px, 1280px);
+        padding-top: 16px;
+        padding-bottom: 28px;
+      }
+
+      .controls-grid,
+      .summary-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .controls-grid,
+      .summary-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+  <script src="/assets/analytics.js"></script>
+</head>
+<body>
+  <main class="page">
+    <header class="hero">
+      <div>
+        <div class="eyebrow">Static SEO operator tooling · upload-only analysis</div>
+        <h1>Keyword Cannibalization Checker</h1>
+        <p class="lead">
+          Upload one Google Search Console query+page CSV, surface the worst page collisions first,
+          and leave with transparent severity scores, affected impression estimates, and a concrete next action.
+        </p>
+      </div>
+      <div class="hero-actions">
+        <a class="chip-link" href="/tools/">← Back to tools</a>
+        <a class="chip-link" href="#results">Jump to results</a>
+      </div>
+    </header>
+
+    <section class="layout">
+      <article class="card">
+        <div class="card-body">
+          <h2 class="section-title">1. Upload a GSC query+page export</h2>
+          <p class="section-copy">
+            Required logical fields: <strong>query</strong>, <strong>page</strong>, <strong>clicks</strong>,
+            <strong>impressions</strong>, and <strong>position</strong>. <strong>CTR</strong>, <strong>country</strong>,
+            <strong>device</strong>, and <strong>date</strong> are supported when present. All processing stays local in your browser.
+          </p>
+
+          <div class="upload-grid">
+            <div class="dropzone">
+              <div>
+                <strong>Upload one CSV file</strong>
+                <small>
+                  Rows with blank query, blank page, or non-positive impressions are dropped. The tool flags overlap risk,
+                  not guaranteed ranking harm, so treat the output as a prioritization queue rather than final SEO truth.
+                </small>
+              </div>
+              <div class="upload-actions">
+                <label class="upload-label primary" for="csvFileInput">
+                  Choose CSV
+                  <input id="csvFileInput" type="file" accept=".csv,text/csv" />
+                </label>
+                <button id="loadFixtureBtn" type="button" class="secondary">Load sample fixture</button>
+                <a class="sample-link" href="./fixtures/sample-gsc-query-page-export.csv" download>Download sample CSV</a>
+              </div>
+              <div id="fileStatus" class="status-text">No CSV loaded yet.</div>
+            </div>
+
+            <div class="status-stack">
+              <div class="status-box">
+                <strong>What you get</strong>
+                <div class="status-text">A ranked overlap table, severity explanation, page-level breakdown, exports, and a copy-ready summary.</div>
+              </div>
+              <div class="help-box">
+                <strong>What this does not do</strong>
+                <div class="status-text">No Search Console API, no crawl, no saved uploads, and no external calls beyond loading the local sample file.</div>
+              </div>
+            </div>
+          </div>
+
+          <div id="errorBox" class="error-box hidden" role="alert" aria-live="polite">
+            <strong>Analysis blocked</strong>
+            <div id="errorText"></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-body">
+          <h2 class="section-title">2. Controls</h2>
+          <p class="section-copy">Tune the thresholds before you decide whether to merge, strengthen, or intentionally split competing pages.</p>
+          <div class="controls-grid">
+            <div class="field">
+              <label for="minQueryImpressions">Minimum query impressions</label>
+              <input id="minQueryImpressions" type="number" min="0" step="1" />
+              <div class="field-help">Default 50. Lower it only if you want to inspect smaller overlaps.</div>
+            </div>
+            <div class="field">
+              <label for="minDistinctPages">Minimum distinct pages</label>
+              <input id="minDistinctPages" type="number" min="2" step="1" />
+              <div class="field-help">Default 2. Use 3+ when you only want widespread collisions.</div>
+            </div>
+            <div class="field">
+              <label for="brandTerms">Brand terms to exclude</label>
+              <textarea id="brandTerms" rows="3" placeholder="eastsea, east sea"></textarea>
+              <div class="field-help">Comma-separated. Any matching query token removes that cluster from the eligible list.</div>
+            </div>
+            <div class="field">
+              <label for="sortMode">Sort mode</label>
+              <select id="sortMode">
+                <option value="severity">Severity score</option>
+                <option value="affectedImpressions">Affected impressions</option>
+              </select>
+              <div class="field-help">If severity ties, higher affected impressions wins. Remaining ties sort by query.</div>
+            </div>
+            <div class="field">
+              <label for="maxRowsShown">Maximum rows shown</label>
+              <input id="maxRowsShown" type="number" min="1" step="1" />
+              <div class="field-help">Default 100. Exports still include the full filtered result set.</div>
+            </div>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section class="card" style="margin-bottom: 16px;">
+      <div class="card-body">
+        <h2 class="section-title">3. Summary KPIs</h2>
+        <p class="section-copy">Eligible counts stay separate from exclusions so you can see what disappeared because of brand filters or thresholds.</p>
+        <div class="summary-grid">
+          <div class="metric"><div class="metric-label">Eligible queries</div><div id="summaryEligible" class="metric-value">0</div></div>
+          <div class="metric"><div class="metric-label">High severity</div><div id="summaryHigh" class="metric-value">0</div></div>
+          <div class="metric"><div class="metric-label">Medium severity</div><div id="summaryMedium" class="metric-value">0</div></div>
+          <div class="metric"><div class="metric-label">Low severity</div><div id="summaryLow" class="metric-value">0</div></div>
+          <div class="metric"><div class="metric-label">Affected impressions</div><div id="summaryAffectedImpressions" class="metric-value">0</div></div>
+          <div class="metric"><div class="metric-label">Affected clicks</div><div id="summaryAffectedClicks" class="metric-value">0</div></div>
+          <div class="metric"><div class="metric-label">Parsed rows</div><div id="summaryParsedRows" class="metric-value">0</div></div>
+          <div class="metric"><div class="metric-label">Invalid rows</div><div id="summaryInvalidRows" class="metric-value">0</div></div>
+          <div class="metric"><div class="metric-label">Excluded by brand</div><div id="summaryExcludedBrand" class="metric-value">0</div></div>
+          <div class="metric"><div class="metric-label">Below impression floor</div><div id="summaryExcludedImpressions" class="metric-value">0</div></div>
+          <div class="metric"><div class="metric-label">Below page-count floor</div><div id="summaryExcludedDistinct" class="metric-value">0</div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" style="margin-bottom: 16px;">
+      <details open>
+        <summary>How severity scoring works</summary>
+        <div class="details-body">
+          The v1 model is intentionally transparent: more split impressions, more competing pages, and a wider rank spread all push severity upward.
+          <div class="formula">severityScore = round(
+  min(40, totalImpressions / 25) +
+  ((1 - topPageShare) * 35) +
+  min(15, (distinctPages - 1) * 5) +
+  min(10, positionSpread)
+)</div>
+        </div>
+      </details>
+      <details>
+        <summary>Recommendation rules</summary>
+        <div class="details-body">
+          <ul class="list">
+            <li><strong>merge-or-canonicalize</strong> → 3+ pages compete and the top page owns less than 60% of impressions.</li>
+            <li><strong>strengthen-primary-page</strong> → one page leads, but it only owns 60–85% of impressions and rank spread is still large.</li>
+            <li><strong>split-intent-and-retitle</strong> → overlap exists, but the situation is not a clean consolidation case.</li>
+          </ul>
+        </div>
+      </details>
+    </section>
+
+    <section id="results" class="card" style="margin-bottom: 16px;">
+      <div class="card-body">
+        <div class="results-head">
+          <div>
+            <h2 class="section-title" style="margin-bottom: 6px;">4. Ranked overlaps</h2>
+            <div id="resultsCount" class="section-copy">No analysis yet.</div>
+          </div>
+          <div class="results-actions">
+            <button id="exportJsonBtn" type="button" disabled>Export JSON</button>
+            <button id="exportCsvBtn" type="button" disabled>Export CSV</button>
+            <button id="copySummaryBtn" type="button" disabled>Copy summary</button>
+          </div>
+        </div>
+
+        <div id="emptyState" class="empty-box">
+          <strong>No ranked output yet</strong>
+          <div class="status-text">Load the sample fixture or upload your own Search Console export to detect cannibalization candidates.</div>
+        </div>
+
+        <textarea id="summaryText" class="summary-text" readonly aria-label="Copyable summary"></textarea>
+      </div>
+
+      <div id="tableWrap" class="table-wrap hidden">
+        <table>
+          <thead>
+            <tr>
+              <th>Query</th>
+              <th>Severity</th>
+              <th>Band</th>
+              <th>Pages</th>
+              <th>Impressions</th>
+              <th>Affected impressions</th>
+              <th>Clicks</th>
+              <th>Top page share</th>
+              <th>Recommended action</th>
+            </tr>
+          </thead>
+          <tbody id="resultsBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="detailPanel" class="card hidden" style="margin-bottom: 16px;">
+      <div class="card-body">
+        <h2 id="detailTitle" class="section-title">No query selected yet</h2>
+        <p id="detailMeta" class="detail-copy">Upload a GSC page+query CSV or load the sample fixture to inspect overlap details.</p>
+
+        <div class="layout" style="margin-bottom: 0;">
+          <div class="detail-box">
+            <strong>Ranked page rows</strong>
+            <ul id="detailRows" class="list">
+              <li>No page rows yet.</li>
+            </ul>
+          </div>
+          <div class="detail-box">
+            <strong>Severity explanation</strong>
+            <p id="detailSeverity" class="detail-copy">—</p>
+            <strong style="margin-top: 12px;">Recommendation</strong>
+            <p id="detailRecommendation" class="detail-copy">—</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-body">
+        <div class="disclaimer-box">
+          <strong>Important SEO disclaimer</strong>
+          <div class="status-text">
+            This tool detects overlap risk from exported Search Console data. It does not prove ranking harm, and some multi-page visibility may be healthy intent splitting,
+            localization, experimentation, or site architecture at work. Use it to prioritize review—not to merge pages blindly.
+          </div>
+        </div>
+        <p class="footer-note">Privacy note: uploaded CSV files are processed locally in your browser. Nothing is sent to a backend.</p>
+      </div>
+    </section>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>

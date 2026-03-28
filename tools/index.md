@@ -39,7 +39,7 @@
 - [Gumroad vs Payhip Profit Calculator | 검로드 vs 페이힙 수익 비교 계산기](./gumroad-vs-payhip-profit-calculator/) — Gumroad direct 10% + $0.50와 Discover 30%를 Payhip Free·Plus·Pro, 별도 결제 처리 수수료, migration cost와 비교해 최적 Payhip 플랜, 월/연 순수익 차이, payback months를 계산합니다.
 - [Sellfy vs Gumroad Profit Calculator](./sellfy-vs-gumroad-profit-calculator/) — Sellfy 월 구독 플랜 비용과 Gumroad direct 10% + $0.50 수수료를 비교해 월·연 순수익 차이, 건당 차이, Sellfy 손익분기 주문수를 계산합니다.
 - [OnlyFans Earnings Calculator](./onlyfans-earnings-calculator/) — OnlyFans 20% 수수료, 환불, 정산 지연, 운영비를 반영해 구독·팁·PPV 수익의 실수령액, 목표 달성 필요 구독자, 손익분기 구독자를 계산합니다.
-- [Twitch Revenue Calculator](./twitch-revenue-calculator/) — Tier 1/2/3 구독, Prime Gaming 구독, 비트, 광고 수익, 기타 수입을 합산해 월·연간 트위치 스트리머 예상 수익, 수익원별 구성 비중, 구독자당 평균 수익을 계산합니다.
+- [Twitch Revenue Calculator](./twitch-revenue-calculator/) — Tier 1/2/3 구독, 비트, 광고 추정치, 도네이션 순수익을 합산해 월·연간 트위치 스트리머 예상 수익과 Partner Plus 진행 상황을 계산합니다.
 - [Udemy Instructor Revenue Calculator](./udemy-instructor-revenue-calculator/) — 쿠폰(97%), 오가닉(37%), 제휴(25%), Udemy Business 분당 요율 4가지 채널을 반영해 강사 월간 순수익, 채널별 수익 비중, 연간 예상 수익을 계산합니다.
 - [Lemon Squeezy Fee Calculator](./lemon-squeezy-fee-calculator/) — Lemon Squeezy의 기본 5%, 국제 결제·PayPal·구독 가산, 정산 방식별 수수료를 반영해 주문당 순수익, 기간 순수익, 목표 순수익 달성 판매가를 계산합니다.
 - [Memberful Fee Calculator](./memberful-fee-calculator/) — Memberful Standard $49/월 + 4.9%, Stripe 처리 수수료, 환불, 기타 고정비를 반영해 월 순이익과 손익분기 매출을 계산합니다.
@@ -48,6 +48,7 @@
 - [Sellfy Pricing Calculator](./sellfy-pricing-calculator/) — Sellfy Starter/Business/Premium의 구독비, Stripe·PayPal 처리 수수료, 2% overage planning model, 환불, 주문당 전달 원가를 반영해 연간 순이익과 업그레이드 손익분기 매출을 계산합니다.
 - [Itch.io 순수익 계산기](./itchio-net-revenue-calculator/) — 최소 가격, 평균 추가 지불액, open revenue share, 결제 수수료를 반영해 itch.io 실제 순수익, 실효 차감률, 목표 순수익 달성 최소 가격을 계산합니다.
 - [Indiegogo Fee Calculator](./indiegogo-fee-calculator/) — 현재 Indiegogo 5% 플랫폼 수수료, 3% + 0.20 결제 수수료, fixed funding 목표 미달 시 0 정산 규칙을 반영해 실제 순수령액과 목표 순수익 달성에 필요한 총 펀딩액을 계산합니다.
+- [GoFundMe Fee Calculator | 고펀드미 수수료 계산기](./gofundme-fee-calculator/) — GoFundMe의 공개 베이스라인(플랫폼 수수료 0%, 결제 수수료 2.9% + $0.30, 정기후원 donor fee 5%)과 캠페인 비용을 반영해 실제 실수령액, 후원자 결제 총액, 목표 순액 달성 평균 후원액을 계산합니다.
 - [Substack 뉴스레터 순수익 계산기](./substack-newsletter-revenue-calculator/) — 이번 기간에 실제 청구된 월간·연간·파운딩 구독자를 넣어 Substack 10%, Stripe 수수료, 반복 결제 드래그 이후 뉴스레터 순수익과 실효 차감률을 계산합니다.
 - [Substack Fee Calculator | 서브스택 수수료 계산기](./substack-fee-calculator/) — Substack 플랫폼 수수료, 결제 처리 수수료, 반복 결제 드래그, 환불을 반영해 실수령액과 목표 월 순수익 달성 필요 유료 구독자 수를 계산합니다.
 - [Ghost vs Substack Profit Calculator | 고스트 vs 서브스택 수익 비교](./ghost-vs-substack-profit-calculator/) — Ghost 0% 거래 수수료와 Substack 10% revenue share를 비교해 월 순수익, 연간 절감액, 손익분기 유료 구독자 수를 계산합니다.
@@ -76,10 +77,12 @@
 - [API 최소 커밋 + 오버리지 손익 계산기](./api-minimum-commit-overage-profit-calculator/) — 종량제 고객을 최소 커밋 + 오버리지 모델로 전환할 때 월 순이익, ROI, 회수기간, 손익분기 최소 커밋 금액을 계산합니다.
 - [마이크로 SaaS 런칭 수익 계산기](./micro-saas-launch-profit-calculator/) — 방문·트라이얼·유료 전환과 고정비/마케팅/수수료/변동비를 반영해 MRR, 월 순이익, 12개월 ROI, 회수기간, 손익분기 유료 고객 수를 계산합니다.
 - [SaaS Quick Ratio Calculator](./saas-quick-ratio-calculator/) — 신규·확장·이탈·축소 MRR로 SaaS quick ratio, gross gain/loss, net new MRR, 목표 비율까지 필요한 추가 gain/loss gap을 계산합니다.
+- [SaaS Burn Multiple Calculator](./saas-burn-multiple-calculator/) — net burn과 beginning/ending ARR로 SaaS burn multiple, net new ARR, 목표 burn multiple까지 필요한 ARR 또는 burn gap을 계산합니다.
 - [크롬 익스텐션 구독 수익 계산기](./chrome-extension-subscription-profit-calculator/) — 스토어 방문자, 설치 퍼널, 체험→유료 전환, 이탈률, 결제/운영비를 반영해 브라우저 확장 프로그램의 순 MRR, 회수기간, 손익분기 방문자를 계산합니다.
 - [뉴스레터 스폰서 Fill Rate ROI 계산기](./newsletter-sponsor-fill-rate-roi-calculator/) — 뉴스레터 스폰서 슬롯의 현재/목표 Fill Rate, 슬롯 단가, 운영비를 반영해 기간 순이익, ROI, 회수기간, 손익분기 Fill Rate를 계산합니다.
 - [크리에이터 멤버십 이탈 방지 ROI 계산기](./creator-membership-churn-reduction-roi-calculator/) — 멤버십 이탈률 개선 프로그램의 유지 멤버 수, 기간 순이익, ROI, 회수기간, 손익분기 목표 이탈률을 계산합니다.
 - [크리에이터 멤버십 플랫폼 수수료 비교기](./creator-membership-platform-fee-comparator/) — Direct Stripe, Patreon, Substack, App Store 구독의 수수료와 실수령액을 비교하고 같은 순수익을 만들기 위한 목표 가격까지 계산합니다.
+- [Circle.so Pricing Calculator](./circle-so-pricing-calculator/) — Circle Professional $89/월, Business $199/월, Email Hub +$99/월 공개 요금에 uplift 가정과 결제수수료를 더해 어떤 스택이 실제로 남는지와 업그레이드 손익분기를 계산합니다.
 - [인앱 팁 Jar 수익 계산기](./in-app-tip-jar-profit-calculator/) — 팁 노출률·전환율·평균 팁·수수료를 반영해 월 순이익, 연간 ROI, 회수기간, 손익분기 전환율을 계산합니다.
 - [제휴 쿠키 윈도우 ROI 계산기](./affiliate-cookie-window-roi-calculator/) — 쿠키 어트리뷰션 기간(예: 7일→30일) 확장 시 추가 주문, 월 순이익, ROI, 회수기간, 손익분기 전환율을 계산합니다.
 - [UGC 화이트리스팅 부착률 ROI 계산기](./ugc-whitelisting-attach-rate-roi-calculator/) — 화이트리스팅 권리 부착률 개선 시 순증 딜, 월 순효과, ROI, 회수기간, 손익분기 부착률을 계산합니다.
@@ -134,8 +137,11 @@
 
 - [App Store Screenshot QA Checklist](./app-store-screenshot-qa-checklist/) — iPhone/iPad App Store screenshot 세트를 제출 전에 점검합니다. 필수 디바이스 세트, 총 스크린샷 수, 크리티컬 블로커, 릴리스 핸드오프용 Markdown 리포트를 한 번에 정리합니다.
 - [Keyword Cannibalization Checker](./keyword-cannibalization-checker/) — Google Search Console query+page CSV를 업로드해 키워드 겹침을 탐지하고, 심각도 점수와 추천 액션으로 우선순위를 정리합니다.
+- [Google Title & Meta Pixel Width Checker](./google-title-meta-pixel-checker/) — Google 제목 태그와 메타 설명의 pixel width를 데스크톱/모바일 기준으로 추정하고, SERP 잘림 위험과 안전한 trim 제안을 빠르게 점검합니다.
 
 - [SaaS Magic Number Calculator](./saas-magic-number-calculator/) — quarter-over-quarter recurring revenue change와 prior-quarter sales & marketing spend를 바탕으로 SaaS magic number, annualized recurring revenue added, 목표 비율까지 필요한 revenue gap을 계산합니다.
+- [SaaS Rule of 40 Calculator](./saas-rule-of-40-calculator/) — previous/current ARR와 profit margin으로 Rule of 40 score, 목표 점수까지 필요한 ARR growth 또는 margin gap을 계산합니다.
 
 - [Venmo Fee Calculator | 벤모 수수료 계산기](./venmo-fee-calculator/) — Venmo 개인 상품·서비스 결제 2.99%, 비즈니스 프로필 1.9%+$0.10, Tap to Pay 2.29%+$0.09, 자선단체 1.9%+$0.10, 즉시 정산 1.75%(건당 최소 $0.25 / 최대 $25)를 반영해 실수령액, 월 순이익, 손익분기 건수, 목표 평균 결제 금액을 계산합니다.
 - [Chargeback Rate Threshold Calculator](./chargeback-rate-threshold-calculator/) — 같은 달 기준과 전월 거래수 기준의 차지백 비율을 함께 계산하고, 1.0%/1.5% 임계치 headroom, 분쟁건수 경고, 월/연 손실 노출액을 보여주는 결제 리스크 운영 도구입니다.
+- [Contribution Margin Calculator](./contribution-margin-calculator/) — 판매가, 변동비, 고정비, 목표이익을 입력하면 공헌이익(단위/비율), 손익분기 단위, 목표이익 단위를 계산합니다.

@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>쿠키 파서 & 빌더 | Cookie Parser & Builder</title>
+  <meta name="description" content="Cookie: 헤더 또는 Set-Cookie 헤더 문자열을 파싱해 이름, 값, 도메인, 경로, 만료, HttpOnly, Secure, SameSite를 테이블로 확인. 빌드 모드로 Set-Cookie 헤더 생성. eastsea.kr 무료 개발자 도구.">
+  <meta property="og:title" content="쿠키 파서 & 빌더 | Cookie Parser">
+  <meta property="og:description" content="Cookie/Set-Cookie 헤더를 파싱하고 시각화. 빌드 모드로 새 쿠키 헤더 생성.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://eastsea.kr/tools/cookie-parser/">
+  <style>
+    :root {
+      --bg-primary: #ffffff;
+      --bg-secondary: #f8f9fa;
+      --text-primary: #212529;
+      --text-secondary: #6c757d;
+      --border: #dee2e6;
+      --shadow: rgba(0,0,0,0.08);
+      --card-bg: #ffffff;
+      --input-bg: #ffffff;
+      --accent: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+      --accent-color: #11998e;
+      --success: #28a745;
+      --danger: #dc3545;
+      --warning: #ffc107;
+    }
+    [data-theme="dark"] {
+      --bg-primary: #1a1a1a;
+      --bg-secondary: #2d2d2d;
+      --text-primary: #f8f9fa;
+      --text-secondary: #adb5bd;
+      --border: #495057;
+      --shadow: rgba(0,0,0,0.3);
+      --card-bg: #2a2a2a;
+      --input-bg: #1e1e1e;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR', sans-serif;
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      transition: background 0.3s, color 0.3s;
+    }
+    .container { max-width: 1050px; margin: 0 auto; padding: 20px; }
+    .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
+    .back-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; color: var(--text-primary); text-decoration: none; font-size: 0.88rem; transition: transform 0.2s, box-shadow 0.2s; }
+    .back-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px var(--shadow); }
+    .theme-btn { background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; padding: 8px 14px; cursor: pointer; font-size: 0.88rem; color: var(--text-primary); }
+    header { text-align: center; margin-bottom: 28px; }
+    h1 { background: var(--accent); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; font-size: 2rem; margin-bottom: 8px; }
+    header p { color: var(--text-secondary); font-size: 0.95rem; }
+    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px; padding: 20px; box-shadow: 0 2px 8px var(--shadow); margin-bottom: 20px; }
+    .tab-row { display: flex; gap: 0; margin-bottom: 20px; border-bottom: 2px solid var(--border); }
+    .tab-btn { padding: 10px 22px; cursor: pointer; font-size: 0.92rem; font-weight: 600; background: none; border: none; color: var(--text-secondary); border-bottom: 3px solid transparent; margin-bottom: -2px; transition: color 0.2s; }
+    .tab-btn.active { color: var(--accent-color); border-bottom-color: var(--accent-color); }
+    label { font-weight: 600; font-size: 0.9rem; display: block; margin-bottom: 6px; }
+    textarea { width: 100%; min-height: 110px; padding: 12px; border: 1px solid var(--border); border-radius: 10px; font-family: 'Courier New', monospace; font-size: 0.85rem; background: var(--input-bg); color: var(--text-primary); resize: vertical; transition: border-color 0.2s; }
+    textarea:focus { outline: none; border-color: var(--accent-color); }
+    input[type="text"], input[type="number"], input[type="datetime-local"] { width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.88rem; background: var(--input-bg); color: var(--text-primary); transition: border-color 0.2s; }
+    input:focus { outline: none; border-color: var(--accent-color); }
+    .btn { padding: 10px 20px; border: none; border-radius: 10px; cursor: pointer; font-size: 0.9rem; font-weight: 600; transition: transform 0.2s, box-shadow 0.2s; }
+    .btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px var(--shadow); }
+    .btn-primary { background: linear-gradient(135deg, #11998e, #38ef7d); color: white; }
+    .btn-secondary { background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border); }
+    .btn-sm { padding: 5px 12px; font-size: 0.8rem; border-radius: 7px; }
+    .btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+    .cookie-table { width: 100%; border-collapse: collapse; font-size: 0.83rem; overflow-x: auto; }
+    .cookie-table th { text-align: left; padding: 10px 12px; border-bottom: 2px solid var(--border); color: var(--text-secondary); font-weight: 600; white-space: nowrap; }
+    .cookie-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    .cookie-table tr:hover td { background: var(--bg-secondary); }
+    .cookie-name { font-family: monospace; font-weight: 700; color: var(--accent-color); }
+    .cookie-value { font-family: monospace; max-width: 200px; word-break: break-all; }
+    .flag-badge { display: inline-block; padding: 2px 7px; border-radius: 5px; font-size: 0.72rem; font-weight: 600; margin-right: 3px; }
+    .flag-true { background: #d4edda; color: #155724; }
+    .flag-false { background: var(--bg-secondary); color: var(--text-secondary); }
+    [data-theme="dark"] .flag-true { background: #1a4d2e; color: #6fcf97; }
+    .samesite-badge { background: #e8f4fd; color: #0066cc; padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; }
+    [data-theme="dark"] .samesite-badge { background: #1a3a5c; color: #7eb8f7; }
+    .result-block { background: #1e1e2e; color: #cdd6f4; border-radius: 10px; padding: 14px; font-family: monospace; font-size: 0.85rem; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+    @media (max-width: 640px) { .form-grid { grid-template-columns: 1fr; } }
+    .form-group { margin-bottom: 10px; }
+    .checkbox-row { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 12px; align-items: center; }
+    .checkbox-label { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.88rem; user-select: none; }
+    .checkbox-label input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent-color); cursor: pointer; }
+    select { width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.88rem; background: var(--input-bg); color: var(--text-primary); }
+    select:focus { outline: none; border-color: var(--accent-color); }
+    .empty-state { text-align: center; padding: 36px; color: var(--text-secondary); }
+    .error-msg { background: #f8d7da; color: #721c24; padding: 10px 14px; border-radius: 8px; font-size: 0.85rem; margin-bottom: 12px; }
+    [data-theme="dark"] .error-msg { background: #4d1a1a; color: #f5b3b3; }
+    .toast { position: fixed; bottom: 24px; right: 24px; background: #333; color: #fff; padding: 10px 18px; border-radius: 10px; font-size: 0.85rem; opacity: 0; pointer-events: none; transition: opacity 0.3s; z-index: 1000; }
+    .toast.show { opacity: 1; }
+    .overflow-x { overflow-x: auto; }
+    .section-title { font-weight: 700; font-size: 0.9rem; margin-bottom: 12px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="top-bar">
+      <a href="/tools/" class="back-btn">← 도구 목록</a>
+      <button class="theme-btn" onclick="toggleTheme()">🌙 다크 모드</button>
+    </div>
+    <header>
+      <h1>🍪 쿠키 파서 & 빌더</h1>
+      <p>Cookie/Set-Cookie 헤더 파싱 시각화 및 새 쿠키 헤더 생성</p>
+    </header>
+
+    <div class="card">
+      <div class="tab-row">
+        <button class="tab-btn active" onclick="switchTab('parse')">🔍 파싱 모드</button>
+        <button class="tab-btn" onclick="switchTab('build')">🔨 빌드 모드</button>
+      </div>
+
+      <!-- Parse Mode -->
+      <div id="parseMode">
+        <div class="form-group">
+          <label>쿠키 헤더 문자열 입력</label>
+          <textarea id="cookieInput" placeholder="예시 1 (Cookie 헤더):&#10;session=abc123; user_id=42; theme=dark&#10;&#10;예시 2 (Set-Cookie 헤더):&#10;Set-Cookie: session=abc123; Path=/; HttpOnly; Secure; SameSite=Strict; Expires=Fri, 31 Dec 2025 23:59:59 GMT; Domain=.example.com"></textarea>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="parseCookies()">🔍 파싱</button>
+          <button class="btn btn-secondary" onclick="loadSample('parse')">📋 샘플 불러오기</button>
+          <button class="btn btn-secondary" onclick="clearParse()">🗑️ 초기화</button>
+        </div>
+
+        <div id="parseError" class="error-msg" style="display:none;margin-top:12px;"></div>
+        <div id="parseResult" style="margin-top:18px;"></div>
+      </div>
+
+      <!-- Build Mode -->
+      <div id="buildMode" style="display:none;">
+        <div class="section-title">쿠키 속성 설정</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>이름 (Name) *</label>
+            <input type="text" id="bName" placeholder="session_id">
+          </div>
+          <div class="form-group">
+            <label>값 (Value) *</label>
+            <input type="text" id="bValue" placeholder="abc123xyz">
+          </div>
+          <div class="form-group">
+            <label>Domain</label>
+            <input type="text" id="bDomain" placeholder=".example.com">
+          </div>
+          <div class="form-group">
+            <label>Path</label>
+            <input type="text" id="bPath" placeholder="/" value="/">
+          </div>
+          <div class="form-group">
+            <label>Expires (날짜/시간)</label>
+            <input type="datetime-local" id="bExpires">
+          </div>
+          <div class="form-group">
+            <label>Max-Age (초)</label>
+            <input type="number" id="bMaxAge" placeholder="3600">
+          </div>
+          <div class="form-group">
+            <label>SameSite</label>
+            <select id="bSameSite">
+              <option value="">(지정 안 함)</option>
+              <option value="Strict">Strict</option>
+              <option value="Lax">Lax</option>
+              <option value="None">None</option>
+            </select>
+          </div>
+        </div>
+        <div class="checkbox-row">
+          <label class="checkbox-label">
+            <input type="checkbox" id="bHttpOnly">
+            HttpOnly
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" id="bSecure">
+            Secure
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" id="bPartitioned">
+            Partitioned
+          </label>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="buildCookie()">🔨 Set-Cookie 생성</button>
+          <button class="btn btn-secondary" onclick="loadSample('build')">📋 샘플 설정</button>
+          <button class="btn btn-secondary" onclick="clearBuild()">🗑️ 초기화</button>
+        </div>
+        <div id="buildError" class="error-msg" style="display:none;margin-top:12px;"></div>
+        <div id="buildResult" style="margin-top:18px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    (function() {
+      const saved = localStorage.getItem('theme');
+      if (saved === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        document.addEventListener('DOMContentLoaded', () => {
+          const btn = document.querySelector('.theme-btn');
+          if (btn) btn.textContent = '☀️ 라이트 모드';
+        });
+      }
+    })();
+
+    function toggleTheme() {
+      const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+      document.documentElement.setAttribute('data-theme', isDark ? 'light' : 'dark');
+      document.querySelector('.theme-btn').textContent = isDark ? '🌙 다크 모드' : '☀️ 라이트 모드';
+      localStorage.setItem('theme', isDark ? 'light' : 'dark');
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 2200);
+    }
+
+    function switchTab(mode) {
+      document.getElementById('parseMode').style.display = mode === 'parse' ? '' : 'none';
+      document.getElementById('buildMode').style.display = mode === 'build' ? '' : 'none';
+      document.querySelectorAll('.tab-btn').forEach((btn, i) => {
+        btn.classList.toggle('active', (i === 0 && mode === 'parse') || (i === 1 && mode === 'build'));
+      });
+    }
+
+    // ===== PARSE MODE =====
+    function parseCookies() {
+      const raw = document.getElementById('cookieInput').value.trim();
+      document.getElementById('parseError').style.display = 'none';
+      if (!raw) { showParseError('헤더 문자열을 입력해주세요.'); return; }
+
+      const cookies = [];
+      const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+
+      for (const line of lines) {
+        // Set-Cookie header
+        const setCookieMatch = line.match(/^set-cookie:\s*/i);
+        if (setCookieMatch) {
+          const c = parseSetCookie(line.replace(/^set-cookie:\s*/i, ''));
+          if (c) cookies.push(c);
+          continue;
+        }
+        // Cookie: header or plain cookie string
+        const cookieStr = line.replace(/^cookie:\s*/i, '');
+        if (cookieStr.includes(';') || !cookieStr.includes(':')) {
+          // Multiple cookies or single
+          parseCookieHeader(cookieStr).forEach(c => cookies.push(c));
+        } else {
+          const c = parseSetCookie(line);
+          if (c) cookies.push(c);
+        }
+      }
+
+      if (!cookies.length) {
+        showParseError('파싱된 쿠키가 없습니다. 형식을 확인해주세요.');
+        return;
+      }
+
+      renderCookieTable(cookies);
+    }
+
+    function parseSetCookie(str) {
+      const parts = str.split(';').map(p => p.trim());
+      if (!parts[0]) return null;
+      const eqIdx = parts[0].indexOf('=');
+      const name = eqIdx !== -1 ? parts[0].substring(0, eqIdx).trim() : parts[0];
+      const value = eqIdx !== -1 ? parts[0].substring(eqIdx + 1).trim() : '';
+
+      const cookie = { name, value, domain: '', path: '', expires: '', httpOnly: false, secure: false, sameSite: '', maxAge: '', source: 'Set-Cookie' };
+
+      for (let i = 1; i < parts.length; i++) {
+        const p = parts[i].toLowerCase();
+        const eqI = parts[i].indexOf('=');
+        const key = eqI !== -1 ? parts[i].substring(0, eqI).trim().toLowerCase() : p;
+        const val = eqI !== -1 ? parts[i].substring(eqI + 1).trim() : '';
+
+        if (key === 'domain') cookie.domain = val;
+        else if (key === 'path') cookie.path = val;
+        else if (key === 'expires') cookie.expires = val;
+        else if (key === 'max-age') cookie.maxAge = val;
+        else if (key === 'samesite') cookie.sameSite = val;
+        else if (key === 'httponly') cookie.httpOnly = true;
+        else if (key === 'secure') cookie.secure = true;
+        else if (key === 'partitioned') cookie.partitioned = true;
+      }
+      return cookie;
+    }
+
+    function parseCookieHeader(str) {
+      return str.split(';').map(p => p.trim()).filter(Boolean).map(p => {
+        const eqIdx = p.indexOf('=');
+        return {
+          name: eqIdx !== -1 ? p.substring(0, eqIdx).trim() : p,
+          value: eqIdx !== -1 ? p.substring(eqIdx + 1).trim() : '',
+          domain: '', path: '', expires: '', httpOnly: '-', secure: '-', sameSite: '', maxAge: '',
+          source: 'Cookie'
+        };
+      }).filter(c => c.name);
+    }
+
+    function renderCookieTable(cookies) {
+      let html = '<div class="overflow-x">';
+      html += '<table class="cookie-table"><thead><tr>';
+      html += '<th>이름</th><th>값</th><th>도메인</th><th>경로</th><th>만료</th><th>HttpOnly</th><th>Secure</th><th>SameSite</th><th>출처</th><th></th>';
+      html += '</tr></thead><tbody>';
+
+      cookies.forEach((c, i) => {
+        html += `<tr>
+          <td><span class="cookie-name">${esc(c.name)}</span></td>
+          <td><span class="cookie-value">${esc(c.value || '-')}</span></td>
+          <td>${esc(c.domain || '-')}</td>
+          <td>${esc(c.path || '-')}</td>
+          <td style="font-size:0.79rem;">${esc(c.expires || c.maxAge ? (c.expires || 'Max-Age: ' + c.maxAge) : '-')}</td>
+          <td>${flagBadge(c.httpOnly)}</td>
+          <td>${flagBadge(c.secure)}</td>
+          <td>${c.sameSite ? '<span class="samesite-badge">' + esc(c.sameSite) + '</span>' : '-'}</td>
+          <td style="font-size:0.78rem;color:var(--text-secondary);">${c.source}</td>
+          <td><button class="btn btn-secondary btn-sm" onclick="copyCookieRow(${i})">복사</button></td>
+        </tr>`;
+      });
+      html += '</tbody></table></div>';
+      html += `<div style="margin-top:12px;"><button class="btn btn-secondary btn-sm" onclick="copyAllCookies()">📋 전체 복사</button></div>`;
+
+      window._parsedCookies = cookies;
+      document.getElementById('parseResult').innerHTML = html;
+    }
+
+    function flagBadge(val) {
+      if (val === '-') return '<span style="color:var(--text-secondary)">-</span>';
+      return val
+        ? '<span class="flag-badge flag-true">✓</span>'
+        : '<span class="flag-badge flag-false">✗</span>';
+    }
+
+    function esc(s) { return String(s).replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+    function copyCookieRow(i) {
+      const c = window._parsedCookies[i];
+      if (!c) return;
+      const text = JSON.stringify(c, null, 2);
+      navigator.clipboard.writeText(text).then(() => showToast('쿠키 정보가 복사되었습니다!'));
+    }
+
+    function copyAllCookies() {
+      if (!window._parsedCookies) return;
+      navigator.clipboard.writeText(JSON.stringify(window._parsedCookies, null, 2)).then(() => showToast('전체 쿠키 정보가 복사되었습니다!'));
+    }
+
+    function showParseError(msg) {
+      const el = document.getElementById('parseError');
+      el.textContent = msg;
+      el.style.display = 'block';
+    }
+
+    function clearParse() {
+      document.getElementById('cookieInput').value = '';
+      document.getElementById('parseResult').innerHTML = '';
+      document.getElementById('parseError').style.display = 'none';
+    }
+
+    // ===== BUILD MODE =====
+    function buildCookie() {
+      document.getElementById('buildError').style.display = 'none';
+      const name = document.getElementById('bName').value.trim();
+      const value = document.getElementById('bValue').value;
+
+      if (!name) { showBuildError('쿠키 이름(Name)은 필수입니다.'); return; }
+      if (/[\s;,\\]/.test(name)) { showBuildError('쿠키 이름에 공백, 세미콜론, 쉼표, 백슬래시를 사용할 수 없습니다.'); return; }
+
+      let str = `${name}=${value}`;
+
+      const path = document.getElementById('bPath').value.trim();
+      if (path) str += `; Path=${path}`;
+
+      const domain = document.getElementById('bDomain').value.trim();
+      if (domain) str += `; Domain=${domain}`;
+
+      const expiresInput = document.getElementById('bExpires').value;
+      if (expiresInput) {
+        const d = new Date(expiresInput);
+        str += `; Expires=${d.toUTCString()}`;
+      }
+
+      const maxAge = document.getElementById('bMaxAge').value.trim();
+      if (maxAge) str += `; Max-Age=${maxAge}`;
+
+      const sameSite = document.getElementById('bSameSite').value;
+      if (sameSite) str += `; SameSite=${sameSite}`;
+
+      if (document.getElementById('bHttpOnly').checked) str += '; HttpOnly';
+      if (document.getElementById('bSecure').checked) str += '; Secure';
+      if (document.getElementById('bPartitioned').checked) str += '; Partitioned';
+
+      const header = `Set-Cookie: ${str}`;
+      document.getElementById('buildResult').innerHTML = `
+        <div style="margin-bottom:8px;font-weight:600;font-size:0.9rem;">생성된 Set-Cookie 헤더</div>
+        <div class="result-block">${esc(header)}</div>
+        <div style="margin-top:10px;display:flex;gap:8px;">
+          <button class="btn btn-primary btn-sm" onclick="copyBuildResult()">📋 복사</button>
+          <button class="btn btn-secondary btn-sm" onclick="sendToParser()">→ 파서로 보내기</button>
+        </div>
+      `;
+      window._builtHeader = header;
+    }
+
+    function copyBuildResult() {
+      if (!window._builtHeader) return;
+      navigator.clipboard.writeText(window._builtHeader).then(() => showToast('Set-Cookie 헤더가 복사되었습니다!'));
+    }
+
+    function sendToParser() {
+      if (!window._builtHeader) return;
+      document.getElementById('cookieInput').value = window._builtHeader;
+      switchTab('parse');
+      parseCookies();
+    }
+
+    function showBuildError(msg) {
+      const el = document.getElementById('buildError');
+      el.textContent = msg;
+      el.style.display = 'block';
+    }
+
+    function clearBuild() {
+      ['bName','bValue','bDomain','bPath','bMaxAge'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('bPath').value = '/';
+      document.getElementById('bExpires').value = '';
+      document.getElementById('bSameSite').value = '';
+      document.getElementById('bHttpOnly').checked = false;
+      document.getElementById('bSecure').checked = false;
+      document.getElementById('bPartitioned').checked = false;
+      document.getElementById('buildResult').innerHTML = '';
+      document.getElementById('buildError').style.display = 'none';
+    }
+
+    function loadSample(mode) {
+      if (mode === 'parse') {
+        document.getElementById('cookieInput').value = `Cookie: session=a1b2c3d4e5; user_id=12345; theme=dark; lang=ko
+
+Set-Cookie: auth_token=eyJhbGciOiJIUzI1NiJ9.payload.sig; Path=/api; Domain=.example.com; HttpOnly; Secure; SameSite=Strict; Expires=Sat, 01 Jan 2026 00:00:00 GMT
+
+Set-Cookie: _ga=GA1.2.123456.789; Path=/; Domain=.example.com; Expires=Sun, 01 Jan 2028 00:00:00 GMT; SameSite=Lax`;
+        parseCookies();
+      } else {
+        document.getElementById('bName').value = 'session_token';
+        document.getElementById('bValue').value = 'eyJhbGciOiJIUzI1NiJ9';
+        document.getElementById('bDomain').value = '.example.com';
+        document.getElementById('bPath').value = '/';
+        document.getElementById('bMaxAge').value = '3600';
+        document.getElementById('bSameSite').value = 'Strict';
+        document.getElementById('bHttpOnly').checked = true;
+        document.getElementById('bSecure').checked = true;
+        buildCookie();
+      }
+    }
+  </script>
+</body>
+</html>

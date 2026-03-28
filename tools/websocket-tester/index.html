@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebSocket 테스터 | WebSocket Connection Tester</title>
+  <meta name="description" content="WebSocket 서버에 연결하여 실시간으로 메시지를 보내고 받는 테스트 도구. 연결 상태 모니터링, 메시지 로깅, JSON 포맷팅 지원. Real-time WebSocket testing tool.">
+  <meta property="og:title" content="WebSocket 테스터 | WS Tester">
+  <meta property="og:description" content="WebSocket 서버 연결 테스트. 실시간 메시지 송수신, JSON 포맷팅.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://eastsea.kr/tools/websocket-tester/">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="WebSocket 테스터">
+  <meta name="twitter:description" content="WebSocket 실시간 연결 테스트 및 메시지 디버깅 도구.">
+  <style>
+    :root {
+      --bg-primary:#ffffff;--bg-secondary:#f8f9fa;--text-primary:#212529;--text-secondary:#6c757d;
+      --accent-color:#6366f1;--accent-hover:#4f46e5;--border:#dee2e6;--shadow:rgba(0,0,0,0.08);
+      --card-bg:#ffffff;--input-bg:#ffffff;--code-bg:#1e1e2e;--code-text:#cdd6f4;
+      --success:#10b981;--error:#ef4444;--warning:#f59e0b;--info:#3b82f6;
+      --tag-bg:#eef2ff;--tag-text:#3730a3;
+      --sent-bg:#eff6ff;--recv-bg:#f0fdf4;--sys-bg:#fefce8;
+    }
+    [data-theme="dark"] {
+      --bg-primary:#0f0f0f;--bg-secondary:#1a1a1a;--text-primary:#f1f5f9;--text-secondary:#94a3b8;
+      --border:#2d2d2d;--shadow:rgba(0,0,0,0.4);--card-bg:#1e1e1e;--input-bg:#2a2a2a;
+      --tag-bg:#312e81;--tag-text:#a5b4fc;
+      --sent-bg:#1e293b;--recv-bg:#14532d;--sys-bg:#422006;
+    }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Noto Sans KR',sans-serif;background:var(--bg-secondary);color:var(--text-primary);line-height:1.6;min-height:100vh;}
+    header{background:var(--card-bg);border-bottom:1px solid var(--border);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;position:sticky;top:0;z-index:100;box-shadow:0 1px 4px var(--shadow);}
+    .header-left{display:flex;align-items:center;gap:12px;}
+    .back-btn{text-decoration:none;color:var(--text-secondary);display:flex;align-items:center;gap:4px;font-weight:500;padding:6px 12px;border-radius:8px;border:1px solid var(--border);transition:all .2s;}
+    .back-btn:hover{background:var(--bg-secondary);color:var(--text-primary);}
+    h1{font-size:1.1rem;font-weight:700;}
+    .theme-btn{background:none;border:1px solid var(--border);color:var(--text-primary);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:.85rem;transition:all .2s;}
+    .theme-btn:hover{background:var(--bg-secondary);}
+    .main{max-width:960px;margin:0 auto;padding:24px 20px;}
+    .desc{font-size:.9rem;color:var(--text-secondary);margin-bottom:20px;}
+
+    .card{background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:20px;}
+    .card h2{font-size:1rem;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+
+    input[type=text],textarea,select{padding:10px 14px;border:1px solid var(--border);border-radius:10px;background:var(--input-bg);color:var(--text-primary);font-size:.9rem;outline:none;transition:border .2s;font-family:inherit;width:100%;}
+    input:focus,textarea:focus{border-color:var(--accent-color);}
+    textarea{font-family:'JetBrains Mono','Fira Code','Courier New',monospace;font-size:.83rem;line-height:1.6;resize:vertical;min-height:80px;}
+    .btn{padding:10px 18px;border-radius:10px;font-size:.88rem;cursor:pointer;transition:all .2s;border:1px solid transparent;font-weight:500;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;}
+    .btn-primary{background:var(--accent-color);color:#fff;border-color:var(--accent-color);}
+    .btn-primary:hover{background:var(--accent-hover);}
+    .btn-danger{background:var(--error);color:#fff;border-color:var(--error);}
+    .btn-danger:hover{background:#dc2626;}
+    .btn-outline{background:var(--card-bg);color:var(--text-primary);border-color:var(--border);}
+    .btn-outline:hover{background:var(--bg-secondary);}
+    .btn-sm{padding:6px 14px;font-size:.82rem;}
+    .btn:disabled{opacity:.5;cursor:not-allowed;}
+
+    /* Connection */
+    .connect-row{display:flex;gap:10px;align-items:stretch;}
+    .url-input{flex:1;font-family:'JetBrains Mono','Fira Code',monospace;font-size:.88rem;}
+    .status-indicator{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:.88rem;font-weight:600;}
+    .status-dot{width:10px;height:10px;border-radius:50%;display:inline-block;}
+    .status-dot.connected{background:var(--success);box-shadow:0 0 6px var(--success);}
+    .status-dot.disconnected{background:var(--error);}
+    .status-dot.connecting{background:var(--warning);animation:pulse 1s infinite;}
+    @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
+
+    /* Protocols */
+    .protocols-row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center;}
+    .protocols-label{font-size:.82rem;color:var(--text-secondary);font-weight:600;}
+
+    /* Message log */
+    .log-container{background:var(--code-bg);border-radius:12px;overflow:hidden;margin-top:16px;}
+    .log-header{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--border);}
+    .log-header-left{display:flex;align-items:center;gap:12px;}
+    .log-title{color:var(--code-text);font-size:.88rem;font-weight:600;}
+    .msg-count{color:var(--code-text);font-size:.8rem;opacity:.7;}
+    .log-body{max-height:500px;overflow-y:auto;padding:8px 0;}
+    .log-empty{text-align:center;color:var(--code-text);opacity:.5;padding:40px;font-size:.88rem;}
+
+    .msg-item{padding:8px 16px;border-bottom:1px solid rgba(255,255,255,0.05);font-size:.83rem;display:flex;gap:10px;align-items:flex-start;transition:background .15s;}
+    .msg-item:hover{background:rgba(255,255,255,0.03);}
+    .msg-dir{font-size:.72rem;font-weight:700;text-transform:uppercase;padding:2px 8px;border-radius:4px;min-width:40px;text-align:center;flex-shrink:0;margin-top:2px;}
+    .msg-dir.sent{background:#3b82f6;color:#fff;}
+    .msg-dir.recv{background:#22c55e;color:#fff;}
+    .msg-dir.sys{background:#f59e0b;color:#000;}
+    .msg-dir.err{background:#ef4444;color:#fff;}
+    .msg-time{color:var(--code-text);opacity:.5;font-family:monospace;font-size:.75rem;min-width:70px;flex-shrink:0;margin-top:3px;}
+    .msg-content{color:var(--code-text);font-family:'JetBrains Mono','Fira Code',monospace;word-break:break-all;flex:1;white-space:pre-wrap;}
+    .msg-json{color:#a6e3a1;}
+    .msg-size{font-size:.72rem;color:var(--code-text);opacity:.4;flex-shrink:0;margin-top:3px;}
+
+    /* Send area */
+    .send-area{margin-top:16px;}
+    .send-row{display:flex;gap:10px;align-items:flex-end;}
+    .send-input-wrap{flex:1;}
+    .send-opts{display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;align-items:center;}
+    .send-opt{display:flex;align-items:center;gap:4px;font-size:.82rem;color:var(--text-secondary);}
+    .send-opt input[type=checkbox]{accent-color:var(--accent-color);}
+
+    /* Presets */
+    .preset-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
+    .preset-chip{background:var(--tag-bg);color:var(--tag-text);border:1px solid transparent;border-radius:20px;padding:4px 14px;font-size:.8rem;cursor:pointer;transition:all .2s;font-weight:500;}
+    .preset-chip:hover{border-color:var(--accent-color);}
+
+    /* Stats bar */
+    .stats-bar{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;padding:10px 14px;background:var(--bg-secondary);border-radius:10px;border:1px solid var(--border);}
+    .stat-item{font-size:.82rem;color:var(--text-secondary);}
+    .stat-item strong{color:var(--text-primary);font-family:monospace;}
+
+    .info-section{background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:20px;margin-top:20px;}
+    .info-section h2{font-size:1rem;margin-bottom:10px;}
+    .info-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;}
+    .info-item{font-size:.83rem;color:var(--text-secondary);line-height:1.8;}
+    .info-item strong{color:var(--text-primary);display:block;margin-bottom:2px;}
+
+    @media(max-width:600px){.connect-row{flex-direction:column;}.send-row{flex-direction:column;}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="header-left">
+    <a href="/" class="back-btn">← 홈</a>
+    <h1>🔌 WebSocket 테스터</h1>
+  </div>
+  <button class="theme-btn" onclick="toggleTheme()">🌓 테마</button>
+</header>
+
+<div class="main">
+  <p class="desc">WebSocket 서버에 연결하여 실시간으로 메시지를 보내고 받습니다. 연결 상태 모니터링, 메시지 로깅, JSON 자동 포맷팅을 지원합니다.</p>
+
+  <!-- Connection -->
+  <div class="card">
+    <h2>🔗 서버 연결</h2>
+    <div class="connect-row">
+      <input type="text" class="url-input" id="wsUrl" placeholder="wss://echo.websocket.org" value="wss://echo.websocket.events">
+      <button class="btn btn-primary" id="connectBtn" onclick="toggleConnect()">연결</button>
+    </div>
+    <div class="protocols-row">
+      <span class="protocols-label">서브프로토콜 (선택):</span>
+      <input type="text" id="protocols" placeholder="쉼표로 구분. 예: graphql-ws, json" style="max-width:300px;">
+    </div>
+    <div class="status-indicator">
+      <span class="status-dot disconnected" id="statusDot"></span>
+      <span id="statusText">연결 끊김</span>
+    </div>
+    <div class="preset-row">
+      <span style="font-size:.82rem;color:var(--text-secondary);font-weight:600;">공개 서버:</span>
+      <button class="preset-chip" onclick="setUrl('wss://echo.websocket.events')">Echo (websocket.events)</button>
+      <button class="preset-chip" onclick="setUrl('wss://ws.postman-echo.com/raw')">Postman Echo</button>
+      <button class="preset-chip" onclick="setUrl('wss://stream.binance.com:9443/ws/btcusdt@trade')">Binance BTC</button>
+    </div>
+  </div>
+
+  <!-- Message Log -->
+  <div class="card" style="padding:0;">
+    <div class="log-container">
+      <div class="log-header">
+        <div class="log-header-left">
+          <span class="log-title">📜 메시지 로그</span>
+          <span class="msg-count" id="msgCount">0 messages</span>
+        </div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-outline btn-sm" onclick="exportLog()">💾 내보내기</button>
+          <button class="btn btn-outline btn-sm" onclick="clearLog()">🗑 지우기</button>
+        </div>
+      </div>
+      <div class="log-body" id="logBody">
+        <div class="log-empty">연결 후 메시지가 여기에 표시됩니다.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Send -->
+  <div class="card">
+    <h2>✉️ 메시지 보내기</h2>
+    <div class="send-row">
+      <div class="send-input-wrap">
+        <textarea id="msgInput" placeholder='보낼 메시지를 입력하세요. JSON도 지원됩니다.&#10;{"type":"ping","data":"hello"}'></textarea>
+      </div>
+      <button class="btn btn-primary" id="sendBtn" onclick="sendMessage()" disabled>전송</button>
+    </div>
+    <div class="send-opts">
+      <label class="send-opt"><input type="checkbox" id="optJson" checked> JSON 포맷팅</label>
+      <label class="send-opt"><input type="checkbox" id="optTimestamp"> 타임스탬프 포함</label>
+      <label class="send-opt"><input type="checkbox" id="optAutoScroll" checked> 자동 스크롤</label>
+    </div>
+    <div class="preset-row">
+      <span style="font-size:.82rem;color:var(--text-secondary);font-weight:600;">빠른 메시지:</span>
+      <button class="preset-chip" onclick="quickSend('ping')">ping</button>
+      <button class="preset-chip" onclick="quickSend('{&quot;type&quot;:&quot;ping&quot;}')">{"type":"ping"}</button>
+      <button class="preset-chip" onclick="quickSend('Hello, WebSocket!')">Hello</button>
+      <button class="preset-chip" onclick="quickSend('{&quot;action&quot;:&quot;subscribe&quot;,&quot;channel&quot;:&quot;updates&quot;}')">subscribe</button>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-bar" id="statsBar">
+    <div class="stat-item">전송: <strong id="statSent">0</strong></div>
+    <div class="stat-item">수신: <strong id="statRecv">0</strong></div>
+    <div class="stat-item">송신 바이트: <strong id="statSentBytes">0 B</strong></div>
+    <div class="stat-item">수신 바이트: <strong id="statRecvBytes">0 B</strong></div>
+    <div class="stat-item">연결 시간: <strong id="statDuration">-</strong></div>
+  </div>
+
+  <div class="info-section">
+    <h2>📚 WebSocket이란?</h2>
+    <div class="info-grid">
+      <div class="info-item"><strong>전이중 통신</strong>클라이언트와 서버가 동시에 데이터를 주고받을 수 있는 양방향 프로토콜.</div>
+      <div class="info-item"><strong>ws:// vs wss://</strong>ws는 평문, wss는 TLS 암호화. 프로덕션에서는 반드시 wss:// 사용.</div>
+      <div class="info-item"><strong>서브프로토콜</strong>연결 시 클라이언트가 원하는 프로토콜을 제안 (graphql-ws 등).</div>
+      <div class="info-item"><strong>Close codes</strong>1000=정상, 1001=이동, 1006=비정상 종료, 1008=정책 위반, 1011=서버 오류.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+let ws=null;
+let messages=[];
+let stats={sent:0,recv:0,sentBytes:0,recvBytes:0,connectedAt:null};
+let durationTimer=null;
+
+function toggleTheme(){
+  const r=document.documentElement;
+  r.setAttribute('data-theme',r.getAttribute('data-theme')==='dark'?'light':'dark');
+}
+
+function setUrl(url){document.getElementById('wsUrl').value=url;}
+
+function toggleConnect(){
+  if(ws&&(ws.readyState===WebSocket.OPEN||ws.readyState===WebSocket.CONNECTING)){
+    ws.close(1000,'User closed');
+  } else {
+    connect();
+  }
+}
+
+function setStatus(state,text){
+  const dot=document.getElementById('statusDot');
+  dot.className='status-dot '+state;
+  document.getElementById('statusText').textContent=text;
+  const btn=document.getElementById('connectBtn');
+  const sendBtn=document.getElementById('sendBtn');
+  if(state==='connected'){
+    btn.textContent='연결 끊기';btn.className='btn btn-danger';
+    sendBtn.disabled=false;
+  } else if(state==='connecting'){
+    btn.textContent='연결 중...';btn.className='btn btn-outline';btn.disabled=true;
+    sendBtn.disabled=true;
+  } else {
+    btn.textContent='연결';btn.className='btn btn-primary';btn.disabled=false;
+    sendBtn.disabled=true;
+  }
+}
+
+function connect(){
+  const url=document.getElementById('wsUrl').value.trim();
+  if(!url){alert('URL을 입력해주세요.');return;}
+  const protocols=document.getElementById('protocols').value.trim();
+  setStatus('connecting','연결 중...');
+  addLog('sys',`🔗 ${url} 연결 시도...`);
+  try{
+    ws=protocols?new WebSocket(url,protocols.split(',').map(s=>s.trim())):new WebSocket(url);
+  }catch(e){
+    setStatus('disconnected','연결 실패');
+    addLog('err',`❌ 연결 실패: ${e.message}`);
+    return;
+  }
+
+  ws.onopen=function(e){
+    setStatus('connected','연결됨');
+    stats.connectedAt=Date.now();
+    startDurationTimer();
+    addLog('sys',`✅ 연결 성공! 프로토콜: ${ws.protocol||'없음'}`);
+  };
+
+  ws.onmessage=function(e){
+    stats.recv++;
+    const data=typeof e.data==='string'?e.data:'[Binary data]';
+    stats.recvBytes+=new Blob([data]).size;
+    const isJson=tryParseJson(data);
+    addLog('recv',isJson?JSON.stringify(isJson,null,2):data,isJson?'json':'text');
+    updateStats();
+  };
+
+  ws.onerror=function(e){
+    addLog('err','❌ WebSocket 오류 발생');
+  };
+
+  ws.onclose=function(e){
+    setStatus('disconnected','연결 끊김');
+    stopDurationTimer();
+    addLog('sys',`🔌 연결 종료 — 코드: ${e.code}, 이유: ${e.reason||'없음'}, clean: ${e.wasClean}`);
+    ws=null;
+  };
+}
+
+function sendMessage(){
+  if(!ws||ws.readyState!==WebSocket.OPEN)return;
+  const raw=document.getElementById('msgInput').value;
+  if(!raw.trim())return;
+  ws.send(raw);
+  stats.sent++;
+  stats.sentBytes+=new Blob([raw]).size;
+  const isJson=tryParseJson(raw);
+  addLog('sent',isJson?JSON.stringify(isJson,null,2):raw,isJson?'json':'text');
+  updateStats();
+}
+
+function quickSend(msg){
+  document.getElementById('msgInput').value=msg;
+  if(ws&&ws.readyState===WebSocket.OPEN)sendMessage();
+}
+
+function addLog(dir,content,type){
+  const now=new Date();
+  const time=now.toTimeString().split(' ')[0]+'.'+String(now.getMilliseconds()).padStart(3,'0');
+  const size=new Blob([content]).size;
+  messages.push({dir,content,time,size,type:type||'text',ts:now.getTime()});
+
+  const body=document.getElementById('logBody');
+  if(messages.length===1)body.innerHTML=''; // clear empty state
+
+  const el=document.createElement('div');
+  el.className='msg-item';
+
+  const dirLabels={sent:'SENT',recv:'RECV',sys:'SYS',err:'ERR'};
+  let contentHtml=escHtml(content);
+  if(type==='json')contentHtml=`<span class="msg-json">${escHtml(content)}</span>`;
+
+  el.innerHTML=`<span class="msg-dir ${dir}">${dirLabels[dir]||dir}</span><span class="msg-time">${time}</span><span class="msg-content">${contentHtml}</span>${dir==='sent'||dir==='recv'?`<span class="msg-size">${formatBytes(size)}</span>`:''}`;
+  body.appendChild(el);
+
+  if(document.getElementById('optAutoScroll').checked){
+    body.scrollTop=body.scrollHeight;
+  }
+
+  document.getElementById('msgCount').textContent=`${messages.length} messages`;
+}
+
+function clearLog(){
+  messages=[];
+  document.getElementById('logBody').innerHTML='<div class="log-empty">로그가 비어있습니다.</div>';
+  document.getElementById('msgCount').textContent='0 messages';
+  stats={sent:0,recv:0,sentBytes:0,recvBytes:0,connectedAt:stats.connectedAt};
+  updateStats();
+}
+
+function exportLog(){
+  const text=messages.map(m=>`[${m.time}] [${m.dir.toUpperCase()}] ${m.content}`).join('\n');
+  const blob=new Blob([text],{type:'text/plain'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`websocket-log-${Date.now()}.txt`;
+  a.click();
+}
+
+function updateStats(){
+  document.getElementById('statSent').textContent=stats.sent;
+  document.getElementById('statRecv').textContent=stats.recv;
+  document.getElementById('statSentBytes').textContent=formatBytes(stats.sentBytes);
+  document.getElementById('statRecvBytes').textContent=formatBytes(stats.recvBytes);
+}
+
+function startDurationTimer(){
+  stopDurationTimer();
+  durationTimer=setInterval(()=>{
+    if(stats.connectedAt){
+      const sec=Math.floor((Date.now()-stats.connectedAt)/1000);
+      const m=Math.floor(sec/60);
+      const s=sec%60;
+      document.getElementById('statDuration').textContent=`${m}:${String(s).padStart(2,'0')}`;
+    }
+  },1000);
+}
+
+function stopDurationTimer(){
+  if(durationTimer){clearInterval(durationTimer);durationTimer=null;}
+}
+
+function tryParseJson(str){
+  if(!document.getElementById('optJson').checked)return null;
+  try{const o=JSON.parse(str);return typeof o==='object'?o:null;}catch(e){return null;}
+}
+
+function formatBytes(b){
+  if(b<1024)return b+' B';
+  if(b<1048576)return (b/1024).toFixed(1)+' KB';
+  return (b/1048576).toFixed(1)+' MB';
+}
+
+function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+// Ctrl+Enter to send
+document.getElementById('msgInput').addEventListener('keydown',function(e){
+  if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){e.preventDefault();sendMessage();}
+});
+</script>
+</body>
+</html>

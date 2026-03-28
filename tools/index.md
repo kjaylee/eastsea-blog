@@ -75,6 +75,7 @@
 - [브랜드 라이선싱 로열티 수익 계산기](./brand-licensing-royalty-profit-calculator/) — 예상 매출·로열티율·최소 보장·선급금 회수를 반영해 기간 로열티 순이익, ROI, 손익분기 매출을 계산합니다.
 - [API 최소 커밋 + 오버리지 손익 계산기](./api-minimum-commit-overage-profit-calculator/) — 종량제 고객을 최소 커밋 + 오버리지 모델로 전환할 때 월 순이익, ROI, 회수기간, 손익분기 최소 커밋 금액을 계산합니다.
 - [마이크로 SaaS 런칭 수익 계산기](./micro-saas-launch-profit-calculator/) — 방문·트라이얼·유료 전환과 고정비/마케팅/수수료/변동비를 반영해 MRR, 월 순이익, 12개월 ROI, 회수기간, 손익분기 유료 고객 수를 계산합니다.
+- [SaaS Burn Multiple Calculator](./saas-burn-multiple-calculator/) — net burn과 ARR 성장액으로 SaaS burn multiple을 계산하고, 목표 효율 달성에 필요한 ARR gap 또는 burn 절감폭을 산출합니다.
 - [SaaS Quick Ratio Calculator](./saas-quick-ratio-calculator/) — 신규·확장·이탈·축소 MRR로 SaaS quick ratio, gross gain/loss, net new MRR, 목표 비율까지 필요한 추가 gain/loss gap을 계산합니다.
 - [크롬 익스텐션 구독 수익 계산기](./chrome-extension-subscription-profit-calculator/) — 스토어 방문자, 설치 퍼널, 체험→유료 전환, 이탈률, 결제/운영비를 반영해 브라우저 확장 프로그램의 순 MRR, 회수기간, 손익분기 방문자를 계산합니다.
 - [뉴스레터 스폰서 Fill Rate ROI 계산기](./newsletter-sponsor-fill-rate-roi-calculator/) — 뉴스레터 스폰서 슬롯의 현재/목표 Fill Rate, 슬롯 단가, 운영비를 반영해 기간 순이익, ROI, 회수기간, 손익분기 Fill Rate를 계산합니다.
@@ -124,6 +125,7 @@
 - [BMI + 체지방률 계산기](./bmi-bfp-calculator/) — BMI와 미국 해군식 체지방률(US Navy Method)을 함께 계산해 체지방량, 제지방량, 건강 체중 범위를 확인합니다.
 - [CAGR 계산기](./cagr-calculator/) — 초기값, 최종값, 기간을 기준으로 CAGR, 누적수익률, 실질 성장률, 두 배 도달 시간, 목표 시나리오를 계산합니다.
 - [모기지 추가 상환 계산기](./mortgage-extra-payment-calculator/) — 월 추가 납입과 연간 목돈 상환이 주택담보대출 이자 절감과 상환기간 단축에 얼마나 도움이 되는지 계산합니다.
+- [대환대출(리파이낸스) 계산기](./mortgage-refinance-calculator/) — 현재 대출과 대환 대출의 월 상환액, 총 이자, 순 절감액, 손익분기 개월 수를 비교 계산합니다.
 - [MSP Pricing Calculator](./msp-pricing-calculator/) — 지원 시간, 툴 스택 비용, 온사이트 부담, 온보딩, 결제 수수료, 목표 마진을 반영해 MSP 월 계약 가격, 손익분기 MRR, 온보딩 수수료를 계산합니다.
 
 - [JSON ↔ YAML 변환기](./json-yaml-converter/) — JSON과 YAML을 실시간 양방향 변환합니다. 에러 라인 표시, 2/4 스페이스 들여쓰기 선택, 복사·다운로드·드래그앤드롭 파일 업로드 지원.

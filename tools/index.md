@@ -116,6 +116,7 @@
 - [GOAT Fee Calculator](./goat-fee-calculator/) — 공개 GOAT baseline(미국 판매자 양호한 상태 + prepaid shipping의 9.5% commission + $5 seller fee)과 custom override를 바탕으로 payout after fees, 순이익, 손익분기 판매가, 목표 순이익 판매가를 계산합니다.
 - [StockX vs GOAT Profit Calculator](./stockx-vs-goat-profit-calculator/) — 같은 판매가·원가 시나리오에서 StockX seller-level fee model과 GOAT baseline/custom override를 나란히 비교해 payout, 순이익, 승자 플랫폼, 상대 플랫폼과 같아지기 위한 필요 판매가를 계산합니다.
 - [Whatnot Seller Fee Calculator](./whatnot-seller-fee-calculator/) — Whatnot 미국 기준 공개 수수료 베이스라인(표준 8%, Electronics 5%, Coins & Money 4%, processing 2.9% + $0.30)을 바탕으로 commission, payout after fees, 순이익, 손익분기 판매가를 계산합니다.
+- [ThriveCart vs SamCart Cost Calculator](./thrivecart-vs-samcart-cost-calculator/) — ThriveCart 일회성 비용과 SamCart 월 구독 비용을 비교해 break-even month, 누적 take-home, SamCart가 정당화되기 위한 필요 gross lift를 계산합니다.
 - [TikTok Shop Fee Calculator | 틱톡샵 수수료 계산기](./tiktok-shop-fee-calculator/) — TikTok Shop 주문 금액, 플랫폼 할인, 세금, 수수료율을 반영해 referral fee와 순수령액, 월간 예상 수익을 계산합니다.
 - [YouTube Title Generator | 유튜브 제목 생성기](./youtube-title-generator/) — topic, primary keyword, audience, tone, format을 조합해 click-ready YouTube 제목 후보를 여러 개 생성하고 바로 복사합니다.
 - [YouTube Money Calculator | 유튜브 수익 계산기](./youtube-money-calculator/) — 월 롱폼/쇼츠 조회수, RPM, 멤버십, 스폰서십, 제휴 수익을 통합해 월 실수령액(세금 적립 반영), 손익분기 조회수, 목표 조회수를 계산합니다.

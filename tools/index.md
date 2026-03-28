@@ -143,3 +143,4 @@
 - [Venmo Fee Calculator | 벤모 수수료 계산기](./venmo-fee-calculator/) — Venmo 개인 상품·서비스 결제 2.99%, 비즈니스 프로필 1.9%+$0.10, Tap to Pay 2.29%+$0.09, 자선단체 1.9%+$0.10, 즉시 정산 1.75%(건당 최소 $0.25 / 최대 $25)를 반영해 실수령액, 월 순이익, 손익분기 건수, 목표 평균 결제 금액을 계산합니다.
 - [Chargeback Rate Threshold Calculator](./chargeback-rate-threshold-calculator/) — 같은 달 기준과 전월 거래수 기준의 차지백 비율을 함께 계산하고, 1.0%/1.5% 임계치 headroom, 분쟁건수 경고, 월/연 손실 노출액을 보여주는 결제 리스크 운영 도구입니다.
 - [Depreciation Calculator | 감가상각 계산기](./depreciation-calculator/) — Straight-Line, Double-Declining Balance, Sum-of-Years-Digits, Units of Production 4가지 표준 방법으로 자산 감가상각비, 연간 스케줄, 방법별 비교를 계산합니다.
+- [Simple Interest Calculator | 단리 계산기](./simple-interest-calculator/) — 단리 이자(I = P × R × T)를 계산하고, 원금·이율·기간 역산, 연도별 스케줄을 제공합니다. Calculate simple interest, solve for any variable, and view yearly schedule.

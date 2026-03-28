@@ -14,6 +14,7 @@
 - [Printify Profit Calculator](./printify-profit-calculator/) — Printify 제품원가, 배송비, 스토어 수수료, 기타 주문당 비용을 반영해 순이익, 마진, 40% 목표 마진용 필요 판매가와 Premium break-even 주문 수를 계산합니다.
 - [eBay 수수료·순이익 계산기](./ebay-fee-profit-calculator/) — 최종 거래가 수수료, 주문당 수수료, promoted listings, buyer shipping, 판매세 추정을 반영해 주문당 순이익, 손익분기 판매가, 적자 전 최대 광고율을 계산합니다.
 - [Facebook Marketplace Fee & Profit Calculator](./facebook-marketplace-fee-profit-calculator/) — shipped 주문의 10%·최소 $0.80 공개 베이스라인, local pickup 0% 가정, 배송비·원가·포장비·광고비를 반영해 순이익, 손익분기 판매가, 목표 순이익 판매가를 계산합니다.
+- [마크업 가격 계산기 | Markup Pricing Calculator](./markup-pricing-calculator/) — 원가와 마크업률로 판매가·이익·마진을 계산합니다. 마크업↔마진 변환, 비교표 생성 기능 포함.
 - [Marketplace Fee Profit Calculator](./marketplace-fee-profit-calculator/) — 판매가, 원가, 배송비, 플랫폼/결제 수수료, 광고비, 반품률을 반영해 주문당 기대이익, 손익분기 판매가, 목표 마진 판매가를 계산합니다.
 - [Eventbrite Fee Calculator](./eventbrite-fee-calculator/) — Eventbrite의 공개 미국 유료 티켓 수수료(3.7% + $1.79, 2.9% processing)를 기준으로 buyer-pays vs organizer-covers, 참석자 결제 총액, 주최자 실수령액, 손익분기 티켓 가격을 계산합니다.
 - [Fiverr 셀러 수수료 계산기](./fiverr-seller-fee-calculator/) — 완료 주문 수, 평균 주문 금액, 팁, 출금 방법, 추가 정산 드래그를 반영해 Fiverr 20% 수수료 이후 실제 순수익, 실효 차감률, 건당 순수익을 계산합니다.

@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bandwidth Calculator — File Transfer Time & Speed</title>
+<meta name="description" content="Calculate file transfer time based on file size and connection speed. Supports GB, MB, Kbps, Mbps, Gbps. Includes common speed presets.">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0a0a0f;--glass:rgba(255,255,255,0.06);--border:rgba(255,255,255,0.1);--text:#e0e0e0;--text2:#888;--accent:#3b82f6;--accent2:#60a5fa;--success:#10b981;--warn:#f59e0b;--purple:#a78bfa}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:1.5rem 1rem}
+.container{max-width:820px;margin:0 auto}
+h1{text-align:center;font-size:1.9rem;margin-bottom:.3rem;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;font-weight:700}
+.subtitle{text-align:center;color:var(--text2);font-size:.9rem;margin-bottom:1.5rem}
+.card{background:var(--glass);border:1px solid var(--border);border-radius:16px;padding:1.25rem;backdrop-filter:blur(20px);margin-bottom:1rem}
+.card-title{font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--text2);margin-bottom:1rem}
+.field-row{display:flex;gap:.75rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:.9rem}
+.field{display:flex;flex-direction:column;gap:.35rem;flex:1;min-width:140px}
+label{font-size:.78rem;color:var(--text2);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+input[type=number]{background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:10px;color:var(--text);padding:.65rem .9rem;font-size:1.1rem;font-weight:600;outline:none;transition:border-color .2s;width:100%}
+input[type=number]:focus{border-color:var(--accent)}
+input[type=number]::placeholder{color:var(--text2)}
+select{background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:10px;color:var(--text);padding:.65rem .9rem;font-size:.9rem;outline:none;transition:border-color .2s;width:100%;cursor:pointer}
+select:focus{border-color:var(--accent)}
+select option{background:#1a1a2e}
+.presets{display:flex;gap:.45rem;flex-wrap:wrap;margin-bottom:.6rem}
+.preset{padding:.35rem .8rem;background:var(--glass);border:1px solid var(--border);border-radius:20px;font-size:.75rem;color:var(--text2);cursor:pointer;transition:all .2s;white-space:nowrap}
+.preset:hover{border-color:var(--accent);color:var(--accent)}
+.result-hero{text-align:center;padding:1.5rem 1rem;margin-bottom:.5rem}
+.result-time{font-size:3rem;font-weight:800;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1.1;margin-bottom:.3rem}
+.result-unit{font-size:.9rem;color:var(--text2)}
+.progress-bar{height:8px;background:rgba(255,255,255,0.08);border-radius:20px;overflow:hidden;margin:.8rem 0}
+.progress-fill{height:100%;border-radius:20px;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .5s ease}
+.metrics{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:.6rem;margin-top:.8rem}
+.metric{background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:10px;padding:.7rem .9rem}
+.metric-label{font-size:.72rem;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.25rem}
+.metric-value{font-size:.95rem;font-weight:700;color:var(--text)}
+.comparison-grid{display:grid;grid-template-columns:1fr 1fr;gap:.6rem}
+@media(max-width:500px){.comparison-grid{grid-template-columns:1fr}}
+.comp-item{background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:10px;padding:.65rem .9rem;display:flex;justify-content:space-between;align-items:center}
+.comp-name{font-size:.78rem;color:var(--text2)}
+.comp-time{font-size:.82rem;font-weight:700;color:var(--text)}
+.comp-time.fast{color:var(--success)}
+.comp-time.medium{color:var(--warn)}
+.comp-time.slow{color:#f87171}
+.section-label{font-size:.75rem;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin:.75rem 0 .4rem;font-weight:700}
+.tab-row{display:flex;gap:.4rem;margin-bottom:.8rem}
+.tab{padding:.4rem 1rem;border-radius:8px;font-size:.82rem;cursor:pointer;background:var(--glass);border:1px solid var(--border);color:var(--text2);transition:all .2s;font-weight:600}
+.tab.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.mode-section{display:none}.mode-section.active{display:block}
+.hidden{display:none}
+.note{font-size:.75rem;color:var(--text2);margin-top:.4rem;line-height:1.5}
+input[type=number]::-webkit-inner-spin-button{opacity:.3}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>⚡ Bandwidth Calculator</h1>
+  <p class="subtitle">Calculate file transfer time, required speed, or achievable file size</p>
+
+  <div class="card">
+    <div class="tab-row">
+      <div class="tab active" onclick="setMode('time')">Transfer Time</div>
+      <div class="tab" onclick="setMode('speed')">Required Speed</div>
+      <div class="tab" onclick="setMode('size')">Max File Size</div>
+    </div>
+
+    <!-- MODE: Time -->
+    <div id="modeTime" class="mode-section active">
+      <div class="field-row">
+        <div class="field" style="flex:2">
+          <label>File Size</label>
+          <input type="number" id="fileSize" value="1" min="0" step="any" oninput="calc()">
+        </div>
+        <div class="field">
+          <label>Unit</label>
+          <select id="fileSizeUnit" onchange="calc()">
+            <option value="1">Bytes</option>
+            <option value="1024">KB</option>
+            <option value="1048576" selected>MB</option>
+            <option value="1073741824">GB</option>
+            <option value="1099511627776">TB</option>
+          </select>
+        </div>
+      </div>
+      <div class="section-label">File presets</div>
+      <div class="presets" id="filePresets"></div>
+    </div>
+
+    <!-- MODE: Speed -->
+    <div id="modeSpeed" class="mode-section">
+      <div class="field-row">
+        <div class="field" style="flex:2">
+          <label>File Size</label>
+          <input type="number" id="fileSize2" value="10" min="0" step="any" oninput="calcSpeed()">
+        </div>
+        <div class="field">
+          <label>Unit</label>
+          <select id="fileSizeUnit2" onchange="calcSpeed()">
+            <option value="1">Bytes</option>
+            <option value="1024">KB</option>
+            <option value="1048576" selected>MB</option>
+            <option value="1073741824">GB</option>
+            <option value="1099511627776">TB</option>
+          </select>
+        </div>
+        <div class="field" style="flex:2">
+          <label>Target Time</label>
+          <input type="number" id="targetTime" value="60" min="0" step="any" oninput="calcSpeed()">
+        </div>
+        <div class="field">
+          <label>Unit</label>
+          <select id="targetTimeUnit" onchange="calcSpeed()">
+            <option value="1">Seconds</option>
+            <option value="60" selected>Minutes</option>
+            <option value="3600">Hours</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODE: Size -->
+    <div id="modeSize" class="mode-section">
+      <div class="field-row">
+        <div class="field" style="flex:2">
+          <label>Available Time</label>
+          <input type="number" id="availTime" value="5" min="0" step="any" oninput="calcSize()">
+        </div>
+        <div class="field">
+          <label>Unit</label>
+          <select id="availTimeUnit" onchange="calcSize()">
+            <option value="1">Seconds</option>
+            <option value="60" selected>Minutes</option>
+            <option value="3600">Hours</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-label">Connection speed</div>
+    <div class="field-row">
+      <div class="field" style="flex:2">
+        <label>Speed</label>
+        <input type="number" id="speed" value="100" min="0" step="any" oninput="calc();calcSpeed();calcSize()">
+      </div>
+      <div class="field">
+        <label>Unit</label>
+        <select id="speedUnit" onchange="calc();calcSpeed();calcSize()">
+          <option value="1000">Kbps</option>
+          <option value="1000000" selected>Mbps</option>
+          <option value="1000000000">Gbps</option>
+          <option value="125000">KB/s</option>
+          <option value="125000000">MB/s</option>
+          <option value="125000000000">GB/s</option>
+        </select>
+      </div>
+    </div>
+    <div class="section-label">Speed presets</div>
+    <div class="presets" id="speedPresets"></div>
+    <p class="note" id="overheadNote">⚠️ Real-world speeds are typically 60–80% of advertised due to protocol overhead, contention, and distance. The calculator uses a <span id="efficiencyLabel">80%</span> efficiency factor.</p>
+  </div>
+
+  <div class="card" id="resultCard">
+    <div class="result-hero">
+      <div class="result-time" id="resultTime">—</div>
+      <div class="result-unit" id="resultUnit"></div>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:50%"></div></div>
+    <div class="metrics" id="metricsGrid"></div>
+  </div>
+
+  <div class="card" id="compCard">
+    <div class="card-title">Speed comparison — your file at different connections</div>
+    <div class="comparison-grid" id="compGrid"></div>
+  </div>
+</div>
+
+<script>
+const FILE_PRESETS=[
+  {name:'Photo (JPEG)',bytes:4e6},
+  {name:'MP3 Song',bytes:8e6},
+  {name:'PDF Report',bytes:15e6},
+  {name:'HD Video (1hr)',bytes:4e9},
+  {name:'4K Video (1hr)',bytes:14e9},
+  {name:'iOS App',bytes:250e6},
+  {name:'PC Game (30GB)',bytes:30e9},
+  {name:'Blu-ray Movie',bytes:50e9},
+];
+const SPEED_PRESETS=[
+  {name:'3G',bps:7.2e6},
+  {name:'4G LTE',bps:50e6},
+  {name:'5G (mid)',bps:200e6},
+  {name:'ADSL',bps:8e6},
+  {name:'50 Mbps',bps:50e6},
+  {name:'100 Mbps',bps:100e6},
+  {name:'Gigabit',bps:1e9},
+  {name:'10 Gbps',bps:10e9},
+  {name:'USB 3.0',bps:5e9},
+  {name:'SSD (SATA)',bps:4e9},
+  {name:'NVMe SSD',bps:32e9},
+];
+const EFFICIENCY=0.8;
+let currentMode='time';
+
+function initPresets(){
+  document.getElementById('filePresets').innerHTML=FILE_PRESETS.map(p=>`<div class="preset" onclick="setFileSize(${p.bytes})">${p.name}</div>`).join('');
+  document.getElementById('speedPresets').innerHTML=SPEED_PRESETS.map(p=>`<div class="preset" onclick="setSpeed(${p.bps})">${p.name}</div>`).join('');
+}
+
+function setFileSize(bytes){
+  let unit=1,label='Bytes';
+  if(bytes>=1e12){unit=1099511627776;label='TB';}
+  else if(bytes>=1e9){unit=1073741824;label='GB';}
+  else if(bytes>=1e6){unit=1048576;label='MB';}
+  else if(bytes>=1e3){unit=1024;label='KB';}
+  const val=(bytes/unit);
+  document.getElementById('fileSize').value=parseFloat(val.toPrecision(4));
+  document.getElementById('fileSizeUnit').value=unit;
+  calc();
+}
+function setSpeed(bps){
+  let unit,label;
+  if(bps>=1e9){unit=1000000000;label='Gbps';}
+  else if(bps>=1e6){unit=1000000;label='Mbps';}
+  else if(bps>=1e3){unit=1000;label='Kbps';}
+  else{unit=1000;label='Kbps';}
+  document.getElementById('speed').value=parseFloat((bps/unit).toPrecision(4));
+  document.getElementById('speedUnit').value=unit;
+  calc();calcSpeed();calcSize();
+}
+function setMode(m){
+  currentMode=m;
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',['time','speed','size'][i]===m));
+  document.querySelectorAll('.mode-section').forEach(s=>s.classList.remove('active'));
+  document.getElementById('mode'+m.charAt(0).toUpperCase()+m.slice(1)).classList.add('active');
+  if(m==='time') calc();
+  else if(m==='speed') calcSpeed();
+  else calcSize();
+}
+
+function getFileSizeBytes(){return parseFloat(document.getElementById('fileSize').value||0)*parseFloat(document.getElementById('fileSizeUnit').value||1);}
+function getSpeedBps(){return parseFloat(document.getElementById('speed').value||0)*parseFloat(document.getElementById('speedUnit').value||1)*EFFICIENCY;}
+
+function formatTime(secs){
+  if(secs<0||!isFinite(secs)) return '∞';
+  if(secs<0.001) return '<1ms';
+  if(secs<1) return (secs*1000).toFixed(0)+'ms';
+  if(secs<60) return secs.toFixed(1)+' sec';
+  if(secs<3600){const m=Math.floor(secs/60),s=Math.round(secs%60);return m+'m '+s+'s';}
+  if(secs<86400){const h=Math.floor(secs/3600),m=Math.floor((secs%3600)/60);return h+'h '+m+'m';}
+  const d=Math.floor(secs/86400),h=Math.floor((secs%86400)/3600);
+  return d+'d '+h+'h';
+}
+function formatBytes(b){if(b<1024)return b.toFixed(0)+' B';if(b<1048576)return (b/1024).toFixed(2)+' KB';if(b<1073741824)return (b/1048576).toFixed(2)+' MB';if(b<1099511627776)return (b/1073741824).toFixed(2)+' GB';return (b/1099511627776).toFixed(2)+' TB';}
+function formatBps(bps){if(bps>=1e9)return (bps/1e9).toFixed(2)+' Gbps';if(bps>=1e6)return (bps/1e6).toFixed(2)+' Mbps';if(bps>=1e3)return (bps/1e3).toFixed(2)+' Kbps';return bps.toFixed(0)+' bps';}
+
+function getTimeClass(secs){
+  if(secs<5) return 'fast';
+  if(secs<300) return 'medium';
+  return 'slow';
+}
+
+function calc(){
+  if(currentMode!=='time') return;
+  const bytes=getFileSizeBytes();
+  const bps=getSpeedBps();
+  if(!bytes||!bps){setResult('—','');updateComparison(bytes);return;}
+  const secs=bytes*8/bps;
+  setResult(formatTime(secs), `to transfer ${formatBytes(bytes)} at ${formatBps(bps/EFFICIENCY)} (effective: ${formatBps(bps)})`);
+  updateMetrics(bytes,bps,secs);
+  updateComparison(bytes);
+}
+
+function calcSpeed(){
+  if(currentMode!=='speed') return;
+  const bytes=parseFloat(document.getElementById('fileSize2').value||0)*parseFloat(document.getElementById('fileSizeUnit2').value||1);
+  const secs=parseFloat(document.getElementById('targetTime').value||0)*parseFloat(document.getElementById('targetTimeUnit').value||1);
+  if(!bytes||!secs){setResult('—','');return;}
+  const bpsNeeded=bytes*8/secs;
+  setResult(formatBps(bpsNeeded/EFFICIENCY),`required to transfer ${formatBytes(bytes)} in ${formatTime(secs)}`);
+  updateMetrics(bytes,bpsNeeded,secs);
+  updateComparison(bytes);
+}
+
+function calcSize(){
+  if(currentMode!=='size') return;
+  const bps=getSpeedBps();
+  const secs=parseFloat(document.getElementById('availTime').value||0)*parseFloat(document.getElementById('availTimeUnit').value||1);
+  if(!bps||!secs){setResult('—','');return;}
+  const bytes=bps*secs/8;
+  setResult(formatBytes(bytes),`transferable in ${formatTime(secs)} at ${formatBps(bps/EFFICIENCY)}`);
+  document.getElementById('metricsGrid').innerHTML='';
+  updateComparison(bytes);
+}
+
+function setResult(val,unit){
+  document.getElementById('resultTime').textContent=val;
+  document.getElementById('resultUnit').textContent=unit;
+}
+
+function updateMetrics(bytes,bps,secs){
+  const grid=document.getElementById('metricsGrid');
+  const bitsTotal=bytes*8;
+  const transferRate=bps; // effective
+  grid.innerHTML=[
+    ['File Size',formatBytes(bytes)],
+    ['File Size (bits)',(bitsTotal>=1e9?(bitsTotal/1e9).toFixed(2)+' Gb':(bitsTotal/1e6).toFixed(2)+' Mb')],
+    ['Effective Speed',formatBps(transferRate)],
+    ['Advertised Speed',formatBps(transferRate/EFFICIENCY)],
+    ['Transfer Rate',formatBytes(bps/8)+'/s'],
+    ['Efficiency',Math.round(EFFICIENCY*100)+'%'],
+  ].map(([l,v])=>`<div class="metric"><div class="metric-label">${l}</div><div class="metric-value">${v}</div></div>`).join('');
+}
+
+function updateComparison(bytes){
+  if(!bytes){document.getElementById('compGrid').innerHTML='';return;}
+  const conns=[
+    {name:'3G Mobile',bps:7.2e6},
+    {name:'4G LTE',bps:50e6},
+    {name:'5G (mid)',bps:200e6},
+    {name:'10 Mbps Cable',bps:10e6},
+    {name:'100 Mbps Fiber',bps:100e6},
+    {name:'Gigabit Fiber',bps:1e9},
+    {name:'USB 3.0',bps:5e9},
+    {name:'NVMe SSD',bps:32e9},
+  ];
+  document.getElementById('compGrid').innerHTML=conns.map(c=>{
+    const effectiveBps=c.bps*EFFICIENCY;
+    const secs=bytes*8/effectiveBps;
+    const t=formatTime(secs);
+    const cls=getTimeClass(secs);
+    return `<div class="comp-item"><span class="comp-name">${c.name}</span><span class="comp-time ${cls}">${t}</span></div>`;
+  }).join('');
+}
+
+initPresets();
+calc();
+</script>
+</body>
+</html>

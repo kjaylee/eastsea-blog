@@ -98,6 +98,7 @@
 - [Skool Fee Calculator | 스쿨 수수료 계산기](./skool-fee-calculator/) — Skool Hobby 10% + $0.30, Pro 2.9% + $0.30 / 3.9% + $0.30, 환불, 기타 고정비를 반영해 실제 순수익과 Hobby→Pro 업그레이드 손익분기점을 계산합니다.
 - [Whop Fee Calculator | Whop 수수료 계산기](./whop-fee-calculator/) — Whop 공개 카드 수수료, 국제·환전 surcharge, 선택적 billing/tax/affiliate layer, payout fee, 셀러 비용을 분리해 실수령액과 손익분기 판매가를 계산합니다.
 - [대기전력 전기요금 계산기](./standby-power-cost-calculator/) — 대기전력(W)·요금 단가·차단 시간을 입력해 월/연간 낭비 요금과 절감 가능액을 계산하고 최근 이력을 저장합니다.
+- [통계 계산기 | Statistics Calculator](./statistics-calculator/) — 숫자 목록을 입력하면 평균, 중앙값, 최빈값, 표준편차(표본/모집단), 분산, 사분위수(Q1/Q3), IQR, 왜도, 첨도, 변동계수, 표준오차를 즉시 계산합니다.
 - [여행 짐 체크리스트 플래너](./travel-packing-planner/) — 여행 일수·유형·날씨에 맞춰 짐 목록을 자동 생성하고 체크 진행률/최근 저장 이력을 관리합니다.
 - [중고거래 손익 계산기](./used-goods-profit-calculator/) — 구매가·수수료·배송비·기타비용을 반영해 순이익/이익률/손익분기 판매가를 계산하고 최근 기록을 저장합니다.
 - [분리배출 가이드](./recycling-sort-guide/) — 품목명을 검색해 재활용/일반배출 분류와 처리 방법·주의사항을 확인하고 최근 검색·즐겨찾기를 저장합니다.
@@ -144,3 +145,8 @@
 - [Chargeback Rate Threshold Calculator](./chargeback-rate-threshold-calculator/) — 같은 달 기준과 전월 거래수 기준의 차지백 비율을 함께 계산하고, 1.0%/1.5% 임계치 headroom, 분쟁건수 경고, 월/연 손실 노출액을 보여주는 결제 리스크 운영 도구입니다.
 - [Depreciation Calculator | 감가상각 계산기](./depreciation-calculator/) — Straight-Line, Double-Declining Balance, Sum-of-Years-Digits, Units of Production 4가지 표준 방법으로 자산 감가상각비, 연간 스케줄, 방법별 비교를 계산합니다.
 - [Simple Interest Calculator | 단리 계산기](./simple-interest-calculator/) — 단리 이자(I = P × R × T)를 계산하고, 원금·이율·기간 역산, 연도별 스케줄을 제공합니다. Calculate simple interest, solve for any variable, and view yearly schedule.
+- [ATS Resume Checker | ATS 이력서 점수 분석기](./ats-resume-checker/) — 채용공고와 이력서를 붙여넣으면 ATS 키워드 매칭 점수, 누락 키워드, 개선 팁을 즉시 계산합니다. Keyword match %, missing keywords, and improvement tips.
+- [Currency Converter | 통화 환율 변환기](./currency-converter/) — USD, EUR, KRW, JPY, GBP, CNY 등 30개 통화를 즉시 변환합니다. 빠른 페어 선택, 역방향 입력, 주요 통화 일괄 표시.
+- [HEX RGB HSL Converter | 색상 코드 변환기](./hex-rgb-converter/) — HEX, RGB, HSL, HSV 색상 코드를 상호 변환합니다. 색상 피커, RGB 슬라이더, 색상 조화 팔레트, CSS 코드 복사 지원.
+- [Percentage Calculator | 퍼센트 계산기](./percentage-calculator/) — X의 Y%, 몇 %인지 계산, 증감률, 역산, 팁 계산을 탭별로 제공합니다. Percent of number, percent change, reverse percentage, tip calculator.
+- [바이오리듬 계산기 | Biorhythm Calculator](./biorhythm-calculator/) — 생년월일을 입력하면 신체(23일)·감성(28일)·지성(33일)·직관(38일) 4가지 바이오리듬을 31일 그래프와 주기 상태로 시각화합니다.

@@ -97,7 +97,7 @@ test('summary includes key decision fields', () => {
   assert.match(text, /Break-even average donation \/ 손익분기 평균 후원액:/);
 });
 
-test('required HTML anchors are present', () => {
+test('required HTML anchors and schema tokens are present', () => {
   const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
   for (const token of [
     'donationCount',
@@ -111,14 +111,30 @@ test('required HTML anchors are present', () => {
     'summary',
     'script defer src="./calculator.js"',
     '/assets/analytics.js',
+    'application/ld+json',
+    'WebApplication',
+    'https://eastsea.monster/tools/gofundme-fee-calculator/',
   ]) {
     assert.match(html, new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   }
 });
 
-test('manifest contains slug exactly once after rebuild', () => {
+test('discovery surfaces contain slug exactly once after live publish wiring', () => {
   const root = path.join(__dirname, '..', '..');
   const slug = 'gofundme-fee-calculator';
-  const manifest = fs.readFileSync(path.join(root, 'tools', 'manifest.json'), 'utf8');
-  assert.equal(manifest.split(`"slug": "${slug}"`).length - 1, 1);
+  const checks = [
+    { file: path.join(root, 'tools', 'index.html'), token: `href="${slug}/"` },
+    { file: path.join(root, 'tools', 'index.md'), token: `(./${slug}/)` },
+    { file: path.join(root, '_data', 'tools-list.json'), token: `"slug": "${slug}"` },
+    { file: path.join(root, 'tools', 'manifest.json'), token: `"slug": "${slug}"` },
+  ];
+
+  for (const { file, token } of checks) {
+    const text = fs.readFileSync(file, 'utf8');
+    assert.equal(
+      text.split(token).length - 1,
+      1,
+      `${path.relative(root, file)} should contain ${token} exactly once`
+    );
+  }
 });

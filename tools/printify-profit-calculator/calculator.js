@@ -397,15 +397,44 @@
     refs.status.className = 'status warn';
   }
 
+  function clearRenderedState() {
+    [
+      refs.netProfit,
+      refs.marginPct,
+      refs.requiredRetailPrice,
+      refs.premiumUpliftPerOrder,
+      refs.grossRevenue,
+      refs.effectiveProductCostOut,
+      refs.storefrontFeeOut,
+      refs.totalSellerCostOut,
+      refs.solverState,
+      refs.annualBreakEvenOrders,
+      refs.monthlyBreakEvenOrders,
+      refs.premiumBreakEvenNote,
+      refs.freeNetProfit,
+      refs.freeMarginPct,
+      refs.premiumNetProfit,
+      refs.premiumMarginPct,
+    ].forEach((node) => {
+      node.textContent = '—';
+    });
+
+    refs.selectedPlanLabel.textContent = 'Selected plan';
+    refs.summary.value = '';
+    refs.copyBtn.disabled = true;
+  }
+
   function render() {
     const { result, error } = calculate(collectInput(), { lang: 'en' });
     setError(error);
 
     if (error || !result) {
+      clearRenderedState();
       setStatus(null);
       return;
     }
 
+    refs.copyBtn.disabled = false;
     refs.selectedPlanLabel.textContent = result.scenario.planMode === 'premium' ? 'Premium selected' : 'Free selected';
     refs.netProfit.textContent = formatMoney(result.scenario.netProfit, 'en');
     refs.marginPct.textContent = formatPercent(result.scenario.marginPct, 'en');

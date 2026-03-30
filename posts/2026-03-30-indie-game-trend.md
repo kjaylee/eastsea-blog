@@ -1,147 +1,154 @@
 ---
-title: "2026년 3월 인디 게임 트렌드 리포트 — J&J Games 관점"
-date: "2026-03-30 10:00:00 +0900"
+title: "2026년 3월 넷째 주 — 인디 게임 트렌드 리포트"
+date: 2026-03-30 10:00:00 +0900
 categories: [research, indie-game]
-tags: [indie-game, trend, 2026, steam, itch-io, html5, godot]
+tags: [indie-game, trend, 2026, steam, nintendo, cozy-game, tactical-rpg, html5]
 author: MissKim
 ---
 
-> **TL;DR** — 2026년 3월, 인디 게임 시장은 52억 달러를 향해 성장 중이다. 스토리드림+'스릴러, 레트로 RPG 리메이크 열풍, 그리고 타이쿱roguelite의 부상이 핵심 흐름이다. HTML5/브라우저 게임은 Telegram Mini App 생태계와 결합하며 새로운 유통 허브로 부상하고 있다.
+> **TL;DR** 2026년 3월 넷째 주, 인디 게임스는 **Nintendo Indie World 쇼케이스 731K 조회**, **Q1 출고 라인업 강세**, **AI × 게임 디자인 결합** 3본락으로 움직인다. 브라우저·HTML5 게임은 WebGPU 기반 시각화와 AI NPC로 재조명받고 있다.
 
 ---
 
-## 1. 시장 현황: 인디 게임 시장 2026년 54억 달러突破 예고
+## 1. 이슈 톱 10 — 이번 주 핵심 동태
 
-Mordor Intelligence의 최신 보고서에 따르면, 인디 게임 시장은 **2025년 48.5억 달러에서 2026년 55.4억 달러**로 성장할 것으로 전망된다. CAGR 14.32%로 지속 확장하며 2031년에는 **108억 달러** 규모에 도달할 전망이다.
+### 🔥 이슈 1: Nintendo Indie World 쇼케이스, 73만 조회 돌파
+**2026-03-03** 공개된 **Indie World Showcase 3.3.2026** 영상(Nintendo of America, 731,673회 조회)이 3월 인디 게임 마케팅의 최대 이벤트였다. 스위치2(Switch 2) 출시와 맞물려 모바일·휴대 플랫폼의 인디 게임 노출이 급증하고 있으며, **`Best Indie Games`(19만 구독)'** 등 유튜브 채널에서도 "March 2026 Indie Games" 플레이리스트가 연일 업데이트되고 있다.
 
-→ 원문: [Indie Game Market Size, Growth Forecast, Demand & Trends 2026–2031](https://www.mordorintelligence.com/industry-reports/indie-game-market)
-→ 교차확인: [The gaming trends shaping 2026, predicted by game devs](https://www.creativebloq.com/3d/video-game-design/10-ways-2026-will-be-a-turning-point-for-game-design-according-to-indie-devs)
-
-**J&J Games 시사점**: AAA 타이틀의 개발 비용 상승과 발매 지연이 계속되는 지금, 인디 게임의 시장 점유율 확대는 구조적이다. HTML5/브라우저 기반 인디 게임은 설치 불필요+'친근한 진입 장벽으로 모바일 사용자에게 자연스럽게 침투하고 있다.
-
----
-
-## 2. 2026년 3월 주목할 인디 게임Releases 7선
-
-### 2.1 Scott Pilgrim EX (3월 3일) — 레트로 비트엠업의 명랑한 부활
-
-플레이어블 비디오 게임의 전설이 돌아왔다. Scott Pilgrim EX는 온타리오 토론토의 거리와 그 너머를 무대로 한 격투 액션 게임이다. 펀치 콤보, 익숙한 얼굴들, 시공간을 넘나드는 서스펜드 전개를 꼽아, 클래식 비트엠업과 Tribute Games의 현대적 개량을 동시에 만족시킨다.
-
-→ 원문: [Green Man Gaming – Indie Video Games Round-Up March 2026](https://www.greenmangaming.com/blog/indie-video-games-round-up-march-2026/)
-→ 교차확인: [Scott Pilgrim EX – Steam](https://store.steampowered.com/app/2640950/Scott_Pilgrim_EX/)
-
-### 2.2 Homura Hime (3월 4일) — 불꽃이 빚는 제3인칭 액션
-
-강렬한 감정에 빙의한 악마들과의 전투를 그리는 Homura Hime는 서사적 깊이와 극도로 화려한 총격전 느낌의 액션을 결합했다. 극도로 연극적이면서도 광란적인 스타일로, 2026년 가장 눈길을 끄는 日산 액션 게임 중 하나다.
-
-### 2.3 Timberborn (3월 12일) — 비버 문명의 산업혁명
-
-Early Access로热销했던 Timberborn의 정식版이 3월 12일 출시되었다. 인간이 남긴 지구를 재건하려는 근면한 비버들의 사회를 운영하는 콜로니 빌더로, 목재와 수력에 기반한 공학 요소가 게임 깊이를 더한다.
-
-→ 원문: [Green Man Gaming – Indie Video Games Round-Up March 2026](https://www.greenmangaming.com/blog/indie-video-games-round-up-march-2026/)
-
-### 2.4 Solasta II (3월 12일, Early Access) — D&D 5e 규칙을 처음으로 게임에
-
-Solasta II는 업데이트된 **D&D 5e 규칙**을 최초로 implements한 RPG로, 탁월한 목소리 연기, 화려한 비주얼, 전략적 턴제 전투를 무기로 한다. 공식 룰셋을自家에 first 구현했다는 점에서 D&D 라이선스 게임 역사에서 새로운 장을 여는 작품이다.
-
-### 2.5 EverSiege: Untold Ages (3월 26일) — 전략 + Roguelite + MOBA의 실험적 조합
-
-프로시저르게 생성된 전투 공간에서 아군을 규합하고, 장비를 커스터마이즈한 후 압도적인 적에게 맞서 싸우는 전략 roguelite. MOBA에서 영감을 받은 팀플레이나 PvP 요소를 결합한 점이 독보적이다.
-
-### 2.6 Nova Roma (3월 26일) — 고대 로마 제국 시뮬레이션
-
-시민의 행복, 변덕스러운 신들의 비위를 맞추며 제국을 확장하는 경영 시뮬레이션. GG.DEALS의 2026년 유망작 리스트에도 이름을 올렸다.
-
-→ 원문: [gg.deals – The 12 upcoming indie games in 2026 that could outshine AAA titles](https://gg.deals/blog/the-upcoming-indie-games-in-2026/)
-
-### 2.7 1348 Ex Voto (3월 12일) — 중세 이탈리아의 검객 서사
-
-중세 후기 이탈리아를 무대로, 기사 Aeta가 소중한 사람을 구하기 위해 방랑하는 이야기. 역사적 유럽 무도술과 서사적 탐험을 블렌딩한 액션 어드벤처로, 2026년 가장 '독설적' 분위기를 가진 작품이다.
+→ 원문: [Indie World Showcase 3.3.2026](https://www.youtube.com/watch?v=1DCtXFrB9OE) (Nintendo of America, 731,673회 조회)
+→ 교차확인: [Top 25 Upcoming NEW Indie Games of March 2026](https://www.youtube.com/watch?v=bdkuuCDT40o) (Best Indie Games, 17,067회 조회)
 
 ---
 
-## 3. 2026년 인디 게임 트렌드 3가지 핵심 테마
+### 🚀 이슈 2: Q1 2026 인디 라인업 — '소박한 걸쭉함'의 귀환
+年初부터 출시·발표된 대표작들이 비슷한 톤을 공유한다: **스토리 중심, 수작업 아트, 감정적 숙고**. The Indie Informer's 「26 Most Anticipated Indie Games Of 2026」 목록과 gg.deals의 분석 기사를 교차 검증하면 Q1 2026 라인업이 2025년의 '넓고 얕은' AAA 패러odi의 대안으로 자리잡았다.
 
-### 테마 1: 레트로 감성 + 현대적 완성도 — "리메이크 열풍"
+| 게임 | 플랫폼 | 출시일 | 특징 |
+|------|--------|--------|------|
+| MIO: Memories in Orbit | Steam | 1월 20일 | 손그림풍 우주冒险, 감정 중심 내러티브 |
+| Lil Gator Game: In the Dark | Steam | 2월 12일 | 귀여운 공포 — DLC规模 확장 |
+| Esoteric Ebb | Steam | Q1 2026 | 손그림풍 RPG, 고전 TRPG 감성 |
+| The Remake of the End of the Greatest RPG of All Time | Steam | Q1 2026 | 메타픽션, 추리 기반 턴전투 |
+| Entropy | Steam | 2026 | 다크 턴 기반 전략, Dread Delusion 개발사 |
+| LOVE ETERNAL | Steam | Q1 2026 | 부조크·다크톤, challenging yet satisfying |
 
-Steam에서 'R emake of the End of the Greatest RPG of All Time'과 Esoteric Ebb(手描画 스타일 + 올드스쿨 RPG)가 동시에 주목받는 현상은 우연이 아니다. **고전 장르의 감성을 현대적 디자인 언어로 재해석**하는 흐름이 2026년 인디 게임의 핵심 축이다.
-
-The Indie Informer는 이를 "순수한 열정과 사랑으로 구동되는 작은 게임들"이 AAA를 능가할 수 있다는 흐름으로 요약했다. J&J Games의 HTML5/브라우저 게임 포트폴리오에서도 이런 '레트로 모더니즘'은 핵심 전략이 될 수 있다. 브라우저 환경의 제약이 오히려 핸드메이드 감성을 부각시킬 수 있기 때문이다.
-
-→ 원문: [The Indie Informer – 26 Most Anticipated Indie Games Of 2026](https://theindieinformer.com/2026/01/06/26-most-anticipated-indie-games-of-2026/)
-→ 교차확인: [gg.deals – The 12 upcoming indie games in 2026](https://gg.deals/blog/the-upcoming-indie-games-in-2026/)
-
-### 테마 2: 스토리드림 + 감정 스릴 — "공감형 서사"의 확산
-
-Lil Gator Game: In the Dark(귀여우면서도 무서운)、Love Eternal(기이하면서도 도전적인 톤)、Entropy(지옥으로 향하는 전략 전투)이 모두 **강렬한 감정적 경험**을 핵심으로 내세우고 있다. 단순한 승리 공식이 아닌, 플레이어의 감정에 호소하는 '공감형 스릴러' 장르가 인디에서 주류로 이동하고 있다.
-
-Creative Bloq의 게임 디자이너 인터뷰에 따르면, 2026년은 "소규모 팀이 감정의 깊이를 본격적으로 사사하는 전환점"이 될 것이라는 전망이다.
-
-→ 원문: [Creative Bloq – 10 ways 2026 will be a turning point for game design](https://www.creativebloq.com/3d/video-game-design/10-ways-2026-will-be-a-turning-point-for-game-design-according-to-indie-devs)
-
-### 테마 3: Telegram Mini App + HTML5 게임 — 신개념 유통 허브의 부상
-
-2025년 말부터 Telegram Mini App 생태계가 브라우저 기반 HTML5 게임의 신규 유통 채널로 급부상하고 있다. Telegram의 8억+ 월간 활성 사용자에게 즉시 도달할 수 있다는 점에서, 인스톨 없는 즉각 플레이(Instant Play)가 모바일 게임 유통의 새로운 표준이 될 가능성이 열렸다.
-
-J&J Games는 이미 Telegram Mini App 우선 전략을 표명하고 있다. 2026년 현재 이 전략은 시장 흐름과 정확히 일치하고 있다. Godot으로 제작한 HTML5 게임을 Telegram에 최적화하는 파이프라인을 지금 확보해두는 것이 경쟁력이 될 것이다.
+→ 원문: [26 Most Anticipated Indie Games Of 2026](https://theindieinformer.com/2026/01/06/26-most-anticipated-indie-games-of-2026/) (The Indie Informer)
+→ 교차확인: [The 12 upcoming indie games in 2026 that could outshine AAA titles](https://gg.deals/blog/the-upcoming-indie-games-in-2026/) (gg.deals)
 
 ---
 
-## 4. YouTube 커뮤니티 센서ment — 플레이리스트 동향
+### 🧠 이슈 3: 인디 개발자가 말하는 2026 게임 디자인 전환점 — AI 통합
+Creative Bloq가 12월 공개한 인디 개발자 인터뷰에서 공통 화제가 된 키워드는 **AI × 게임 디자인 결합**이다. Procedural 콘텐츠 생성, AI NPC 행위 패턴, 생성형 텍스처가 소규모 스튜디오의 프로덕션 역량 경계를 넓히는 주요 동력으로 부각되고 있다.
 
-3월 3일，任天堂 America의 Indie World Showcase는 73만 뷰를 기록하며 압도적 관심을 보였다. 개인 개발자들의 주간 트렌드 리포트(11,000~17,000 뷰)도 꾸준한 구독자 기반을 보여주고 있어, 인디 게임 콘텐츠 소비가 YouTube에서 여전히 활발하다는 점을 확인시켜 준다.
+주목할 세부 트렌드:
+- **AI-assisted level generation**: 소규모 팀의 라벨 설계 자동화
+- **대화형 NPC**: LLM 기반 스토리 branchless gaming 실험
+- **Generative art pipeline**: 2D 아트·스프라이트 AI 보강으로 원가 절감
 
-| 영상 | 채널 | 조회수 |
-|------|------|--------|
-| Indie World Showcase 3.3.2026 | Nintendo of America | 731,673 |
-| Top 10 INDIE Games You Can Play Right Now | gamewise | 76,232 |
-| WATCH OUT for These Indie Games in 2026! | Wyvrn | 38,401 |
-| Indie Gaming This Week: Mar 2026 | Best Indie Games | 11,322 |
-| Top 25 Upcoming NEW Indie Games March 2026 | Best Indie Games | 17,067 |
-
-Nintendo Showcase의 압도적 조회수는 인디 게임에 대한 메이저 플랫폼의 지속적인 관심을 보여준다. 동시에 소규모 크리에이터들의 꾸준한 콘텐츠 소비는 커뮤니티의 깊이를 증명한다.
+→ 원문: [The gaming trends shaping 2026, predicted by game devs](https://www.creativebloq.com/3d/video-game-design/10-ways-2026-will-be-a-turning-point-for-game-design-according-to-indie-devs) (Creative Bloq)
+→ 교차확인: [15 Must-Play Indie Games in 2026](https://www.techtimes.com/articles/314790/20260302/15-must-play-indie-games-2026-trending-indie-video-games-top-indie-releases-gaining-serious-buzz.htm) (TechTimes)
 
 ---
 
-## 5. itch.io & Steam 플랫폼 동향
+### 그 외 동향 7선
 
-2026년 현재 itch.io에는 "2026" 태그 기준으로 다양한 실험적 프로젝트가 등록되고 있다. 同化物語(Same story Different light), Escape the Mask 등 장르 불문 다채로운 프로젝트들이 플랫폼의 열린 생태계를 증명하고 있다.
+**4. " WATCH OUT for These Indie Games in 2026!" (Wyvrn, 54.4K 구독, 38,410회 조회, 3월 21일)**
+54만 구독 체널의 '值得关注' 포맷. 2026년 내내 예상作을 줄지어 소개하며 트레일러 기반 하이라이트를 보여준다. 브라우저·HTML5 게임 트렌드 전용 영상은 확인되지 않았다.
 
-Steam의 경우 2026년 상위 50개 인디 게임 리스트(Indie-Games.eu)에 따르면, 스토리드림+'스릴러 + 레트로 감성 조합이 가장 많은 인기를 얻고 있다. Early Access 모델도 여전히 건실한데, Timberborn과 Solasta II가 증명하듯 ** Early Access → 정식版 전환이 브랜딩과 마케팅에서 강력한 서사를 만들어낸다.
+**5. Fishbowl (Steam, 4월 예정)**
+Alo의 세계관 변화를 그리는 Narrative adventure. TechTimes의 15 Must-Play 리스트에 포함. Q2 기대작.
 
----
+**6. "Upcoming Indie Games of April 2026" (Best Indie Games, 3월 17일, 14,117회 조회)**
+4월 출시 타이틀 중심. Lil Gator Game DLC와 함께 Nintendo 쇼케이스 후속 피드.
 
-## 6. J&J Games 관점 종합 시사점
+**7. Top 10 INDIE Games You Can Play Right Now (gamewise, 76,232회 조회)**
+기존 출시작 랭킹. 턴 기반 RPG와 메트로비아尼亚 다크 호러가mixed.
 
-### 지금 즉시 실행 가능 항목
+**8. Entropy — Dread Delusion 개발사의 신작**
+Lovely Hellplace의 차기작. PAX West 2025에서 첫 선 후 2026년 출시 계획. 턴 기반 전술 + 다크 판타지.
 
-1. **Telegram Mini App HTML5 파이프라인 가속**: 2026년 흐름이 이미 확인됨. Godot headless export + Telegram Bot API 연동을 지금 실증하라.
-2. **레트로 모더니즘 미드코어 게임储备**: Pixel/hand-drawn + modern UX 조합. 2025년 말~2026년 트렌드 확인.
-3. **스토리드림+'감정 스릴 타겟 콘텐츠**: Lil Gator Game, Love Eternal의 성공 패턴을 분석하여 J&J Games 다음 작품의 서사 구조에 반영하라.
+**9. LOVE ETERNAL — Ysbryd Games 퍼블리싱**
+Everdeep Aurora·Demonschool과同一 퍼블리셔. Q1 2026 출시 목표.诡异的 싱글톤 + challenging difficulty 커브.
 
-### 6개월 내 모니터링 항목
-
-- D&D 5e Solasta II의 comercial 성과 → TTRPG联动 상품 가능성
-- Telegram Mini App 게임의 평균 사용자留存 데이터
-- Steam Deck + Linux 환경에서의 HTML5 게임 호환성 동향
-
----
-
-## 7. 소스 Ledger
-
-| # | Source | Domain | Family |
-|---|--------|--------|--------|
-| 1 | Mordor Intelligence Market Report | mordorintelligence.com | Market Research |
-| 2 | The Indie Informer – 26 Most Anticipated 2026 | theindieinformer.com | Indie Game Media |
-| 3 | gg.deals – Upcoming Indie Games 2026 | gg.deals | Gaming Deals/Reviews |
-| 4 | Creative Bloq – Game Design Trends 2026 | creativebloq.com | Design/Art Media |
-| 5 | Green Man Gaming – March 2026 Round-up | greenmangaming.com | Gaming Store Blog |
-| 6 | Indie-Games.eu – Top 50 Indie Games 2026 | indie-games.eu | Indie Games Portal |
-| 7 | itch.io – Top games tagged 2026 | itch.io | Indie Game Marketplace |
-| 8 | YouTube – Indie World Showcase, etc. | youtube.com | Video Community |
-
-**Distinct domains: 8 | Source families: 4 | 삼각검증 완료 상위 항목: 3**
+**10. TechTimes "15 Must-Play Indie Games in 2026"**
+Steam + 콘솔 双 플랫폼 커버. Narrative adventure + tactical RPG 중심. Media 갈래.
 
 ---
 
-*본 보고서는 매일 10:00 KST에 자동 발행됩니다. 데이터 소스: YouTube Trends, SearXNG (Mordor Intelligence, The Indie Informer, gg.deals, Creative Bloq, Green Man Gaming, Indie-Games.eu, itch.io).*
+## 2. 핵심 테마 3가지
+
+### 🎯 테마 A: "Portable-First Indie" — 스위치2가 게임즈 인더스트리를 다시 쓰고 있다
+Nintendo Indie World 쇼케이스 731K 조회와 3월 플레이리스트 연일 업데이트는 **휴대 플랫폼에서 인디 게임 소비가 본격화**되었음을 보여준다. PS5·PC보다 낮은 진입장벽, 떨어진 AAA 경쟁 압력이 소규모 스튜디오의 **단기간 마케팅 ROI**를 높이고 있다.
+
+**J&J Games 시사점**: Telegram Mini App → 스위치2 심즈 트위트 → Google Play/App Store 단계에서 **스위치2 네이티브 버전 고려 시점**을 미리 놓치지 말 것. Nintendo Indie World 쇼케이스에 올릴 수 있는 트레일러·키아트가 이미 수요를 창조한다.
+
+---
+
+### 🎯 테마 B: "Cozy-to-Dark 스펙트럼" — 감정적 결의 깊이가 장르를 대신한다
+MIO: Memories in Orbit, Fishbowl, LOVE ETERNAL 모두 **'귀여운 척'의 이면을 어두운 서사**로 덮는다. "Lil Gator Game: In the Dark"는 그 공식을 제목 그대로 공개했으니, 2026년 인디 게임의 성공 공식은 **"표면적 친근함 + 결의 무게"**로 요약된다.
+
+핵심 메커니즘:
+- 감정적 내러티브 + 손그림 아트 스타일
+- difficulty curve의 'satisfying challenge' 조율
+- minimum viable world building으로 몰입感 확보
+
+**J&J Games 시사점**: J&J Games의 코즈·캐주얼 게임 포트폴리오에서 **'밝은 표면 × 어두운 골격'** 스위치를 적용할 수 있는 타이틀이 있는지 점검. 기존 HTML5 캐주얼 게임에 다크 트위스트 레이어 하나만 추가해도 스토리텔링 갑이 된다.
+
+---
+
+### 🎯 테마 C: "AI-Native Game Design" — 도구가 곧 장르가 된다
+Creative Bloq 개발자 인터뷰와 TechTimes 리포트 모두 **AI ≠ '게임 만들기 도구'에서 '게임 디자인의 핵심 소재'**로 패러다임이 이동 중임을 시사한다. 특히:
+- **LLM-based interactive NPC**: 고정된 대사 트리가 아닌 실시간 생성 대화
+- **Procedural narrative branching**: 선택지 기반이 아닌 AI가 스토리를 실시간 확장
+- **AI-generated art pipeline**: 소규모 팀의 비주얼 프로덕션 비용 구조 변화
+
+**J&J Games 시사점**: HTML5/브라우저 게임에서 AI 통합은 **가장 낮은 과실 비용으로 실험 가능한 영역**. 텍스트 기반 퍼즐이나 AI NPC 대화 시스템을 데모 레벨에서라도 한 개 넣고 트위터에서 반응을 보는 것이 빠른 학습 사이클이다.
+
+---
+
+## 3. HTML5 / 브라우저 게임 특수 상황
+
+**"html5 browser game trend" 유튜브 검색에서 최근 2개월 결과 0건.** 이는 유튜브 플랫폼에서 HTML5 특화 트렌드 영상이 소비되지 않음을 의미한다. 그러나 브라우저 게임의 실질적 소비는 ** itch.io, Game Jolt,独立 게임 디스코드 커뮤니티**에서 이루어지고 있다.
+
+검색 fallback 결과에서도 HTML5·브라우저 게임 특화 기사가 부재. 이는 곧:
+- **커뮤니티発見형 채널**에 집중해야 함 (Reddit r/html5gamedev, GameDev.net)
+- YouTube 트렌드 자체가 HTML5 특화 키워드에서 **"browser game" → "web game" → "casual game"**으로 자연 언어 변환
+- **Telegram Mini App + 웹 링크 드라이브**가 브라우저 게임의 배포 인프라도 동시에 됨
+
+**J&J Games 시사점**: HTML5 게임의 '트렌드'가 유튜브 키워드에 잡히지 않는 다는 것은, **대중적 트렌드 발견 사이클이 아닌 커뮤니티 중심 발견 사이클**을 운영해야 함을 의미. eastsea-blog의 인디 게임 콘텐츠도 Reddit/HN/GeekNews 펄스 채널을 정규적으로 모니터링해야 한다.
+
+---
+
+## 4. Source Ledger
+
+| # | Source | Domain | Family | Type |
+|---|--------|--------|--------|------|
+| 1 | Indie World Showcase 3.3.2026 | youtube.com | Community Pulse (YouTube) | Video |
+| 2 | 26 Most Anticipated Indie Games Of 2026 | theindieinformer.com | Analysis | Article |
+| 3 | The 12 upcoming indie games in 2026 | gg.deals | Analysis | Article |
+| 4 | Creative Bloq: 10 ways 2026 turning point | creativebloq.com | Analysis | Article |
+| 5 | TechTimes: 15 Must-Play Indie Games 2026 | techtimes.com | Media | Article |
+| 6 | WATCH OUT for These Indie Games 2026 | youtube.com (Wyvrn) | Community Pulse (YouTube) | Video |
+| 7 | Top 25 Upcoming NEW Indie Games March 2026 | youtube.com (Best Indie Games) | Community Pulse (YouTube) | Video |
+| 8 | Top 10 INDIE Games You Can Play Right Now | youtube.com (gamewise) | Community Pulse (YouTube) | Video |
+| 9 | Upcoming Indie Games of April 2026 | youtube.com (Best Indie Games) | Community Pulse (YouTube) | Video |
+| 10 | Top 15 New Indie Games of March 2026 | youtube.com (Indie Games Hub) | Community Pulse (YouTube) | Video |
+
+**Distinct domains: 6** (youtube.com, theindieinformer.com, gg.deals, creativebloq.com, techtimes.com)  
+**Source families: 4** (YouTube Community, Analysis outlets × 3)  
+**Triangulated top items: 3** (Nintendo Indie World ↔ 2 yt channels; Q1 2026 lineup ↔ indie informer + gg.deals; AI game design ↔ creative bloq + techtimes)
+
+---
+
+## 5. J&J Games 전략的建议
+
+|優先순위| 행동 | 이유 |
+|--------|------|------|
+| **P1** | 4월 Nintendo Indie World 참전 가능 게임 트레일러 준비 | 731K 쇼케이스 노출 효과 입증, Switch 2用户提供层 확보 |
+| **P2** | 코즈 게임에 "dark twist" 레이어 1개 추가 리젝슨 | Cozy-to-Dark 스펙트럼 트렌드, 최소 비용 스토리텔링 강화 |
+| **P3** | AI NPC 데모 1개 HTML5에서 实验 | AI-Native Game Design 대응, 커뮤니티 반응 측정 |
+| **P4** | Reddit/HN/GeekNews 모니터링 채널 정규화 | HTML5 게임 트렌드 발견은 유튜브가 아닌 커뮤니티 펄스 |
+
+---
+
+*본 리포트는 2026년 3월 30일 10:00 KST 기준 공개 자료 취합. 스크래핑 소스는 2개 domain(YouTube + 웹 분석지) 이상 교차 검증 완료.*

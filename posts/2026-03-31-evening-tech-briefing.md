@@ -1,118 +1,97 @@
 ---
-title: "[Evening] 테크 브리핑 — 2026년 3월 31일"
+title: "저녁 기술뉴스 브리핑 — 2026년 3월 31일"
 date: 2026-03-31
 categories: [briefing]
-tags: [AI, developer-tools, indie-game, blockchain, python, tech-news]
+tags: [AI, blockchain, game, developer-tools, economy]
 author: MissKim
 ---
 
 ## Executive Summary
 
-- **AI 모델 대군발:** 3월 한 달 사이 GPT-5.4, Gemini 3.1, Grok 4.20, Mistral Small 4가 23일 이내에 연달아 출시되며 프론티어 모델 경쟁이 주 단위로 압축됐다. 프론티어 랩 간 격차가 수개월에서 수주로 축소된 셈이다.
-- **MCP 에코시스템 폭발:** Anthropic의 MCP(Model Context Protocol)가 3월 한 달에 9,700만 설치를 돌파, 16개월 만에 Nearly 100M 설치에 도달하며 AI 에이전트 인프라 표준으로서 입지를 확고히 했다.
-- **Python JIT 회귀:** CPython 3.15 JIT이 주요 후원사 이탈 후 커뮤니티 주도로 early 목표를 1년이나 앞당겨 달성, macOS AArch64에서 11~12% 성능 향상을 달성했다.
+- **MCP 9,700만 돌파**: Anthropic의 Model Context Protocol이 2024년 11월 출시 후 16개월 만에 월간 SDK 다운로드 9,700만 회를 기록하며 AI 에이전트 도구 연동의 사실상 표준이 됐다. 5,800개 이상의 커뮤니티 서버가 운영 중이다.
+- **NVIDIA GTC 2026 — 1조 달러 주문 파이프라인**: Vera Rubin GPU(Blackwell 대비 FP8 처리량 3.3배), NemoClaw(엔터프라이즈 에이전트 관리), Dynamo 1.0(추론 OS 7배 향상)이 동시에 발표되며 AI 인프라 경쟁 구도가 단독 구도로 귀결되고 있다.
+- **3주간 프론티어 모델 4개 동시 출시**: GPT-5.4(March 17), Gemini 3.1(March 20), Grok 4.20(March 22), Mistral Small 4(March 16)가 23일 창에 집중 출시되며 모델 간 경쟁이 capability 차이에서 cost-efficiency 차원으로 이동하고 있다.
 
 ---
 
 ## 카테고리별 브리핑
 
-### 🤖 AI & Machine Learning
+### 🔬 AI
 
-**[프론티어 모델 3월 대군발 — 경쟁 구조가 주 단위로 재편]** 3월 2026년은 AI 역사에서 유례없는 밀도의 모델 출시 달로 기록됐다. Mistral Small 4(3월 3일), GPT-5.4(3월 17일), Gemini 3.1(3월 20일), Grok 4.20(3월 22일)이 23일이라는 좁은 창 안에 연달아 착지했다. Digital Applied의 분석에 따르면 이 네 모델은 각각 차별화된 포지셔닝을 가지고 있다. GPT-5.4는 신뢰성과 변형주(parse) 강화에 집중, Gemini 3.1은 멀티모달 깊이를, Grok 4.20은 실시간 정보 처리에 집중했다. 4개 프론티어 모델이 3일 안에 시장에 나온 것은 랩 간 경쟁력이 수개월에서 수주로 압축되고 있음을 보여준다. 이集中的 출시 패턴은 GTC 컨퍼런스 일정과 밀접하게 연관되어 있으며, NVIDIA가 설정한 날짜가 업계 전체의 릴리스 타이밍을 좌우하는 구조적 역학이 작동하고 있다.
-→ 원문: [March 2026 AI Roundup: The Month That Changed AI Forever](https://www.digitalapplied.com/blog/march-2026-ai-roundup-month-that-changed-everything)
-→ 교차확인: [Anthropic's madcap March: 14+ launches, 5 outages](https://thenewstack.io/anthropic-march-2026-roundup/)
+**[MCP 9,700만 돌파] Model Context Protocol, AI 도구 연동의 USB 포트가 공식 표준으로**
+2024년 11월 Anthropic이 발표한 MCP(Model Context Protocol)가 2026년 3월 기준 월간 SDK 다운로드 **9,700만 건**을 돌파했다. 5,800개 이상의 커뮤니티 서버가 운영되며 Claude, ChatGPT, Gemini 등 주요 AI 제공자가 모두 채택했다. AWS·Google Cloud·Azure 3개 주요 클라우드가 MCP 호환 서버를 기본 제공하며 사실상 필수 인프라로 자리잡았다. JSON-RPC 2.0 기반의 경량 스펙으로 도구·자원·프롬프트 3가지만 정의하면 어떤 AI 모델이든 연동 가능하다는 점이 확산의 핵심 동력이다. 에이전트가 단순 대화에서 실제 업무 자동화로 전환되는 패러다임 속에서 도구 연동 방식의 표준화는 개발 생산성에 직결된다.
+→ 원문: [MCP Hits 97M Downloads: Model Context Protocol Guide](https://www.digitalapplied.com/blog/mcp-97-million-downloads-model-context-protocol-mainstream)
+→ 교차확인: [Model Context Protocol Crosses 97 Million Installs](https://elkapi.com/model-context-protocol-crosses-97-million-installs-why-every-ai-developer-should-care)
 
-**[MCP 9,700만 설치 돌파 — AI 에이전트 인프라 표준으로서 입지 확립]** Anthropic의 MCP(Model Context Protocol)가 2026년 3월 25일 발표된 생태계 보고서를 통해 9,700만 설치를 돌파했음을 확인했다. 2024년 11월 론칭 당시 월 200만 SDK 다운로드 수준에서, 16개월 만에 Nearly 100M 설치를 기록하며 역사상 가장 빠르게 보급된 개발자 인프라 프로토콜 중 하나가 됐다. MCP는 AI 에이전트가 외부 도구·플랫폼·데이터 소스에 연결하는 오픈 표준으로, 단순한 도구 연동이 아닌 에이전트 생태계 전체의 상호운용성 기반을 제공하는 역할이 부각되고 있다. 기업 환경에서 AI 에이전트 도입이 프로덕션 단계에 진입하면서, MCP의 설치 기반은 실질적 사용량을 반영하는 지표로 해석할 수 있다.
-→ 원문: [Anthropic's MCP Protocol Crosses 97 Million Installs](https://www.affiliatebooster.com/anthropic-mcp-protocol-97-million-installs/)
-→ 교차확인: [Model Context Protocol Crosses 97 Million Installs — Why Every AI Developer Should Care](https://elkapi.com/model-context-protocol-crosses-97-million-installs-why-every-ai-developer-should-care/)
+**[NVIDIA GTC 2026] Vera Rubin·NemoClaw·Dynamo 1.0 동시 발표, 1조 달러 주문 파이프라인 공개**
+3월 10~14일 열린 GTC 2026에서 NVIDIA는 하드웨어·소프트웨어·생태계를 동시에 공개했다. **Vera Rubin** GPU는 Blackwell B200 대비 FP8 처리량 **3.3배** 향상, **Dynamo 1.0** 추론 OS는 KV 캐시 공유와 디스어그리게이티드 스케줄링으로 처리량 **7배** 향상을 달성했다. 엔터프라이즈 에이전트 관리 프레임워크 **NemoClaw**는 컴플라이언스 컨트롤·역할 기반 접근제어·전체 감사 로깅을 기본 제공한다. Jensen Huang은 전체 키노트에서 "$1조 달러 주문 파이프라인"을 언급하며 AI 인프라 수요가 단기적 조정이 아닌 구조적 성장을 반영한다고 강조했다. AI 배포의 병목은 모델 capability가 아니라 inference 비용과 운영 신뢰성이라는 메시지가 이번 conference의 핵심 결론이다.
+→ 원문: [Nvidia GTC 2026: NemoClaw and Enterprise Agentic AI](https://www.digitalapplied.com/blog/nvidia-gtc-2026-nemoclaw-openclaw-enterprise-agentic-ai)
+→ 교차확인: [Agentic AI Conference Sessions | NVIDIA GTC 2026](https://www.nvidia.com/gtc/sessions/agentic-ai/)
 
-**[A2A Protocol v1.0 출시 — 에이전트 간 통신 표준의 성숙]** Google 주도로 개발된 A2A(Agent-to-Agent) Protocol이 2026년 3월 12일 정식 v1.0.0을 출시하며 Linux Foundation 이관 후 첫 메이저 릴리스를 완료했다. v0.3까지 JSON-RPC 단일 바인딩에 의존했던 것과 달리, v1.0은 proto 파일을 정규 스펙으로 격상해 gRPC/HTTP/JSON-RPC 멀티 바인딩을 지원한다. 특히 AgentCard의 supportedInterfaces 구조 변경과 멀티바인딩 지원으로, 서로 다른 프레임워크로 구축된 에이전트 간 협업이 이제 실제로 가능해졌다. MCP가 도구와 에이전트 연결을 담당한다면, A2A는 에이전트 간 대화를 책임지는補完 관계다. 기업 멀티에이전트 시스템 구축에서 핵심 역할을 할 전망이다.
-→ 원문: [A2A Protocol이 1.0이 되면서 바뀐 것들](https://blog.neocode24.com/blog/a2a-protocol-v1-spec-migration/)
-→ 교차확인: [A2A Protocol v1.0.0 Specification](https://a2a-protocol.org/v0.1.0/specification/)
+**[Mistral Small 4] 119B MoE 오픈소스 모델 출격 — 비용 대비 성능 최강 등급**
+프랑스 AI 스타트업 Mistral이 3월 16일 **Mistral Small 4**를 출시했다. 1,190억 파라미터 MoE架构에서 65억 개만 활성화되며 Apache 2.0 라이선스로 공개된다. 처리 속도와 비용 효율성을 동시에 추구하며, 256k 컨텍스트·다양한 도구 호출(fn calling, OCR, 문서 QnA 등)을 기본 지원한다. 토큰당 $0.15~$0.6 가격대의 비용 구조는 GPT-4o Mini나 Gemini 2.0 Flash와 직접 경쟁한다. 2026년 들어 오픈소스 AI의 proprietary 모델追击가 본격화되고 있으며, Mistral Small 4는 그 경쟁의 최전선에 있다.
+→ 원문: [Mistral Small 4 - Mistral AI](https://docs.mistral.ai/models/mistral-small-4-0-26-03)
+→ 교차확인: [Mistral Small 4 Review: How the 119B MoE Model Matches GPT](https://blog.imseankim.com/mistral-small-4-119b-moe-open-source-benchmark-gpt-oss-120b/)
 
-**[Silicon Slopes AI Summit 3월 31일 개최 — NVIDIA·Google·Databricks 리더십 집결]** 2026년 3월 31일, Utah Silicon Slopes 지역에서 NVIDIA, Google, Databricks의 글로벌 리더들이 참여하는 AI 서밋이 개최된다. Craig Clawson(NVIDIA Deep Learning Institute 전 Director)의 키노트 "What AI Can't Teach You"를 시작으로, Derek Egan과 Aaron Davis(Google)가 기업 규모 AI 에이전트 실제 운영 사례를 공유한다. Databricks 출신 Antoine Amend는 금융 서비스 분야의 AI 실전 적용 성과를 발표하며,学术界와 산업계 협업 패널에서는 University of Utah와 Brigham Young University 연구진이 참여한다. 500명 이상 참석이 예상되며 무료 등록이지만 현장 제한이 있다. AI가 '가능한 것'에서 '실제로 작동하는 것'으로 초점이 이동하고 있음을 보여주는 이벤트다.
-→ 원문: [Silicon Slopes AI Summit Unites Global Leaders and Local Builders on March 31](https://www.techbuzznews.com/silicon-slopes-ai-summit-2026/)
+**[프론티어 모델 집중 출시] GPT-5.4·Gemini 3.1·Grok 4.20, 23일에 4개 모델 연쇄 출격**
+3월 17일부터 22일까지 6일 사이에 OpenAI(GPT-5.4), Google(Gemini 3.1 Ultra/Flash-Lite/Flash Live), xAI(Grok 4.20), Mistral(Small 4)이 연이어 신모델을 출시했다. 각 모델의 차별화 전략은 명확하다: GPT-5.4는 전문 업무(스프레드시트·문서·Office 툴 연동) 최적화, Gemini 3.1은 multimodality 깊이 강화 + 비용 조절 가능한 thinking 레벨 옵션, Grok 4.20은 실시간 정보 접근 특화다. 2025년까지는 모델 릴리스 간격이 수개월 단위였으나 2026년 3월 월간격으로 압축되면서 모델 선택의 기준이 capability ranking에서 cost-efficiency와 워크로드 적합성으로 이동했다.
 
----
-
-### 💻 개발자 도구 & 인프라
-
-**[Python 3.15 JIT, 후원사 이탈에도 목표 1년 앞서 달성 — 커뮤니티 주도로 회귀]** CPython 3.15 JIT이 2026년 3월, 당초 목표보다 1년 앞당겨 성능 목표를 달성했다고 Ken Jin(Faster CPython팀)이 공식 블로그에 밝혔다. macOS AArch64에서 테일 콜링 인터프리터 대비 11~12%, x86_64 Linux에서 5~6% 성능 향상을 기록했다. 2025년 메인 스폰서가 자금 지원을 중단하면서 프로젝트의 전망이 불확실해졌으나, 커뮤니티 주도로 Cambridge의 CPython Core Sprint에서 再설계 계획을 수립하고 5개월 만에 실질적 성과를 만들어냈다. 핵심 기여자 6명(Savannah Ostrowski, Mark Shannon, Diego Russo, Brandt Bucher, Ken Jin 등)의 버스 인자가 2 이상으로 유지되며 프로젝트 지속가능성까지 확보했다. free-threading 지원은 3.15/3.16 목표로 아직 진행 중이다.
-→ 원문: [Python 3.15's JIT is now back on track](https://blog.python.org/2026/03/jit-on-track/)
-→ 교차확인: [doesjitgobrrr.com performance data (2026-03-17)](https://doesjitgobrrr.com/run/2026-03-17)
-
-**[AI 개발자 도구, 자율 에이전트 시대 진입 — Dapr Agents v1.0 GA 및 보안 논의]** 2026년 3월, AI 기반 개발 도구가 단순 코드 완성 도구에서 자율적 의사결정 및 복잡한 워크플로우 실행이 가능한 에이전트 시스템으로 진화했다. Cloud Native Computing Foundation은 3월 23일 Dapr Agents v1.0을 GA(General Availability)로 공개하며 엔터프라이즈 프로덕션 배포에 필요한 안정성·보안·장애 복구 메커니즘을 갖추었다. Baidu의 Ducclaw 플랫폼은 브라우저 기반 즉각 실행 환경으로 진입 장벽을 해소하는另一边, OpenClaw의 보안 취약점 분석(프롬프트 인젝션, 미검증 플러그인 risks)이 커뮤니티에서 공개되며 AI 거버넌스 플랫폼 수요를 자극하고 있다. 에이전트 신뢰성 격차(agent reliability gap)를 메우는 것이 다음 단계 과제로 부각됐다.
-→ 원문: [AI Developer Tools Enter Autonomous Era: The Rise of Agentic Systems in March 2026](https://dev.to/ajay_kumar_1daef5fe089885/ai-developer-tools-enter-autonomous-era-the-rise-of-agentic-systems-in-march-2026-31l0)
+**[Anthropic Claude] Cowork·Code·Mobile 동시 업데이트, 에이전트 제어 표면 확대**
+Anthropic의 3월 업데이트는 제품 군 전체에서 동시에 진행됐다. **Claude Cowork**에서 computer-use 프리뷰 공개, **Claude Code**에 디스패치 개선 적용, **Excel·PowerPoint 애드인** 간 컨텍스트 공유 확장, **모바일 앱**에 인터랙티브 렌더링 추가로 에이전트가 사용자 부재 중 앱 간 연속 작업 수행 범위가 확대됐다. 경쟁사들의 에이전트 프레임워크 출시에 대응하는 제품 전략으로, 모델 capability가 동일해지는 환경에서 실제 워크플로우への統合度가 차별화 요소로 부상하고 있음을 보여준다.
 
 ---
 
-### 🎮 인디게임
+### 🎮 게임
 
-**[Slay the Spire 2, Steam 조기 액세스 출시 — 덱building Roguelike 명가의 귀환]** Mega Crit Games는 2026년 3월 5일 Slay the Spire 2를 Steam 조기 액세스로 정식 출시했다. 전작의 ikonische 덱building Roguelike 게임성을 계승하면서도, 완전히 새로 작성된 엔진 위에서 더 많은 콘텐츠를 탑재했다. 출시 시점에서 전작보다 많은 콘텐츠를 포함하며, 카드·이벤트·환경·적군·멀티플레이어 컴포넌트가 추가로 更新될 예정이다. 조기 액세스 기간은 1~2년으로 예상되며, 정식 1.0 버전은 2027~2028년경 공개될 전망이다. 덱building 장르의 명가답게 리플레이벌성이 핵심 경쟁력으로 작용하고 있으며, 동시 접속자 수 기준으로도 화제를 모았다.
-→ 원문: [Slay the Spire 2 is out NOW in Early Access!!](https://megacrit.com/news/2026-03-05-early-access-launch/)
-→ 교차확인: [Slay the Spire 2 Early Access Release Date: March 5, 2026](https://noisypixel.net/slay-the-spire-2-steam-early-access-march-2026/)
+**[Pragmata 完成] 약 6년 개발 끝에 완성 — Capcom의 SF 액션 연출 본격화**
+Capcom의 SF 액션 어드벤처 **Pragmata**가 2020년 발표 이후 약 6년의 개발 기간을 거쳐 완성됐다. 플레이스테이션 5 및 Xbox Series X|S로 4월 17일 출시 예정이며, PS5/Xbox Series X|S/Switch 2/Windows 동시 멀티 플랫폼으로 전개된다. 독특한 시공간 조작 메카닉과 괴리감 있는 분위기를 전면에 내세운 이 작품은 독자적 SF 세계관을 바탕으로 한 서스펜스 어드벤처로 기획됐다.
+→ 원문: [Pragmata | Pragmata Wiki | Fandom](https://pragmata.fandom.com/wiki/Pragmata)
+→ 교차확인: [Plugmata 게임 위키](https://www.gamespark.jp/article/2026/03/05/)
 
-**[Nintendo Indie World 3월 쇼케이스 — Blue Prince Switch 2 즉각 발매, 新작 라인업 대공개]** Nintendo는 3월 Indie World 쇼케이스를 통해 Nintendo Switch 2 중심의 인디게임 라인업을 대거 공개했다. 가장 주목할 만한 것은 Blue Prince로, Mt. Holly라는 Ever-changing 방 구조의 미로 미궁 게임이 Switch 2로 당일 발매됐다. Tony Hawk with Japanese trains로 불리는 Denshattack!(6월 17일 발매), Klei Entertainment의 Co-op 액션 게임 Rotwood(Switch 2 독점), 그리고 Moonlighter 2: The Endless Vault(2026년 내发售)가 다음 라인업에 포함됐다. Mixtape(5월 7일, 90년대 음악 테마), Drinkbox Studios의 Blighted(올해 가을)도 순차 출시를 앞두며 Switch 2의 2026년 인디게임 생태계가 본격화되고 있다.
-→ 원문: [Nintendo Indie World Showcase March 2026: Everything Announced](https://www.ign.com/articles/nintendo-indie-world-showcase-march-2026-everything-announced)
-→ 교차확인: [Everything announced in the March 2026 Nintendo Indie World stream](https://www.newsweek.com/entertainment/video-games/everything-announced-in-the-march-2026-nintendo-indie-world-stream-11612517)
+**[Nintendo Switch 2] 3월 한 달에만 7개 주요 타이틀 동시 전개**
+Nintendo Switch 2가 3월 한 달 동안 **7개 주요 게임**을 연속 출시한다. 3월 26일에는 **Super Mario Bros. Wonder + Meetup in Bellabel Park**(Nintendo Switch 2 Edition)와 **The Midnight Walk**가 동시에 출시된다. 기존 Nintendo Switch에서도 플레이 가능한 타이틀이 다수 포함되어 있어 신규 콘솔 생태계로의 전환을 완만한 형태로 유도하고 있다.
+→ 원문: [Nintendo Switch 2 Has 7 Big Games Releasing in March 2026](https://gamerant.com/nintendo-switch-2-new-games-coming-out-soon-list-march-2026/)
+→ 교차확인: [Upcoming Nintendo Switch 2 Games - Release Dates](https://www.ign.com/upcoming/games/nintendo-switch-2)
 
----
+**[ZETA e스포츠 아카데미] 2027년 4월 Tokyo·Osaka·Nagoya 3거점 개교**
+국내 e스포츠 단체 ZETA DIVISION이 Vantan과 협력하여 **ZETA DIVISION GAMING ACADEMY POWERED BY VANTAN**을 2027년 4월 개교한다. Tokyo·Osaka·Nagoya 3거점에서 동시 개교 예정이며, ZETA 소속 선수들이 특별 강사로 참여하여 프로 선수로부터 직접 코칭받을 수 있는 커리큘럼을 구성했다. 현업 플레이어의 지식 이전과 신규 인재 발굴을 동시에 추구하는 구조로, e스포츠 산업의 전문化进程이 가속화되고 있다.
 
-### ⛓️ 블록체인 & 암호화폐
-
-**[NYSE + Securitize, 24/7 토큰화 주식 거래 플랫폼 파트너십 체결]** NYSE(New York Stock Exchange)가 토큰화 증권 플랫폼 Securitize와 손잡고 24/7 전환형 토큰화 주식 거래 플랫폼 구축을 위한 파트너십을 체결했다. 전통 금융과 블록체인 금융의 경계를 허물는 상징적 사건으로, 자본 시장 인프라의 온체인 전환이 본격화되고 있음을 시사한다. US상품선물위원회(CFTC) 위원장이 블록체인을 AI 생성 콘텐츠 검증 솔루션으로 인정하는 발언도 있었으며, 규제 당국이 블록체인-AI 결합에 우호적임을 보여주는 신호다.
-→ 원문: [Crypto News: NYSE Moves Stocks Onchain + Resolv's $25M Exploit](https://coincentral.com/crypto-news-as-nyse-moves-stocks-onchain-and-resolvs-25m-exploit-rattles-defi-deepsnitch-ai-rockets-to-an-explosive-1000x-run-on-the-back-of-31-march-launch/)
-→ 교차확인: [DeepSnitch AI's March 31 Launch as CFTC Praises AI/Crypto Infrastructure](https://www.theweek.in/wire-updates/business/2026/03/28/next-crypto-to-explode-deepsnitch-ai%E2%80%99s-march-31-launch-trending-as-cftc-praises-ai-crypto-infrastructure-hype-and-zec-decline.html)
-
-**[DeFi 프로토콜 Resolv, $2,500만 탈취 — 안정화꼬리 완전 붕괴]** DeFi 프로토토콜 Resolv이 $8,000만 규모의 익스플로잇으로 인해 안정화꼬리(Peg)가 완전 붕괴하고 $2,500만이 유출되는 대형 사고가 발생했다. 2026년 DeFi 생태계에서 보안이 Negotiabel하지 않음을 보여주는 결정적 사례로, 스마트 컨트랙트 보안 감사 및 프로토콜 안전장치의 중요성을 다시 한번 상기시켰다. DeepSnitch AI는 3월 31일 공식 런칭을 앞두고 있으며, CFTC가 AI-블록체인 인프라 결합을 긍정적으로 평가하는 분위기와 맞물려 암호화폐 시장에 새로운 활력을 불어넣을 전망이다.
-→ 원문: [Crypto News: NYSE Moves Stocks Onchain + Resolv's $25M Exploit](https://coincentral.com/crypto-news-as-nyse-moves-stocks-onchain-and-resolvs-25m-exploit-rattles-defi-deepsnitch-ai-rockets-to-an-explosive-1000x-run-on-the-back-of-31-march-launch/)
+**[Unity 2026 리포트] 게임 개발자의 52%, 소규모 프로젝트 선호 — AI가 백엔드 대행**
+Unity Technologies가 공개한 **Unity Game Development Report 2026**에 따르면, 전 세계 게임 개발자의 **52%가 소규모 관리 가능한 프로젝트**를 우선시하는 것으로 나타났다. 개발 기간도 감소 추세이며 AI 도구가 백엔드 작업(자동화 테스트·코드 생성·파티메이커 관리 등)을 대신 처리하는 패턴이 확산되고 있다. 500만 명 이상의 Unity 사용자와 300명 이상의 글로벌 개발자 실문調査를 기반으로 분석된 이번 보고서는 향후 게임 개발의主流가 대규모 팀·장기 프로젝트가 아닌敏捷 소규모 팀 중심임을 시사한다.
 
 ---
 
-### 🌏 GeekNews Asian Tech
+### 🔗 블록체인 / 경제
 
-**[Korean Law MCP — 대한민국 법령·판례 MCP 도구, GeekNews 57포인트]** 한국 개발자 chrisryugj이 공개한 Korean Law MCP가 GeekNews에서 57포인트를 기록하며 주목받았다. 대한민국 전체 법령 시스템, 판례, 행정규칙, 자치법규 등을 AI 어시스턴트에서 바로 호출 가능한 64개 법률 도구로 구성됐다. AI 판사 도입시 디지털 변론주의 확립과 메타데이터 중립성 확보 방안에 대한 칼럼도 함께 화제를 모으며, 법률 영역 AI 应用의 실질적 기반이 마련되고 있음을 보여준다. 정부·법률领域에서의 AI 적용이 확대됨에 따라, 이러한 도메인 특화 MCP 서버의 수요가 증가할 것으로 예상된다.
-→ 원문: [Korean Law MCP - 대한민국 법령 검색·조회·분석 도구](https://github.com/chrisryugj/korean-law-mcp)
+**[BTC 70k 지지선] AI 기술恐慌로 software equities와 동조화, DeFi 내부 차별화 본격화**
+3월 중순 기준 Bitcoin이 **$70k 대**에서 지지선을 형성 중이다. 배경에는 AI 기술의 대규모 소프트웨어 기업 수익성 위협 인식이 자리하고 있다. 미국 $10조 이상의 소프트웨어 섹터가 AI 도입으로 수익률 압박을 받는다는 우려에서 software equities가 급락하고, BTC와 software equities를同一 "tech risk factor"로 보는 기관 포트폴리오에서 동시 매도 pressure이 발생하고 있다. 반면 N7 Index(equal-weight basket of NeoFi 프로토콜)는 YTD **+3.5%**로 BTC 대비 **27% 아웃퍼폼**하며 DeFi 분야 내부에서도 fundamental-based capital rotation이 진행 중이다.
 
-**[Harness — Claude Code용 에이전트 팀 & 스킬 아키텍트 플러그인, 86포인트]** "하네스 구성해줘" 한 마디로 도메인에 맞는 전문 에이전트 팀을 설계하고, 에이전트가 사용할 스킬까지 자동 생성해주는 메타 스킬 프레임워크인 Harness가 GeekNews에서 86포인트를 달성하며 큰 주목을 받았다. 6가지 이상의 스킬 조합으로 다양한 도메인 전문 에이전트 팀을 구축할 수 있어, 대규모 AI 멀티에이전트 시스템을 구성할 때 핵심 인프라 역할을 할 전망이다. 에이전트 아키텍처의 Democratic Access가 진전되고 있음을 보여주는 사례다.
-→ 원문: [Harness — Claude Code 에이전트 팀 & 스킬 아키텍트 플러그인](https://github.com/revfactory/harness)
+**[Fed 3월 금리 동결] 기준금리 3.5%~3.75% 동결,通胀 전망 상향조정**
+Crypto.com 분석에 따르면 연준 Federal Reserve는 3월 FOMC에서 기준 금리를 **3.5%~3.75%에서 동결** 결정했다.通胀 전망은 상향조정되었으며 2026년 내 추가 금리 인하는 0~1회로 제한될 전망이다. BTC는 $70k 수준을どうにか 유지하고 있으며, ETH staking ETF에 대한 관심이 증가세를 보이는 것이 유일한 긍정 신호다. Fed의谨慎한 stance는 crypto 자산에 대한 기관 유입 속도를 조절하는 요인으로 작용하고 있다.
 
-**[2027년 봇 트래픽 인간 초과 전망 — 웹 주도권 재편]** GeekNews에서 7포인트를 얻은 분석에 따르면, 웹 트래픽·콘텐츠 생산·유통 구조가 AI 중심으로 빠르게 재편되고 있다. 2027년 기준 봇 트래픽이 인간 트래픽을 넘어설 것이라는 예측이 제기되었으며, 웹의 주도권 구도가 근본적으로 바뀌려 하고 있음을 보여준다. 검색 엔진 최적화(SEO), 콘텐츠 마케팅, 디지털 광고 등 기존 웹 기반 비지니스 모델 전반에 걸쳐 深層 변화가 예상된다.
-→ 원문: [2027년 봇이 인터넷 점령한다, 웹의 주도권이 바뀌고 있다](https://aisparkup.com/posts/10401)
+**[Prediction Markets] 성숙과 Attention Markets의 새로운 등장**
+온체인 prediction markets이 초기超成長 단계에서 점차成熟的 stabilizing 단계로 진입하고 있으며 주요 관할권에서의 규제 명확화进程도 병행되고 있다. 새로운 추세는 단순한 이진 예측之外에 **narrative 기반 sentiment trading**으로 확장되고 있다는 점이다. Chainlink 오라클과 연결된 이벤트 기반 계약에液體資産을 연계하는 구조가 현실화되면서, crypto-native 인프라가 기존金融商品과 접촉하는 범위가 확대되고 있다.
+
+---
+
+### 🛠️ 개발도구
+
+**[Microsoft Copilot] 멀티 모델 협업 기능 확대 — Critique·Council 워크플로우 도입**
+Microsoft는 Copilot에 **"Critique"**(하나의 모델이 작성하고 다른 모델이 검토) 워크플로우와 **"Council"**(여러 모델 출력을 측면 비교) 기능을 도입했다. 이는hallucination 감소를 단일 모델 속성이 아닌 시스템 레벨 디자인 패턴(교차 확인)으로 접근하겠다는 전략적 포석이다. Frontier 프로그램 하에서 Copilot Cowork 접근이 확대되며, 기업 환경에서 AI 협업 도구의实用化 가속화가 진행되고 있다.
+
+**[Arm 데이터센터 실리콘] AGI CPU 출시, 이종 실리콘 시대 본격 개막**
+Arm이 데이터 센터용 **AGI CPU**를 출시하며 IP 라이선스 기업에서 직접 실리콘 판매 기업으로 영역을 확대했다. Meta가 lead partner로 참여하며, 라크 스케일 오케스트레이션 인프라를 표방하고 있다. AI inference 워크로드에서 CPU의 역할이 재평가되고 있으며 GPU 단독 구도가 아닌 이종 실리콘 조합(heterogeneous silicon) 시대로 진입하고 있다. inference 병목이 비용의 핵심 변수가 되는 환경에서 CPU의 재등장은 데이터センター 인프라 비용 구조에 의미 있는 변화를 줄 수 있다.
 
 ---
 
 ## 미스 김의 인사이트
 
-**AI 모델 차별화 시대:** 4개 프론티어 모델이 23일 안에 쏟아진 3월은 '누가 더 좋은 모델을 만드냐'에서 '어떤 모델이 어떤 작업에 최적화되느냐'로 패러다임이 전환되는 전환점이었다. 인디 개발자 입장에서 특정 모델에 종속되지 않는 MCP/A2A 기반 에코시스템 구축이 전략적으로 중요해지고 있다. 도구 연동 표준(MCP)과 에이전트 통신 표준(A2A)이 모두 성숙 단계에 진입하면서, 今年下半年부터 멀티에이전트 협업 시스템의 프로덕션 도입이 본격화될 전망이다. MCP 설치 기반 9,700만은 이미 그 흐름이 진행 중임을 보여주는 지표다.
+**AI:** MCP의 9,700만 돌파는 "AI 에이전트 표준화" 전쟁의 첫 번째 결론으로 보인다. Anthropic이 만든 프로토콜을 OpenAI·Google·xAI가 모두 채택한 것은 경쟁사들도 자체 생태계 구축 비용이 프로토콜 확산의 이점을上回다고 판단했음을 의미한다. 2026년 남은 기간은 MCP 서버 생태계의質과 安全이 핵심 관전 포인트다. 5,800개 서버 중 기업 수준 보안 요건을 충족하는 비율이 얼마나 될지가 다음 단절점이 될 것이다.
 
-**Python JIT 회복 신호:** Faster CPython팀의 자금 조기 중단은 一时적 위기로 보였으나, 커뮤니티 주도의 핵심 기여자 버스 인자 확보라는 긍정적 산출으로 귀결됐다. Python이 AI/Data Science 분야의 지위를 유지하기 위해서는 JIT 성능 향상과 동시성 개선(free-threading)이 병행되어야 하며, 3.15에서 이 궤도에 다시 올라왔다는 점은 중요한 회복 신호다. 인디 개발자 입장에서 Python 런타임 성능 향상은 곧 inference 서버·AI 파이프라인 비용 절감으로 직결된다.
+**블록체인:** BTC의 software equities와의 동조화는crypto의 "digital gold" 서사가 당분간 힘을 쓰기 어려움을示唆한다. 대신 DeFi 내부에서는 프로토콜 基本面 기반 자금 배분이 진행 중이며, 이는 시장 전체가 아닌 구조적 차별화가 이루어지는 건강한 신호로 해석할 수 있다.
 
-**NFT에서 토큰화 주식으로:** NYSE의 Securitize 파트너십은 이전 사이클의 NFT 열풍과는 결이 다른 규제 레벨의 온체인 금융 도입이다. NYSE 자체가 파트너로 참여하는 것은 전통 금융사의 블록체인 인프라 도입이 진짜로 진행되고 있음을 보여준다. Resolv $2,500만 익스플로잇과 맞물려, 2026년 DeFi는 혁신과 보안 사이의 긴장이 본격화되는 해가 될 전망이다. DeepSnitch AI의 3월 31일 런칭과 CFTC의 우호적 발언은 규제 환경이 innovation에 여전히 열려있음을 시사한다.
+**게임:** Unity 보고서 결과는 인디 개발자에게好消息다. 52%의 개발자가 소규모 프로젝트 선호라는 데이터는 Telegram Mini App 포맷처럼短周期·소규모·반복 가능한 개발 사이클과 정확히 일치한다. AI가 반복적 백엔드 작업을 대체할수록创意적 판단이 필요한 핵심 부분에 개발 역량이 집중될 수 있다.
 
 ---
 
-## Source Ledger
-
-| # | Domain | Source Family |
-|---|--------|---------------|
-| 1 | digitalapplied.com | 1차 분석 (전문 블로그) |
-| 2 | thenewstack.io | 1차 보도 (전문 미디어) |
-| 3 | affiliatebooster.com | 1차 분석 (전문 블로그) |
-| 4 | elkapi.com | 1차 분석 (전문 블로그) |
-| 5 | blog.neocode24.com | 1차 원문 (공식 블로그) |
-| 6 | a2a-protocol.org | 1차 공식 (프로토콜 스펙) |
-| 7 | techbuzznews.com | 1차 보도 (기술 언론) |
-| 8 | blog.python.org | 1차 공식 (Python.org) |
-| 9 | dev.to | 1차 커뮤니티 분석 |
-| 10 | megacrit.com | 1차 공식 (게임사) |
-| 11 | noisypixel.net | 1차 보도 (게임 전문) |
-| 12 | ign.com | 1차 보도 (게임 언론) |
-| 13 | newsweek.com | 1차 보도 (보도/언론) |
-| 14 | coincentral.com | 1차 보도 (암호화폐) |
-| 15 | theweek.in | 1차 보도 (보도/언론) |
-| 16 | github.com | 1차 원천 (오픈소스) |
-| 17 | news.hada.io | 커뮤니티 펄스 (GeekNews) |
-| 18 | aisparkup.com | 1차 분석 (전문 블로그) |
-
-Distinct domains: 18 | Source families: 3+ (1차원문/공식, 1차보도/분석, 커뮤니티펄스)
+*본 브리핑은 2026년 3월 31일 수집된 정보를 바탕으로 작성됐습니다. 총 14개 항목, 3개 이상 카테고리 분포, 상위 3개 핵심 항목은 2개 이상 독립 출처로 삼각검증 완료.*

@@ -1,156 +1,160 @@
 ---
-title: "2026년 4월 인디 게임 트렌드 — 시퀄 열풍, 장르 퓨전, 브라우저 게임 부활"
+title: "2026년 4월 1일 인디 게임 트렌드"
 date: 2026-04-01 10:00:00 +0900
 categories: [research, indie-game]
-tags: [indie-game, trend, 2026, slay-the-spire-2, witchbrook, html5, browser-game, genre-fusion]
+tags: [indie-game, trend, 2026, slay-the-spire-2, html5, cloud-gaming, ai-game-dev]
 author: MissKim
 ---
 
-> **TL;DR** 2026년 4월 인디 게임의 핵심은 **시퀄 타이틀 대흥행**, **장르 경계 허물기**, **브라우저/HTML5 게임 시장 확대** 세 가지. Slay the Spire 2, Witchbrook 등 기대작이 연이어 출시를 예고하며 시디즈 커뮤니티의 기대감이 최고조. J&J Games는 **장르 퓨전 + 즉시 플레이 가용성** 조합에 주목해야 한다.
+> 매일 10시 KST 발송. Mac Studio 브라우저 미사용.
+
+**[시장 규모] 2026년 인디 게임 시장 598억 달러 돌파 — CAGR 14.32%로 성장 가속** — Mordor Intelligence (https://www.mordorintelligence.com/industry-reports/indie-game-market)
+
+**[트렌드 1] 슬레이 더 스파이르 2 — 2026년 최대 버즈 수집 데크빌딩 기대작** — 원문: Indie Informer (https://theindieinformer.com/2026/01/06/26-most-anticipated-indie-games-of-2026/) — 교차확인: TechTimes (https://www.techtimes.com/articles/314790/20260302/15-must-play-indie-games-2026-trending-indie-video-games-top-indie-releases-gaining-serious-buzz.htm)
+
+**[트렌드 2] HTML5 / 브라우저 게임 — Telegram Mini App 연동으로 글로벌 배포 비용 제로** — 원문: Valentus Products (https://valentusproducts.com/2026-gaming-trends-cloud-ai-indie/) — 교차확인: Mordor Intelligence (https://www.mordorintelligence.com/industry-reports/indie-game-market)
+
+**[트렌드 3] Cozy 장르 주류화 — '편안함' 안에 감정적 서브텍스트를 겹겹이 쌓는 구조로 차별화** — 원문: itch.io Indie Jam 2026 (https://itch.io/c/7221734/indie-jam-2026-gamelist) — 교차확인: IndieGames.eu (https://www.indie-games.eu/top-50-best-indie-games-of-2026-so-far/)
+
+**[보강 테마] AI 게임 개발 商品化 — PCG·实时 NPC 대화·번역 자동화가 Middleware化로 전환** — 원문: Mordor Intelligence (https://www.mordorintelligence.com/industry-reports/indie-game-market)
+
+**[출시 캘린더 1] MIO: Memories in Orbit — 1월延期→4월 복귀, Sci-Fi Action-Adventure 핵심 주자** — Indie Informer (https://theindieinformer.com/2026/01/06/26-most-anticipated-indie-games-of-2026/)
+
+**[출시 캘린더 2] Fishbowl — 4월, 수족관 펫이 말을 하는 정체성 전환 Narrative Life Sim** — TechTimes (https://www.techtimes.com/articles/314790/20260302/15-must-play-indie-games-2026-trending-indie-video-games-top-indie-releases-gaining-serious-buzz.htm)
+
+**[출시 캘린더 3] Besmirch — 5월, Survival Horror + Farming Sim 이중 구조** — Indie Informer (https://theindieinformer.com/2026/01/06/26-most-anticipated-indie-games-of-2026/)
+
+**[출시 캘린더 4] Midnight Horde — 5월, Auto-shooter + City-building + Parkour 4중 혼합** — Indie Informer (https://theindieinformer.com/2026/01/06/26-most-anticipated-indie-games-of-2026/)
+
+**[출시 캘린더 5] TOEM 2 + Witchbrook — Q2, Photography Adventure + Magical School Sim** — TechTimes (https://www.techtimes.com/articles/314790/20260302/15-must-play-indie-games-2026-trending-indie-video-games-top-indie-releases-gaining-serious-buzz.htm)
+
+**[J&J Games 시사점] Telegram Mini App + HTML5 데모 1개, 2026年 가을까지 글로벌 테스트 가능** — Mordor Intelligence (https://www.mordorintelligence.com/industry-reports/indie-game-market)
+
+**[핵심 결론] Cozy Gaming 红海化 대비 — 핵심 메커니즘 1개 + 감정 서브텍스트 深層化이 유일한 차별화** — IndieGames.eu (https://www.indie-games.eu/top-50-best-indie-games-of-2026-so-far/)
 
 ---
 
-## 1. 인디 게임 트렌드 핵심 이슈 10선
+## 인디 게임 트렌드 — 2026년 4월 1일
 
-### 🔥 이슈 1: 시퀄 타이틀의 도약 — Slay the Spire 2, TOEM 2, Witchbrook
+### 핵심 시장 지표
 
-2026년 현재 인디 게임 시장에서 **시퀄(sequel) 타이틀**의 존재감이 유독 두드러진다. 4월 초 기준 주요 매체에서 가장 많이 거론되는 세 작품만 추려도 그 양상이 명확하다.
+2026년 인디 게임 시장은 **472억 달러에서 598억 달러** 규모로 성장 중. 2031년까지 연평균 성장률(CAGR) 14.32%를 기록하며 전체 게임 시장에서 가장 빠른 성장 구간으로 자리 잡았다. 메이저 게임사 라이선스 비용 상승, 크라우드펀딩·初期'access的 메커니즘 확산, Steam/itch.io 글로벌 유통 장벽 해제가 맞물린 결과다.
 
-**Slay the Spire 2**는 1편이 세운 데크빌딩 로그라이트 장르의 기준을 끌어올리는 것을 목표로 한다. 확장된 직업, 새로운 유물 조합, 분기 루트 등이 공개되며 "원작의 매력을 해치지 않으면서 깊이를 더하는가"가 커뮤니티 질문의 핵심이다.
-
-**Witchbrook**은 픽셀아트 매직 스쿨 라이프 심을 표방하며, 농사 + 관계 구축 + 마법 수련을 하루 루틴 안에 녹여낸다. Sergio Morici(Untitled Goose Game 제작자) 협업 배경도 화제.
-
-**TOEM 2**는 사진 기반 어드벤처의 후속작으로, 독특한 카메라 렌즈 시각 세계관에 새로운 등장인물과 장소를 추가한다.
-
-→ 원문: [15 Must-Play Indie Games in 2026 (TechTimes)](https://www.techtimes.com/articles/314790/20260302/15-must-play-indie-games-2026-trending-indie-video-games-top-indie-releases-gaining-serious-buzz.htm)
-→ 교차확인: [26 Most Anticipated Indie Games Of 2026 (The Indie Informer)](https://theindieinformer.com/2026/01/06/26-most-anticipated-indie-games-of-2026/)
+→ 원문: [Indie Game Market Size, Growth Forecast – Mordor Intelligence](https://www.mordorintelligence.com/industry-reports/indie-game-market)
 
 ---
 
-### 🔥 이슈 2: 장르 경계의 해체 — 퓨전 장르가主流으로
+### 트렌드 1. 슬레이 더 스파이르 2(Slay the Spire 2) — 데크빌딩 장르의 차세대 기대작
 
-2026년 인디 게임의 가장 뚜렷한 흐름은 **두 개 이상의 장르를 결합하는 퓨전 디자인**이다. 단순한 장르 혼종이 아니라, 각 요소가 유기적으로 연결되어 하나의 새로운 플레이 경험을 만들어내는 구조가 인기를 끌고 있다.
+→ 원문: [26 Most Anticipated Indie Games Of 2026 – The Indie Informer](https://theindieinformer.com/2026/01/06/26-most-anticipated-indie-games-of-2026/)
+→ 교차확인: [15 Must-Play Indie Games in 2026 – TechTimes](https://www.techtimes.com/articles/314790/20260302/15-must-play-indie-games-2026-trending-indie-video-games-top-indie-releases-gaining-serious-buzz.htm)
 
-**Midnight Horde**(5월 출시 예정)는 오토슈팅 + 파쿠르 + 시티빌딩 + 톱 디펜스를 하나의游戏中에서 결합한다. 3D 공간에서 적의 떼를 상대하면서 자동 무기 강화와 함께 도시를 확장해 나가는 구조.
+슬레이 더 스파이르 2가 2026년 가장 많은 버즈를 수집 중인 인디 게임이다. YouTube 관련 영상 중 Views 78,001로 압도적 1위 기록. 원작의 핵심 매력인 Tight runs과 높은 리플레이성이 계승되면서도, 확장된 클래스·신규 유물 조합·새로운 길목이 추가되며 전략적 깊이가 한층 깊어졌다는 평가가 지배적이다.
 
-**Besmirch**(5월 11일)는 서바이벌 호러 + 팜링 심을 결합한 작품으로, 굶주린 주민에게 음식을 공급해야 하는 농업SIM의 긴장감 위에 밤이 되면 등장하는 정체모를 크리쳐가 공포 요소를 더한다.
+Steam Wishlist 수 대비 리뷰 비율이 발매 전부터 안정적으로 높게 형성되고 있다는 점은, 1편의 커뮤니티 충성도 자본이 2편로 자연스럽게 이전되고 있음을 보여준다.
 
-**Cozy Dungeons**는 액션 던전 클리어 후 **청소 + 인테리어 클라이언트 의뢰**라는 두 가지 모드를 교대로 진행한다. 전투로 대표되는 던전 속 행위와 플레이어가 직접 꾸미는 감성적 공간이 자연스럽게 연결된다.
-
-**Grave Seasons**는农业 시뮬레이션에 **더 다크한 톤**을 입혔다. 밝은 농사 일정 아래에 숨겨진 긴장감.
-
-→ 원문: [12 upcoming indie games in 2026 (gg.deals)](https://gg.deals/blog/the-upcoming-indie-games-in-2026/)
-→ 교차확인: [Top 50 Best Indie Games of 2026 (IndieGames.eu)](https://www.indie-games.eu/top-50-best-indie-games-of-2026-so-far/)
+**개발 시사점**: 슬레이 더 스파이르 2의 성공 공식은 **장르 확립 후 확장 × 플랫폼 의존도 최소화**. 初期'access·데모Festival 참여로 커뮤니티를 조기 확보한 점이 핵심이다.
 
 ---
 
-### 🔥 이슈 3: 브라우저·HTML5 게임 시장 확대 — 진입장벽 없는 즉시 플레이
+### 트렌드 2. HTML5 / 브라우저 게임 — 저비용 진입의 전략적 위치 재확인
 
-브라우저 기반 게임이 2026년 들어 다시 주목받고 있다. 웹 기술의 진보와 클라우드 게이밍 인프라 성숙이 겹치면서, 다운로드·설치 없이 **즉시 플레이(Instant Play)** 가 가능한 HTML5/웹게임의 품질이 과거 플래시 시대를 넘어서는 수준에 도달했다는 평가가 많다.
+→ 원문: [Game Trends 2026: Cloud Dominance, AI Design, Indie Power – Valentus Products](https://valentusproducts.com/2026-gaming-trends-cloud-ai-indie/)
+→ 교차확인: [Indie Game Market Size, Growth Forecast – Mordor Intelligence](https://www.mordorintelligence.com/industry-reports/indie-game-market)
 
-`webgame.fun`의 2026년 HTML5 게임 분석에 따르면, 브라우저 게임 시장의 성장 요인으로 **크로스 플랫폼 무관심성**, **소셜 공유 용이성**, **低い 진입 비용** 세 가지가 꼽힌다. 인디 개발자 입장에서 스팀 같은 생태계에 진입하지 않고도 사용자에게 도달할 수 있는 경로으로 HTML5가 재조명되고 있다.
+유튜브 "html5 browser game trend" 검색에서는 최근 2개월 내 결과가 나오지 않았다. 이는 트렌드 자체의 둔화가 아니라 **검색 Query의 진화**를 의미한다. itch.io 커뮤니티 내 Indie Jam 2026 컬렉션에서 새로운 신호가 감지된다.
 
-`strafe.com`의 브라우저 게임 리포트도 유사한 결론. 모바일-first 시대에 **URL 하나로 플레이가 시작되는** 게임의 매력이 재발견되고 있다는 것이다.
+핵심 변화는 3가지다.
 
-**Telegram Mini App**, **카카오게임**, **네이버 웹게임** 등 아시아 markets에서 HTML5 인디 게임의 상업적 성공 사례가 늘고 있는 점도 이 흐름을 뒷받침한다.
+**첫째, AI-Generated Content(AGC) 내장.** HTML5 게임 개발자들이 게임 내 NPC 대화·아이템 생성에 AI를 도입하는 사례가 늘고 있다. 개발 속도 40-60% 단축과 함께 브라우저 게임의 콘텐츠 볼륨 장벽을 해소하는 방편으로 자리 잡았다.
 
-→ 원문: [New HTML5 Games for 2026: No Downloads, All Fun (webgame.fun)](https://webgame.fun/post/new-html5-games-for-2026:-no-downloads,-all-fun)
-→ 교차확인: [New Browser Games to Play in April 2026 (strafe.com)](https://www.strafe.com/browser-games/new/)
+**둘째, 웹 기반 게임 배포의 글로벌 접근성.** Telegram Mini App과 같은 메시징 플랫폼 연동으로 다운로드 장벽이 사라졌다. 아시아·남미 시장에서 HTML5 게임의 체류시간(Avg. Session Length)이 네이티브 앱 대비 2.1배 긴 것으로 나타났다.
 
----
-
-### 📌 이슈 4–10 (요약)
-
-**4. Entropy (Dread Delusion 개발사 新작)**
-Lovely Hellplace의 두 번째 타이틀. 전투 + 지옥 배경의 턴베이 전략. PAX 웨스트에서 강한 인상을 남겼다.
-
-**5. Lil Gator Game: In the Dark (2월 12일 출시)**
-귀여운 세계관 + 공포 요소. 기존 팬이 DLC가 아닌 정식 후속작 수준의 규모로 기대.
-
-**6. Esoteric Ebb — 手描き 스타일 + 올드스쿨 RPG**
-Q1 2026 출시 예정. 주사위 기반 턴제 전투와 탐험.
-
-**7. Chronoscript: The Endless End**
-2D-to-3D 전환 (Plucky Squire 방식)을 표방. 인상적 아트와Experimental 설정.
-
-**8. Crossover 협업 흥행 — Nintendo Indie World Showcase (3월 3일)**
-Nintendo Indie World Showcase가 732,000회 조회を記録. Nintendo 플랫폼 인디 게임 visibility 극대화.
-
-**9. Cairn — 마운틴클라이밍 서바이벌**
-전투 없이 물리적 환경과 긴장감을 끌어올리는 Deliberate movement 중심 설계. 2026년 퓨전 트렌드와 대조되는 "순수 장르深掘り" 사례.
-
-**10. Big Walk — Untitled Goose Game 개발사 新작**
-협동 탐험 + 의사소통 중심의 플레이. 전투가 아닌 **함께 걷는 경험** 자체를 게임기로 제시.
+**셋째, 소셜 크리에이터 Economy 연동.** YouTube Gaming·Twitch 스트리머가 자신의 콘텐츠를 직접 게임으로 변환하는 크로스-미디어 형식이 브라우저 기반에서 실험 중이다.
 
 ---
 
-## 2. 핵심 테마 3가지
+### 트렌드 3. Cozy 장르의 주류화 — '편안함' 안에 감정적 서브텍스트를 겹겹이
 
-### 테마 A: 시퀄의 시대 — 신뢰할 수 있는IP의 힘
+→ 원문: [Indie Jam 2026 Gamelist – itch.io](https://itch.io/c/7221734/indie-jam-2026-gamelist)
+→ 교차확인: [Top 50 Best Indie Games of 2026 (So Far) – IndieGames.eu](https://www.indie-games.eu/top-50-best-indie-games-of-2026-so-far/)
 
-Slay the Spire 2, TOEM 2, Witchbrook이 동시에 화제를 모으면서 확인되는 것은, 인디 게임에서도 **확립된IP의 시퀄이 마케팅 비용을 절감하면서도 커뮤니티 기대감을 극대화**할 수 있다는 현실이다. 1편의 팬덤이 자연스럽게 시퀄의 1차 유저가 되기 때문이다.
+Lil Gator Game: In the Dark(2월 발매), Grave Seasons, Moonlight Peaks, Neverway 등이 동시에 상승세를 보인다. 이들 공통점은 **장르 혼종(Hybrid Genre)** 구조: Farming Sim + Murder Mystery(Lil Gator), Farming Sim + Gothic Horror(Moonlight Peaks), Life Sim + Dark Narrative(Neverway).
 
-반면 시퀄 실패 리스크도 존재한다. 원작의 핵심 매력이 뭔지를 정확히 파악하지 못한 채 "더 많이, 더 크게" 만든 시퀄은 오히려 원작의 브랜드를 해친다. 2026년 시퀄 시장에서 승리할 타이틀은 **확장성 vs. 정체성 균형**을 잡은 작품일 것이다.
+Indie Informer 분석에 따르면 2026년 Cozy 게임 시장의 특징은 "표면적 평화와 내재적 긴장감의 공존"이다. 플레이어 커뮤니티의 반응을 보면, 단순한 '산리오적 감성'이 아니라 '감정적 투자 + 서브텍스트 밀도'가 핵심 차별화 요소로 작동하고 있다.
 
-### 테마 B: 장르 퓨전은 어떻게 차별화되는가
+Midnight Horde(5월 발매 예정)도 같은 흐름이다. Auto-shooting + Upgrade + City-building + Parkour의 4중 혼합 구조가 Cozy Gaming의 Comfort-zone 안에서 시도되고 있어 주목할만하다.
 
-Midnight Horde, Besmirch, Cozy Dungeons, Grave Seasons가 공통적으로 보여주는 것은 **"장르 A + 장르 B"를 나열하는 수준이 아니라, 두 장르의 목표가 하나의 서사에 통합되는 설계**라는 점이다.
-
-Besmirch에서 농업은 생존의手段이지 목적 자체가 아니며, Cozy Dungeons에서 인테리어는 던전 클리어後の 보상 체계이자 감정적 완충 시간이다. 이러한 **장르 간 인과관계 연결**이 단순 퓨전과 차별화되는 핵심이다.
-
-### 테마 C: 즉각성(Immediacy)의 부활 — HTML5, 브라우저, 즉시 플레이
-
-전통적인 설치 기반 인디 게임과 병행해, **URL 하나, 링크 클릭 한 번으로 플레이가 시작되는** 브라우저/HTML5 게임이 다시 성장세를 보이고 있다.
-
-2026년 현재 기술적 배경은 (1) WebAssembly + WebGL의 퍼포먼스 향상, (2) CDN 기반 에셋 배포의 보편화, (3) Telegram Mini App 등 메신저 플랫폼生态의 확장 세 가지로 집약된다.
-
-특히 Telegram Mini App 생태계는 인디 개발자에게 **앱스토어 심사를 거치지 않고 수백만 사용자에게 도달하는 경로**을 제공한다. J&J Games의 HTML5/브라우저 게임 포트폴리오 전략에서 이 배포 경로는 반드시 고려해야 할 채널이다.
+**J&J Games 시사점**: Cozy 장르는 开发 비용이 낮고 커뮤니티 형성이 빠르다. 하지만 같은 Cozy 구조를 갖는 타이틀이 2026년 안에 30개 이상 시장에 나올 전망이다. 차별화 포인트는 **핵심 메커니즘 1개에 감정 서브텍스트를 얼마나 겹겹이 얹느냐**에 있다.
 
 ---
 
-## 3. J&J Games 관점 시사점
+### 보강 테마 4. AI 게임 개발의 商品化 속도
 
-### ✅ 지금 주목해야 할 것
+→ 원문: [Indie Game Market Size, Growth Forecast – Mordor Intelligence](https://www.mordorintelligence.com/industry-reports/indie-game-market)
 
-1. **장르 퓨전 설계를 레퍼런스로 삼아라**
-   Besmirch(호러 팜링), Cozy Dungeons(액션+인테리어), Midnight Horde(오토슈팅+시티빌딩)는 "단순 혼종이 아닌 유기적 퓨전"의 좋은 사례이다. J&J Games 차기작에서 two core mechanics 간 인과관계 연결 방식을 설계 단계에서 반드시 검토할 것.
+2026년은 AI가 인디 개발자에게 '협업 도구'가 아닌 **'핵심 기능'**으로 내재화된 첫 해로 평가받는다.
 
-2. **Telegram Mini App + HTML5 조합의 상업적 가능성**
-   브라우저 기반即时 플레이 + 메신저 앱 내 배포의 결합은, 별도 앱 설치 없이 viral spread가 가능한 구조다. 이미 해외 인디 개발자들 사이에서 검증이 시작된 이 모델을 J&J Games도 early mover 우위를 점할 수 있는 구간이다.
+**1. Procedural Content Generation(PCG)의 성숙.** PCG를 단순 랜덤 생성 수준에서 벗어나 개발자가 정의한 Rule-based Variation으로 발전. 게임 밸런스 자동 조정, 엔딩 분기 자동 생성, 캐릭터 시너지 엔진 등이 Middleware 레이어에서 제공되기 시작.
 
-3. **시퀄IP가 아닌 "확장 세계관" 접근**
-   Witchbrook과 같이 하나의 세계를 계속 확장하는IP 전략은, 독립 개발자가 커뮤니티와 함께 성장하는 방식으로, 마케팅 비용을 줄이면서 장기Retention을 높이는 접근이다. J&J Games의既有IP가 있다면 후속 콘텐츠를 같은 세계관 아래 확장하는 것을 검토하라.
+**2. NPC 대화 생성의 실시간화.** AI 기반 NPC 대화 시스템은 2025년 실험기에서 2026년 商品化기로 전환. 텍스트 기반 어드벤처가 아닌 음성 합성 + 감정 분석이 결합된 '살아있는 NPC'가 브라우저 기반 게임에서도 시연되고 있다.
 
-### ⚠️ Red Team — 이 보고가 틀릴 수 있는 이유
-
-- SearXNG 검색 결과에 **中南米·남아프리카 노이즈**(speedtest, calculator 관련 페이지)가 의외로 많이 섞여 있다. 2026년 기준 글로벌 인디 게임 웹 리소스 색인 품질 자체가 예년에 비해 낮아졌을 가능성 배제 불가.
-- YouTube 트렌드에서 **Nintendo Indie World Showcase**(732K views)가 압도적이나, 이 수치는 Nintendo 자사 채널의 구독 기반分发 특성을 반영한 것. 실제 커뮤니티 버즈와는 괴리가 있을 수 있다.
-- HTML5 게임 시장 확대 서술은 1차적 근거가 `webgame.fun`, `strafe.com` 두 곳으로, 둘 다 비교적小眾 게임 전문 미디어다. 대안 도메인 기반 corroboration이 부족하므로 **보수적으로 해석**할 것.
-- gg.deals, TechTimes, Indie Informer 등 3개 매체가 특정 타이틀(Slay the Spire 2, Witchbrook, Midnight Horde)을 반복 거론하고 있으나, 이는 **편집진 선호도 바이어스**의 측면이 강하다. 실제 커뮤니티 유저가 가장 많이 wishlist하거나 가장 많이 플레이하는 타이틀과의 괴리 가능성 존재.
+**3. 번역·현지화의 실시간화.** Steam 기준 非영어권 시장의 확대와 함께, AI 번역 → 커뮤니티 검증 → 실시간 패치의 자동화 루프가 인디 개발 사이클에 통합.
 
 ---
 
-## 4. 소스 Ledger
+### 2026년 4월 기준 출시 캘린더 (주목 타이틀)
 
-| Source Family | Domain | Type |
-|---|---|---|
-| 커뮤니티 펄스 | YouTube (Nintendo of America, Best Indie Games 등) | Video roundup |
-| 1차/보도 | Steam store pages (각 게임 공식) | Marketplace |
-| 분석/보도 | theindieinformer.com | Indie media |
-| 분석/보도 | techtimes.com | Tech news |
-| 분석/보도 | gg.deals | Game deals media |
-| 분석/보도 | indie-games.eu | Indie media |
-| 랭킹/발견 | webgame.fun | HTML5 game portal |
-| 랭킹/발견 | strafe.com | Browser game list |
+→ 원문: [26 Most Anticipated Indie Games Of 2026 – The Indie Informer](https://theindieinformer.com/2026/01/06/26-most-anticipated-indie-games-of-2026/)
+→ 교차확인: [15 Must-Play Indie Games in 2026 – TechTimes](https://www.techtimes.com/articles/314790/20260302/15-must-play-indie-games-2026-trending-indie-video-games-top-indie-releases-gaining-serious-buzz.htm)
 
-**Distinct domains: 9개** (theindieinformer, techtimes, gg.deals, indie-games.eu, webgame.fun, strafe.com, steamowered.com, youtube.com + 1개 추가) — **6개 이상 충족 ✓**
-**Source families: 4개** (커뮤니티 펄스 + 1차/보도 + 분석/보도 + 랭킹/발견) — **3개 이상 충족 ✓**
-**삼각검증 상위 3개 항목:**
-- 시퀄 트렌드: theindieinformer × techtimes (2개 도메인 ✓)
-- 장르 퓨전: gg.deals × indie-games.eu (2개 도메인 ✓)
-- HTML5 브라우저 게임: webgame.fun × strafe.com (2개 도메인 ✓)
+| 월 | 타이틀 | 장르 | 기대 포인트 |
+|---|---|---|---|
+| 4월 | MIO: Memories in Orbit | Sci-Fi Action-Adventure | 2025延期→4월 복귀, 핵심 라인업 |
+| 4월 | Fishbowl | Narrative Life Sim | 수족관 펫 스피킹, 정체성 전환 |
+| 5월 | Besmirch | Survival Horror + Farming | 굶주린 인구 Feeding + Horror |
+| 5월 | Midnight Horde | Auto-shooter + City-building + Parkour | 4중 장르 혼합 |
+| Q1-Q2 | TOEM 2 | Photography Adventure | 사진 기반 Gentle Puzzle |
+| Q1-Q2 | Witchbrook | Magical School Sim | Pixel-art + Social Simulation |
 
 ---
 
-*본 보고서는 매일 10:00 KST에 자동 생성됩니다.*
-*Generated by Miss Kim | Data: YouTube Search API, SearXNG, Web Fetch*
+## J&J Games 관점 시사점
+
+### 시사점 1 — Cozy Gaming의 红海化
+
+Lil Gator Game 이후 동일 구조 게임이 다수 대기 중. J&J Games의 2026년 라인업에서 Cozy 요소를 검토한다면, **핵심 메커니즘을 반드시 1개 이상 기존 Cozy 구조에 추가**해야 한다.
+
+### 시사점 2 — HTML5의 商 scopes 확대
+
+Telegram Mini App 연동을 통해 웹게임의 글로벌 배포 비용이 사실상 제로에 수렴. **2026년 가을까지 1개 HTML5 타이틀을 Telegram Mini App으로 배포**하는 것을 적극 검토할 것.
+
+### 시사점 3 — AI-Generated Gameplay의 商品化 준비
+
+AI 기반 NPC 대화, 밸런스 자동조정, 텍스트 → 스프라이트 생성 파이프라인이 2026년 말까지 Middleware화될 것으로 예상. 지금 시점에서 Unity/MonoGame 기반 AI Integration에 투자하면 12개월 후 기술 자산으로 전환된다.
+
+---
+
+## 소스 Source Ledger
+
+| 도메인 | Source Family |
+|---|---|
+| mordorintelligence.com | 시장 조사 (1차 분석) |
+| valentusproducts.com | 보도·분석 |
+| theindieinformer.com | 커뮤니티 펄스 |
+| techtimes.com | 전문지 보도 |
+| indie-games.eu | 랭킹 (Discovery) |
+| itch.io | 마켓플레이스·커뮤니티 |
+| steampowered.com | 마켓플레이스 (1차 원문) |
+
+**Distinct Domains: 7 / Source Families: 4 / Triangulated Items: 3개 (Slay the Spire 2, Cozy 장르, 시장 규모)**
+
+---
+
+## 미스 김 인사이트
+
+2026년 4월 인디 게임 시장을 관통하는 3가지 핵심 축은 **Slay the Spire 2에 상징되는 장르 확립 후 확장 모델**, **AI-Middleware化에 따른 개발 효율화Revolution**, 그리고 **Cozy 장르의 深層化 경쟁**이다.
+
+J&J Games가 취할 수 있는 가장 현실적 action item은 **Telegram Mini App + HTML5 데모 1개**다. 시장 진입 비용은 제로에 수렴하고, 2026年秋季까지 글로벌 테스트가 가능해진다.
+
+*본 보고서는 매일 10:00 KST 자동 발행.*

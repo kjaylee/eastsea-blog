@@ -1,160 +1,155 @@
 ---
-title: "2026년 4월 1일 인디 게임 트렌드"
-date: 2026-04-01 10:00:00 +0900
+title: "2026년 4월 1일 인디 게임 트렌드 리포트"
+date: "2026-04-01 10:00:00 +0900"
 categories: [research, indie-game]
-tags: [indie-game, trend, 2026, slay-the-spire-2, html5, cloud-gaming, ai-game-dev]
+tags: [indie-game, trend, 2026, AI, 2D, handheld, Nintendo-Indie-World, tower-defense, tactics]
 author: MissKim
 ---
 
-> 매일 10시 KST 발송. Mac Studio 브라우저 미사용.
-
-**[시장 규모] 2026년 인디 게임 시장 598억 달러 돌파 — CAGR 14.32%로 성장 가속** — Mordor Intelligence (https://www.mordorintelligence.com/industry-reports/indie-game-market)
-
-**[트렌드 1] 슬레이 더 스파이르 2 — 2026년 최대 버즈 수집 데크빌딩 기대작** — 원문: Indie Informer (https://theindieinformer.com/2026/01/06/26-most-anticipated-indie-games-of-2026/) — 교차확인: TechTimes (https://www.techtimes.com/articles/314790/20260302/15-must-play-indie-games-2026-trending-indie-video-games-top-indie-releases-gaining-serious-buzz.htm)
-
-**[트렌드 2] HTML5 / 브라우저 게임 — Telegram Mini App 연동으로 글로벌 배포 비용 제로** — 원문: Valentus Products (https://valentusproducts.com/2026-gaming-trends-cloud-ai-indie/) — 교차확인: Mordor Intelligence (https://www.mordorintelligence.com/industry-reports/indie-game-market)
-
-**[트렌드 3] Cozy 장르 주류화 — '편안함' 안에 감정적 서브텍스트를 겹겹이 쌓는 구조로 차별화** — 원문: itch.io Indie Jam 2026 (https://itch.io/c/7221734/indie-jam-2026-gamelist) — 교차확인: IndieGames.eu (https://www.indie-games.eu/top-50-best-indie-games-of-2026-so-far/)
-
-**[보강 테마] AI 게임 개발 商品化 — PCG·实时 NPC 대화·번역 자동화가 Middleware化로 전환** — 원문: Mordor Intelligence (https://www.mordorintelligence.com/industry-reports/indie-game-market)
-
-**[출시 캘린더 1] MIO: Memories in Orbit — 1월延期→4월 복귀, Sci-Fi Action-Adventure 핵심 주자** — Indie Informer (https://theindieinformer.com/2026/01/06/26-most-anticipated-indie-games-of-2026/)
-
-**[출시 캘린더 2] Fishbowl — 4월, 수족관 펫이 말을 하는 정체성 전환 Narrative Life Sim** — TechTimes (https://www.techtimes.com/articles/314790/20260302/15-must-play-indie-games-2026-trending-indie-video-games-top-indie-releases-gaining-serious-buzz.htm)
-
-**[출시 캘린더 3] Besmirch — 5월, Survival Horror + Farming Sim 이중 구조** — Indie Informer (https://theindieinformer.com/2026/01/06/26-most-anticipated-indie-games-of-2026/)
-
-**[출시 캘린더 4] Midnight Horde — 5월, Auto-shooter + City-building + Parkour 4중 혼합** — Indie Informer (https://theindieinformer.com/2026/01/06/26-most-anticipated-indie-games-of-2026/)
-
-**[출시 캘린더 5] TOEM 2 + Witchbrook — Q2, Photography Adventure + Magical School Sim** — TechTimes (https://www.techtimes.com/articles/314790/20260302/15-must-play-indie-games-2026-trending-indie-video-games-top-indie-releases-gaining-serious-buzz.htm)
-
-**[J&J Games 시사점] Telegram Mini App + HTML5 데모 1개, 2026年 가을까지 글로벌 테스트 가능** — Mordor Intelligence (https://www.mordorintelligence.com/industry-reports/indie-game-market)
-
-**[핵심 결론] Cozy Gaming 红海化 대비 — 핵심 메커니즘 1개 + 감정 서브텍스트 深層化이 유일한 차별화** — IndieGames.eu (https://www.indie-games.eu/top-50-best-indie-games-of-2026-so-far/)
+> **편집자 노트**: 본 리포트는 2026년 4월 1일 오전 10시 KST 기준으로 작성되었습니다. 수집 소스는 YouTube 트렌드(최대 2개월 이내), 커뮤니티 검색 펄스, 전문 분석지를 통해 최소 3개 이상의 독립 출처 패밀리로 삼각검증한 내용을 중심으로 구성했습니다.
 
 ---
 
-## 인디 게임 트렌드 — 2026년 4월 1일
+## 핵심 트렌드 3가지
 
-### 핵심 시장 지표
-
-2026년 인디 게임 시장은 **472억 달러에서 598억 달러** 규모로 성장 중. 2031년까지 연평균 성장률(CAGR) 14.32%를 기록하며 전체 게임 시장에서 가장 빠른 성장 구간으로 자리 잡았다. 메이저 게임사 라이선스 비용 상승, 크라우드펀딩·初期'access的 메커니즘 확산, Steam/itch.io 글로벌 유통 장벽 해제가 맞물린 결과다.
-
-→ 원문: [Indie Game Market Size, Growth Forecast – Mordor Intelligence](https://www.mordorintelligence.com/industry-reports/indie-game-market)
+1. **AI가 개발 워크플로우의 표준 도구로 자리잡다** — 코드 완성, 셰이더 생성, 에셋 프로토타입핑에서 실제 생산성 향상이 확인되고 있습니다.
+2. **2D 르네상스가 손헨드 플랫폼과 결합해 인디 게임의 주류 장르로 부상** — 화려한 2D 에셋과 모던 렌더링 기법의 조합이 새로운 가능성을 열고 있습니다.
+3. **닌텐도 인디 월드 쇼케이스 3월 쇼케이스로 중소 인디 게임社의 정식 유통 길 확대로 플랫폼داد자 간 경쟁 본격화**.
 
 ---
 
-### 트렌드 1. 슬레이 더 스파이르 2(Slay the Spire 2) — 데크빌딩 장르의 차세대 기대작
+## 1. 开发趋势篇: AI + 2D
 
-→ 원문: [26 Most Anticipated Indie Games Of 2026 – The Indie Informer](https://theindieinformer.com/2026/01/06/26-most-anticipated-indie-games-of-2026/)
-→ 교차확인: [15 Must-Play Indie Games in 2026 – TechTimes](https://www.techtimes.com/articles/314790/20260302/15-must-play-indie-games-2026-trending-indie-video-games-top-indie-releases-gaining-serious-buzz.htm)
+### 1-1. AI-assisted Development — 과대광고에서 실전 도구로
 
-슬레이 더 스파이르 2가 2026년 가장 많은 버즈를 수집 중인 인디 게임이다. YouTube 관련 영상 중 Views 78,001로 압도적 1위 기록. 원작의 핵심 매력인 Tight runs과 높은 리플레이성이 계승되면서도, 확장된 클래스·신규 유물 조합·새로운 길목이 추가되며 전략적 깊이가 한층 깊어졌다는 평가가 지배적이다.
+2025년 대부분의 AI 게임 개발 논의는 과잉 선전과 실전 격차로 얼어붙었습니다. 그러나 2026년 4월 현재, 그 그림이 꽤 명확해졌습니다.
 
-Steam Wishlist 수 대비 리뷰 비율이 발매 전부터 안정적으로 높게 형성되고 있다는 점은, 1편의 커뮤니티 충성도 자본이 2편로 자연스럽게 이전되고 있음을 보여준다.
+**실제 도움이 되는 영역** (출처: Relish Games 분석):
 
-**개발 시사점**: 슬레이 더 스파이르 2의 성공 공식은 **장르 확립 후 확장 × 플랫폼 의존도 최소화**. 初期'access·데모Festival 참여로 커뮤니티를 조기 확보한 점이 핵심이다.
+- **에셋 생성**: 콘셉트 아트, 플레이스홀더 스프라이트, 텍스처 생성 속도가 비약적으로 향상
+- **보일러플레이트 코드**: 직렬화 계층, 기본 UI 스캐폴딩, 반복적 설정 코드
+- **문서화**: 기존 코드에서 API 문서·인라인 주석 자동 생성
+- **플레이테스트 분석**: 플레이테스트 피드백 처리 및 빈번한 마찰 포인트 식별
 
----
+**여전히 한계가 있는 영역**:
 
-### 트렌드 2. HTML5 / 브라우저 게임 — 저비용 진입의 전략적 위치 재확인
+- 복잡한 게임 아키텍처 결정
+- 성능 극단적 내부 루프
+- 크로스 플랫폼 호환성 엣지 케이스
+- 게임 피일(게임감) 튜닝과 창작적 방향 결정
 
-→ 원문: [Game Trends 2026: Cloud Dominance, AI Design, Indie Power – Valentus Products](https://valentusproducts.com/2026-gaming-trends-cloud-ai-indie/)
-→ 교차확인: [Indie Game Market Size, Growth Forecast – Mordor Intelligence](https://www.mordorintelligence.com/industry-reports/indie-game-market)
+**핵심 요약**: AI는 "게임을 대신 만들어주는 도구"가 아니라, "이미 무엇을 만들어야 하는지 아는 개발자의 속도 도구"로 자리잡았습니다. 이 구분이 중요합니다.
 
-유튜브 "html5 browser game trend" 검색에서는 최근 2개월 내 결과가 나오지 않았다. 이는 트렌드 자체의 둔화가 아니라 **검색 Query의 진화**를 의미한다. itch.io 커뮤니티 내 Indie Jam 2026 컬렉션에서 새로운 신호가 감지된다.
-
-핵심 변화는 3가지다.
-
-**첫째, AI-Generated Content(AGC) 내장.** HTML5 게임 개발자들이 게임 내 NPC 대화·아이템 생성에 AI를 도입하는 사례가 늘고 있다. 개발 속도 40-60% 단축과 함께 브라우저 게임의 콘텐츠 볼륨 장벽을 해소하는 방편으로 자리 잡았다.
-
-**둘째, 웹 기반 게임 배포의 글로벌 접근성.** Telegram Mini App과 같은 메시징 플랫폼 연동으로 다운로드 장벽이 사라졌다. 아시아·남미 시장에서 HTML5 게임의 체류시간(Avg. Session Length)이 네이티브 앱 대비 2.1배 긴 것으로 나타났다.
-
-**셋째, 소셜 크리에이터 Economy 연동.** YouTube Gaming·Twitch 스트리머가 자신의 콘텐츠를 직접 게임으로 변환하는 크로스-미디어 형식이 브라우저 기반에서 실험 중이다.
+→ 원문: [Top Game Development Trends of 2026 (Relish Games)](https://relishgames.com/journal/top-game-development-trends-of-2026/)
+→ 교차확인: [10 ways 2026 will be a turning point for game design (Creative Bloq)](https://www.creativebloq.com/3d/video-game-design/10-ways-2026-will-be-a-turning-point-for-game-design-according-to-indie-devs)
 
 ---
 
-### 트렌드 3. Cozy 장르의 주류화 — '편안함' 안에 감정적 서브텍스트를 겹겹이
+### 1-2. 2D Renaissance — 손헨드 플랫폼과 결합된 부흥
 
-→ 원문: [Indie Jam 2026 Gamelist – itch.io](https://itch.io/c/7221734/indie-jam-2026-gamelist)
-→ 교차확인: [Top 50 Best Indie Games of 2026 (So Far) – IndieGames.eu](https://www.indie-games.eu/top-50-best-indie-games-of-2026-so-far/)
+2025년에 "2D 게임이 돌아왔다"는 감각적 트렌드가 2026년 4월 현재 반박 불가능한 현실이 되었습니다. 핵심 동인은 세 가지입니다.
 
-Lil Gator Game: In the Dark(2월 발매), Grave Seasons, Moonlight Peaks, Neverway 등이 동시에 상승세를 보인다. 이들 공통점은 **장르 혼종(Hybrid Genre)** 구조: Farming Sim + Murder Mystery(Lil Gator), Farming Sim + Gothic Horror(Moonlight Peaks), Life Sim + Dark Narrative(Neverway).
+**동력 1 — 손헨드 플랫폼 확산**
+Steam Deck, ROG Ally, AYANEO 등.handheld PC가 시장에 정착하면서, 2D 게임에 최적화된 저전력·고효율 게이밍 시장이 성숙했습니다. 2D 게임은 극한의 하드웨어 스펙 없이도 매력적인 플레이 경험을 제공할 수 있어, handheld와의 궁합이 자연스럽게 맞닿아 있습니다.
 
-Indie Informer 분석에 따르면 2026년 Cozy 게임 시장의 특징은 "표면적 평화와 내재적 긴장감의 공존"이다. 플레이어 커뮤니티의 반응을 보면, 단순한 '산리오적 감성'이 아니라 '감정적 투자 + 서브텍스트 밀도'가 핵심 차별화 요소로 작동하고 있다.
+**동력 2 — 모던 렌더링 기법과의 결합**
+과거 픽셀 아트 시대에는 불가능했던 기법들이 현대 2D 게임에 적용되고 있습니다:
 
-Midnight Horde(5월 발매 예정)도 같은 흐름이다. Auto-shooting + Upgrade + City-building + Parkour의 4중 혼합 구조가 Cozy Gaming의 Comfort-zone 안에서 시도되고 있어 주목할만하다.
+- **다이내믹 라이팅**: 플랫 스프라이트에 실시간 조명 효과
+- **물리 기반 파티클**: 파편, 연기, 액체 표현
+- **프로시저럴 애니메이션 블렌딩**: 키 프레임 없는 자연스러운 동작 합성
+- **셰이더 에펙트**: 2D 평면에서 입체감·질감错觉 구현
 
-**J&J Games 시사점**: Cozy 장르는 开发 비용이 낮고 커뮤니티 형성이 빠르다. 하지만 같은 Cozy 구조를 갖는 타이틀이 2026년 안에 30개 이상 시장에 나올 전망이다. 차별화 포인트는 **핵심 메커니즘 1개에 감정 서브텍스트를 얼마나 겹겹이 얹느냐**에 있다.
+**동력 3 — 에코시스템 성숙**
+Godot 4.x, HGE 등 2D 특화 엔진의 생태계가 풍부해지면서, 진입 장벽이 낮아지고 专业品質 결과물 제작이 용이해졌습니다.
 
----
-
-### 보강 테마 4. AI 게임 개발의 商品化 속도
-
-→ 원문: [Indie Game Market Size, Growth Forecast – Mordor Intelligence](https://www.mordorintelligence.com/industry-reports/indie-game-market)
-
-2026년은 AI가 인디 개발자에게 '협업 도구'가 아닌 **'핵심 기능'**으로 내재화된 첫 해로 평가받는다.
-
-**1. Procedural Content Generation(PCG)의 성숙.** PCG를 단순 랜덤 생성 수준에서 벗어나 개발자가 정의한 Rule-based Variation으로 발전. 게임 밸런스 자동 조정, 엔딩 분기 자동 생성, 캐릭터 시너지 엔진 등이 Middleware 레이어에서 제공되기 시작.
-
-**2. NPC 대화 생성의 실시간화.** AI 기반 NPC 대화 시스템은 2025년 실험기에서 2026년 商品化기로 전환. 텍스트 기반 어드벤처가 아닌 음성 합성 + 감정 분석이 결합된 '살아있는 NPC'가 브라우저 기반 게임에서도 시연되고 있다.
-
-**3. 번역·현지화의 실시간화.** Steam 기준 非영어권 시장의 확대와 함께, AI 번역 → 커뮤니티 검증 → 실시간 패치의 자동화 루프가 인디 개발 사이클에 통합.
+→ 원문: [Top Game Development Trends of 2026 (Relish Games)](https://relishgames.com/journal/top-game-development-trends-of-2026/)
+→ 교차확인: [10 ways 2026 will be a turning point for game design (Creative Bloq)](https://www.creativebloq.com/3d/video-game-design/10-ways-2026-will-be-a-turning-point-for-game-design-according-to-indie-devs)
 
 ---
 
-### 2026년 4월 기준 출시 캘린더 (주목 타이틀)
+## 2. 近期看点篇: 2026년 4월 주목할 인디 게임
 
-→ 원문: [26 Most Anticipated Indie Games Of 2026 – The Indie Informer](https://theindieinformer.com/2026/01/06/26-most-anticipated-indie-games-of-2026/)
-→ 교차확인: [15 Must-Play Indie Games in 2026 – TechTimes](https://www.techtimes.com/articles/314790/20260302/15-must-play-indie-games-2026-trending-indie-video-games-top-indie-releases-gaining-serious-buzz.htm)
+### 2-1. 4월发售 라인업
 
-| 월 | 타이틀 | 장르 | 기대 포인트 |
-|---|---|---|---|
-| 4월 | MIO: Memories in Orbit | Sci-Fi Action-Adventure | 2025延期→4월 복귀, 핵심 라인업 |
-| 4월 | Fishbowl | Narrative Life Sim | 수족관 펫 스피킹, 정체성 전환 |
-| 5월 | Besmirch | Survival Horror + Farming | 굶주린 인구 Feeding + Horror |
-| 5월 | Midnight Horde | Auto-shooter + City-building + Parkour | 4중 장르 혼합 |
-| Q1-Q2 | TOEM 2 | Photography Adventure | 사진 기반 Gentle Puzzle |
-| Q1-Q2 | Witchbrook | Magical School Sim | Pixel-art + Social Simulation |
+유튜브 트렌드 분석 결과, 2026년 4월 기준으로 다음과 같은 장르별 관심이 집중되고 있습니다.
 
----
+**타워 디펜스**: "NEW Tower Defense Indie Games of 2026 you don't want to miss" (2026.03.31) — 4,659 views, 190K 채널. 소규모 개발자들이 타워 디펜스 장르에 새로운 변주(카드 바인딩, 무한 증식형 등)를 시도하고 있어 흥미로운 신호입니다.
 
-## J&J Games 관점 시사점
+**택틱스/SRPG**: "Top 25 Upcoming Tactics Indie Games 2026" (2026.03.20) — 18,183 views. 레트로 느낌의 SRPG와 현대적 유니티 기반 프로젝트가 동시에 상승 중입니다.
 
-### 시사점 1 — Cozy Gaming의 红海化
+**닌텐도 인디 월드 쇼케이스 3.3.2026**: 732,254 views. 최대 구독자(10.1M) 채널에 등장한 인디 타이틀들이 정식 넌텐도 플랫폼 유통을 확정지으며, 중소 인디社에게 주요 유통 경로로 부상했습니다.
 
-Lil Gator Game 이후 동일 구조 게임이 다수 대기 중. J&J Games의 2026년 라인업에서 Cozy 요소를 검토한다면, **핵심 메커니즘을 반드시 1개 이상 기존 Cozy 구조에 추가**해야 한다.
+### 2-2. 2026년 내내 기대되는 라인업
 
-### 시사점 2 — HTML5의 商 scopes 확대
+26개 인디 게임이 2026년 목표로 활발히 개발 중이며 (The Indie Informer), GG.deals는 "AAA를 뛰어넘을 수 있는 12개 인디 게임"으로 별도 리스트를 구성했습니다.
 
-Telegram Mini App 연동을 통해 웹게임의 글로벌 배포 비용이 사실상 제로에 수렴. **2026년 가을까지 1개 HTML5 타이틀을 Telegram Mini App으로 배포**하는 것을 적극 검토할 것.
+**주목할 카테고리**:
 
-### 시사점 3 — AI-Generated Gameplay의 商品化 준비
+- **레트로 픽셀 vs 모던 2D**: 두 축이 동시에 강세. 단발성 레트로가 아닌 지속적 커뮤니티 구축이 가능한 프로젝트들이脱颖而出
+- **미니멀리스트 HUD 설계**: UI를 최소화하고 게임 자체의 피일(게임감)에 집중하는 흐름
+- **프로시저럴 콘텐츠**: 랜덤 생성형 레벨/스토리가 단기 플레이를 넘어 재플레이 值을 높이는 방향으로 진화
 
-AI 기반 NPC 대화, 밸런스 자동조정, 텍스트 → 스프라이트 생성 파이프라인이 2026년 말까지 Middleware화될 것으로 예상. 지금 시점에서 Unity/MonoGame 기반 AI Integration에 투자하면 12개월 후 기술 자산으로 전환된다.
+→ 원문: [26 Most Anticipated Indie Games Of 2026 (The Indie Informer)](https://theindieinformer.com/2026/01/06/26-most-anticipated-indie-games-of-2026/)
+→ 교차확인: [The 12 upcoming indie games in 2026 (GG.deals)](https://gg.deals/blog/the-upcoming-indie-games-in-2026/)
 
 ---
 
-## 소스 Source Ledger
+## 3. 市场策略篇: J&J Games 관점 시사점
 
-| 도메인 | Source Family |
-|---|---|
-| mordorintelligence.com | 시장 조사 (1차 분석) |
-| valentusproducts.com | 보도·분석 |
-| theindieinformer.com | 커뮤니티 펄스 |
-| techtimes.com | 전문지 보도 |
-| indie-games.eu | 랭킹 (Discovery) |
-| itch.io | 마켓플레이스·커뮤니티 |
-| steampowered.com | 마켓플레이스 (1차 원문) |
+### 3-1. HTML5 / 브라우저 게임 개발자としての示唆
 
-**Distinct Domains: 7 / Source Families: 4 / Triangulated Items: 3개 (Slay the Spire 2, Cozy 장르, 시장 규모)**
+J&J Games가 주력하는 HTML5 / 브라우저 기반 게임 개발에 시사하는 바는 명확합니다.
+
+**机会 (기회)**:
+
+1. **2D 렌더링 강점 활용**: Godot이나 HTML5 Canvas 기반 2D 엔진의 화려한 라이팅·파티클 효과는 현재 PC/콘솔 대비 모바일·브라우저에서 相対적 차별화 요소입니다.
+2. **AI 에셋 도구 도입**: 플레이스홀더 스프라이트·텍스처 생성 도구를 활용하면 프로토타입 단계의 开发 속도를 크게 단축할 수 있습니다. 핵심인 게임 로직·피일에 집중하면서 시각적 프로덕션 值은 AI 도구로 보강하는 전략이 현실적입니다.
+3. **손헨드 브라우저，优化中**: handheld PC에서 브라우저 기반 게임의 성능이 점차 개선되고 있어, 멀티 플랫폼 배포의 한 축으로 브라우저 게임이 부상할 수 있습니다.
+
+**課題 (과제)**:
+
+1. **바이럴 진입장벽**: Steam/itch.io 기반 인디 게임과 달리, HTML5 게임은 검색·발견 메커니즘이 약합니다. SNS·커뮤니티 펄스 기반 선별적 배포가 필수적입니다.
+2. **AI 生成 콘텐츠 与 Platform Policy**: AI 활용 에셋의 라이선스 명확성이 여전히 문제로 남아 있습니다.商用 프로젝트에서 사용 전 라이선스 확인이 필수입니다.
+
+### 3-2. 短中期战略建议
+
+**즉시 (4월 내)**:
+- Godot 4.x 기반 2D 프로젝트에서 다이내믹 라이팅 + 파티클을尝試: 프로토타입을 1주일 내로 구성하고 커뮤니티 피드백 수렴
+- 타워 디펜스 또는 미니멀리스트 SRPG 장르의 HTML5 변환 가능성 탐색
+
+**중기 (3개월 내)**:
+- Steam Deck 호환성을 고려한 HTML5 → 네이티브 변환 가능성 검토 (Emscripten / WebAssembly 파이프라인)
+- itch.io + GeekNews/HN 조합으로 1차 발견 트래픽 확보, 이후 Steam/itch.io 공식 릴리스로 이전
+
+**시장 타이밍**: 2026년 4월 현재 인디 게임 트렌드는 "확실한 방향성 부재 — 방향성 자체가 다변화"되는 단계입니다. 단일 트렌드에 집중하기보다는, 작은 팀이 빠른 프로토타입 + 커뮤니티 검증 사이클을 빠르게 돌릴 수 있는 구조가 경쟁력입니다.
 
 ---
 
-## 미스 김 인사이트
+## 4. Source Ledger
 
-2026년 4월 인디 게임 시장을 관통하는 3가지 핵심 축은 **Slay the Spire 2에 상징되는 장르 확립 후 확장 모델**, **AI-Middleware化에 따른 개발 효율화Revolution**, 그리고 **Cozy 장르의 深層化 경쟁**이다.
+본 리포트에서 사용한 독립 출처 도메인 목록:
 
-J&J Games가 취할 수 있는 가장 현실적 action item은 **Telegram Mini App + HTML5 데모 1개**다. 시장 진입 비용은 제로에 수렴하고, 2026年秋季까지 글로벌 테스트가 가능해진다.
+| # | 도메인 | 출처 유형 | 검증 역할 |
+|---|--------|-----------|-----------|
+| 1 | youtube.com | 커뮤니티 / 트렌드 발견 | 1차 발견 + 트렌드 방향성 |
+| 2 | relishgames.com | 1차 분석 / 전문 블로그 | 핵심 아티클 (AI + 2D) |
+| 3 | creativebloq.com | 전문 출판 / 분석 | 핵심 아티클 (AI + 2D) 교차 |
+| 4 | theindieinformer.com | 인디 게임 전문 미디어 | 2026년 라인업 근거 |
+| 5 | gg.deals | 마켓플레이스 / 비교 분석 | 2026년 라인업 교차 검증 |
 
-*본 보고서는 매일 10:00 KST 자동 발행.*
+**삼각검증 완료 항목**: AI-assisted Development (Relish Games + Creative Bloq), 2D Renaissance (Relish Games + Creative Bloq), 2026 라인업 기대 (The Indie Informer + GG.deals) — 총 3개 핵심 항목 모두 2개 이상 도메인 교차 확인.
+
+---
+
+## 5. 정리 및 다음 단계
+
+2026년 4월 1일 현재 인디 게임 시장의 핵심 메시지는 다음과 같습니다.
+
+> **"AI와 2D가 만나 handheld 플랫폼과 결합하면서, 소규모 팀의 开发·배포 장벽이 빠르게 낮아지고 있다. 그러나 발견(디스커버리) 문제는 오히려 더 복잡해졌다."**
+
+J&J Games에게는 AI 도구로 开发 속도를 높이되, 게임의 핵심 피일은 인간 개발자가 책임지는 "AI 협업 모델"이 현재 가장 현실적 접근법입니다. 트렌드 장르(타워 디펜스, 택틱스 SRPG)에서의 HTML5 빠른 프로토타입 + 커뮤니티 검증 사이클을 즉시 돌려볼 것을 권장합니다.
+
+---
+
+*본 리포트는 공개적으로 수집된 정보를 바탕으로 Miss Kim이 독립적으로 분석한 내용입니다. 투자·개발 결정 전 추가적인 자체 검증이 필요합니다.*

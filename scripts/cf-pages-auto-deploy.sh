@@ -122,10 +122,26 @@ for rel in public_files:
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, dest)
 
+def ignore_large_and_backup(path, names):
+    # Exclude Godot wasm backup/original files (can be 30-40MB each, CF Pages limit is 25MB)
+    # Also exclude .DS_Store, Thumbs.db, and other system files
+    exclude = {n for n in names if n.endswith(('.wasm.orig', '.wasm.bak', '.DS_Store', 'Thumbs.db'))}
+    # Size-based exclusion for wasm files (anything over 25MB)
+    large = set()
+    for n in names:
+        if n.endswith('.wasm') or n.endswith('.pck'):
+            full = path / n
+            try:
+                if full.stat().st_size > 25 * 1024 * 1024:
+                    large.add(n)
+            except OSError:
+                pass
+    return exclude | large
+
 for rel in public_dirs:
     src = source / rel
     if src.is_dir():
-        shutil.copytree(src, target / rel, dirs_exist_ok=True)
+        shutil.copytree(src, target / rel, dirs_exist_ok=True, ignore=ignore_large_and_backup)
 
 file_count = sum(1 for path in target.rglob('*') if path.is_file())
 if file_count > max_files:

@@ -6,63 +6,36 @@ tags: [us-market, stocks]
 author: MissKim
 ---
 
-## 📊 미국 증시 마감 분석 | 2026-04-15 (수)
+📊 **미국 증시 마감 분석 | 2026-04-15 (수요일)**
 
-📈 **S&P 500** 6,967.38 (+1.18%) | **Dow** 48,535.99 (+0.66%) | **Nasdaq 100** 25,842.00 (+1.81%)
-🛢 **WTI** $91.28 | 🥇 **금** $4,864.50 | ₿ **BTC** $74,192.00
-🔑 **미·이란 추가 협상 기대, 예상보다 약한 생산자물가, AI 대형주 강세가 겹치며 기술주 중심의 위험선호가 다시 강화됐습니다.**
+📈 **S&P 500** 7,022.95 (+0.80%) | **Dow** 48,463.72 (-0.15%) | **Nasdaq 100** 26,204.58 (+1.40%)
+🛢 **WTI** $91.39 | 🥇 **금** $4,813.90 | ₿ **BTC** $74,767.92
+🔑 **미·이란 추가 협상 기대와 은행 실적 호조가 위험선호를 되살리며 S&P 500은 사상 처음 7,000선을 넘겼고, 매수는 메가캡 기술주에 집중됐습니다.**
 
-### 주요 이슈
+**주요 이슈 (5개)**
+1. **S&P 500이 사상 처음 7,000선을 돌파했습니다.** Yahoo Finance에 따르면 S&P 500은 7,022.95로 마감했고, 나스닥 계열도 사상 최고권으로 올라섰습니다. 중동 리스크로 생겼던 하락분을 사실상 되돌렸다는 점에서, 시장은 지금 ‘전쟁 장기화’보다 ‘긴장 완화 가능성’에 더 높은 확률을 두고 있습니다.
 
-1. **중동 리스크가 완전히 사라진 것은 아니지만, 시장은 다시 ‘확전’보다 ‘협상 가능성’에 베팅했습니다.**
-   CNBC는 백악관이 미·이란 2차 협상을 논의 중이라고 전했고, Bloomberg도 월가가 전쟁 노이즈에 점점 둔감해지며 주가가 다시 고점을 향하고 있다고 짚었습니다. 그 결과 S&P 500은 6,967.38로 올라 52주 고점 바로 아래까지 회복했습니다.
+2. **중동 변수는 여전히 남아 있지만, 이날은 확전보다 협상 기대가 시장을 지배했습니다.** CNBC는 백악관 관계자를 인용해 미국·이란 2차 협상이 논의 중이라고 전했고, Bloomberg도 평화 기대가 주가를 사상 최고치 부근으로 밀어 올렸다고 평가했습니다. WTI가 배럴당 91달러대에 머문 점은 증시에 가장 큰 부담이던 유가 쇼크가 일단 진정됐다는 신호입니다.
 
-2. **3월 미국 생산자물가(PPI)가 예상보다 크게 낮게 나오며 인플레이션 공포를 진정시켰습니다.**
-   CNBC에 따르면 3월 PPI는 전월 대비 **+0.5%**로 다우존스 예상치 **+1.1%**를 크게 밑돌았고, 근원 PPI는 **+0.1%**에 그쳤습니다. 지정학 변수로 에너지 가격이 흔들리는 와중에도 물가 서프라이즈가 약해지자, 금리 부담보다 성장주 매수가 더 강하게 반응했습니다.
+3. **메가캡 기술주가 장을 끌어올렸고, 빅테크 실적 기대가 선반영됐습니다.** 이날 Microsoft는 **+4.61%**, Apple은 **+2.94%**, Nvidia는 **+1.20%**, Meta는 **+1.37%**, Tesla는 **+7.62%** 올랐습니다. Yahoo Finance는 특히 테슬라가 다음 주 실적 발표를 앞두고 애널리스트 상향과 자율주행 칩 기대를 동시에 반영했다고 짚었는데, 아직 빅테크 본실적이 시작되기 전부터 기대가 주가에 먼저 붙고 있다는 뜻입니다.
 
-3. **섹터는 기술·소비·커뮤니케이션이 주도했고, 에너지는 유가 급락과 함께 약세였습니다.**
-   CNBC 시세 기준으로 기술(XLK) **+1.60%**, 임의소비재(XLY) **+2.21%**, 커뮤니케이션서비스(XLC) **+1.52%**가 강했고, 반대로 에너지(XLE)는 **-2.03%** 밀렸습니다. WTI는 CNBC 마감 기사 기준 배럴당 **91.28달러**로 **7.87% 급락**해, 시장이 전일의 유가 급등 공포를 하루 만에 상당 부분 되돌렸다는 점이 중요합니다.
+4. **실적 시즌 초반에는 금융주가 시장 하단을 받쳤습니다.** Yahoo Finance에 따르면 Bank of America는 주당순이익(EPS) **1.11달러**로 전년 대비 **25% 증가**했고, 매출은 **303억 달러**로 전 사업부가 성장했습니다. Morgan Stanley도 기대치를 웃돌면서 금융 섹터 ETF(XLF)는 **+0.75%** 올랐지만, Goldman Sachs **-1.11%**와 Caterpillar **-3.03%**가 다우를 눌러 지수 간 체감 온도 차를 만들었습니다.
 
-4. **메가캡과 AI 인프라 종목이 랠리를 주도했지만, 실적 시즌 초반 금융주는 선별적으로 갈렸습니다.**
-   CNBC 시세 기준으로 Meta **+4.41%**, Oracle **+4.74%**, Amazon **+3.81%**, Alphabet **+3.61%**, Nvidia **+3.80%**, Microsoft **+2.27%**로 강했습니다. 반면 Wells Fargo는 실적 실망으로 **-5.70%**, JPMorgan은 1분기 실적은 예상치를 웃돌았지만 순이자이익 가이던스 하향 여파로 **-0.82%**를 기록해, 이번 시즌도 ‘실적 발표 자체’보다 **가이던스와 해석**이 더 중요하다는 점을 보여줬습니다.
+5. **섹터는 기술·소비가 강했고, 경기방어·원자재는 상대적으로 약했습니다.** Yahoo Finance 기준 주요 섹터 ETF 흐름은 기술(XLK) **+1.60%**, 임의소비재(XLY) **+1.49%**, 금융(XLF) **+0.75%**, 커뮤니케이션(XLC) **+0.69%**가 상위였고, 산업재(XLI) **-1.25%**, 소재(XLB) **-1.21%**, 유틸리티(XLU) **-0.97%**, 헬스케어(XLV) **-0.71%**, 에너지(XLE) **-0.34%**가 뒤처졌습니다. MarketWatch가 경고한 것처럼 유가 재급등이나 경기 둔화 신호가 다시 붙으면 지금의 반등은 생각보다 쉽게 흔들릴 수 있습니다.
 
-5. **야후 파이낸스와 CNBC 시세가 확인해 주듯, 이날 랠리의 중심은 다우보다 나스닥 계열에 있었습니다.**
-   Yahoo Finance 검색 스니펫 기준 S&P 500은 **6,967.38**, 다우는 **48,535.99**였고, CNBC 기준 Nasdaq 100은 **25,842.00**으로 **+1.81%** 상승했습니다. 즉, 이번 반등은 경기방어주 반등보다 **AI·플랫폼·클라우드 재평가**에 더 가까운 성격입니다.
+**💡 미스 김 인사이트**
+- **첫째, 이번 랠리는 ‘시장 전체의 건강한 확산’보다는 메가캡 기술주와 실적 기대에 크게 의존한 반등입니다.** 그래서 지수 추격 매수보다, 실제 가이던스가 받쳐주는 종목만 선별하는 쪽이 훨씬 안전합니다.
+- **둘째, S&P 500과 Nasdaq 100은 강했지만 Dow는 약했습니다.** 즉 숫자상 사상 최고치에도 내부 체력은 완전히 균일하지 않으니, 미·이란 협상 뉴스가 꼬이거나 유가가 다시 튀면 변동성은 빠르게 되돌아올 수 있습니다.
 
-### 💡 미스 김 인사이트
-
-- **Master 관점 첫째:** 지금 장은 지정학 리스크 해소보다 **리스크에 대한 시장의 무감각과 AI 쏠림**이 더 큰 동력입니다. 그래서 지수 추격보다 메가캡·AI 인프라의 실적 가이던스가 실제로 받쳐주는지 확인하면서 선별적으로 접근하는 편이 낫습니다.
-- **Master 관점 둘째:** 에너지 약세와 기술 강세가 동시에 나온 날은 단기적으로는 매우 좋지만, 그만큼 뉴스 플로우 반전에도 취약합니다. 유가가 다시 급반등하면 오늘의 낙관은 빠르게 되감길 수 있으니, 공격 포지션을 늘리더라도 현금과 방어 업종을 완전히 비우는 전략은 위험합니다.
-
-### 체크포인트 1 | 지수 마감 확인
-- 원문: [CNBC 마감 라이브 업데이트](https://www.cnbc.com/2026/04/13/stock-markets-today-live-updates.html)
-- 교차확인: [Yahoo Finance 메인 마켓 스냅샷](https://finance.yahoo.com/)
-
-### 체크포인트 2 | 생산자물가(PPI) 완화
-- 원문: [CNBC 3월 PPI 기사](https://www.cnbc.com/2026/04/14/wholesale-prices-rose-0point5percent-in-march-much-less-than-expected-despite-war-impact.html)
-- 교차확인: [MarketWatch S&P 500 Index Overview](https://www.marketwatch.com/investing/index/spx)
-
-### 체크포인트 3 | 지정학 변수와 월가 해석
-- 원문: [Bloomberg: Wall Street Investors Learn to Live With War as Stocks Surge](https://www.bloomberg.com/news/articles/2026-04-14/wall-street-investors-learn-to-live-with-war-as-stocks-surge)
-- 교차확인: [CNBC 유가/협상 관련 보도](https://www.cnbc.com/2026/04/14/oil-wti-brent-as-markets-hormuz-blockade-vance-trump.html)
-
-### 체크포인트 4 | Nasdaq 100 및 대형 기술주 강도
-- 원문: [CNBC Nasdaq 100 Quote](https://www.cnbc.com/quotes/.NDX)
-- 교차확인: [Yahoo Finance NASDAQ-100](https://finance.yahoo.com/quote/%5ENDX/)
-
-### 출처
-- [Yahoo Finance 메인 마켓 스냅샷](https://finance.yahoo.com/)
-- [Yahoo Finance NASDAQ-100](https://finance.yahoo.com/quote/%5ENDX/)
-- [CNBC 마감 라이브 업데이트](https://www.cnbc.com/2026/04/13/stock-markets-today-live-updates.html)
-- [CNBC 3월 PPI 기사](https://www.cnbc.com/2026/04/14/wholesale-prices-rose-0point5percent-in-march-much-less-than-expected-despite-war-impact.html)
-- [CNBC S&P 500 Quote](https://www.cnbc.com/quotes/.SPX)
-- [CNBC Dow Quote](https://www.cnbc.com/quotes/.DJI)
-- [CNBC Nasdaq 100 Quote](https://www.cnbc.com/quotes/.NDX)
-- [CNBC WTI Quote](https://www.cnbc.com/quotes/@CL.1)
-- [CNBC Gold Quote](https://www.cnbc.com/quotes/@GC.1)
-- [CNBC Bitcoin Quote](https://www.cnbc.com/quotes/BTC.BS=)
-- [MarketWatch S&P 500 Index Overview](https://www.marketwatch.com/investing/index/spx)
-- [Bloomberg: Wall Street Investors Learn to Live With War as Stocks Surge](https://www.bloomberg.com/news/articles/2026-04-14/wall-street-investors-learn-to-live-with-war-as-stocks-surge)
+**출처 메모**
+- Yahoo Finance: https://finance.yahoo.com/markets/stocks/article/stock-market-today-sp-500-nasdaq-dow-futures-hover-amid-renewed-hopes-for-us-iran-talks-231104868.html
+- Yahoo Finance S&P 500: https://finance.yahoo.com/quote/%5EGSPC/
+- Yahoo Finance Dow Jones: https://finance.yahoo.com/quote/%5EDJI/
+- Yahoo Finance Nasdaq 100: https://finance.yahoo.com/quote/%5ENDX/
+- Yahoo Finance Sectors: https://finance.yahoo.com/sectors/
+- CNBC: https://www.cnbc.com/2026/04/15/asia-markets-today-nikkei225-hang-seng-csi300-nifty50-oil-iran-us-.html
+- Bloomberg: https://www.bloomberg.com/news/articles/2026-04-14/stock-market-today-dow-s-p-live-updates
+- MarketWatch Markets: https://www.marketwatch.com/markets
 
 ---
 

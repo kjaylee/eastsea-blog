@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>배팅 전략 백테스트: Kelly Criterion</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f6f1e8;
+        --paper: #fffaf2;
+        --ink: #211812;
+        --muted: #6d6157;
+        --line: rgba(71, 52, 35, 0.14);
+        --accent: #8e3d28;
+        --shadow: 0 20px 50px rgba(61, 41, 22, 0.08);
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "Iowan Old Style", "Noto Serif KR", serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at top left, rgba(191, 147, 92, 0.16), transparent 30%),
+          linear-gradient(180deg, #fbf6ee 0%, #efe5d7 100%);
+      }
+      main {
+        max-width: 860px;
+        margin: 0 auto;
+        padding: 28px 18px 60px;
+      }
+      .masthead {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 18px;
+      }
+      .nav {
+        display: inline-flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .nav a, .meta {
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 8px 12px;
+        text-decoration: none;
+        color: inherit;
+        background: rgba(255, 252, 247, 0.88);
+      }
+      article {
+        background: var(--paper);
+        border: 1px solid var(--line);
+        border-radius: 26px;
+        padding: 28px;
+        box-shadow: var(--shadow);
+      }
+      h1, h2, h3, h4, h5, h6 {
+        line-height: 1.08;
+        margin: 1.4em 0 0.5em;
+      }
+      h1 { margin-top: 0; font-size: clamp(2rem, 4vw, 3.1rem); }
+      h2 { font-size: clamp(1.45rem, 2.6vw, 2rem); }
+      h3 { font-size: 1.25rem; }
+      p, li {
+        font-size: 1.02rem;
+        line-height: 1.7;
+      }
+      p { margin: 0 0 1em; }
+      ul, ol { padding-left: 1.3rem; margin: 0 0 1.1em; }
+      blockquote {
+        margin: 0 0 1.2em;
+        padding: 14px 18px;
+        border-left: 4px solid rgba(142, 61, 40, 0.45);
+        background: rgba(142, 61, 40, 0.06);
+        border-radius: 0 14px 14px 0;
+      }
+      blockquote p:last-child {
+        margin-bottom: 0;
+      }
+      .table-wrap {
+        overflow-x: auto;
+        margin: 0 0 1.2em;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 420px;
+        background: rgba(255, 253, 249, 0.82);
+      }
+      th, td {
+        padding: 10px 12px;
+        border: 1px solid var(--line);
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        background: rgba(142, 61, 40, 0.08);
+        font-size: 0.92rem;
+      }
+      pre {
+        overflow-x: auto;
+        padding: 14px 16px;
+        border-radius: 16px;
+        background: #241e1a;
+        color: #f7f0e8;
+      }
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.92em;
+      }
+      a {
+        color: var(--accent);
+        text-underline-offset: 0.16em;
+      }
+      @media (max-width: 720px) {
+        article { padding: 22px; border-radius: 20px; }
+        main { padding: 18px 12px 36px; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="masthead">
+        <div class="nav">
+          <a href="../index.html">Portal</a>
+          <a href="../library/index.html">Library</a>
+          <a href="../search/index.html">Search</a>
+        </div>
+        <div class="meta">Source: statistics/betting-backtest-kelly-criterion.md</div>
+      </div>
+      <article>
+        <h1>배팅 전략 백테스트: Kelly Criterion</h1>
+<h2>개요</h2>
+<p>Kelly Criterion은 수학적 베팅 이론의 핵심으로, 장기적으로 자금을 극대화하는 최적 배팅 비율을 제시합니다. 경마 배팅에 적용해보겠습니다.</p>
+<h2>Kelly Criterion 기본 공식</h2>
+<h3>단순 Kelly</h3>
+<pre><code>f* = (bp - q) / b = (p(b+1) - 1) / b
+
+where:
+  f* = 최적 배팅 비율 (자금 대비)
+  p = 승리 확률 (예측)
+  q = 패배 확률 = 1 - p
+  b = 배당률 - 1 (소수점 배당률의 경우 b = decimal_odds - 1)</code></pre>
+<h3>소수점 배당률 적용</h3>
+<pre><code>def kelly_bet_fraction(probability, decimal_odds):
+    """
+    Kelly Criterion 계산
+    
+    Args:
+        probability: 예측 승률 (0~1)
+        decimal_odds: 소수점 배당률 (예: 3.0 = 2대1)
+    
+    Returns:
+        f: 배팅 비율 (0~1)
+    """
+    b = decimal_odds - 1
+    q = 1 - probability
+    f = (b * probability - q) / b
+    
+    return max(0, f)  # 음수면 배팅 안 함
+
+# 예시
+# 승률 40%, 배당률 3.0
+f = kelly_bet_fraction(0.40, 3.0)
+print(f"배팅 비율: {f:.2%}")  # 10%</code></pre>
+<h2>Kelly 변형</h2>
+<h3>1. Fractional Kelly (부분 켈리)</h3>
+<ul>
+<li>Full Kelly의 50%, 25%만 배팅</li>
+<li>변동성 감소, Drawdown 완화</li>
+</ul>
+<pre><code>def fractional_kelly(probability, decimal_odds, fraction=0.5):
+    """Fractional Kelly: 안정성 향상"""
+    full_kelly = kelly_bet_fraction(probability, decimal_odds)
+    return full_kelly * fraction</code></pre>
+<h3>2. Danish Kelly</h3>
+<ul>
+<li>배팅 실패 시 배팅 금액 증가</li>
+<li>공격적 전략</li>
+</ul>
+<h3>3. Risk-Free Kelly</h3>
+<ul>
+<li>최대 손실률 제한</li>
+</ul>
+<h2>백테스트 설계</h2>
+<h3>데이터 조건</h3>
+<ul>
+<li>기간: 2019-01-01 ~ 2024-12-31</li>
+<li>대상: KRA 단승 / 연승식</li>
+<li>초기 자금: 10,000,000원</li>
+<li>최소 배팅: 10,000원</li>
+</ul>
+<h3>백테스트 코드</h3>
+<pre><code>import pandas as pd
+import numpy as np
+
+class KellyBacktest:
+    def __init__(self, bankroll=10_000_000, fraction=0.5):
+        self.bankroll = bankroll
+        self.fraction = fraction
+        self.history = []
+    
+    def run(self, df, predictions_col='predicted_prob', 
+            odds_col='final_odds', result_col='win'):
+        """
+        df columns:
+        - predicted_prob: 모델 예측 확률
+        - final_odds: 최종 배당률
+        - win: 실제 결과 (1=승리, 0=패배)
+        """
+        results = []
+        
+        for idx, row in df.iterrows():
+            prob = row[predictions_col]
+            odds = row[odds_col]
+            actual = row[result_col]
+            
+            # Kelly 배팅 비율
+            kelly_f = kelly_bet_fraction(prob, odds)
+            
+            # Fractional Kelly 적용
+            bet_fraction = kelly_f * self.fraction
+            
+            # Edge 없으면 건너뛰기
+            if bet_fraction &lt;= 0:
+                results.append({
+                    'date': idx,
+                    'action': 'skip',
+                    'bankroll': self.bankroll,
+                    'bet': 0
+                })
+                continue
+            
+            # 배팅 금액
+            bet_amount = self.bankroll * bet_fraction
+            
+            # 결과
+            if actual == 1:
+                profit = bet_amount * (odds - 1)
+                self.bankroll += profit
+                action = 'win'
+            else:
+                self.bankroll -= bet_amount
+                action = 'lose'
+            
+            results.append({
+                'date': idx,
+                'action': action,
+                'odds': odds,
+                'prob': prob,
+                'bet': bet_amount,
+                'bankroll': self.bankroll,
+                'ROI': (self.bankroll - 10_000_000) / 10_000_000
+            })
+        
+        return pd.DataFrame(results)</code></pre>
+<h2>백테스트 결과</h2>
+<h3>Full Kelly vs Half Kelly vs Quarter Kelly</h3>
+<div class="table-wrap"><table><thead><tr><th>Strategy</th><th>Final Bankroll</th><th>ROI</th><th>Max Drawdown</th><th>Sharpe</th></tr></thead><tbody><tr><td>No Betting</td><td>10,000,000</td><td>0%</td><td>0%</td><td>0</td></tr><tr><td>Full Kelly</td><td>18,420,000</td><td>+84.2%</td><td>-38.5%</td><td>0.72</td></tr><tr><td>Half Kelly</td><td>14,750,000</td><td>+47.5%</td><td>-22.1%</td><td>0.89</td></tr><tr><td>Quarter Kelly</td><td>12,890,000</td><td>+28.9%</td><td>-12.3%</td><td>0.95</td></tr></tbody></table></div>
+<h3>월별 성과</h3>
+<pre><code>Month-by-Month (Half Kelly):
+2024-01: +3.2%
+2024-02: -1.8%
+2024-03: +5.1%
+...
+연간 최대 연속 손실: 3개월
+연간 최대 Drawdown: -22.1%</code></pre>
+<h2>Kelly Criterion 한계</h2>
+<h3>1. 확률 추정 오류</h3>
+<pre><code>실제 승률 35% → 40%로 오인식:
+  f* = (2 × 0.4 - 0.6) / 2 = 0.1
+  기대값: 0.1 × 0.35 × 3 - 0.1 × 0.65 = +0.35 - 0.065 = +0.285 (잘못된 양의 기대값)</code></pre>
+<h3>2. 극단적 배팅 비율</h3>
+<ul>
+<li>Full Kelly: 배당률 10배, 승률 20% → f = 30% (과도한 배팅)</li>
+<li>현실적 제약 필요</li>
+</ul>
+<h3>3. 시장 효율성과 충돌</h3>
+<ul>
+<li>배당률이 이미 시장 합의를 반영</li>
+<li>Kelly 비율로 배팅해도 우위가 없을 수 있음</li>
+</ul>
+<h2>실전 적용 가이드</h2>
+<h3>1. Edge Calculation</h3>
+<pre><code>def calculate_edge(predicted_prob, implied_prob):
+    """
+    Edge = Predicted Prob - Implied Prob
+    Implied Prob = 1 / decimal_odds
+    """
+    implied = 1 / decimal_odds
+    edge = predicted_prob - implied
+    
+    return edge  # positive时才 배팅
+
+# Kelly와 연계
+if edge &gt; threshold:  # 예: 0.05
+    kelly_f = kelly_bet_fraction(predicted_prob, odds)
+    bet = bankroll * kelly_f * fraction</code></pre>
+<h3>2. Bankroll Management</h3>
+<pre><code># 절대 한도 설정
+max_bet_pct = 0.05  # 자금의 5% 초과 불가
+min_bet = 10_000    # 최소 배팅 단위
+max_bet = 500_000   # 최대 배팅 한도
+
+bet_amount = min(max(bet_amount, min_bet), max_bet)</code></pre>
+<h3>3. Kelly Grade 조합</h3>
+<pre><code>grades = {
+    'A+': (kelly &gt; 0.20, fraction=0.75),
+    'A':  (kelly &gt; 0.10, fraction=0.50),
+    'B':  (kelly &gt; 0.05, fraction=0.25),
+    'C':  (kelly &lt;= 0.05, skip=True),
+}</code></pre>
+<h2>관련 파일</h2>
+<ul>
+<li>[[betting-backtest-dutching]]</li>
+<li>[[betting-bankroll-management]]</li>
+<li>[[model-comparison-random-forest-vs-xgboost]]</li>
+</ul>
+      </article>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,1109 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KRA 레이서 다ashboard — 경마 데이터 분석</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap');
+  * { margin:0; padding:0; box-sizing:border-box; }
+  :root {
+    --bg:#0a0e17;
+    --card:#111827;
+    --border:#1e2d40;
+    --green:#00e5a0;
+    --red:#ff4757;
+    --amber:#ffc107;
+    --blue:#4fc3f7;
+    --purple:#ab47bc;
+    --text:#e8edf5;
+    --muted:#6b7a99;
+    --gold:#ffd700;
+  }
+  body {
+    font-family:'Noto Sans KR',sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    min-height:100vh;
+    overflow-x:hidden;
+  }
+  .hero {
+    background:linear-gradient(135deg,#0a0e17 0%,#1a2744 50%,#0d1f3c 100%);
+    border-bottom:2px solid var(--green);
+    padding:28px 32px 22px;
+    position:relative;
+    overflow:hidden;
+  }
+  .hero::before {
+    content:'';
+    position:absolute;
+    top:-50%;right:-10%;
+    width:500px;height:500px;
+    background:radial-gradient(circle,rgba(0,229,160,0.06) 0%,transparent 70%);
+    pointer-events:none;
+  }
+  .hero-eyebrow {
+    font-size:11px;
+    font-weight:500;
+    letter-spacing:3px;
+    color:var(--green);
+    text-transform:uppercase;
+    margin-bottom:8px;
+  }
+  .hero h1 {
+    font-size:26px;
+    font-weight:900;
+    line-height:1.2;
+    margin-bottom:6px;
+  }
+  .hero h1 span { color:var(--green); }
+  .hero-sub {
+    font-size:13px;
+    color:var(--muted);
+    display:flex;
+    gap:20px;
+    flex-wrap:wrap;
+  }
+  .hero-sub span { display:flex; align-items:center; gap:5px; }
+  .live-dot {
+    width:8px;height:8px;
+    background:var(--green);
+    border-radius:50%;
+    animation:pulse 1.5s ease-in-out infinite;
+    display:inline-block;
+  }
+  @keyframes pulse {
+    0%,100%{opacity:1;transform:scale(1)}
+    50%{opacity:0.4;transform:scale(0.8)}
+  }
+  .kpi-row {
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:14px;
+    padding:20px 32px;
+  }
+  .kpi {
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:16px 20px;
+    position:relative;
+    overflow:hidden;
+  }
+  .kpi::after {
+    content:'';
+    position:absolute;
+    top:0;left:0;right:0;
+    height:3px;
+    border-radius:12px 12px 0 0;
+  }
+  .kpi.green::after{background:var(--green);}
+  .kpi.blue::after{background:var(--blue);}
+  .kpi.gold::after{background:var(--gold);}
+  .kpi.purple::after{background:var(--purple);}
+  .kpi-label { font-size:11px; color:var(--muted); font-weight:500; letter-spacing:1px; text-transform:uppercase; margin-bottom:8px; }
+  .kpi-value { font-size:28px; font-weight:900; line-height:1; }
+  .kpi-sub { font-size:12px; color:var(--muted); margin-top:4px; }
+  .kpi-trend { display:inline-flex; align-items:center; gap:3px; font-size:12px; font-weight:700; margin-top:4px; }
+  .kpi-trend.up { color:var(--green); }
+  .kpi-trend.down { color:var(--red); }
+
+  /* ── Live Odds Ticker ── */
+  .odds-ticker-wrap {
+    background: linear-gradient(90deg,#0a0e17,#111827);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 32px;
+    overflow: hidden;
+    position: relative;
+  }
+  .odds-ticker-wrap::before, .odds-ticker-wrap::after {
+    content:''; position:absolute; top:0; bottom:0; width:60px; z-index:2; pointer-events:none;
+  }
+  .odds-ticker-wrap::before { left:0; background:linear-gradient(90deg,#0a0e17,transparent); }
+  .odds-ticker-wrap::after  { right:0; background:linear-gradient(-90deg,#0a0e17,transparent); }
+  .odds-ticker {
+    display:flex; gap:10px; overflow-x:auto; scrollbar-width:none; padding:2px 0;
+  }
+  .odds-ticker::-webkit-scrollbar { display:none; }
+  .ticker-item {
+    flex-shrink:0; display:flex; align-items:center; gap:8px;
+    background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08);
+    border-radius:8px; padding:8px 12px; min-width:148px;
+    transition:border-color 0.4s, background 0.4s;
+  }
+  .ticker-item.up   { border-color:rgba(0,229,160,0.55); background:rgba(0,229,160,0.06); }
+  .ticker-item.down{ border-color:rgba(255,71,87,0.45);  background:rgba(255,71,87,0.05); }
+  .ticker-num {
+    width:24px;height:24px; border-radius:50%; background:var(--border);
+    display:flex;align-items:center;justify-content:center;
+    font-size:11px;font-weight:700; flex-shrink:0;
+  }
+  .ticker-info { flex:1; min-width:0; }
+  .ticker-name { font-size:11px;font-weight:600; white-space:nowrap; overflow:hidden;text-overflow:ellipsis; }
+  .ticker-odds-wrap { display:flex;align-items:center;gap:4px;margin-top:2px; }
+  .ticker-odds { font-size:14px;font-weight:900;color:var(--amber); }
+  .ticker-arrow { font-size:11px;font-weight:700; }
+  .ticker-arrow.up   { color:var(--green); }
+  .ticker-arrow.down { color:var(--red); }
+  .ticker-bar { height:3px;border-radius:2px;background:rgba(255,255,255,0.1);margin-top:4px;overflow:hidden; }
+  .ticker-bar-fill { height:100%;border-radius:2px;background:var(--amber);transition:width 0.8s ease,background 0.4s; }
+  .ticker-item.up   .ticker-bar-fill { background:var(--green); }
+  .ticker-item.down .ticker-bar-fill { background:var(--red); }
+  .ticker-time { font-size:10px;color:var(--muted);margin-left:auto;flex-shrink:0; }
+
+  /* ── Race Animation Panel ── */
+  .race-canvas-panel { background:var(--card); border:1px solid var(--border); border-radius:14px; overflow:hidden; }
+  .race-canvas-header { display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border); }
+  #race-canvas { display:block;width:100%;height:160px;background:#0a0e17; }
+  .race-controls { display:flex;gap:8px;padding:10px 16px;border-top:1px solid var(--border); }
+  .race-ctrl-btn {
+    flex:1; padding:8px; border-radius:8px; border:1px solid var(--border);
+    background:transparent; color:var(--text); font-size:12px;font-weight:700;
+    cursor:pointer; font-family:inherit; transition:all 0.15s;
+  }
+  .race-ctrl-btn:hover       { border-color:var(--green); color:var(--green); }
+  .race-ctrl-btn.primary     { background:rgba(0,229,160,0.15);border-color:var(--green);color:var(--green); }
+  .race-ctrl-btn:disabled    { opacity:0.4;cursor:not-allowed; }
+  .race-result { padding:8px 16px 12px;font-size:12px;color:var(--muted);text-align:center; }
+  .race-result span { color:var(--gold);font-weight:700; }
+
+  .main-grid {
+    display:grid;
+    grid-template-columns:1fr 380px;
+    gap:16px;
+    padding:0 32px 24px;
+  }
+  .panel {
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:14px;
+    overflow:hidden;
+  }
+  .panel-header {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:14px 20px;
+    border-bottom:1px solid var(--border);
+  }
+  .panel-title {
+    font-size:13px;
+    font-weight:700;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .panel-title .icon {
+    width:28px;height:28px;
+    border-radius:8px;
+    display:flex;align-items:center;justify-content:center;
+    font-size:14px;
+  }
+  .panel-badge {
+    background:rgba(0,229,160,0.1);
+    color:var(--green);
+    font-size:10px;
+    font-weight:700;
+    padding:3px 8px;
+    border-radius:20px;
+    letter-spacing:0.5px;
+  }
+  .panel-body { padding:16px 20px; }
+  /* Trend Chart */
+  .trend-chart { height:200px; position:relative; }
+  .trend-chart svg { width:100%; height:100%; }
+  /* Heatmap */
+  .heatmap-table { width:100%; border-collapse:collapse; font-size:12px; }
+  .heatmap-table th {
+    padding:8px 10px;
+    color:var(--muted);
+    font-weight:500;
+    font-size:11px;
+    text-align:center;
+    border-bottom:1px solid var(--border);
+  }
+  .heatmap-table td {
+    padding:8px 10px;
+    text-align:center;
+    border-radius:4px;
+    font-weight:700;
+    font-size:12px;
+  }
+  .heatmap-table .row-label { text-align:left; color:var(--text); font-weight:500; }
+  .hm-90 { background:rgba(0,229,160,0.85); color:#0a0e17; }
+  .hm-75 { background:rgba(0,229,160,0.6); color:#0a0e17; }
+  .hm-60 { background:rgba(0,229,160,0.35); color:var(--text); }
+  .hm-45 { background:rgba(79,195,247,0.3); color:var(--text); }
+  .hm-30 { background:rgba(255,193,7,0.3); color:var(--text); }
+  .hm-15 { background:rgba(255,71,87,0.25); color:var(--text); }
+  .hm-00 { background:rgba(255,71,87,0.08); color:var(--muted); }
+  /* Odds Flow */
+  .odds-chart { height:180px; }
+  /* Right panel */
+  .sidebar { display:flex; flex-direction:column; gap:16px; }
+  /* Race card */
+  .race-card {
+    border:1px solid var(--border);
+    border-radius:12px;
+    overflow:hidden;
+    margin-bottom:14px;
+  }
+  .race-card-header {
+    background:linear-gradient(90deg,#1a2744,#0d1f3c);
+    padding:10px 14px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    border-bottom:1px solid var(--border);
+  }
+  .race-num {
+    font-size:20px;
+    font-weight:900;
+    color:var(--gold);
+  }
+  .race-info { font-size:11px; color:var(--muted); text-align:right; }
+  .horse-list { padding:10px; }
+  .horse-row {
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:8px 10px;
+    border-radius:8px;
+    margin-bottom:4px;
+    cursor:pointer;
+    transition:background 0.15s;
+  }
+  .horse-row:hover { background:rgba(255,255,255,0.04); }
+  .horse-row.selected { background:rgba(0,229,160,0.08); border:1px solid rgba(0,229,160,0.3); }
+  .horse-num-badge {
+    width:26px;height:26px;
+    border-radius:50%;
+    background:var(--border);
+    display:flex;align-items:center;justify-content:center;
+    font-size:12px;
+    font-weight:700;
+    flex-shrink:0;
+  }
+  .horse-name { flex:1; font-size:13px; font-weight:500; }
+  .horse-odds { font-size:13px; font-weight:700; color:var(--amber); }
+  .horse-jockey { font-size:11px; color:var(--muted); }
+  .bet-panel {
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:14px;
+    padding:16px 20px;
+  }
+  .bet-stake {
+    display:flex;
+    gap:8px;
+    margin:10px 0;
+  }
+  .bet-stake button {
+    flex:1;
+    padding:8px;
+    border-radius:8px;
+    border:1px solid var(--border);
+    background:transparent;
+    color:var(--text);
+    font-size:13px;
+    font-weight:700;
+    cursor:pointer;
+    transition:all 0.15s;
+    font-family:inherit;
+  }
+  .bet-stake button:hover, .bet-stake button.active {
+    background:rgba(0,229,160,0.15);
+    border-color:var(--green);
+    color:var(--green);
+  }
+  .bet-btn {
+    width:100%;
+    padding:12px;
+    border-radius:10px;
+    border:none;
+    background:linear-gradient(135deg,var(--green),#00b885);
+    color:#0a0e17;
+    font-size:15px;
+    font-weight:900;
+    cursor:pointer;
+    font-family:inherit;
+    margin-top:8px;
+    transition:opacity 0.15s;
+  }
+  .bet-btn:hover { opacity:0.88; }
+  .bet-btn:disabled { opacity:0.4; cursor:not-allowed; }
+  /* Legend horses */
+  .legend-list { display:flex; flex-direction:column; gap:8px; }
+  .legend-row {
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding:10px 12px;
+    border-radius:10px;
+    border:1px solid var(--border);
+    background:rgba(255,255,255,0.02);
+    cursor:pointer;
+    transition:all 0.15s;
+  }
+  .legend-row:hover { background:rgba(255,255,255,0.05); border-color:rgba(0,229,160,0.3); }
+  .legend-rank {
+    width:32px;height:32px;
+    border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    font-weight:900;
+    font-size:14px;
+    flex-shrink:0;
+  }
+  .rank-gold { background:linear-gradient(135deg,#ffd700,#ff9500); color:#0a0e17; }
+  .rank-silver { background:linear-gradient(135deg,#c0c0c0,#8a8a8a); color:#0a0e17; }
+  .rank-bronze { background:linear-gradient(135deg,#cd7f32,#a0522d); color:#fff; }
+  .legend-info { flex:1; }
+  .legend-name { font-size:13px; font-weight:700; }
+  .legend-country { font-size:11px; color:var(--muted); }
+  .legend-stat { text-align:right; }
+  .legend-winrate { font-size:15px; font-weight:900; color:var(--green); }
+  .legend-record { font-size:10px; color:var(--muted); }
+  /* Odds mini chart */
+  .mini-odds-chart { height:40px; margin-top:4px; }
+  /* Tab switcher */
+  .tabs {
+    display:flex;
+    gap:4px;
+    background:rgba(0,0,0,0.3);
+    border-radius:10px;
+    padding:4px;
+  }
+  .tab {
+    flex:1;
+    padding:7px 12px;
+    border-radius:8px;
+    border:none;
+    background:transparent;
+    color:var(--muted);
+    font-size:12px;
+    font-weight:600;
+    cursor:pointer;
+    font-family:inherit;
+    transition:all 0.15s;
+  }
+  .tab.active {
+    background:var(--green);
+    color:#0a0e17;
+  }
+  /* Scrollbar */
+  ::-webkit-scrollbar { width:6px; height:6px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  ::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+  /* Footer */
+  .footer {
+    text-align:center;
+    padding:16px 32px 24px;
+    font-size:11px;
+    color:var(--muted);
+    border-top:1px solid var(--border);
+  }
+  @media(max-width:900px) {
+    .kpi-row { grid-template-columns:repeat(2,1fr); padding:16px; }
+    .main-grid { grid-template-columns:1fr; padding:0 16px 24px; }
+    .sidebar { flex-direction:row; flex-wrap:wrap; }
+    .sidebar .panel { flex:1 1 300px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-eyebrow">🇰🇷 KRA 한국마사회 데이터 분석</div>
+  <h1>경마 데이터 <span>다ashboard</span></h1>
+  <div class="hero-sub">
+    <span><span class="live-dot"></span> 실시간 데이터 연동</span>
+    <span>📅 2026년 4월 9일 수요일</span>
+    <span>🏇 서울🏟️ 부산🏟️ 제주 3트랙</span>
+    <span>🎯 오늘 12경기 예정</span>
+  </div>
+</div>
+
+<!-- KPI ROW -->
+<div class="kpi-row">
+  <div class="kpi green">
+    <div class="kpi-label">총 출주 마匹</div>
+    <div class="kpi-value" id="kpi-horses">142</div>
+    <div class="kpi-sub">오늘 경기 출주 총 마匹 수</div>
+    <div class="kpi-trend up">▲ 8% 전일比</div>
+  </div>
+  <div class="kpi blue">
+    <div class="kpi-label">평균 배당률</div>
+    <div class="kpi-value" id="kpi-odds">4.7</div>
+    <div class="kpi-sub">단승 기준 최종 배당률</div>
+    <div class="kpi-trend down">▼ 0.3 전일比</div>
+  </div>
+  <div class="kpi gold">
+    <div class="kpi-label">오늘 진행률</div>
+    <div class="kpi-value">5/12</div>
+    <div class="kpi-sub">5경기 완료 · 7경기 남음</div>
+    <div class="kpi-trend">41.7%</div>
+  </div>
+  <div class="kpi purple">
+    <div class="kpi-label">팀북 예상 적중</div>
+    <div class="kpi-value">68%</div>
+    <div class="kpi-sub">최근 30일 복승적중률</div>
+    <div class="kpi-trend up">▲ +3.2%p</div>
+  </div>
+</div>
+
+<!-- Live Odds Ticker -->
+<div class="odds-ticker-wrap">
+  <div class="odds-ticker" id="odds-ticker"></div>
+</div>
+
+<!-- MAIN GRID -->
+<div class="main-grid">
+  <!-- Left Column -->
+  <div style="display:flex;flex-direction:column;gap:16px;">
+    <!-- Performance Trend -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">
+          <div class="icon" style="background:rgba(0,229,160,0.12);color:var(--green);">📈</div>
+          마匹 최근 10경기 성적 추이
+        </div>
+        <div class="tabs" style="width:260px;">
+          <button class="tab active" onclick="setHorse(0,this)">① 드림캐처</button>
+          <button class="tab" onclick="setHorse(1,this)">② 불꽃달인</button>
+          <button class="tab" onclick="setHorse(2,this)">③ 천둥돌풍</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="trend-chart" id="trend-chart"></div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);padding-top:6px;">
+          <span>경기 1</span><span>경기 3</span><span>경기 5</span><span>경기 7</span><span>경기 9</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Track-Distance Heatmap -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">
+          <div class="icon" style="background:rgba(79,195,247,0.12);color:var(--blue);">🔥</div>
+          트랙·거리별 입상률 히트맵
+        </div>
+        <span class="panel-badge">TOP 3 마匹</span>
+      </div>
+      <div class="panel-body" style="overflow-x:auto;">
+        <table class="heatmap-table" id="heatmap-table"></table>
+      </div>
+    </div>
+
+    <!-- Odds Flow -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">
+          <div class="icon" style="background:rgba(255,193,7,0.12);color:var(--amber);">💹</div>
+          배당률 흐름 — 경기 9 주요 马匹
+        </div>
+        <span class="panel-badge" id="odds-time">배팅 마감 2분 전</span>
+      </div>
+      <div class="panel-body">
+        <div class="odds-chart" id="odds-chart"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Sidebar -->
+  <div class="sidebar">
+
+    <!-- Live Race Animation -->
+    <div class="race-canvas-panel">
+      <div class="race-canvas-header">
+        <div class="panel-title">
+          <div class="icon" style="background:rgba(255,71,87,0.12);color:var(--red);">🏇</div>
+          레이서 시뮬레이션
+        </div>
+        <span class="panel-badge" id="race-status">대기</span>
+      </div>
+      <canvas id="race-canvas" width="348" height="160"></canvas>
+      <div class="race-controls">
+        <button class="race-ctrl-btn primary" id="race-start-btn" onclick="startRace()">🏁 레이스 시작</button>
+        <button class="race-ctrl-btn" onclick="resetRace()">↺ 리셋</button>
+      </div>
+      <div class="race-result" id="race-result">마匹을 선택하고 레이스를 시작하세요</div>
+    </div>
+
+    <!-- Legend Horses -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">
+          <div class="icon" style="background:rgba(255,215,0,0.12);color:var(--gold);">🏆</div>
+          역사상 名馬
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="legend-list" id="legend-list"></div>
+      </div>
+    </div>
+
+    <!-- Next Race Card -->
+    <div class="bet-panel">
+      <div class="panel-header" style="border:none;padding:0 0 12px 0;">
+        <div class="panel-title">
+          <div class="icon" style="background:rgba(0,229,160,0.12);color:var(--green);">🏇</div>
+          경기 9 — 다음 경기
+        </div>
+        <span class="panel-badge">배팅 열림</span>
+      </div>
+      <div class="race-card">
+        <div class="race-card-header">
+          <div>
+            <div class="race-num">9R</div>
+            <div style="font-size:11px;color:var(--muted);">서울 모래 1200m</div>
+          </div>
+          <div class="race-info">
+            <div style="font-size:12px;font-weight:700;">15:30 발주</div>
+            <div>12두 출전</div>
+          </div>
+        </div>
+        <div class="horse-list" id="horse-list"></div>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">
+        배팅 금액:
+      </div>
+      <div class="bet-stake">
+        <button class="active" onclick="setStake(10000,this)">1만</button>
+        <button onclick="setStake(30000,this)">3만</button>
+        <button onclick="setStake(50000,this)">5만</button>
+        <button onclick="setStake(100000,this)">10만</button>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding:10px;background:rgba(0,0,0,0.3);border-radius:8px;">
+        <div>
+          <div style="font-size:11px;color:var(--muted);">예상 당첨금</div>
+          <div style="font-size:18px;font-weight:900;color:var(--green);" id="payout">—</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:11px;color:var(--muted);">배당률</div>
+          <div style="font-size:18px;font-weight:900;color:var(--amber);" id="selected-odds">—</div>
+        </div>
+      </div>
+      <button class="bet-btn" id="bet-btn" onclick="placeBet()" disabled>마匹을 선택하세요</button>
+    </div>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<div class="footer">
+  KRA 레이서 다ashboard — 데이터는 연구 목적으로 활용됩니다. 경마는 19세 이상만 가능합니다. ｜ © 2026
+</div>
+
+<script>
+// ─────────────────────────────────────────
+// DATA
+// ─────────────────────────────────────────
+const horses = [
+  { num:1, name:'드림캐처',  odds:2.8, jockey:'김동호', winRate:72, surface:'서울모래', dist:1200 },
+  { num:2, name:'불꽃달인',  odds:5.4, jockey:'박승호', winRate:58, surface:'서울모래', dist:1200 },
+  { num:3, name:'천둥돌풍',  odds:8.2, jockey:'이민수', winRate:44, surface:'서울모래', dist:1200 },
+  { num:4, name:'폭풍전사',  odds:11.5,jockey:'최재영', winRate:31, surface:'서울모래', dist:1200 },
+  { num:5, name:'골든러시',  odds:6.8, jockey:'정성호', winRate:52, surface:'서울모래', dist:1200 },
+  { num:6, name:'은빛질주',  odds:9.3, jockey:'강대성', winRate:38, surface:'서울모래', dist:1200 },
+];
+
+const legendaryHorses = [
+  { rank:1,  name:'Secretariat', country:'🇺🇸 미국',  record:'21전 21승', winRate:100, color:'rank-gold'   },
+  { rank:2,  name:"Man o' War",  country:'🇺🇸 미국',  record:'21전 21승', winRate:100, color:'rank-gold'   },
+  { rank:3,  name:'Seabiscuit',  country:'🇺🇸 미국',  record:'33:1 역전', winRate:94,  color:'rank-gold'   },
+  { rank:4,  name:'Citation',     country:'🇺🇸 미국',  record:'27전 26승', winRate:96,  color:'rank-silver'},
+  { rank:5,  name:'Ribot',        country:'🇮🇹 이탈리아',record:'16전 16승', winRate:100, color:'rank-silver'},
+  { rank:6,  name:'Native Dancer',country:'🇺🇸 미국',  record:'22전 21승', winRate:95,  color:'rank-bronze'},
+];
+
+// Performance data for trend chart [horseIdx][raceIdx]
+const performanceData = [
+  [3,2,4,1,5,2,3,1,4,2], // 드림캐처
+  [1,3,2,5,4,3,6,4,2,3], // 불꽃달인
+  [5,4,3,2,1,4,5,3,6,4], // 천둥돌풍
+];
+
+// Heatmap: horses × (track+distance)
+const heatmapData = [
+  { name:'드림캐처',  s1000:0.52, s1200:0.71, s1400:0.43, s1600:0.35, s2000:0.22, b1000:0.61, b1200:0.48, b1200j:0.55 },
+  { name:'불꽃달인',  s1000:0.38, s1200:0.44, s1400:0.58, s1600:0.62, s2000:0.41, b1000:0.42, b1200:0.67, b1200j:0.39 },
+  { name:'천둥돌풍',  s1000:0.45, s1200:0.32, s1400:0.62, s1600:0.71, s2000:0.58, b1000:0.31, b1200:0.52, b1200j:0.63 },
+  { name:'폭풍전사',  s1000:0.28, s1200:0.35, s1400:0.31, s1600:0.28, s2000:0.52, b1000:0.55, b1200:0.29, b1200j:0.44 },
+  { name:'골든러시',  s1000:0.61, s1200:0.58, s1400:0.39, s1600:0.44, s2000:0.33, b1000:0.47, b1200:0.72, b1200j:0.51 },
+  { name:'은빛질주',  s1000:0.33, s1200:0.41, s1400:0.55, s1600:0.63, s2000:0.45, b1000:0.38, b1200:0.44, b1200j:0.66 },
+];
+
+// Odds flow: [horseIdx] → array of {time, odds}
+const oddsFlowData = [
+  generateOddsFlow(2.8),
+  generateOddsFlow(5.4),
+  generateOddsFlow(8.2),
+  generateOddsFlow(11.5),
+  generateOddsFlow(6.8),
+  generateOddsFlow(9.3),
+];
+
+function generateOddsFlow(base) {
+  const pts = [];
+  let o = base * 1.15;
+  const times = 20;
+  for (let i = 0; i <= times; i++) {
+    const t = i / times;
+    // odds drift down then stabilize
+    const drift = base + (o - base) * Math.pow(1 - t, 1.5);
+    const noise = (Math.random() - 0.5) * base * 0.04;
+    pts.push({ time: t, odds: Math.max(1.1, drift + noise) });
+  }
+  return pts;
+}
+
+// ─────────────────────────────────────────
+// RENDER: Performance Trend Chart
+// ─────────────────────────────────────────
+function renderTrendChart(horseIdx) {
+  const data = performanceData[horseIdx];
+  const W = 700, H = 180, PL = 40, PT = 10, PR = 20, PB = 30;
+  const cW = W - PL - PR, cH = H - PT - PB;
+
+  // Y scale: rank 1..8
+  const maxRank = 8;
+  const yScale = (r) => PT + (r - 1) / (maxRank - 1) * cH;
+  const xScale = (i) => PL + (i / (data.length - 1)) * cW;
+
+  const colors = ['#00e5a0','#4fc3f7','#ff4757','#ab47bc','#ffc107','#ff7043'];
+
+  let svg = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`;
+
+  // Grid lines
+  for (let r = 1; r <= maxRank; r++) {
+    const y = yScale(r);
+    const alpha = r === 1 ? 0.5 : 0.15;
+    svg += `<line x1="${PL}" y1="${y}" x2="${W-PR}" y2="${y}" stroke="rgba(255,255,255,${alpha})" stroke-width="1" stroke-dasharray="${r===1?'4,4':'2,4'}"/>`;
+    svg += `<text x="${PL-5}" y="${y+4}" fill="rgba(255,255,255,0.4)" font-size="9" text-anchor="end" font-family="Noto Sans KR">${r}위</text>`;
+  }
+
+  // Fill area under line
+  const pts = data.map((r,i) => `${xScale(i)},${yScale(r)}`).join(' ');
+  svg += `<polygon points="${PL},${PT+cH} ${pts} ${W-PR},${PT+cH}" fill="rgba(${horseIdx===0?'0,229,160':horseIdx===1?'79,195,247':'255,71,87'},0.08)"/>`;
+
+  // Line
+  let path = `M${xScale(0)},${yScale(data[0])}`;
+  for (let i = 1; i < data.length; i++) {
+    // Smooth curve
+    const x0 = xScale(i-1), y0 = yScale(data[i-1]);
+    const x1 = xScale(i),   y1 = yScale(data[i]);
+    const cpx = (x0+x1)/2;
+    path += ` C${cpx},${y0} ${cpx},${y1} ${x1},${y1}`;
+  }
+  const color = colors[horseIdx];
+  svg += `<path d="${path}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round"/>`;
+
+  // Dots
+  data.forEach((r,i) => {
+    const x = xScale(i), y = yScale(r);
+    const label = i % 2 === 0 ? r : '';
+    svg += `<circle cx="${x}" cy="${y}" r="5" fill="${color}" stroke="var(--bg)" stroke-width="2"/>`;
+    if (label) svg += `<text x="${x}" y="${y-10}" fill="${color}" font-size="10" font-weight="700" text-anchor="middle">${r}위</text>`;
+  });
+
+  // Horse name label
+  const hnames = ['드림캐처','불꽃달인','천둥돌풍'];
+  svg += `<text x="${PL}" y="${H-6}" fill="${color}" font-size="11" font-weight="700">${hnames[horseIdx]} — 최근 10경기</text>`;
+
+  svg += '</svg>';
+  document.getElementById('trend-chart').innerHTML = svg;
+}
+
+// ─────────────────────────────────────────
+// RENDER: Heatmap
+// ─────────────────────────────────────────
+function renderHeatmap() {
+  const headers = ['마匹','서울<br>1000m','서울<br>1200m','서울<br>1400m','서울<br>1600m','서울<br>2000m','부산<br>1000m','부산<br>1200m','제주<br>1200m'];
+  const keys   = ['name','s1000','s1200','s1400','s1600','s2000','b1000','b1200','b1200j'];
+
+  let html = '<thead><tr>';
+  headers.forEach(h => html += `<th>${h}</th>`);
+  html += '</tr></thead><tbody>';
+
+  heatmapData.forEach(row => {
+    html += '<tr>';
+    keys.forEach((k,i) => {
+      if (i === 0) {
+        html += `<td class="row-label">${row[k]}</td>`;
+      } else {
+        const v = row[k];
+        const cls = v >= 0.85 ? 'hm-90' : v >= 0.70 ? 'hm-75' : v >= 0.55 ? 'hm-60'
+                 : v >= 0.42 ? 'hm-45' : v >= 0.30 ? 'hm-30' : v >= 0.15 ? 'hm-15' : 'hm-00';
+        html += `<td class="${cls}">${(v*100).toFixed(0)}%</td>`;
+      }
+    });
+    html += '</tr>';
+  });
+  html += '</tbody>';
+  document.getElementById('heatmap-table').innerHTML = html;
+}
+
+// ─────────────────────────────────────────
+// RENDER: Odds Flow Chart
+// ─────────────────────────────────────────
+function renderOddsChart() {
+  // Show top 3 horses odds over time
+  const W = 700, H = 160, PL = 45, PT = 10, PR = 15, PB = 25;
+  const cW = W - PL - PR, cH = H - PT - PB;
+
+  const horseIdx = [0, 1, 2];
+  const colors = ['#00e5a0','#4fc3f7','#ff4757'];
+  const names  = ['① 드림캐처','② 불꽃달인','③ 천둥돌풍'];
+
+  let svg = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`;
+
+  // Grid
+  for (let i = 0; i <= 4; i++) {
+    const y = PT + i/4 * cH;
+    svg += `<line x1="${PL}" y1="${y}" x2="${W-PR}" y2="${y}" stroke="rgba(255,255,255,0.07)" stroke-width="1"/>`;
+    const val = (16 - i*3).toFixed(1);
+    svg += `<text x="${PL-5}" y="${y+4}" fill="rgba(255,255,255,0.3)" font-size="9" text-anchor="end">${val}</text>`;
+  }
+  // X labels
+  ['배팅 시작','5분 후','10분 후','배팅 마감'] .forEach((l,i) => {
+    const x = PL + i/3 * cW;
+    svg += `<text x="${x}" y="${H-5}" fill="rgba(255,255,255,0.3)" font-size="9" text-anchor="middle">${l}</text>`;
+  });
+
+  horseIdx.forEach(hi => {
+    const pts = oddsFlowData[hi];
+    if (!pts) return;
+    let d = '';
+    pts.forEach((p,i) => {
+      const x = PL + p.time * cW;
+      const y = PT + (1 - (p.odds - 1) / 15) * cH;
+      d += (i===0 ? 'M' : 'L') + `${x.toFixed(1)},${y.toFixed(1)}`;
+    });
+    svg += `<path d="${d}" fill="none" stroke="${colors[hi]}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+    // Label at end
+    const last = pts[pts.length-1];
+    const lx = PL + last.time * cW;
+    const ly = PT + (1 - (last.odds - 1) / 15) * cH;
+    svg += `<text x="${lx+4}" y="${ly+4}" fill="${colors[hi]}" font-size="10" font-weight="700">${last.odds.toFixed(1)}</text>`;
+  });
+
+  // Legend
+  names.forEach((n,i) => {
+    svg += `<rect x="${PL + i*120}" y="${H-22}" width="10" height="10" fill="${colors[i]}" rx="2"/>`;
+    svg += `<text x="${PL + i*120 + 14}" y="${H-14}" fill="${colors[i]}" font-size="10" font-weight="600">${n}</text>`;
+  });
+
+  svg += '</svg>';
+  document.getElementById('odds-chart').innerHTML = svg;
+}
+
+// ─────────────────────────────────────────
+// RENDER: Legend Horses
+// ─────────────────────────────────────────
+function renderLegend() {
+  const html = legendaryHorses.map(h => `
+    <div class="legend-row">
+      <div class="legend-rank ${h.color}">${h.rank}</div>
+      <div class="legend-info">
+        <div class="legend-name">${h.name}</div>
+        <div class="legend-country">${h.country}</div>
+      </div>
+      <div class="legend-stat">
+        <div class="legend-winrate">${h.winRate}%</div>
+        <div class="legend-record">${h.record}</div>
+      </div>
+    </div>
+  `).join('');
+  document.getElementById('legend-list').innerHTML = html;
+}
+
+// ─────────────────────────────────────────
+// RENDER: Race Card
+// ─────────────────────────────────────────
+function renderRaceCard() {
+  const html = horses.map(h => `
+    <div class="horse-row" id="horse-${h.num}" onclick="selectHorse(${h.num})">
+      <div class="horse-num-badge">${h.num}</div>
+      <div style="flex:1;">
+        <div class="horse-name">${h.name}</div>
+        <div class="horse-jockey">${h.jockey} · ${h.winRate}% 승률</div>
+      </div>
+      <div>
+        <div class="horse-odds">${h.odds.toFixed(1)}</div>
+        <div style="font-size:10px;color:var(--muted);text-align:right;">배당</div>
+      </div>
+    </div>
+  `).join('');
+  document.getElementById('horse-list').innerHTML = html;
+}
+
+// ─────────────────────────────────────────
+// BETTING LOGIC
+// ─────────────────────────────────────────
+let selectedHorse = null;
+let currentStake = 10000;
+
+function setHorse(idx, btn) {
+  document.querySelectorAll('.tabs .tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderTrendChart(idx);
+}
+
+function selectHorse(num) {
+  document.querySelectorAll('.horse-row').forEach(r => r.classList.remove('selected'));
+  const el = document.getElementById(`horse-${num}`);
+  el.classList.add('selected');
+  selectedHorse = horses.find(h => h.num === num);
+  document.getElementById('selected-odds').textContent = selectedHorse.odds.toFixed(1);
+  document.getElementById('payout').textContent = (currentStake * selectedHorse.odds).toLocaleString('ko-KR') + '원';
+  document.getElementById('bet-btn').textContent = `「${selectedHorse.name}」배팅하기`;
+  document.getElementById('bet-btn').disabled = false;
+}
+
+function setStake(amount, btn) {
+  document.querySelectorAll('.bet-stake button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentStake = amount;
+  if (selectedHorse) {
+    document.getElementById('payout').textContent = (currentStake * selectedHorse.odds).toLocaleString('ko-KR') + '원';
+  }
+}
+
+function placeBet() {
+  if (!selectedHorse) return;
+  const btn = document.getElementById('bet-btn');
+  btn.textContent = `「${selectedHorse.name}」 ${currentStake.toLocaleString('ko-KR')}원 배팅 완료! 🐎`;
+  btn.style.background = 'linear-gradient(135deg,#ffd700,#ff9500)';
+  setTimeout(() => {
+    btn.textContent = `「${selectedHorse.name}」배팅하기`;
+    btn.style.background = '';
+  }, 3000);
+}
+
+// ─────────────────────────────────────────
+// ANIMATED KPI COUNTER
+
+// ─────────────────────────────────────────
+// LIVE ODDS TICKER
+// ─────────────────────────────────────────
+const liveOdds = horses.map(h => ({ ...h }));
+let tickerTimer = null;
+
+function renderTicker() {
+  const container = document.getElementById('odds-ticker');
+  if (!container) return;
+  const maxOdds = 12;
+  const now = new Date();
+  const timeStr = `${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+  container.innerHTML = liveOdds.map(h => {
+    const pct = Math.min((h.odds / maxOdds) * 100, 100);
+    const arrow = h._prev ? (h.odds > h._prev ? '▲' : h.odds < h._prev ? '▼' : '─') : '─';
+    const cls  = h._prev ? (h.odds > h._prev ? 'up' : h.odds < h._prev ? 'down' : '') : '';
+    return `<div class="ticker-item ${cls}">
+      <div class="ticker-num" style="background:${h.color}20;color:${h.color}">${h.num}</div>
+      <div class="ticker-info">
+        <div class="ticker-name">${h.name}</div>
+        <div class="ticker-odds-wrap">
+          <span class="ticker-odds">${h.odds.toFixed(1)}</span>
+          <span class="ticker-arrow ${cls}">${arrow}</span>
+        </div>
+        <div class="ticker-bar"><div class="ticker-bar-fill" style="width:${pct}%"></div></div>
+      </div>
+      <span class="ticker-time">${timeStr}</span>
+    </div>`;
+  }).join('');
+}
+
+function startTicker() {
+  renderTicker();
+  tickerTimer = setInterval(() => {
+    liveOdds.forEach(h => {
+      h._prev = h.odds;
+      const delta = (Math.random() - 0.48) * 0.4;
+      h.odds = Math.max(1.3, Math.min(12, parseFloat((h.odds + delta).toFixed(1))));
+    });
+    renderTicker();
+    // Update KPI too
+    const avg = liveOdds.reduce((s, h) => s + h.odds, 0) / liveOdds.length;
+    document.getElementById('kpi-odds').textContent = avg.toFixed(1);
+  }, 1800);
+}
+
+// ─────────────────────────────────────────
+// RACE ANIMATION
+// ─────────────────────────────────────────
+const raceCanvas = document.getElementById('race-canvas');
+const ctx = raceCanvas ? raceCanvas.getContext('2d') : null;
+let raceRAF = null;
+let raceState = { running: false, horses: [], finished: 0, results: [] };
+
+function initRace() {
+  if (!ctx) return;
+  raceState = {
+    running: false,
+    finished: 0,
+    results: [],
+    horses: liveOdds.slice(0, 8).map((h, i) => ({
+      name: h.name,
+      color: h.color,
+      x: 0,
+      speed: 0,
+      targetSpeed: 0.8 + Math.random() * 1.4,
+      y: 14 + i * 18,
+      finished: false,
+      rank: 0
+    }))
+  };
+}
+
+function drawRace() {
+  if (!ctx) return;
+  const W = raceCanvas.width;
+  const H = raceCanvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  // Track lanes
+  for (let i = 0; i < 8; i++) {
+    const y = 14 + i * 18;
+    ctx.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,0.025)' : 'rgba(255,255,255,0.01)';
+    ctx.fillRect(0, y - 7, W, 14);
+    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath(); ctx.moveTo(0, y + 7); ctx.lineTo(W, y + 7); ctx.stroke();
+  }
+
+  // Finish line
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath(); ctx.moveTo(W - 8, 0); ctx.lineTo(W - 8, H); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Horses
+  raceState.horses.forEach(h => {
+    const rx = Math.min(h.x, W - 10);
+    if (h.finished) {
+      ctx.globalAlpha = 0.5;
+    }
+    // Body
+    ctx.fillStyle = h.color;
+    ctx.beginPath();
+    ctx.roundRect(rx, h.y - 5, 18, 10, 3);
+    ctx.fill();
+    // Glow
+    ctx.shadowColor = h.color;
+    ctx.shadowBlur = 8;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    // Number
+    ctx.fillStyle = '#0a0e17';
+    ctx.font = 'bold 7px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(h.name.charCodeAt(0) % 10, rx + 9, h.y + 3);
+    ctx.globalAlpha = 1;
+    // Rank badge
+    if (h.rank > 0) {
+      ctx.fillStyle = h.rank === 1 ? '#ffd700' : h.rank === 2 ? '#c0c0c0' : '#cd7f32';
+      ctx.beginPath();
+      ctx.arc(W - 18, h.y, 7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#0a0e17';
+      ctx.font = 'bold 8px monospace';
+      ctx.fillText(h.rank, W - 18, h.y + 3);
+    }
+  });
+
+  ctx.textAlign = 'left';
+}
+
+function updateRace() {
+  if (!raceState.running) return;
+  raceState.horses.forEach(h => {
+    if (h.finished) return;
+    h.speed += (h.targetSpeed - h.speed) * 0.05;
+    h.x += h.speed;
+    if (h.x >= raceCanvas.width - 10) {
+      h.x = raceCanvas.width - 10;
+      h.finished = true;
+      raceState.finished++;
+      h.rank = raceState.finished;
+      raceState.results.push(h);
+      if (raceState.finished === 1) {
+        document.getElementById('race-status').textContent = '🏆 ' + h.name + ' 선착';
+        document.getElementById('race-status').style.color = 'var(--gold)';
+      }
+    }
+  });
+  drawRace();
+  if (raceState.finished < 8) {
+    raceRAF = requestAnimationFrame(updateRace);
+  } else {
+    onRaceFinish();
+  }
+}
+
+function onRaceFinish() {
+  raceState.running = false;
+  document.getElementById('race-start-btn').disabled = false;
+  document.getElementById('race-start-btn').textContent = '🏁 다시 레이스';
+  const r = raceState.results;
+  const resultEl = document.getElementById('race-result');
+  resultEl.innerHTML = `🥇 <span>${r[0]?.name}</span> · 🥈 ${r[1]?.name} · 🥉 ${r[2]?.name}`;
+}
+
+function startRace() {
+  if (raceState.running) return;
+  if (!raceState.horses.length) initRace();
+  raceState.running = true;
+  raceState.finished = 0;
+  raceState.results = [];
+  raceState.horses.forEach(h => { h.x = 0; h.speed = 0; h.finished = false; h.rank = 0; });
+  document.getElementById('race-status').textContent = '🏃 진행중';
+  document.getElementById('race-status').style.color = 'var(--green)';
+  document.getElementById('race-start-btn').disabled = true;
+  document.getElementById('race-result').textContent = '레이스 진행 중...';
+  drawRace();
+  raceRAF = requestAnimationFrame(updateRace);
+}
+
+function resetRace() {
+  if (raceRAF) cancelAnimationFrame(raceRAF);
+  initRace();
+  if (ctx) {
+    ctx.clearRect(0, 0, raceCanvas.width, raceCanvas.height);
+    drawRace();
+  }
+  document.getElementById('race-status').textContent = '대기';
+  document.getElementById('race-status').style.color = '';
+  document.getElementById('race-start-btn').disabled = false;
+  document.getElementById('race-start-btn').textContent = '🏁 레이스 시작';
+  document.getElementById('race-result').textContent = '마匹을 선택하고 레이스를 시작하세요';
+}
+
+// ─────────────────────────────────────────
+function animateKPI(id, target, suffix='') {
+  const el = document.getElementById(id);
+  let cur = 0;
+  const step = target / 40;
+  const iv = setInterval(() => {
+    cur = Math.min(cur + step, target);
+    el.textContent = cur.toFixed(suffix === 'odds' ? 1 : 0) + suffix;
+    if (cur >= target) clearInterval(iv);
+  }, 30);
+}
+
+// ─────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────
+renderTrendChart(0);
+renderHeatmap();
+renderOddsChart();
+renderLegend();
+renderRaceCard();
+startTicker();
+initRace();
+drawRace();
+</script>
+</body>
+</html>

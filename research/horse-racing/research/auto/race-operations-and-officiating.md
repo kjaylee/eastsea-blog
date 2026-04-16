@@ -1,0 +1,33 @@
+# Race Operations and Officiating
+
+- 자동 생성 리서치 노트
+- 생성 시각: `2026-04-07T08:52:52.655455+00:00`
+- 저장 경로: `research/auto/race-operations-and-officiating.md`
+- 선정 이유: target 4 docs 대비 현재 1 docs
+- 검색 쿼리: site:ifhaonline.org horse racing stewarding officiating race operations, site:britishhorseracing.com horse racing clerk of scales paddock judge, site:hisaus.org racetrack safety operations officials
+
+## 수집 소스
+
+1. [Raceday operations and regulation - The British Horseracing Authority](https://www.britishhorseracing.com/about/the-bha/what-we-do/raceday-operations-regulation/) (duckduckgo, query=`site:britishhorseracing.com horse racing clerk of scales paddock judge`)
+   - snippet: The Judge has the primary function of determining the finishing order of the horses at the end of the race, using the photofinish as an aid. The Clerk of the Scales' primary task is the weighing out and weighing in of riders before and after the race and thereby ensuring horses carry the weight allocated to them in the race.
+   - extracted: # Raceday operations and regulation | British Horseracing Authority [](https://www.britishhorseracing.com/about/the-bha/what-we-do/raceday-operations-regulation/#) [Updates](https://www.britishhorseracing.com/about/the-bha/what-we-do/raceday-operations-regulation/#) [Racing updates](https://www.britishhorseracing.com/racing-updates/)[Industry statistics](https://www.britishhorseracing.com/indus...
+2. [PDF BRITISH HORSERACING AUTHORITY Job Description (2024)](https://media.britishhorseracing.com/bha/Careers/Vacancies/Clerk_of_Scales_JD.pdf) (duckduckgo, query=`site:britishhorseracing.com horse racing clerk of scales paddock judge`)
+   - snippet: ROLE PURPOSE: To assist in guaranteeing the integrity of racing by interpreting and implementing the Rules, Instructions and requirements of racing concerning all Weighing Room procedures, principally the weighing in and out of jockeys, and to provide information and advice to the public and those professionally involved at assigned race meetings.
+   - extracted: BRITISH HORSERACING AUTHORITY # Job Description # (202 4) JOB TITLE : Clerk of the Scales DEPARTMENT : Clerk of the Scales REPORTS TO : Team Leader (Scales ) NUMBER of DIRECT REPORTS : 0 GRADE: AT4 LAST REVIEWED : January 202 4 ROLE PURPOSE: To assist in guaranteeing the integrity of racing by interpreting and implementing the Rules, Instructions and requirements of racing concerning all Weighi...
+3. [PDF Clerk of Scales - British Horseracing Board](https://media.britishhorseracing.com/bha/Careers/Vacancies/Clerk_of_Scales_Ad.pdf) (duckduckgo, query=`site:britishhorseracing.com horse racing clerk of scales paddock judge`)
+   - snippet: An exciting opportunity has arisen for a half time (100 days) Clerk of Scales to be based in the West Midlands covering courses including, Cheltenham, Warwick, Ludlow, Worcester, Wolverhampton, Chester and Haydock as well as further afield. Ideally located within easy access of the trunk road network covering the West of England. The core function of this essential role is to weigh out and ...
+   - extracted: Clerk of Scales ## 100 days pa ## £19,839.50 pa ## West Midlands ## AT4 The British Horseracing Authority is the single governing and regulatory body for British Horseracing which ensures the continuing integrity and successful development of the sport. It is the BHA's role to act for and on behalf of the whole sport, ensuring the highest standards for the sport and participants, on and away fr...
+
+## 초안 인사이트
+
+### Source 1: Raceday operations and regulation - The British Horseracing Authority
+
+# Raceday operations and regulation | British Horseracing Authority [](https://www.britishhorseracing.com/about/the-bha/what-we-do/raceday-operations-regulation/#) [Updates](https://www.britishhorseracing.com/about/the-bha/what-we-do/raceday-operations-regulation/#) [Racing updates](https://www.britishhorseracing.com/racing-updates/)[Industry statistics](https://www.britishhorseracing.com/industry-statistics/) [![Image 2: BHA](https://www.britishhorseracing.com/wp-content/themes/bha/assets/img/brand/brand-lockup.svg)](https://www.britishhorseracing.com/) * Close * [Racing](https://www.britishhorseracing.com/racing/fixtures/upcoming/) * Back Close * [Fixtures](https://www.britishhorseracing.com/racing/fixtures/) * [Results](https://www.britishhorseracing.com/racing/results/) * [Stewards reports](https://www.britishhorseracing.com/racing/stewards-reports/) * [Racecourses](https://www.britishhorseracing.com/racing/racecourses/) * [Horses](https://www.britishhorseracing.com/racing/horse...
+
+### Source 2: PDF BRITISH HORSERACING AUTHORITY Job Description (2024)
+
+BRITISH HORSERACING AUTHORITY # Job Description # (202 4) JOB TITLE : Clerk of the Scales DEPARTMENT : Clerk of the Scales REPORTS TO : Team Leader (Scales ) NUMBER of DIRECT REPORTS : 0 GRADE: AT4 LAST REVIEWED : January 202 4 ROLE PURPOSE: To assist in guaranteeing the integrity of racing by interpreting and implementing the Rules, Instructions and requirements of racing concerning all Weighing Room procedures , principally the we ighing in and out of jockeys, and to provide information and advice to the public and those professionally involved at assigned race meetings. PRINCIPAL RESPONSIBILITIES : • To ensure that every rider is correctly weighed out. • To investigate and as necessary correct any detail on the race card ensuring that any variations from the card are justified, announced and displayed. • To ensure that appropriate riders are weighed in after every race and, following confirmation that the race is clear from the Stewards and confirmation of the result by the Judge...
+
+### Source 3: PDF Clerk of Scales - British Horseracing Board
+
+Clerk of Scales ## 100 days pa ## £19,839.50 pa ## West Midlands ## AT4 The British Horseracing Authority is the single governing and regulatory body for British Horseracing which ensures the continuing integrity and successful development of the sport. It is the BHA's role to act for and on behalf of the whole sport, ensuring the highest standards for the sport and participants, on and away from the racecourse. Our vision is simple: to build a brighter future for our sport, our horses and our people. An exciting opportunity has arisen for a half time (100 days) Clerk of Scales to be based in the West Midlands covering courses including, Cheltenham, Warwick, Ludlow, Worcester, Wolverhampton, Chester and Haydock as well as further afield. Ideally located within easy access of the trunk road network covering the West of England. The core function of this essential role is to weigh out and weigh in riders , guaranteeing the integrity of racing by interpreting and implementing the Rules...

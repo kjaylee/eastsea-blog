@@ -39,7 +39,7 @@ with open(log_path, 'w', encoding='utf-8') as log:
         completed = subprocess.run(
             cmd,
             stdout=log,
-            stderr=subprocess.STDOUT,
+            stderr=None,  # Keep stderr separate so npm warnings don't pollute JSON stdout
             text=True,
             timeout=timeout,
             check=False,
@@ -111,6 +111,7 @@ public_dirs = [
     'hotdeal',
     'novels',
     'posts',
+    'research',
     'static',
     'tools',
 ]
@@ -125,6 +126,7 @@ for rel in public_files:
 def ignore_large_and_backup(path, names):
     # Exclude Godot wasm backup/original files (can be 30-40MB each, CF Pages limit is 25MB)
     # Also exclude .DS_Store, Thumbs.db, and other system files
+    path = Path(path)
     exclude = {n for n in names if n.endswith(('.wasm.orig', '.wasm.bak', '.DS_Store', 'Thumbs.db'))}
     # Size-based exclusion for wasm files (anything over 25MB)
     large = set()

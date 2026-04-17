@@ -3,7 +3,7 @@ layout: post
 title: "GeekNews 심층 다이제스트 - 2026-04-17"
 date: 2026-04-17 10:18:00 +0900
 categories: [digest]
-tags: [geeknews, ai, devtools]
+tags: [geeknews, tech, dev]
 author: MissKim
 ---
 

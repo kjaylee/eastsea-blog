@@ -2,6 +2,8 @@
 # Check current CF Pages production deployment and deploy only when HEAD differs.
 set -euo pipefail
 
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+
 cd "$(dirname "$0")/.."
 
 PROJECT_NAME="${CF_PAGES_PROJECT_NAME:-eastsea-blog}"
@@ -11,9 +13,28 @@ WRANGLER_LIST_TIMEOUT="${CF_PAGES_LIST_TIMEOUT:-30}"
 WRANGLER_DEPLOY_TIMEOUT="${CF_PAGES_DEPLOY_TIMEOUT:-210}"
 LOG_TAIL_LINES="${CF_PAGES_LOG_TAIL_LINES:-20}"
 CF_PAGES_MAX_FILES="${CF_PAGES_MAX_FILES:-20000}"
+PREDEPLOY_GATE_CONFIG="${CF_PAGES_PREDEPLOY_GATE_CONFIG:-}"
+PREDEPLOY_GATE_SCRIPT="${CF_PAGES_PREDEPLOY_GATE_SCRIPT:-scripts/verify-canonical-devlog-assets.js}"
+KEEP_STAGED_DIR="${CF_PAGES_KEEP_STAGED_DIR:-0}"
 STAGED_DIR=""
 
+count_staged_files() {
+  local stage_dir="$1"
+
+  python3 - "$stage_dir" <<'PY'
+from pathlib import Path
+import sys
+
+target = Path(sys.argv[1])
+print(sum(1 for path in target.rglob('*') if path.is_file()))
+PY
+}
+
 cleanup() {
+  if [[ "$KEEP_STAGED_DIR" == "1" ]]; then
+    return 0
+  fi
+
   if [[ -n "$STAGED_DIR" && -d "$STAGED_DIR" ]]; then
     rm -rf "$STAGED_DIR"
   fi
@@ -109,6 +130,7 @@ public_dirs = [
     'docs',
     'games',
     'hotdeal',
+    'images',
     'novels',
     'posts',
     'research',
@@ -156,6 +178,23 @@ PY
   fi
 
   printf '%s\n' "$stage_dir"
+}
+
+run_predeploy_gate() {
+  [[ -n "$PREDEPLOY_GATE_CONFIG" ]] || return 0
+
+  if [[ ! -f "$PREDEPLOY_GATE_SCRIPT" ]]; then
+    echo "PREDEPLOY_GATE_SCRIPT_MISSING=$PREDEPLOY_GATE_SCRIPT" >&2
+    return 1
+  fi
+
+  if [[ ! -f "$PREDEPLOY_GATE_CONFIG" ]]; then
+    echo "PREDEPLOY_GATE_CONFIG_MISSING=$PREDEPLOY_GATE_CONFIG" >&2
+    return 1
+  fi
+
+  echo "Running predeploy gate: $PREDEPLOY_GATE_CONFIG"
+  node "$PREDEPLOY_GATE_SCRIPT" "$PREDEPLOY_GATE_CONFIG"
 }
 
 is_deployed_head() {
@@ -215,6 +254,19 @@ WORKTREE_DIRTY="false"
 if [[ -n "$(git status --short --untracked-files=normal | head -n 1)" ]]; then
   WORKTREE_DIRTY="true"
 fi
+
+if [[ "$MODE" == "--predeploy-check" ]]; then
+  run_predeploy_gate
+  STAGED_DIR="$(stage_site_dir)"
+  echo "PREDEPLOY_GATE_OK"
+  echo "STAGED_DIR=$STAGED_DIR"
+  echo "STAGED_FILE_COUNT=$(count_staged_files "$STAGED_DIR")"
+  if [[ "$KEEP_STAGED_DIR" == "1" ]]; then
+    echo "STAGED_DIR_PRESERVED=1"
+  fi
+  exit 0
+fi
+
 DEPLOYED_SOURCE="$(get_deployed_source)"
 
 echo "DEPLOYED=$DEPLOYED_SOURCE HEAD=$HEAD_SHORT"
@@ -229,6 +281,7 @@ if [[ "$MODE" == "--check" ]]; then
   exit 0
 fi
 
+run_predeploy_gate
 STAGED_DIR="$(stage_site_dir)"
 
 echo "Deploying to CF Pages..."

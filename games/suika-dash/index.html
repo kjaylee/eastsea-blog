@@ -1,0 +1,1266 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Suika Dash — 물리 머지 러너</title>
+<meta name="description" content="눌러 압축하고 놓아 대시하는 물리 머지 러너. 같은 티어 과일에 고속 충돌해 머지하고, Vault/Blend 선택 게이트로 런의 성격을 바꾸세요." />
+<style>
+:root{
+  --bg1:#fff7ec;
+  --bg2:#ffd7a8;
+  --ink:#3b2a22;
+  --panel:#fff6e8;
+  --panel-border:rgba(118,72,34,.18);
+  --accent:#ff7b54;
+  --accent-2:#7cc576;
+  --accent-3:#ffcf56;
+  --danger:#c94f45;
+  --shadow:0 14px 36px rgba(116,67,21,.16);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{margin:0;padding:0;background:linear-gradient(180deg,var(--bg1),#ffe8ca 28%,#ffd3a8 100%);color:var(--ink);font-family:"Pretendard","Noto Sans KR",system-ui,-apple-system,sans-serif;}
+body{min-height:100vh;display:flex;justify-content:center;padding:14px 10px 24px;}
+button{font:inherit;border:none;cursor:pointer;}
+.app{width:min(460px,100%);display:flex;flex-direction:column;gap:10px;}
+.topbar,.footer-card{background:rgba(255,250,242,.82);backdrop-filter:blur(10px);border:1px solid var(--panel-border);border-radius:18px;box-shadow:var(--shadow);}
+.topbar{padding:12px 14px;display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:8px;align-items:center;}
+.brand h1{margin:0;font-size:21px;line-height:1;color:#623818;letter-spacing:-.03em;}
+.brand p{margin:4px 0 0;font-size:12px;color:#8b623d;line-height:1.35;}
+.stat{background:rgba(255,255,255,.7);border:1px solid rgba(170,108,58,.12);border-radius:14px;padding:8px 10px;min-height:58px;display:flex;flex-direction:column;justify-content:center;}
+.stat .k{font-size:11px;color:#9f6f43;}
+.stat .v{font-size:15px;font-weight:800;color:#4f2b16;}
+.stage{position:relative;border-radius:26px;overflow:hidden;box-shadow:0 20px 40px rgba(103,56,18,.18);border:1px solid rgba(148,96,47,.16);background:#fff4e0;}
+canvas{display:block;width:100%;height:auto;aspect-ratio:390 / 844;background:linear-gradient(180deg,#ffeec9 0%,#ffd99d 38%,#ffb16e 100%);touch-action:none;}
+.overlay{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:flex-end;padding:18px;background:linear-gradient(180deg,rgba(255,244,224,.18) 0%,rgba(255,236,210,.45) 30%,rgba(255,248,236,.95) 100%);}
+.overlay.hidden{display:none;}
+.panel{background:rgba(255,252,246,.94);border:1px solid rgba(157,101,51,.15);border-radius:24px;padding:18px;box-shadow:0 16px 36px rgba(122,72,26,.16);}
+.panel h2{margin:0 0 8px;font-size:30px;line-height:1;color:#5a331c;letter-spacing:-.04em;}
+.panel .sub{margin:0 0 14px;font-size:13px;line-height:1.5;color:#8d633d;}
+.kicker{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:#fff2da;color:#9c622e;font-size:12px;font-weight:700;margin-bottom:10px;border:1px solid rgba(183,126,53,.16);}
+.pill-row{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px;}
+.pill{padding:8px 10px;border-radius:999px;background:#fff6e8;border:1px solid rgba(155,102,50,.12);font-size:12px;color:#794d2b;font-weight:700;}
+.missions{display:grid;gap:8px;margin:0 0 16px;}
+.mission{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;background:#fff7ec;border:1px solid rgba(173,111,50,.12);border-radius:14px;font-size:13px;}
+.mission.done{background:#eef9ea;border-color:rgba(85,154,70,.22);}
+.mission small{color:#8d633d;}
+.mission.done small{color:#4e8a46;}
+.actions{display:flex;gap:10px;}
+.actions button{flex:1;padding:14px 16px;border-radius:16px;font-weight:800;font-size:15px;box-shadow:0 8px 20px rgba(164,86,31,.12);}
+.primary{background:linear-gradient(180deg,#ff9864 0%,#ff7b54 100%);color:#fff;}
+.secondary{background:#fff4e2;color:#7c522f;border:1px solid rgba(153,100,50,.12);}
+.gameover-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:0 0 14px;}
+.toast{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);padding:10px 14px;border-radius:999px;background:rgba(73,45,27,.9);color:#fff8f0;font-size:13px;font-weight:700;opacity:0;pointer-events:none;transition:opacity .18s ease;max-width:84%;text-align:center;}
+.toast.show{opacity:1;}
+.footer-card{padding:10px 12px;display:grid;gap:10px;}
+.legend{display:grid;grid-template-columns:1fr;gap:8px;}
+.legend-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 10px;border-radius:14px;background:rgba(255,255,255,.65);border:1px solid rgba(151,100,48,.12);font-size:13px;}
+.legend-row strong{color:#5d371d;}
+.legend-row span{color:#8c623d;}
+.controls{display:flex;gap:8px;flex-wrap:wrap;}
+.controls button{flex:1;padding:10px 12px;border-radius:14px;background:#fff4e2;color:#704626;border:1px solid rgba(152,103,52,.12);font-weight:700;}
+.controls button.warn{background:#fff0ed;color:#9c4638;}
+.footer-note{font-size:12px;color:#8d633d;line-height:1.45;}
+@media (max-width:420px){
+  .topbar{grid-template-columns:1fr 1fr;}
+  .brand{grid-column:1 / -1;}
+  .panel h2{font-size:27px;}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <h1>Suika Dash</h1>
+      <p>눌러 압축하고 놓아 대시 · 같은 티어 과일은 대시 중에만 머지됩니다.</p>
+    </div>
+    <div class="stat"><span class="k">최고 점수</span><span class="v" id="bestScore">0</span></div>
+    <div class="stat"><span class="k">최고 티어</span><span class="v" id="bestTier">체리</span></div>
+  </header>
+
+  <section class="stage">
+    <canvas id="game" width="390" height="844" aria-label="Suika Dash 게임 캔버스"></canvas>
+
+    <div id="titleOverlay" class="overlay">
+      <div class="panel">
+        <div class="kicker">🍉 물리 머지 러너</div>
+        <h2>대시로만 합쳐집니다.</h2>
+        <p class="sub">길게 눌러 과일을 압축하고, 손을 떼면 가로로 튀어 나갑니다. 같은 티어를 고속으로 들이받아 머지하고, Vault 또는 Blend 게이트로 런의 성격을 직접 고르세요.</p>
+        <div class="pill-row">
+          <div class="pill">홀드 = 차지 + 슬로우</div>
+          <div class="pill">릴리즈 = 대시</div>
+          <div class="pill">같은 티어 + 대시 충돌 = 머지</div>
+        </div>
+        <div class="missions" id="missionList"></div>
+        <div class="actions">
+          <button class="primary" id="startBtn">런 시작</button>
+          <button class="secondary" id="titleRestartBtn">기록 초기화</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="gameOverOverlay" class="overlay hidden">
+      <div class="panel">
+        <div class="kicker">🥤 런 종료</div>
+        <h2 id="gameOverTitle">과즙이 다 새버렸습니다</h2>
+        <p class="sub" id="gameOverSub">한 번 더 짜보죠. Vault로 안정성을 챙길지, Blend로 폭주할지 선택이 런을 바꿉니다.</p>
+        <div class="gameover-grid">
+          <div class="stat"><span class="k">점수</span><span class="v" id="finalScore">0</span></div>
+          <div class="stat"><span class="k">거리</span><span class="v" id="finalDistance">0m</span></div>
+          <div class="stat"><span class="k">도달 티어</span><span class="v" id="finalTier">체리</span></div>
+          <div class="stat"><span class="k">랭크</span><span class="v" id="finalRank">C</span></div>
+        </div>
+        <div class="actions">
+          <button class="primary" id="retryBtn">다시 짜기</button>
+          <button class="secondary" id="backTitleBtn">타이틀로</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+  </section>
+
+  <section class="footer-card">
+    <div class="legend">
+      <div class="legend-row"><strong>현재</strong><span id="hudNow">체리 · HP 3 · Combo ×1</span></div>
+      <div class="legend-row"><strong>점수 / 거리</strong><span id="hudScore">0 / 0m</span></div>
+      <div class="legend-row"><strong>선택 게이트</strong><span id="hudGate">다음 게이트 900m</span></div>
+      <div class="legend-row"><strong>미션</strong><span id="hudMission">오렌지 도달 / Juicefall x3 / Vault 2회</span></div>
+    </div>
+    <div class="controls">
+      <button id="pauseBtn">일시정지</button>
+      <button id="restartBtn" class="warn">현재 런 다시 시작</button>
+    </div>
+    <div class="footer-note">모바일에서는 캔버스 위를 길게 눌렀다가 놓아 대시하세요. 키보드는 <strong>Space</strong> 홀드/릴리즈, <strong>← →</strong> 조준입니다.</div>
+  </section>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width;
+  const H = canvas.height;
+  const TRACK_LEFT = 42;
+  const TRACK_RIGHT = W - 42;
+  const PLAYER_Y = 680;
+  const SAVE_KEY = 'suikaDashSaveV1';
+
+  const ui = {
+    bestScore: document.getElementById('bestScore'),
+    bestTier: document.getElementById('bestTier'),
+    hudNow: document.getElementById('hudNow'),
+    hudScore: document.getElementById('hudScore'),
+    hudGate: document.getElementById('hudGate'),
+    hudMission: document.getElementById('hudMission'),
+    missionList: document.getElementById('missionList'),
+    titleOverlay: document.getElementById('titleOverlay'),
+    gameOverOverlay: document.getElementById('gameOverOverlay'),
+    startBtn: document.getElementById('startBtn'),
+    titleRestartBtn: document.getElementById('titleRestartBtn'),
+    pauseBtn: document.getElementById('pauseBtn'),
+    restartBtn: document.getElementById('restartBtn'),
+    retryBtn: document.getElementById('retryBtn'),
+    backTitleBtn: document.getElementById('backTitleBtn'),
+    finalScore: document.getElementById('finalScore'),
+    finalDistance: document.getElementById('finalDistance'),
+    finalTier: document.getElementById('finalTier'),
+    finalRank: document.getElementById('finalRank'),
+    gameOverTitle: document.getElementById('gameOverTitle'),
+    gameOverSub: document.getElementById('gameOverSub'),
+    toast: document.getElementById('toast')
+  };
+
+  const TIERS = [
+    { name: '체리', color: '#ff6b6b', rim: '#d84848', glow: 'rgba(255,107,107,.34)', radius: 18, points: 55, emoji: '🍒' },
+    { name: '라임', color: '#99d95c', rim: '#6fa63a', glow: 'rgba(153,217,92,.30)', radius: 23, points: 95, emoji: '🟢' },
+    { name: '복숭아', color: '#ffb27d', rim: '#db7e56', glow: 'rgba(255,178,125,.30)', radius: 28, points: 160, emoji: '🍑' },
+    { name: '오렌지', color: '#ff9d3d', rim: '#d5731d', glow: 'rgba(255,157,61,.32)', radius: 34, points: 240, emoji: '🍊' },
+    { name: '멜론', color: '#7ddc99', rim: '#41a55d', glow: 'rgba(125,220,153,.34)', radius: 40, points: 360, emoji: '🍈' },
+    { name: '수박', color: '#41c66d', rim: '#24884a', glow: 'rgba(65,198,109,.36)', radius: 48, points: 520, emoji: '🍉' }
+  ];
+
+  const missionsMeta = [
+    { id: 'tierOrange', label: '오렌지 도달', detail: '복숭아를 넘겨 오렌지 티어까지 올라가기' },
+    { id: 'juicefall', label: 'Juicefall x3', detail: '한 런에서 3연쇄 머지 연출 보기' },
+    { id: 'vault2', label: 'Vault 2회', detail: 'Vault 게이트를 두 번 선택하기' }
+  ];
+
+  const laneXs = [80, 145, 210, 275, 330];
+
+  const state = {
+    mode: 'title',
+    paused: false,
+    pageErrors: 0,
+    save: loadSave(),
+    player: null,
+    score: 0,
+    distance: 0,
+    speed: 250,
+    elapsed: 0,
+    spawnTimer: 0,
+    spawnIndex: 0,
+    nextGateDistance: 900,
+    entities: [],
+    particles: [],
+    splashes: [],
+    gate: null,
+    frenzy: 0,
+    toastTimer: 0,
+    shake: 0,
+    runVaults: 0,
+    runBestCombo: 0,
+    runMaxTier: 0,
+    triggeredJuicefall: false,
+    pointerDown: false,
+    pointerX: W * 0.5,
+    pointerStartX: W * 0.5,
+    keyboardAim: 0,
+    lastTime: 0,
+    overReason: ''
+  };
+
+  window.addEventListener('error', () => {
+    state.pageErrors += 1;
+  });
+
+  function loadSave() {
+    const base = {
+      bestScore: 0,
+      bestDistance: 0,
+      bestTier: 0,
+      totalVaults: 0,
+      missions: {
+        tierOrange: false,
+        juicefall: false,
+        vault2: false
+      }
+    };
+    try {
+      const raw = localStorage.getItem(SAVE_KEY);
+      if (!raw) return base;
+      const parsed = JSON.parse(raw);
+      return {
+        bestScore: Number(parsed.bestScore) || 0,
+        bestDistance: Number(parsed.bestDistance) || 0,
+        bestTier: clampInt(parsed.bestTier, 0, TIERS.length - 1),
+        totalVaults: Number(parsed.totalVaults) || 0,
+        missions: Object.assign({}, base.missions, parsed.missions || {})
+      };
+    } catch (_err) {
+      return base;
+    }
+  }
+
+  function saveData() {
+    localStorage.setItem(SAVE_KEY, JSON.stringify(state.save));
+  }
+
+  function resetSave() {
+    localStorage.removeItem(SAVE_KEY);
+    state.save = loadSave();
+    renderMissionList();
+    updateHud();
+    showToast('기록을 초기화했습니다.');
+  }
+
+  function clamp(v, min, max) {
+    return Math.max(min, Math.min(max, v));
+  }
+
+  function clampInt(v, min, max) {
+    return Math.max(min, Math.min(max, Number(v) || 0));
+  }
+
+  function lerp(a, b, t) {
+    return a + (b - a) * t;
+  }
+
+  function rand(min, max) {
+    return min + Math.random() * (max - min);
+  }
+
+  function pick(arr) {
+    return arr[Math.floor(Math.random() * arr.length)];
+  }
+
+  function tierName(level) {
+    return TIERS[clampInt(level, 0, TIERS.length - 1)].name;
+  }
+
+  function createPlayer() {
+    return {
+      x: W * 0.5,
+      y: PLAYER_Y,
+      vx: 0,
+      level: 0,
+      hp: 3,
+      charge: 0,
+      charging: false,
+      dashTimer: 0,
+      invuln: 1.5,
+      squeeze: 0,
+      combo: 0,
+      comboTimer: 0,
+      aimX: W * 0.5,
+      flash: 0,
+      hop: 0,
+      shock: 0,
+      trail: []
+    };
+  }
+
+  function getPlayerRadius() {
+    return TIERS[state.player.level].radius;
+  }
+
+  function getScoreMultiplier() {
+    let mult = 1 + state.runVaults * 0.35;
+    if (state.frenzy > 0) mult += 0.25;
+    return mult;
+  }
+
+  function startGame() {
+    state.mode = 'play';
+    state.paused = false;
+    ui.pauseBtn.textContent = '일시정지';
+    state.player = createPlayer();
+    state.score = 0;
+    state.distance = 0;
+    state.speed = 250;
+    state.elapsed = 0;
+    state.spawnTimer = 0.25;
+    state.spawnIndex = 0;
+    state.nextGateDistance = 900;
+    state.entities = [];
+    state.particles = [];
+    state.splashes = [];
+    state.gate = null;
+    state.frenzy = 0;
+    state.toastTimer = 0;
+    state.shake = 0;
+    state.runVaults = 0;
+    state.runBestCombo = 0;
+    state.runMaxTier = 0;
+    state.triggeredJuicefall = false;
+    state.pointerDown = false;
+    state.keyboardAim = 0;
+    state.overReason = '';
+    ui.titleOverlay.classList.add('hidden');
+    ui.gameOverOverlay.classList.add('hidden');
+    showToast('첫 10초: 눌렀다가 놓아 체리부터 합쳐보세요.');
+    updateHud();
+  }
+
+  function showTitle() {
+    state.mode = 'title';
+    state.paused = false;
+    ui.pauseBtn.textContent = '일시정지';
+    state.pointerDown = false;
+    ui.titleOverlay.classList.remove('hidden');
+    ui.gameOverOverlay.classList.add('hidden');
+    renderMissionList();
+    updateHud();
+  }
+
+  function endGame(reason) {
+    state.mode = 'gameover';
+    state.overReason = reason;
+    state.pointerDown = false;
+    state.player.charging = false;
+
+    state.save.bestScore = Math.max(state.save.bestScore, Math.round(state.score));
+    state.save.bestDistance = Math.max(state.save.bestDistance, Math.round(state.distance));
+    state.save.bestTier = Math.max(state.save.bestTier, state.runMaxTier);
+    state.save.totalVaults += state.runVaults;
+
+    if (state.runMaxTier >= 3) state.save.missions.tierOrange = true;
+    if (state.triggeredJuicefall) state.save.missions.juicefall = true;
+    if (state.runVaults >= 2) state.save.missions.vault2 = true;
+
+    saveData();
+    updateHud();
+    renderMissionList();
+
+    ui.finalScore.textContent = Math.round(state.score).toLocaleString('ko-KR');
+    ui.finalDistance.textContent = `${Math.round(state.distance)}m`;
+    ui.finalTier.textContent = tierName(state.player.level);
+    ui.finalRank.textContent = getRank(Math.round(state.score));
+    ui.gameOverTitle.textContent = reason === 'hazard' ? '과즙이 다 새버렸습니다' : '러닝이 멈췄습니다';
+    ui.gameOverSub.textContent = `최대 ${tierName(state.runMaxTier)}까지 키웠고, Vault ${state.runVaults}회 · 최고 콤보 ${state.runBestCombo}를 기록했습니다.`;
+    ui.gameOverOverlay.classList.remove('hidden');
+  }
+
+  function getRank(score) {
+    if (score >= 5200) return 'S';
+    if (score >= 3600) return 'A';
+    if (score >= 2200) return 'B';
+    return 'C';
+  }
+
+  function showToast(text) {
+    ui.toast.textContent = text;
+    ui.toast.classList.add('show');
+    state.toastTimer = 2.1;
+  }
+
+  function renderMissionList() {
+    ui.missionList.innerHTML = '';
+    missionsMeta.forEach((mission) => {
+      const row = document.createElement('div');
+      row.className = `mission${state.save.missions[mission.id] ? ' done' : ''}`;
+      row.innerHTML = `<div><strong>${mission.label}</strong><br><small>${mission.detail}</small></div><small>${state.save.missions[mission.id] ? '완료' : '진행 중'}</small>`;
+      ui.missionList.appendChild(row);
+    });
+  }
+
+  function updateHud() {
+    ui.bestScore.textContent = Math.round(state.save.bestScore).toLocaleString('ko-KR');
+    ui.bestTier.textContent = tierName(state.save.bestTier);
+
+    if (!state.player) {
+      ui.hudNow.textContent = `체리 · HP 3 · Combo ×1`;
+      ui.hudScore.textContent = `${Math.round(state.save.bestScore).toLocaleString('ko-KR')} / ${Math.round(state.save.bestDistance)}m`;
+      ui.hudGate.textContent = '다음 게이트 900m';
+      ui.hudMission.textContent = missionsMeta.map((m) => state.save.missions[m.id] ? `${m.label} ✓` : m.label).join(' / ');
+      return;
+    }
+
+    ui.hudNow.textContent = `${tierName(state.player.level)} · HP ${state.player.hp} · Combo ×${Math.max(1, state.player.combo)}`;
+    ui.hudScore.textContent = `${Math.round(state.score).toLocaleString('ko-KR')} / ${Math.round(state.distance)}m`;
+    ui.hudGate.textContent = state.gate ? '게이트 통과 중' : `다음 게이트 ${Math.max(0, Math.round(state.nextGateDistance - state.distance))}m`;
+    ui.hudMission.textContent = missionsMeta.map((m) => {
+      if (m.id === 'tierOrange') return `${m.label}${state.player.level >= 3 || state.save.missions[m.id] ? ' ✓' : ''}`;
+      if (m.id === 'juicefall') return `${m.label}${state.triggeredJuicefall || state.save.missions[m.id] ? ' ✓' : ''}`;
+      if (m.id === 'vault2') return `${m.label}${state.runVaults >= 2 || state.save.missions[m.id] ? ' ✓' : ''}`;
+      return m.label;
+    }).join(' / ');
+  }
+
+  function screenToCanvasX(clientX) {
+    const rect = canvas.getBoundingClientRect();
+    const x = (clientX - rect.left) / rect.width * W;
+    return clamp(x, TRACK_LEFT + 10, TRACK_RIGHT - 10);
+  }
+
+  function beginCharge(x) {
+    if (state.mode !== 'play' || state.paused) return;
+    state.pointerDown = true;
+    state.pointerX = x;
+    state.pointerStartX = x;
+    state.player.charging = true;
+    state.player.charge = Math.max(state.player.charge, 0.08);
+    state.player.aimX = x;
+  }
+
+  function moveCharge(x) {
+    state.pointerX = x;
+    if (state.player) state.player.aimX = x;
+  }
+
+  function releaseCharge() {
+    if (!state.player || state.mode !== 'play') return;
+    state.pointerDown = false;
+    if (!state.player.charging) return;
+
+    const charge = clamp(state.player.charge, 0.08, 1);
+    const dx = clamp(state.player.aimX - state.player.x, -150, 150);
+    const push = dx * (5.3 + charge * 2.1);
+    state.player.vx += push;
+    state.player.dashTimer = 0.16 + charge * 0.24;
+    state.player.invuln = Math.max(state.player.invuln, 0.12 + charge * 0.18);
+    state.player.hop = Math.max(state.player.hop, 18 + charge * 34);
+    state.player.shock = Math.max(state.player.shock, 0.26 + charge * 0.12);
+    spawnBurst(state.player.x, state.player.y, TIERS[state.player.level].color, 10 + Math.round(charge * 12));
+    state.player.charge = 0;
+    state.player.charging = false;
+  }
+
+  canvas.addEventListener('pointerdown', (event) => {
+    const x = screenToCanvasX(event.clientX);
+    beginCharge(x);
+  });
+  canvas.addEventListener('pointermove', (event) => {
+    const x = screenToCanvasX(event.clientX);
+    moveCharge(x);
+  });
+  canvas.addEventListener('pointerup', releaseCharge);
+  canvas.addEventListener('pointercancel', releaseCharge);
+  canvas.addEventListener('pointerleave', () => {
+    if (state.pointerDown) releaseCharge();
+  });
+
+  window.addEventListener('keydown', (event) => {
+    if (event.key === 'ArrowLeft') state.keyboardAim = -1;
+    if (event.key === 'ArrowRight') state.keyboardAim = 1;
+    if (event.key === ' ' && state.mode === 'play') {
+      event.preventDefault();
+      if (!state.player.charging) beginCharge(clamp(state.player.x + state.keyboardAim * 90, TRACK_LEFT, TRACK_RIGHT));
+    }
+    if ((event.key === 'Enter' || event.key.toLowerCase() === 'r') && state.mode === 'gameover') {
+      startGame();
+    }
+  });
+
+  window.addEventListener('keyup', (event) => {
+    if (event.key === 'ArrowLeft' && state.keyboardAim < 0) state.keyboardAim = 0;
+    if (event.key === 'ArrowRight' && state.keyboardAim > 0) state.keyboardAim = 0;
+    if (event.key === ' ' && state.mode === 'play') {
+      event.preventDefault();
+      releaseCharge();
+    }
+  });
+
+  ui.startBtn.addEventListener('click', startGame);
+  ui.retryBtn.addEventListener('click', startGame);
+  ui.backTitleBtn.addEventListener('click', showTitle);
+  ui.pauseBtn.addEventListener('click', () => {
+    if (state.mode !== 'play') return;
+    state.paused = !state.paused;
+    ui.pauseBtn.textContent = state.paused ? '재개' : '일시정지';
+    showToast(state.paused ? '일시정지' : '재개');
+  });
+  ui.restartBtn.addEventListener('click', () => {
+    if (state.mode === 'play') startGame();
+  });
+  ui.titleRestartBtn.addEventListener('click', resetSave);
+
+  function spawnFruit(level, x, y) {
+    const tier = TIERS[level];
+    state.entities.push({
+      kind: 'fruit',
+      x,
+      y,
+      vx: rand(-24, 24),
+      wobble: rand(0, Math.PI * 2),
+      level,
+      radius: tier.radius,
+      alive: true
+    });
+  }
+
+  function spawnHazard(x, y, size = 24) {
+    state.entities.push({
+      kind: 'hazard',
+      x,
+      y,
+      vx: rand(-14, 14),
+      wobble: rand(0, Math.PI * 2),
+      radius: size,
+      alive: true
+    });
+  }
+
+  function spawnGate() {
+    state.gate = {
+      y: -150,
+      h: 120,
+      selected: false,
+      left: { label: 'Vault', sub: '작아지고 배율 축적', color: '#ffcf56' },
+      right: { label: 'Blend', sub: '광란 10초', color: '#7cd972' }
+    };
+  }
+
+  function applyGate(side) {
+    if (!state.player) return;
+    if (side === 'left') {
+      state.runVaults += 1;
+      if (state.player.level > 0) state.player.level -= 1;
+      state.player.hp = Math.min(3, state.player.hp + 1);
+      state.score += 120 + state.runVaults * 50;
+      showToast('Vault! 크기를 줄이고 배율을 쌓았습니다.');
+      spawnBurst(state.player.x, state.player.y, '#ffcf56', 18);
+    } else {
+      state.frenzy = 10;
+      state.score += 90;
+      state.speed += 18;
+      showToast('Blend! 10초 동안 같은 티어가 더 자주 나옵니다.');
+      spawnBurst(state.player.x, state.player.y, '#7cd972', 18);
+    }
+  }
+
+  function spawnScriptedRow() {
+    const rowY = -60;
+    const early = [
+      () => {
+        spawnFruit(0, laneXs[1], rowY);
+        spawnFruit(0, laneXs[2], rowY - 4);
+      },
+      () => {
+        spawnFruit(0, laneXs[2], rowY);
+        spawnFruit(0, laneXs[3], rowY - 10);
+      },
+      () => {
+        spawnFruit(1, laneXs[1], rowY + 4);
+        spawnFruit(0, laneXs[3], rowY - 8);
+        spawnFruit(0, laneXs[4], rowY - 18);
+      },
+      () => {
+        spawnFruit(0, laneXs[0], rowY - 12);
+        spawnFruit(0, laneXs[2], rowY - 2);
+        spawnFruit(0, laneXs[4], rowY - 4);
+      },
+      () => {
+        spawnFruit(state.player.level, laneXs[1], rowY - 8);
+        spawnFruit(state.player.level, laneXs[2], rowY);
+        spawnFruit(state.player.level, laneXs[3], rowY - 10);
+      },
+      () => {
+        spawnFruit(clampInt(state.player.level + 1, 0, TIERS.length - 1), laneXs[0], rowY - 12);
+        spawnFruit(state.player.level, laneXs[2], rowY - 4);
+        spawnFruit(state.player.level, laneXs[4], rowY - 10);
+      },
+      () => {
+        spawnHazard(laneXs[1], rowY - 8, 22);
+        spawnFruit(state.player.level, laneXs[3], rowY - 4);
+        spawnFruit(state.player.level, laneXs[4], rowY - 14);
+      },
+      () => {
+        spawnHazard(laneXs[3], rowY - 8, 22);
+        spawnFruit(state.player.level, laneXs[0], rowY - 2);
+        spawnFruit(state.player.level, laneXs[1], rowY - 16);
+      }
+    ];
+    early[Math.min(state.spawnIndex, early.length - 1)]();
+  }
+
+  function spawnDynamicRow() {
+    const rowY = -80;
+    const level = clampInt(state.player.level + (Math.random() < (state.frenzy > 0 ? 0.55 : 0.28) ? 0 : (Math.random() < 0.6 ? -1 : 1)), 0, TIERS.length - 1);
+    const pattern = Math.random();
+    const sameLevel = clampInt(state.player.level, 0, TIERS.length - 1);
+
+    if (pattern < 0.34) {
+      const count = state.frenzy > 0 ? 3 : 2 + (Math.random() < 0.35 ? 1 : 0);
+      const lanes = shuffle(laneXs.slice()).slice(0, count);
+      lanes.forEach((x, index) => spawnFruit(sameLevel, x + rand(-8, 8), rowY - index * 8));
+    } else if (pattern < 0.72) {
+      const lanes = shuffle(laneXs.slice()).slice(0, 3);
+      lanes.forEach((x, index) => spawnFruit(clampInt(level + (index === 0 ? 0 : (Math.random() < 0.5 ? -1 : 1)), 0, TIERS.length - 1), x + rand(-10, 10), rowY - index * 10));
+      if (Math.random() < 0.4) spawnHazard(pick(laneXs), rowY - 18, rand(20, 28));
+    } else {
+      const safeLane = pick(laneXs);
+      laneXs.forEach((x) => {
+        if (Math.abs(x - safeLane) < 10) return;
+        if (Math.random() < 0.65) spawnHazard(x + rand(-8, 8), rowY - rand(0, 18), rand(20, 28));
+      });
+      spawnFruit(clampInt(sameLevel - 1, 0, TIERS.length - 1), safeLane + rand(-6, 6), rowY - 10);
+    }
+  }
+
+  function shuffle(arr) {
+    for (let i = arr.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+
+  function doMerge(entity) {
+    entity.alive = false;
+    const beforeLevel = state.player.level;
+    const base = TIERS[beforeLevel].points;
+    state.player.level = clampInt(state.player.level + 1, 0, TIERS.length - 1);
+    state.runMaxTier = Math.max(state.runMaxTier, state.player.level);
+    state.player.flash = 0.36;
+    state.player.combo = Math.max(1, state.player.combo + 1);
+    state.player.comboTimer = 2.6;
+    state.runBestCombo = Math.max(state.runBestCombo, state.player.combo);
+
+    let gain = base * getScoreMultiplier() * (1 + (state.player.combo - 1) * 0.45);
+    if (beforeLevel === TIERS.length - 1) {
+      gain += 280;
+      state.player.hp = Math.min(3, state.player.hp + 1);
+      showToast('수박 과즙 폭발! 보너스와 체력을 얻었습니다.');
+    }
+    state.score += gain;
+    spawnBurst(entity.x, entity.y, TIERS[state.player.level].color, 16 + state.player.combo * 2);
+
+    if (state.player.combo >= 3 && !state.triggeredJuicefall) {
+      state.triggeredJuicefall = true;
+      state.score += 420;
+      state.shake = Math.max(state.shake, 12);
+      state.splashes.push({ text: 'JUICEFALL ×3', time: 1.25, color: '#ff7b54' });
+      showToast('Juicefall! 지금이 자랑 구간입니다.');
+    }
+
+    if (state.player.level >= 3) {
+      state.save.missions.tierOrange = state.save.missions.tierOrange || false;
+    }
+  }
+
+  function bumpPlayer(strength, dir) {
+    state.player.vx += strength * dir;
+    state.shake = Math.max(state.shake, 4);
+  }
+
+  function damagePlayer(reason) {
+    if (state.player.invuln > 0) return;
+    state.player.hp -= 1;
+    state.player.invuln = 0.95;
+    state.player.combo = 0;
+    state.player.comboTimer = 0;
+    state.shake = Math.max(state.shake, 8);
+    spawnBurst(state.player.x, state.player.y, '#c94f45', 18);
+    showToast('장애물 충돌! HP -1');
+    if (state.player.hp <= 0) {
+      endGame(reason);
+    }
+  }
+
+  function spawnBurst(x, y, color, count) {
+    for (let i = 0; i < count; i += 1) {
+      state.particles.push({
+        x,
+        y,
+        vx: rand(-180, 180),
+        vy: rand(-220, 40),
+        life: rand(0.45, 0.95),
+        maxLife: 1,
+        size: rand(4, 10),
+        color
+      });
+    }
+  }
+
+  function updatePlayer(dt) {
+    const player = state.player;
+    player.flash = Math.max(0, player.flash - dt);
+    player.invuln = Math.max(0, player.invuln - dt);
+    player.dashTimer = Math.max(0, player.dashTimer - dt);
+    player.hop = Math.max(0, player.hop - dt * 110);
+    player.shock = Math.max(0, player.shock - dt);
+
+    if (player.comboTimer > 0) {
+      player.comboTimer -= dt;
+      if (player.comboTimer <= 0) player.combo = 0;
+    }
+
+    if (player.charging) {
+      player.charge = clamp(player.charge + dt * 1.5, 0, 1);
+      if (state.keyboardAim !== 0) player.aimX = clamp(player.x + state.keyboardAim * 110, TRACK_LEFT, TRACK_RIGHT);
+      player.squeeze = lerp(player.squeeze, 0.45 + player.charge * 0.45, 0.18);
+    } else {
+      player.squeeze = lerp(player.squeeze, 0, 0.16);
+    }
+
+    if (!player.charging && state.keyboardAim !== 0) {
+      player.vx += state.keyboardAim * 920 * dt;
+    }
+
+    player.vx *= Math.pow(0.92, dt * 60);
+    player.x += player.vx * dt;
+    const radius = getPlayerRadius();
+    if (player.x < TRACK_LEFT + radius) {
+      player.x = TRACK_LEFT + radius;
+      player.vx *= -0.15;
+    }
+    if (player.x > TRACK_RIGHT - radius) {
+      player.x = TRACK_RIGHT - radius;
+      player.vx *= -0.15;
+    }
+
+    player.trail.push({ x: player.x, y: player.y + rand(-3, 3), life: 0.22 + player.dashTimer * 0.7, radius: radius * 0.55 });
+    player.trail = player.trail.filter((t) => {
+      t.life -= dt;
+      return t.life > 0;
+    });
+  }
+
+  function updateEntities(dt) {
+    const player = state.player;
+    const playerRadius = getPlayerRadius();
+
+    state.entities.forEach((entity) => {
+      if (!entity.alive) return;
+      entity.wobble += dt * 2.2;
+      entity.y += state.speed * dt + (entity.kind === 'hazard' ? 15 : 0);
+      entity.x += entity.vx * dt + Math.sin(entity.wobble) * (entity.kind === 'fruit' ? 0.5 : 0.2);
+      entity.x = clamp(entity.x, TRACK_LEFT + entity.radius, TRACK_RIGHT - entity.radius);
+
+      const dx = entity.x - player.x;
+      const dy = entity.y - player.y;
+      const dist = Math.hypot(dx, dy) || 0.0001;
+      const overlap = entity.radius + playerRadius - dist;
+
+      if (overlap > 0 && entity.kind === 'fruit') {
+        if (entity.level === player.level && player.dashTimer > 0.045) {
+          doMerge(entity);
+          return;
+        }
+        const nx = dx / dist;
+        entity.x += nx * overlap * 0.55;
+        player.x -= nx * overlap * 0.25;
+        bumpPlayer(-150 - entity.level * 18, nx);
+      }
+
+      if (overlap > 0 && entity.kind === 'hazard') {
+        damagePlayer('hazard');
+        entity.alive = false;
+      }
+
+      if (entity.y > H + 120) entity.alive = false;
+    });
+
+    state.entities = state.entities.filter((entity) => entity.alive);
+  }
+
+  function updateGate(dt) {
+    if (!state.gate) return;
+    state.gate.y += state.speed * dt;
+    if (!state.gate.selected && state.gate.y + state.gate.h * 0.5 >= state.player.y) {
+      state.gate.selected = true;
+      applyGate(state.player.x < W * 0.5 ? 'left' : 'right');
+    }
+    if (state.gate.y > H + 140) {
+      state.gate = null;
+    }
+  }
+
+  function updateParticles(dt) {
+    state.particles = state.particles.filter((p) => {
+      p.life -= dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vy += 240 * dt;
+      return p.life > 0;
+    });
+
+    state.splashes = state.splashes.filter((splash) => {
+      splash.time -= dt;
+      return splash.time > 0;
+    });
+  }
+
+  function spawnIfNeeded(dt) {
+    state.spawnTimer -= dt;
+    if (state.spawnTimer > 0) return;
+
+    if (!state.gate && state.distance >= state.nextGateDistance) {
+      spawnGate();
+      state.nextGateDistance += 900 + Math.round(rand(0, 180));
+      state.spawnTimer = 0.65;
+      return;
+    }
+
+    if (state.spawnIndex < 8) {
+      spawnScriptedRow();
+    } else {
+      spawnDynamicRow();
+    }
+    state.spawnIndex += 1;
+    state.spawnTimer = clamp(0.62 - state.speed / 950 + (state.frenzy > 0 ? -0.08 : 0), 0.18, 0.62);
+  }
+
+  function updateGame(dt) {
+    if (state.paused) return;
+    const timeScale = state.player.charging ? 0.7 : 1;
+    const step = dt * timeScale;
+    state.elapsed += step;
+    state.distance += state.speed * step * 0.1;
+    state.speed = clamp(250 + state.distance * 0.21 + state.player.level * 12 + (state.frenzy > 0 ? 28 : 0), 250, 540);
+    state.frenzy = Math.max(0, state.frenzy - step);
+    state.shake = Math.max(0, state.shake - step * 16);
+
+    updatePlayer(step);
+    updateEntities(step);
+    if (state.mode !== 'play' || !state.player || state.player.hp <= 0) {
+      updateHud();
+      return;
+    }
+    updateGate(step);
+    updateParticles(step);
+    spawnIfNeeded(step);
+
+    state.score += step * (16 + state.player.level * 4 + state.runVaults * 3);
+
+    if (state.player.level >= 3) state.save.missions.tierOrange = state.save.missions.tierOrange || false;
+    updateHud();
+  }
+
+  function drawBackground() {
+    const gradient = ctx.createLinearGradient(0, 0, 0, H);
+    gradient.addColorStop(0, '#ffecc8');
+    gradient.addColorStop(0.32, '#ffd498');
+    gradient.addColorStop(0.72, '#ffb66d');
+    gradient.addColorStop(1, '#ff8b5f');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.fillStyle = 'rgba(255,255,255,.32)';
+    ctx.beginPath();
+    ctx.arc(70, 86, 44, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(110, 104, 28, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = 'rgba(255,233,210,.62)';
+    ctx.fillRect(TRACK_LEFT, 0, TRACK_RIGHT - TRACK_LEFT, H);
+
+    for (let i = 0; i < 18; i += 1) {
+      const stripeY = ((i * 60) + (state.distance * 7)) % (H + 80) - 40;
+      ctx.fillStyle = i % 2 === 0 ? 'rgba(255,244,225,.34)' : 'rgba(255,197,144,.22)';
+      ctx.fillRect(TRACK_LEFT + 14, stripeY, TRACK_RIGHT - TRACK_LEFT - 28, 24);
+    }
+
+    ctx.strokeStyle = 'rgba(130,76,31,.2)';
+    ctx.lineWidth = 5;
+    ctx.setLineDash([16, 16]);
+    ctx.beginPath();
+    ctx.moveTo(TRACK_LEFT + 18, 0);
+    ctx.lineTo(TRACK_LEFT + 18, H);
+    ctx.moveTo(TRACK_RIGHT - 18, 0);
+    ctx.lineTo(TRACK_RIGHT - 18, H);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  function drawGate() {
+    if (!state.gate) return;
+    const y = state.gate.y;
+    const gateW = 136;
+    const gap = 18;
+    const h = state.gate.h;
+    const leftX = TRACK_LEFT + 8;
+    const rightX = W - TRACK_LEFT - 8 - gateW;
+
+    drawGatePanel(leftX, y, gateW, h, state.gate.left.color, state.gate.left.label, state.gate.left.sub, state.player.x < W * 0.5);
+    drawGatePanel(rightX, y, gateW, h, state.gate.right.color, state.gate.right.label, state.gate.right.sub, state.player.x >= W * 0.5);
+
+    ctx.fillStyle = 'rgba(255,250,245,.82)';
+    roundRect(ctx, W * 0.5 - 70, y - 24, 140, 28, 14, true, false);
+    ctx.fillStyle = '#6e4423';
+    ctx.font = '700 12px Pretendard, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('좌/우 위치로 게이트 선택', W * 0.5, y - 6);
+    void gap;
+  }
+
+  function drawGatePanel(x, y, w, h, color, label, sub, active) {
+    ctx.save();
+    ctx.shadowColor = active ? 'rgba(255,255,255,.55)' : 'rgba(80,48,26,.18)';
+    ctx.shadowBlur = active ? 24 : 8;
+    ctx.fillStyle = color;
+    roundRect(ctx, x, y, w, h, 28, true, false);
+    ctx.restore();
+    ctx.strokeStyle = active ? 'rgba(255,255,255,.9)' : 'rgba(119,73,39,.18)';
+    ctx.lineWidth = active ? 4 : 2;
+    roundRect(ctx, x, y, w, h, 28, false, true);
+    ctx.fillStyle = active ? '#fff' : '#55331c';
+    ctx.textAlign = 'center';
+    ctx.font = '900 20px Pretendard, sans-serif';
+    ctx.fillText(label, x + w / 2, y + 46);
+    ctx.font = '700 11px Pretendard, sans-serif';
+    wrapText(sub, x + w / 2, y + 66, w - 18, 14);
+  }
+
+  function drawEntities() {
+    state.entities.forEach((entity) => {
+      if (entity.kind === 'fruit') drawFruit(entity.x, entity.y, entity.level, entity.radius, false, entity.vx);
+      if (entity.kind === 'hazard') drawHazard(entity);
+    });
+  }
+
+  function drawHazard(entity) {
+    ctx.save();
+    ctx.translate(entity.x, entity.y);
+    ctx.rotate(Math.sin(entity.wobble) * 0.12);
+    ctx.fillStyle = '#a6693b';
+    roundRect(ctx, -entity.radius, -entity.radius, entity.radius * 2, entity.radius * 2, 10, true, false);
+    ctx.strokeStyle = '#78431f';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(-entity.radius + 5, -entity.radius + 7);
+    ctx.lineTo(entity.radius - 5, entity.radius - 7);
+    ctx.moveTo(entity.radius - 5, -entity.radius + 7);
+    ctx.lineTo(-entity.radius + 5, entity.radius - 7);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawFruit(x, y, level, radius, isPlayer, vx = 0) {
+    const tier = TIERS[level];
+    const squash = isPlayer ? state.player.squeeze : 0;
+    const dashStretch = isPlayer ? clamp(Math.abs(state.player.vx) / 520, 0, 0.22) : clamp(Math.abs(vx) / 180, 0, 0.08);
+    const rx = radius * (1 + dashStretch) * (1 + squash * 0.14);
+    const ry = radius * (1 - squash * 0.18);
+
+    ctx.save();
+    ctx.translate(x, y - (isPlayer ? state.player.hop : 0));
+    ctx.shadowColor = tier.glow;
+    ctx.shadowBlur = isPlayer ? 26 : 16;
+    ctx.fillStyle = tier.color;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.lineWidth = isPlayer ? 4 : 3;
+    ctx.strokeStyle = tier.rim;
+    ctx.stroke();
+
+    ctx.fillStyle = 'rgba(255,255,255,.26)';
+    ctx.beginPath();
+    ctx.ellipse(-rx * 0.28, -ry * 0.24, rx * 0.22, ry * 0.16, -0.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#472a16';
+    ctx.beginPath();
+    ctx.arc(-rx * 0.18, -ry * 0.04, Math.max(2.2, radius * 0.08), 0, Math.PI * 2);
+    ctx.arc(rx * 0.18, -ry * 0.04, Math.max(2.2, radius * 0.08), 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = '#5c3418';
+    ctx.lineWidth = Math.max(1.5, radius * 0.06);
+    ctx.beginPath();
+    ctx.arc(0, ry * 0.12, radius * 0.18, 0.15, Math.PI - 0.15);
+    ctx.stroke();
+
+    ctx.strokeStyle = '#5a7f34';
+    ctx.lineWidth = Math.max(2, radius * 0.12);
+    ctx.beginPath();
+    ctx.moveTo(0, -ry + 2);
+    ctx.lineTo(3, -ry - 12);
+    ctx.stroke();
+    ctx.fillStyle = '#73b848';
+    ctx.beginPath();
+    ctx.ellipse(8, -ry - 6, 8, 5, -0.6, 0, Math.PI * 2);
+    ctx.fill();
+
+    if (isPlayer && state.player.flash > 0) {
+      ctx.strokeStyle = `rgba(255,255,255,${state.player.flash * 1.7})`;
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, rx + 6, ry + 6, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
+  function drawPlayer() {
+    const player = state.player;
+    player.trail.forEach((trail) => {
+      ctx.fillStyle = `rgba(255,255,255,${trail.life * 0.18})`;
+      ctx.beginPath();
+      ctx.arc(trail.x, trail.y, trail.radius * trail.life, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    if (player.charging) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(92,55,24,.22)';
+      ctx.lineWidth = 3;
+      ctx.setLineDash([8, 6]);
+      ctx.beginPath();
+      ctx.moveTo(player.x, player.y - 6);
+      ctx.lineTo(player.aimX, player.y - 96);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.fillStyle = 'rgba(255,255,255,.78)';
+      ctx.beginPath();
+      ctx.arc(player.aimX, player.y - 96, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    drawFruit(player.x, player.y, player.level, getPlayerRadius(), true, player.vx);
+
+    if (player.charging) {
+      ctx.fillStyle = 'rgba(255,255,255,.78)';
+      roundRect(ctx, W * 0.5 - 84, H - 58, 168, 16, 10, true, false);
+      ctx.fillStyle = '#ff7b54';
+      roundRect(ctx, W * 0.5 - 84, H - 58, 168 * player.charge, 16, 10, true, false);
+      ctx.fillStyle = '#5d371d';
+      ctx.font = '700 12px Pretendard, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('압축 중 — 놓으면 대시', W * 0.5, H - 66);
+    }
+  }
+
+  function drawHud() {
+    ctx.save();
+    ctx.fillStyle = 'rgba(255,251,245,.84)';
+    roundRect(ctx, 12, 12, W - 24, 86, 18, true, false);
+    ctx.fillStyle = '#5d381e';
+    ctx.textAlign = 'left';
+    ctx.font = '800 14px Pretendard, sans-serif';
+    ctx.fillText(`티어 ${tierName(state.player.level)}`, 24, 36);
+    ctx.fillText(`HP ${state.player.hp}`, 24, 58);
+    ctx.fillText(`Combo ×${Math.max(1, state.player.combo)}`, 24, 80);
+
+    ctx.textAlign = 'right';
+    ctx.fillText(`${Math.round(state.score).toLocaleString('ko-KR')} 점`, W - 24, 36);
+    ctx.fillText(`${Math.round(state.distance)}m`, W - 24, 58);
+    ctx.fillText(`배율 ×${getScoreMultiplier().toFixed(2)}`, W - 24, 80);
+
+    if (state.frenzy > 0) {
+      ctx.fillStyle = 'rgba(124,217,114,.18)';
+      roundRect(ctx, 110, 56, 96, 24, 12, true, false);
+      ctx.fillStyle = '#3f8a35';
+      ctx.textAlign = 'center';
+      ctx.font = '800 12px Pretendard, sans-serif';
+      ctx.fillText(`Blend ${state.frenzy.toFixed(1)}s`, 158, 72);
+    }
+    ctx.restore();
+  }
+
+  function drawParticles() {
+    state.particles.forEach((p) => {
+      ctx.fillStyle = p.color.replace(')', `,${Math.max(0, p.life)})`).replace('rgb', 'rgba');
+      if (!ctx.fillStyle.includes('rgba')) ctx.fillStyle = p.color;
+      ctx.globalAlpha = clamp(p.life, 0, 1);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size * clamp(p.life, 0.25, 1), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    });
+
+    state.splashes.forEach((splash, index) => {
+      const alpha = clamp(splash.time / 1.25, 0, 1);
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = 'rgba(255,250,244,.82)';
+      roundRect(ctx, 40, 176 + index * 54, W - 80, 42, 18, true, false);
+      ctx.fillStyle = splash.color;
+      ctx.font = '900 24px Pretendard, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(splash.text, W * 0.5, 204 + index * 54);
+      ctx.restore();
+    });
+  }
+
+  function drawPauseLabel() {
+    if (!state.paused) return;
+    ctx.fillStyle = 'rgba(60,38,24,.52)';
+    roundRect(ctx, 85, H * 0.5 - 34, W - 170, 68, 24, true, false);
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'center';
+    ctx.font = '900 26px Pretendard, sans-serif';
+    ctx.fillText('일시정지', W * 0.5, H * 0.5 + 8);
+  }
+
+  function drawDebugSafeBorder() {
+    ctx.strokeStyle = 'rgba(110,68,35,.08)';
+    ctx.strokeRect(1, 1, W - 2, H - 2);
+  }
+
+  function draw() {
+    const shakeX = state.shake > 0 ? rand(-state.shake, state.shake) : 0;
+    const shakeY = state.shake > 0 ? rand(-state.shake, state.shake) : 0;
+    ctx.save();
+    ctx.clearRect(0, 0, W, H);
+    ctx.translate(shakeX, shakeY);
+    drawBackground();
+    if (state.player) {
+      drawGate();
+      drawEntities();
+      drawPlayer();
+      drawHud();
+      drawParticles();
+      drawPauseLabel();
+    }
+    drawDebugSafeBorder();
+    ctx.restore();
+  }
+
+  function roundRect(context, x, y, w, h, r, fill, stroke) {
+    const radius = Math.min(r, w / 2, h / 2);
+    context.beginPath();
+    context.moveTo(x + radius, y);
+    context.arcTo(x + w, y, x + w, y + h, radius);
+    context.arcTo(x + w, y + h, x, y + h, radius);
+    context.arcTo(x, y + h, x, y, radius);
+    context.arcTo(x, y, x + w, y, radius);
+    context.closePath();
+    if (fill) context.fill();
+    if (stroke) context.stroke();
+  }
+
+  function wrapText(text, x, y, maxWidth, lineHeight) {
+    const words = text.split(' ');
+    let line = '';
+    let lineIndex = 0;
+    words.forEach((word) => {
+      const test = line ? `${line} ${word}` : word;
+      if (ctx.measureText(test).width > maxWidth && line) {
+        ctx.fillText(line, x, y + lineIndex * lineHeight);
+        line = word;
+        lineIndex += 1;
+      } else {
+        line = test;
+      }
+    });
+    if (line) ctx.fillText(line, x, y + lineIndex * lineHeight);
+  }
+
+  function loop(ts) {
+    if (!state.lastTime) state.lastTime = ts;
+    const dt = Math.min(0.033, (ts - state.lastTime) / 1000);
+    state.lastTime = ts;
+    if (state.mode === 'play' && state.player) updateGame(dt);
+    draw();
+
+    if (state.toastTimer > 0) {
+      state.toastTimer -= dt;
+      if (state.toastTimer <= 0) ui.toast.classList.remove('show');
+    }
+
+    requestAnimationFrame(loop);
+  }
+
+  function getSnapshot() {
+    return {
+      mode: state.mode,
+      paused: state.paused,
+      score: Math.round(state.score),
+      distance: Math.round(state.distance),
+      playerLevel: state.player ? state.player.level : 0,
+      playerTier: state.player ? tierName(state.player.level) : tierName(state.save.bestTier),
+      hp: state.player ? state.player.hp : 0,
+      combo: state.player ? state.player.combo : 0,
+      runVaults: state.runVaults,
+      runMaxTier: tierName(state.runMaxTier),
+      frenzy: Number(state.frenzy.toFixed(2)),
+      bestScore: state.save.bestScore,
+      bestDistance: state.save.bestDistance,
+      bestTier: tierName(state.save.bestTier),
+      missions: Object.assign({}, state.save.missions),
+      pageErrors: state.pageErrors,
+      gateActive: Boolean(state.gate),
+      localStorageKey: SAVE_KEY,
+      undefinedTexts: Array.from(document.querySelectorAll('body *:not(script):not(style):not(noscript)')).filter((el) => (el.textContent || '').includes('undefined')).length
+    };
+  }
+
+  window.__suikaDash = {
+    startGame,
+    showTitle,
+    resetSave,
+    snapshot: getSnapshot,
+    forceMerge() {
+      if (state.mode !== 'play') return false;
+      const entity = { kind: 'fruit', x: state.player.x, y: state.player.y - 10, vx: 0, wobble: 0, level: state.player.level, radius: TIERS[state.player.level].radius, alive: true };
+      doMerge(entity);
+      return true;
+    },
+    forceGate(side) {
+      applyGate(side === 'left' ? 'left' : 'right');
+      return getSnapshot();
+    },
+    forceDamage() {
+      damagePlayer('hazard');
+      return getSnapshot();
+    }
+  };
+
+  renderMissionList();
+  updateHud();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

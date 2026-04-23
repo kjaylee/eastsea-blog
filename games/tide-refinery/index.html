@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+<title>Tide Refinery - 조류 정제소 | 무료 HTML5 게임</title>
+<meta name="description" content="3개 조류 라인의 밸브를 재배치해 압력을 운영하고, 디렉티브 선택과 골든 윈도우를 노리는 모바일 전략 시뮬레이션 게임." />
+<meta name="keywords" content="simulation,strategy,pressure,refinery,html5,littlejs,모바일게임" />
+<meta name="author" content="J&J Games" />
+<meta property="og:title" content="Tide Refinery - 조류 정제소" />
+<meta property="og:description" content="예고된 조류 서지를 읽고 밸브를 바꾸며, 디렉티브 선택과 골든 윈도우 보너스로 최고 출력을 노리세요." />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://games.eastsea.xyz/tide-refinery/" />
+<meta property="og:image" content="https://games.eastsea.xyz/tide-refinery/og-image.png" />
+<meta property="og:site_name" content="J&J Games" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Tide Refinery - 조류 정제소" />
+<meta name="twitter:description" content="Forecast Ladder, Directive Draft, Golden Window를 갖춘 압력 운영 전략 게임." />
+<link rel="canonical" href="https://games.eastsea.xyz/tide-refinery/" />
+<link rel="icon" href="data:," />
+<link rel="manifest" href="/games/manifest.json" />
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "VideoGame",
+  "name": "Tide Refinery",
+  "description": "Route tidal surges into refinery tanks, draft directives, and trigger Golden Windows for bonus output.",
+  "genre": "Simulation",
+  "gamePlatform": "Web Browser",
+  "applicationCategory": "Game",
+  "operatingSystem": "Any",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "author": { "@type": "Organization", "name": "J&J Games" },
+  "url": "https://games.eastsea.xyz/tide-refinery/"
+}
+</script>
+<script src="https://killedbyapixel.github.io/LittleJS/dist/littlejs.min.js"></script>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;user-select:none}
+  html,body{width:100%;height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Noto Sans KR',sans-serif}
+  body{touch-action:none;background:linear-gradient(180deg,#f5ebdb 0%,#d8c2a1 100%);color:#2f2a24}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+
+  .hud{position:fixed;left:0;top:0;width:100%;z-index:30;padding:calc(8px + env(safe-area-inset-top)) 10px 8px;display:flex;flex-direction:column;gap:7px;pointer-events:none}
+  .hud.hidden{display:none}
+  .row{display:flex;gap:6px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+  .pill{background:rgba(255,250,241,.9);border:1px solid rgba(79,104,92,.24);border-radius:999px;padding:6px 10px;font-size:12px;font-weight:800;color:#34493f;backdrop-filter:blur(4px)}
+  .pill.gold{background:rgba(255,241,195,.92);border-color:rgba(184,138,32,.34);color:#7a5714}
+  .pill.alert{background:rgba(255,233,225,.94);border-color:rgba(192,90,43,.34);color:#8d4220}
+  .bar{height:10px;border-radius:999px;background:rgba(54,87,82,.16);overflow:hidden;border:1px solid rgba(54,87,82,.24)}
+  .fill{height:100%;width:100%;transition:width .12s linear}
+  .integrity{background:linear-gradient(90deg,#4d8f5c,#89b56f)}
+  .demand{background:linear-gradient(90deg,#c87842,#d8a060)}
+  .stability{background:linear-gradient(90deg,#ffcf6b,#ffe89a)}
+  .btnRow{display:flex;gap:6px;justify-content:center;pointer-events:auto;flex-wrap:wrap}
+  .hudBtn{border:none;border-radius:11px;padding:8px 10px;min-width:88px;font-size:12px;font-weight:800;color:#fff;background:linear-gradient(135deg,#2f5d62,#4f8a8b);box-shadow:0 8px 16px rgba(45,93,98,.26)}
+  .hudBtn.alt{background:linear-gradient(135deg,#7f4a2e,#c87842);box-shadow:0 8px 16px rgba(143,88,50,.28)}
+  .hudBtn:disabled{opacity:.45;box-shadow:none}
+
+  .panel{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:40;width:min(92vw,440px);background:rgba(255,247,232,.96);border:2px solid rgba(109,86,62,.22);border-radius:18px;padding:18px 16px;text-align:center;box-shadow:0 20px 40px rgba(82,64,46,.25)}
+  .panel.hidden{display:none}
+  .panel h1,.panel h2{font-size:30px;line-height:1.08;color:#2f463f;margin-bottom:8px}
+  .panel p{font-size:14px;line-height:1.45;color:#50433a}
+  .panel .desc{margin:10px 0 12px}
+  .mini{font-size:12px;color:#66594f;margin-top:10px;line-height:1.5}
+  .panelBtns{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px}
+  .panelBtn{border:none;cursor:pointer;border-radius:12px;padding:12px 14px;min-width:128px;font-size:14px;font-weight:800;color:#fff;background:linear-gradient(135deg,#2f5d62,#4f8a8b);box-shadow:0 8px 16px rgba(47,93,98,.28)}
+  .panelBtn.secondary{background:linear-gradient(135deg,#7f6a52,#b68f6b);box-shadow:0 8px 16px rgba(127,106,82,.24)}
+
+  .missionBoard{display:grid;gap:7px;text-align:left;margin:12px 0 4px}
+  .missionItem{background:rgba(255,255,255,.64);border:1px solid rgba(110,94,74,.14);border-radius:12px;padding:8px 10px;font-size:12px;line-height:1.4;color:#55473d}
+  .missionItem.done{background:rgba(232,248,230,.88);border-color:rgba(77,143,92,.25);color:#295736}
+
+  .directiveList{display:grid;gap:10px;margin-top:12px;text-align:left}
+  .directiveBtn{border:none;width:100%;text-align:left;border-radius:14px;padding:12px 13px;background:rgba(255,255,255,.72);border:1px solid rgba(99,84,64,.14);box-shadow:0 10px 18px rgba(95,74,54,.12);cursor:pointer}
+  .directiveBtn b{display:block;font-size:14px;color:#2f463f;margin-bottom:4px}
+  .directiveBtn span{display:block;font-size:12px;line-height:1.45;color:#5e5248}
+
+  #leaderboard{position:fixed;right:8px;bottom:calc(8px + env(safe-area-inset-bottom));z-index:20;max-width:min(90vw,330px);transform:scale(.84);transform-origin:bottom right;pointer-events:none}
+  #toast{position:fixed;left:50%;bottom:calc(14px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:50;background:rgba(56,46,37,.92);color:#fff;border-radius:999px;padding:9px 13px;font-size:12px;font-weight:700;opacity:0;transition:opacity .18s}
+  #toast.show{opacity:1}
+  #banner{position:fixed;left:50%;top:calc(96px + env(safe-area-inset-top));transform:translateX(-50%) scale(.96);z-index:60;padding:10px 16px;border-radius:999px;background:linear-gradient(135deg,rgba(255,232,164,.98),rgba(255,197,97,.98));color:#6a4510;font-size:14px;font-weight:900;letter-spacing:.02em;box-shadow:0 14px 30px rgba(162,111,19,.22);opacity:0;transition:opacity .18s,transform .18s}
+  #banner.show{opacity:1;transform:translateX(-50%) scale(1)}
+</style>
+</head>
+<body>
+<div id="hud" class="hud hidden">
+  <div class="row">
+    <div class="pill" id="hudScore">Score 0</div>
+    <div class="pill" id="hudLevel">Lv 1</div>
+    <div class="pill" id="hudOutput">Output 0</div>
+    <div class="pill" id="hudVent">Vent 0</div>
+  </div>
+  <div class="row">
+    <div class="pill" id="hudForecast">Forecast</div>
+    <div class="pill" id="hudStatus">Status</div>
+  </div>
+  <div class="row">
+    <div class="pill alert" id="hudIntegrity">Integrity 100</div>
+    <div class="pill gold" id="hudGolden">Golden 0</div>
+  </div>
+  <div class="btnRow">
+    <button id="route0" class="hudBtn" type="button">N→A</button>
+    <button id="route1" class="hudBtn" type="button">E→B</button>
+    <button id="route2" class="hudBtn" type="button">W→C</button>
+  </div>
+  <div class="btnRow">
+    <button id="vent0" class="hudBtn alt" type="button">Vent A</button>
+    <button id="vent1" class="hudBtn alt" type="button">Vent B</button>
+    <button id="vent2" class="hudBtn alt" type="button">Vent C</button>
+  </div>
+  <div class="bar"><div id="integrityFill" class="fill integrity"></div></div>
+  <div class="bar"><div id="demandFill" class="fill demand"></div></div>
+  <div class="bar"><div id="stabilityFill" class="fill stability"></div></div>
+</div>
+
+<section id="titleScreen" class="panel">
+  <h1 id="titleText">Tide Refinery</h1>
+  <p id="titleDesc" class="desc">Reroute tidal lines and keep refinery pressure stable.</p>
+  <div class="panelBtns"><button id="startBtn" class="panelBtn" type="button">Start</button></div>
+  <p id="bestText">Best 0</p>
+  <p id="hintText" class="mini">Tap route buttons to change destination tanks. Spend vent charges to relieve pressure spikes.</p>
+  <div id="missionBoard" class="missionBoard"></div>
+</section>
+
+<section id="directiveScreen" class="panel hidden">
+  <h2 id="directiveTitle">Directive Draft</h2>
+  <p id="directiveDesc" class="desc">Choose one refinery directive.</p>
+  <div id="directiveList" class="directiveList"></div>
+</section>
+
+<section id="gameOverScreen" class="panel hidden">
+  <h2 id="overTitle">Refinery Collapsed</h2>
+  <p id="resultLine">Score 0 · Level 1</p>
+  <p id="resultLine2">Output 0</p>
+  <p id="resultLine3" class="mini">Directive none</p>
+  <div id="resultMissionBoard" class="missionBoard"></div>
+  <div class="panelBtns">
+    <button id="retryBtn" class="panelBtn" type="button">Retry</button>
+    <button id="homeBtn" class="panelBtn secondary" type="button">Title</button>
+  </div>
+</section>
+
+<div id="leaderboard" data-lb-slug="tide-refinery"></div>
+<div id="toast"></div>
+<div id="banner"></div>
+
+<script>
+function GameI18n(dict) {
+  const lang = (navigator.language || 'en').toLowerCase().startsWith('ko') ? 'ko' : 'en';
+  return function translate(key) {
+    const entry = dict[key];
+    if (!entry) return key;
+    return entry[lang] || entry.en || entry.ko || key;
+  };
+}
+
+(() => {
+  'use strict';
+
+  const GAME_ID = 'tide-refinery';
+  const STORAGE_KEY = 'tide_refinery_v2';
+  const BASE_SAFE_LOW = 35;
+  const BASE_SAFE_HIGH = 75;
+  const CRIT_LOW = 15;
+  const CRIT_HIGH = 90;
+  const GOLDEN_TRIGGER = 5.2;
+
+  const T = GameI18n({
+    title: { ko: '조류 정제소', en: 'Tide Refinery' },
+    titleDesc: { ko: '예고된 조류 서지를 읽고 밸브를 재배치해 압력을 운영하세요.', en: 'Read incoming surges and reroute valves to keep the refinery stable.' },
+    start: { ko: '시작', en: 'Start' },
+    retry: { ko: '다시 시작', en: 'Retry' },
+    home: { ko: '타이틀', en: 'Title' },
+    over: { ko: '정제소 붕괴', en: 'Refinery Collapsed' },
+    score: { ko: '점수', en: 'Score' },
+    level: { ko: '레벨', en: 'Lv' },
+    output: { ko: '출력', en: 'Output' },
+    vent: { ko: '벤트', en: 'Vent' },
+    best: { ko: '최고 점수', en: 'Best' },
+    integrity: { ko: '무결성', en: 'Integrity' },
+    demand: { ko: '수요', en: 'Demand' },
+    forecast: { ko: '예고', en: 'Forecast' },
+    golden: { ko: '골든', en: 'Golden' },
+    status: { ko: '상태', en: 'Status' },
+    hint: { ko: '라우팅 버튼으로 유입 목적지를 바꾸고, 벤트로 과압을 해소하세요.', en: 'Switch route targets and spend vents to dump pressure spikes.' },
+    laneN: { ko: '북류', en: 'North' },
+    laneE: { ko: '동류', en: 'East' },
+    laneW: { ko: '서류', en: 'West' },
+    tankA: { ko: '탱크 A', en: 'Tank A' },
+    tankB: { ko: '탱크 B', en: 'Tank B' },
+    tankC: { ko: '탱크 C', en: 'Tank C' },
+    scoreLine: { ko: '점수 {s} · 레벨 {l}', en: 'Score {s} · Level {l}' },
+    outputLine: { ko: '누적 출력 {o}', en: 'Total output {o}' },
+    directiveLine: { ko: '마지막 디렉티브 {d}', en: 'Last directive {d}' },
+    toastRoute: { ko: '{lane} → {tank} 전환', en: '{lane} → {tank} routed' },
+    toastVent: { ko: '{tank} 압력 배출', en: '{tank} pressure vented' },
+    toastNoVent: { ko: '벤트 충전이 부족합니다', en: 'No vent charge available' },
+    toastLevel: { ko: '수요 상승, 레벨 {l}', en: 'Demand up, level {l}' },
+    toastSurge: { ko: '강한 조류 유입', en: 'Heavy surge incoming' },
+    toastDirective: { ko: '디렉티브 선택', en: 'Directive draft ready' },
+    toastGolden: { ko: '골든 윈도우 발동', en: 'Golden Window online' },
+    bannerGolden: { ko: 'GOLDEN WINDOW', en: 'GOLDEN WINDOW' },
+    bannerDirective: { ko: 'DIRECTIVE LOCKED', en: 'DIRECTIVE LOCKED' },
+    directiveTitle: { ko: '디렉티브 드래프트', en: 'Directive Draft' },
+    directiveDesc: { ko: '이번 런의 운영 방향을 하나 고르세요.', en: 'Pick one refinery directive for this run.' },
+    missionTitle: { ko: '교대 미션', en: 'Shift Missions' },
+    missionLevel3: { ko: '레벨 3 도달', en: 'Reach level 3' },
+    missionDirective: { ko: '디렉티브 1회 선택', en: 'Pick 1 directive' },
+    missionGolden2: { ko: '골든 윈도우 2회 발동', en: 'Trigger 2 Golden Windows' },
+    statusSafe: { ko: '안정 운영', en: 'Stable' },
+    statusRisk: { ko: '위험 구간', en: 'Risk' },
+    statusGolden: { ko: '골든 윈도우', en: 'Golden Window' },
+    dirBuffer: { ko: 'Buffer Baffles', en: 'Buffer Baffles' },
+    dirBufferDesc: { ko: '안전 구간을 넓혀 안정 운용을 쉽게 만듭니다.', en: 'Widen the safe pressure band for steadier control.' },
+    dirOverclock: { ko: 'Turbine Overclock', en: 'Turbine Overclock' },
+    dirOverclockDesc: { ko: '출력 배율이 오르지만 위험 구간 손실도 조금 커집니다.', en: 'Raise score output, but danger penalties also rise.' },
+    dirSalvage: { ko: 'Salvage Crew', en: 'Salvage Crew' },
+    dirSalvageDesc: { ko: '벤트 최대치와 충전 속도를 높입니다.', en: 'Increase vent capacity and recharge speed.' },
+    dirPatch: { ko: 'Sealant Patch', en: 'Sealant Patch' },
+    dirPatchDesc: { ko: '즉시 무결성을 회복하고 회복 속도를 높입니다.', en: 'Instantly restore integrity and improve passive recovery.' },
+    noDirective: { ko: '없음', en: 'None' }
+  });
+
+  const ui = {
+    hud: document.getElementById('hud'),
+    score: document.getElementById('hudScore'),
+    level: document.getElementById('hudLevel'),
+    output: document.getElementById('hudOutput'),
+    vent: document.getElementById('hudVent'),
+    forecast: document.getElementById('hudForecast'),
+    status: document.getElementById('hudStatus'),
+    golden: document.getElementById('hudGolden'),
+    integrity: document.getElementById('hudIntegrity'),
+    integrityFill: document.getElementById('integrityFill'),
+    demandFill: document.getElementById('demandFill'),
+    stabilityFill: document.getElementById('stabilityFill'),
+    routes: [document.getElementById('route0'), document.getElementById('route1'), document.getElementById('route2')],
+    vents: [document.getElementById('vent0'), document.getElementById('vent1'), document.getElementById('vent2')],
+    titleScreen: document.getElementById('titleScreen'),
+    directiveScreen: document.getElementById('directiveScreen'),
+    directiveTitle: document.getElementById('directiveTitle'),
+    directiveDesc: document.getElementById('directiveDesc'),
+    directiveList: document.getElementById('directiveList'),
+    gameOverScreen: document.getElementById('gameOverScreen'),
+    titleText: document.getElementById('titleText'),
+    titleDesc: document.getElementById('titleDesc'),
+    startBtn: document.getElementById('startBtn'),
+    bestText: document.getElementById('bestText'),
+    hintText: document.getElementById('hintText'),
+    missionBoard: document.getElementById('missionBoard'),
+    overTitle: document.getElementById('overTitle'),
+    resultLine: document.getElementById('resultLine'),
+    resultLine2: document.getElementById('resultLine2'),
+    resultLine3: document.getElementById('resultLine3'),
+    resultMissionBoard: document.getElementById('resultMissionBoard'),
+    retryBtn: document.getElementById('retryBtn'),
+    homeBtn: document.getElementById('homeBtn'),
+    toast: document.getElementById('toast'),
+    banner: document.getElementById('banner')
+  };
+
+  const soundMgr = typeof SoundManager === 'function' ? new SoundManager() : null;
+  const sfxRoute = typeof Sound === 'function' ? new Sound([1,.06,.24,.02,.08,.18,,.2]) : null;
+  const sfxVent = typeof Sound === 'function' ? new Sound([1,.03,.12,.07,.3,.45,,.3]) : null;
+  const sfxAlert = typeof Sound === 'function' ? new Sound([1,.02,.6,.2,.2,.3,,.5]) : null;
+  const sfxGolden = typeof Sound === 'function' ? new Sound([1,.02,.34,.08,.28,.62,,.5]) : null;
+
+  const lineNames = ['laneN', 'laneE', 'laneW'];
+  const tankNames = ['tankA', 'tankB', 'tankC'];
+  const linePos = [vec2(-4.8, 4.4), vec2(0, 4.4), vec2(4.8, 4.4)];
+  const tankPos = [vec2(-4.2, -1.1), vec2(0, -1.1), vec2(4.2, -1.1)];
+
+  const directivePool = [
+    { key: 'buffer', title: 'dirBuffer', desc: 'dirBufferDesc' },
+    { key: 'overclock', title: 'dirOverclock', desc: 'dirOverclockDesc' },
+    { key: 'salvage', title: 'dirSalvage', desc: 'dirSalvageDesc' },
+    { key: 'patch', title: 'dirPatch', desc: 'dirPatchDesc' }
+  ];
+
+  let gameState = 'title';
+  let score = 0;
+  let level = 1;
+  let totalOutput = 0;
+  let integrity = 100;
+  let demand = 1;
+  let bestScore = 0;
+  let bestLevel = 1;
+  let bestGoldenWindows = 0;
+  let lastDirective = 'noDirective';
+
+  let tanks = [52, 48, 50];
+  let routes = [0, 1, 2];
+  let vents = 2;
+  let ventCharge = 0;
+  let ventCapacity = 3;
+
+  let surgeQueue = [];
+  let surgeTimer = 1.25;
+  let levelTimer = 0;
+  let nextDirectiveLevel = 2;
+  let activeDirectiveChoices = [];
+  let directiveCount = 0;
+  let directiveHistory = [];
+
+  let pulseFx = [];
+  let routeFlash = [0, 0, 0];
+  let tankHighlight = [0, 0, 0];
+  let stabilityTimer = 0;
+  let goldenWindowActive = 0;
+  let goldenWindowCooldown = 0;
+  let goldenWindows = 0;
+  let scoreMultiplier = 1;
+  let ventRegenMultiplier = 1;
+  let passiveRepair = 0.9;
+  let dangerPenaltyMultiplier = 1;
+  let safeBandBonus = 0;
+
+  let missions = {
+    level3: false,
+    directive1: false,
+    golden2: false
+  };
+
+  function fmt(template, vars){
+    return template.replace(/\{(\w+)\}/g, (_, key) => vars[key] ?? '');
+  }
+
+  function clamp01(v){ return clamp(v, 0, 1); }
+  function safeLow(){ return BASE_SAFE_LOW - safeBandBonus; }
+  function safeHigh(){ return BASE_SAFE_HIGH + safeBandBonus; }
+  function currentDirectiveLabel(){ return directiveHistory.length ? T(directiveHistory[directiveHistory.length - 1].title) : T('noDirective'); }
+  function pickDirectives(count){
+    const pool = [...directivePool];
+    const picks = [];
+    while (pool.length && picks.length < count) {
+      const index = Math.floor(Math.random() * pool.length);
+      picks.push(pool.splice(index, 1)[0]);
+    }
+    return picks;
+  }
+
+  function playSfx(sfx){
+    try { if (sfx) sfx.play(); } catch (_) {}
+    try { soundMgr?.play?.('tap'); } catch (_) {}
+  }
+
+  function showToast(text){
+    ui.toast.textContent = text;
+    ui.toast.classList.add('show');
+    clearTimeout(showToast._timer);
+    showToast._timer = setTimeout(() => ui.toast.classList.remove('show'), 780);
+  }
+
+  function showBanner(text){
+    ui.banner.textContent = text;
+    ui.banner.classList.add('show');
+    clearTimeout(showBanner._timer);
+    showBanner._timer = setTimeout(() => ui.banner.classList.remove('show'), 1200);
+  }
+
+  function buildMissionMarkup(){
+    const items = [
+      { done: missions.level3, label: T('missionLevel3') },
+      { done: missions.directive1, label: T('missionDirective') },
+      { done: missions.golden2, label: T('missionGolden2') }
+    ];
+    return items.map(item => `<div class="missionItem${item.done ? ' done' : ''}">${item.done ? '✔ ' : '• '}${item.label}</div>`).join('');
+  }
+
+  function updateMissionProgress(){
+    const before = JSON.stringify(missions);
+    if (level >= 3) missions.level3 = true;
+    if (directiveCount >= 1) missions.directive1 = true;
+    if (goldenWindows >= 2) missions.golden2 = true;
+    if (before !== JSON.stringify(missions)) saveSave();
+  }
+
+  function makeSurge(mult=1){
+    const lane = randInt(3);
+    const strength = Math.floor(rand(18, 8) * mult);
+    return { lane, strength };
+  }
+
+  function refillQueue(){
+    while (surgeQueue.length < 3) surgeQueue.push(makeSurge(1 + (level - 1) * 0.09));
+  }
+
+  function loadSave(){
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const data = JSON.parse(raw);
+      bestScore = Number(data.bestScore) || 0;
+      bestLevel = Number(data.bestLevel) || 1;
+      bestGoldenWindows = Number(data.bestGoldenWindows) || 0;
+      lastDirective = data.lastDirective || 'noDirective';
+      if (data.missions && typeof data.missions === 'object') {
+        missions = {
+          level3: !!data.missions.level3,
+          directive1: !!data.missions.directive1,
+          golden2: !!data.missions.golden2
+        };
+      }
+    } catch (_) {}
+  }
+
+  function saveSave(){
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        bestScore,
+        bestLevel,
+        bestGoldenWindows,
+        missions,
+        lastDirective
+      }));
+    } catch (_) {}
+  }
+
+  function routeLabel(index){
+    return `${T(lineNames[index])}→${String.fromCharCode(65 + routes[index])}`;
+  }
+
+  function ventLabel(index){
+    return `${T('vent')} ${String.fromCharCode(65 + index)}`;
+  }
+
+  function forecastLabel(){
+    refillQueue();
+    return `${T('forecast')} ${surgeQueue.slice(0, 3).map(s => `${T(lineNames[s.lane])}+${s.strength}`).join(' · ')}`;
+  }
+
+  function statusLabel(){
+    if (goldenWindowActive > 0) return `${T('status')}: ${T('statusGolden')}`;
+    const safeAll = tanks.every(v => v >= safeLow() && v <= safeHigh());
+    return `${T('status')}: ${safeAll ? T('statusSafe') : T('statusRisk')}`;
+  }
+
+  function applyTexts(){
+    ui.titleText.textContent = T('title');
+    ui.titleDesc.textContent = T('titleDesc');
+    ui.startBtn.textContent = T('start');
+    ui.retryBtn.textContent = T('retry');
+    ui.homeBtn.textContent = T('home');
+    ui.overTitle.textContent = T('over');
+    ui.hintText.textContent = T('hint');
+    ui.directiveTitle.textContent = T('directiveTitle');
+    ui.directiveDesc.textContent = T('directiveDesc');
+  }
+
+  function updateMissionBoards(){
+    ui.missionBoard.innerHTML = buildMissionMarkup();
+    ui.resultMissionBoard.innerHTML = buildMissionMarkup();
+  }
+
+  function updateHUD(){
+    ui.score.textContent = `${T('score')} ${Math.floor(score)}`;
+    ui.level.textContent = `${T('level')} ${level}`;
+    ui.output.textContent = `${T('output')} ${Math.floor(totalOutput)}`;
+    ui.vent.textContent = `${T('vent')} ${vents}`;
+    ui.integrity.textContent = `${T('integrity')} ${Math.floor(integrity)}`;
+    ui.forecast.textContent = forecastLabel();
+    ui.status.textContent = statusLabel();
+    ui.golden.textContent = `${T('golden')} ${goldenWindows}${goldenWindowActive > 0 ? ' ✦' : ''}`;
+
+    ui.integrityFill.style.width = `${clamp01(integrity / 100) * 100}%`;
+    ui.demandFill.style.width = `${clamp01(demand / 4.5) * 100}%`;
+    ui.stabilityFill.style.width = `${clamp01(stabilityTimer / GOLDEN_TRIGGER) * 100}%`;
+
+    for (let i = 0; i < 3; i++) {
+      ui.routes[i].textContent = routeLabel(i);
+      ui.vents[i].textContent = ventLabel(i);
+      ui.vents[i].disabled = gameState !== 'play' || vents <= 0;
+      ui.routes[i].disabled = gameState !== 'play';
+    }
+
+    ui.bestText.textContent = `${T('best')} ${bestScore} · ${T('level')} ${bestLevel} · ${T('golden')} ${bestGoldenWindows}`;
+    ui.resultLine.textContent = fmt(T('scoreLine'), { s: Math.floor(score), l: level });
+    ui.resultLine2.textContent = fmt(T('outputLine'), { o: Math.floor(totalOutput) });
+    ui.resultLine3.textContent = fmt(T('directiveLine'), { d: currentDirectiveLabel() });
+    updateMissionBoards();
+  }
+
+  function resetRun(){
+    score = 0;
+    level = 1;
+    totalOutput = 0;
+    integrity = 100;
+    demand = 1;
+    tanks = [52, 48, 50];
+    routes = [0, 1, 2];
+    vents = 2;
+    ventCharge = 0;
+    ventCapacity = 3;
+    surgeQueue = [makeSurge(), makeSurge(), makeSurge()];
+    surgeTimer = 1.25;
+    levelTimer = 0;
+    nextDirectiveLevel = 2;
+    activeDirectiveChoices = [];
+    directiveCount = 0;
+    directiveHistory = [];
+    pulseFx = [];
+    routeFlash = [0, 0, 0];
+    tankHighlight = [0, 0, 0];
+    stabilityTimer = 0;
+    goldenWindowActive = 0;
+    goldenWindowCooldown = 0;
+    goldenWindows = 0;
+    scoreMultiplier = 1;
+    ventRegenMultiplier = 1;
+    passiveRepair = 0.9;
+    dangerPenaltyMultiplier = 1;
+    safeBandBonus = 0;
+  }
+
+  function setTitle(){
+    gameState = 'title';
+    ui.hud.classList.add('hidden');
+    ui.directiveScreen.classList.add('hidden');
+    ui.gameOverScreen.classList.add('hidden');
+    ui.titleScreen.classList.remove('hidden');
+    updateHUD();
+  }
+
+  function startRun(){
+    gameState = 'play';
+    resetRun();
+    ui.titleScreen.classList.add('hidden');
+    ui.directiveScreen.classList.add('hidden');
+    ui.gameOverScreen.classList.add('hidden');
+    ui.hud.classList.remove('hidden');
+    updateHUD();
+    try { window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.('light'); } catch (_) {}
+  }
+
+  function endRun(){
+    gameState = 'gameover';
+    ui.hud.classList.add('hidden');
+    ui.directiveScreen.classList.add('hidden');
+    ui.titleScreen.classList.add('hidden');
+    ui.gameOverScreen.classList.remove('hidden');
+
+    bestScore = Math.max(bestScore, Math.floor(score));
+    bestLevel = Math.max(bestLevel, level);
+    bestGoldenWindows = Math.max(bestGoldenWindows, goldenWindows);
+    lastDirective = directiveHistory.length ? directiveHistory[directiveHistory.length - 1].title : lastDirective;
+    updateMissionProgress();
+    saveSave();
+    updateHUD();
+
+    try {
+      const name = (window.Telegram?.WebApp?.initDataUnsafe?.user?.username || 'Player').slice(0, 24);
+      window.Leaderboard?.submit?.(GAME_ID, name, Math.floor(score), { level, output: Math.floor(totalOutput), goldenWindows });
+      window.Leaderboard?.getTop?.(GAME_ID)?.then(rows => window.Leaderboard?.renderBoard?.('leaderboard', rows));
+    } catch (_) {}
+  }
+
+  function emitPulse(from, to, hue=.53){
+    pulseFx.push({ from: from.copy(), to: to.copy(), t: 0, hue });
+  }
+
+  function triggerGoldenWindow(){
+    goldenWindows += 1;
+    goldenWindowActive = 6.4;
+    goldenWindowCooldown = 11;
+    stabilityTimer = 0;
+    showToast(T('toastGolden'));
+    showBanner(T('bannerGolden'));
+    playSfx(sfxGolden);
+    for (let i = 0; i < 3; i++) {
+      tankHighlight[i] = 1.2;
+      emitPulse(linePos[i], tankPos[i].add(vec2(0, 1.3)), .14 + i * .04);
+    }
+    updateMissionProgress();
+  }
+
+  function applyDirective(choice){
+    directiveCount += 1;
+    directiveHistory.push(choice);
+    lastDirective = choice.title;
+
+    if (choice.key === 'buffer') safeBandBonus += 5;
+    if (choice.key === 'overclock') {
+      scoreMultiplier += 0.22;
+      dangerPenaltyMultiplier += 0.18;
+    }
+    if (choice.key === 'salvage') {
+      ventCapacity = Math.min(5, ventCapacity + 1);
+      ventRegenMultiplier += 0.26;
+      vents = Math.min(ventCapacity, vents + 1);
+    }
+    if (choice.key === 'patch') {
+      integrity = clamp(integrity + 18, 0, 100);
+      passiveRepair += 0.34;
+    }
+
+    missions.directive1 = true;
+    saveSave();
+    gameState = 'play';
+    ui.directiveScreen.classList.add('hidden');
+    ui.hud.classList.remove('hidden');
+    showBanner(T('bannerDirective'));
+    showToast(T(choice.title));
+    playSfx(sfxRoute);
+    updateHUD();
+  }
+
+  function openDirectiveDraft(){
+    gameState = 'directive';
+    ui.hud.classList.add('hidden');
+    ui.directiveScreen.classList.remove('hidden');
+    activeDirectiveChoices = pickDirectives(3);
+    ui.directiveList.innerHTML = '';
+    activeDirectiveChoices.forEach(choice => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'directiveBtn';
+      button.innerHTML = `<b>${T(choice.title)}</b><span>${T(choice.desc)}</span>`;
+      button.addEventListener('click', () => applyDirective(choice));
+      ui.directiveList.appendChild(button);
+    });
+    showToast(T('toastDirective'));
+  }
+
+  function applySurge(){
+    refillQueue();
+    const surge = surgeQueue.shift();
+    const targetTank = routes[surge.lane];
+    tanks[targetTank] += surge.strength * (1 + level * 0.036);
+    emitPulse(linePos[surge.lane], tankPos[targetTank].add(vec2(0, 1.5)), .55);
+    tankHighlight[targetTank] = Math.max(tankHighlight[targetTank], 0.8);
+    if (surge.strength >= 16) {
+      showToast(T('toastSurge'));
+      playSfx(sfxAlert);
+    }
+    surgeQueue.push(makeSurge(1 + (level - 1) * 0.12));
+  }
+
+  function rotateRoute(i){
+    if (gameState !== 'play') return;
+    routes[i] = (routes[i] + 1) % 3;
+    routeFlash[i] = 0.9;
+    tankHighlight[routes[i]] = Math.max(tankHighlight[routes[i]], 0.9);
+    emitPulse(linePos[i], tankPos[routes[i]].add(vec2(0, 1.5)), .52);
+    showToast(fmt(T('toastRoute'), { lane: T(lineNames[i]), tank: T(tankNames[routes[i]]) }));
+    playSfx(sfxRoute);
+    try { window.Telegram?.WebApp?.HapticFeedback?.selectionChanged?.(); } catch (_) {}
+    updateHUD();
+  }
+
+  function ventTank(i){
+    if (gameState !== 'play') return;
+    if (vents <= 0) {
+      showToast(T('toastNoVent'));
+      return;
+    }
+    vents -= 1;
+    tanks[i] = max(0, tanks[i] - (22 + level * 0.8));
+    emitPulse(tankPos[i].add(vec2(0, -1.2)), tankPos[i].add(vec2(0, -2.4)), .09);
+    tankHighlight[i] = 1;
+    showToast(fmt(T('toastVent'), { tank: T(tankNames[i]) }));
+    playSfx(sfxVent);
+    try { window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.('medium'); } catch (_) {}
+    updateHUD();
+  }
+
+  function updatePlay(){
+    surgeTimer -= timeDelta;
+    if (surgeTimer <= 0) {
+      applySurge();
+      surgeTimer = max(0.46, 1.26 - level * 0.055);
+    }
+
+    levelTimer += timeDelta;
+    if (levelTimer >= 20) {
+      levelTimer = 0;
+      level += 1;
+      demand = min(4.5, demand + 0.34);
+      showToast(fmt(T('toastLevel'), { l: level }));
+      playSfx(sfxAlert);
+      if (level >= nextDirectiveLevel && nextDirectiveLevel <= 6) {
+        nextDirectiveLevel += 2;
+        openDirectiveDraft();
+      }
+    }
+
+    ventCharge += timeDelta * (0.09 + level * 0.012) * ventRegenMultiplier;
+    if (ventCharge >= 1 && vents < ventCapacity) {
+      vents += 1;
+      ventCharge = 0;
+    }
+
+    const avg = (tanks[0] + tanks[1] + tanks[2]) / 3;
+    for (let i = 0; i < 3; i++) {
+      tanks[i] += (avg - tanks[i]) * 0.012;
+      tanks[i] -= (0.56 + demand * 0.42) * timeDelta;
+      tanks[i] = clamp(tanks[i], 0, 100);
+    }
+
+    const safeAll = tanks.every(v => v >= safeLow() && v <= safeHigh());
+    if (safeAll) {
+      stabilityTimer += timeDelta;
+      if (stabilityTimer >= GOLDEN_TRIGGER && goldenWindowCooldown <= 0 && goldenWindowActive <= 0) triggerGoldenWindow();
+    } else {
+      stabilityTimer = max(0, stabilityTimer - timeDelta * 1.6);
+    }
+
+    if (goldenWindowActive > 0) goldenWindowActive -= timeDelta;
+    if (goldenWindowCooldown > 0) goldenWindowCooldown -= timeDelta;
+
+    const diff = Math.abs(tanks[0] - tanks[1]) + Math.abs(tanks[1] - tanks[2]) + Math.abs(tanks[2] - tanks[0]);
+    const safeBonus = safeAll ? 4.4 : 0;
+    const goldenBonus = goldenWindowActive > 0 ? 6.5 : 0;
+    const outputNow = max(0, diff * 0.115 + safeBonus + goldenBonus - demand * 1.45);
+
+    totalOutput += outputNow * timeDelta * 8;
+    score += (outputNow * timeDelta * 13 + level * 0.62 * timeDelta) * scoreMultiplier * (goldenWindowActive > 0 ? 1.4 : 1);
+
+    let danger = 0;
+    for (let i = 0; i < 3; i++) {
+      const v = tanks[i];
+      if (v < CRIT_LOW || v > CRIT_HIGH) danger += 1;
+      if (v < 6 || v > 97) danger += 1.45;
+    }
+
+    if (danger > 0) {
+      integrity -= danger * (1.16 + demand * 0.72) * timeDelta * dangerPenaltyMultiplier;
+      if (danger > 1.5 && rand() < 0.03) playSfx(sfxAlert);
+    } else {
+      integrity += passiveRepair * timeDelta;
+    }
+    integrity = clamp(integrity, 0, 100);
+
+    for (let i = pulseFx.length - 1; i >= 0; i--) {
+      pulseFx[i].t += timeDelta * 2.5;
+      if (pulseFx[i].t >= 1) pulseFx.splice(i, 1);
+    }
+    for (let i = 0; i < 3; i++) {
+      routeFlash[i] = max(0, routeFlash[i] - timeDelta * 1.9);
+      tankHighlight[i] = max(0, tankHighlight[i] - timeDelta * 1.4);
+    }
+
+    updateMissionProgress();
+    if (integrity <= 0) endRun();
+    updateHUD();
+  }
+
+  function pressureColor(v){
+    if (v < CRIT_LOW || v > CRIT_HIGH) return hsl(.04, .62, .53);
+    if (v >= safeLow() && v <= safeHigh()) return hsl(.34, .38, .5);
+    return hsl(.1, .48, .56);
+  }
+
+  function drawBackground(){
+    const goldenGlow = goldenWindowActive > 0 ? 0.12 + goldenWindowActive * 0.01 : 0;
+    drawRect(vec2(0, 0), vec2(22, 14), hsl(.11, .28, .88 + goldenGlow));
+    drawRect(vec2(0, -3.8), vec2(22, 6), hsl(.1, .25, .8 + goldenGlow * 0.8));
+    if (goldenWindowActive > 0) drawRect(vec2(0, 0), vec2(22, 14), hsl(.13, .55, .8, .14));
+
+    for (let i = 0; i < 3; i++) {
+      const x = -6 + i * 6;
+      drawRect(vec2(x, 5.1), vec2(1.4, .5), hsl(.53, .32, .55));
+      drawCircle(vec2(x, 5.1), .34 + routeFlash[i] * 0.2, hsl(.56, .72, .76, routeFlash[i] * .55));
+    }
+
+    drawLine(vec2(-7, 3.7), vec2(7, 3.7), .12, hsl(.53, .2, .54));
+    drawLine(vec2(-7, -3.8), vec2(7, -3.8), .18, hsl(.11, .25, .45));
+  }
+
+  function drawTank(i){
+    const pos = tankPos[i];
+    const pressure = tanks[i];
+    const fill = clamp01(pressure / 100);
+    const glow = tankHighlight[i];
+
+    if (glow > 0) drawCircle(pos.add(vec2(0, -0.1)), 1.7 + glow * .25, hsl(.13 + i * .04, .8, .72, glow * .28));
+    drawRect(pos, vec2(2.35, 3.2), hsl(.54, .18, .34));
+    drawRect(pos.add(vec2(0, -1.05 + fill * 1.45)), vec2(1.88, fill * 2.9), pressureColor(pressure));
+    drawRect(pos.add(vec2(0, 1.78)), vec2(2.4, .14), hsl(.12, .25, .3));
+    drawLine(pos.add(vec2(-1.17, -1.46)), pos.add(vec2(1.17, -1.46)), .08, hsl(.13, .2, .22));
+
+    const ratio = clamp01((pressure - safeLow()) / (safeHigh() - safeLow()));
+    drawRect(pos.add(vec2(0, -1.95)), vec2(1.9, .12), hsl(.13, .15, .24));
+    drawRect(pos.add(vec2(-.95 + ratio * .95, -1.95)), vec2(ratio * 1.9, .1), hsl(.34, .4, .55));
+    drawText(String.fromCharCode(65 + i), pos.add(vec2(0, -2.36)), .58, hsl(.12, .2, .2), .08, hsl(.1, .26, .9));
+    drawText(`${Math.round(pressure)}`, pos.add(vec2(0, 0.12)), .45, hsl(.1, .2, .92), .07, hsl(.12, .2, .2));
+  }
+
+  function drawRoutes(){
+    for (let i = 0; i < 3; i++) {
+      const from = linePos[i];
+      const to = tankPos[routes[i]].add(vec2(0, 1.55));
+      drawLine(from, to, .12, hsl(.53, .45, .52));
+      drawLine(from, to, .05, hsl(.56, .64, .78));
+    }
+  }
+
+  function drawPulse(){
+    for (let i = 0; i < pulseFx.length; i++) {
+      const p = pulseFx[i];
+      const pos = p.from.lerp(p.to, p.t);
+      drawCircle(pos, .19, hsl(p.hue, .75, .62));
+      drawCircle(pos, .08, hsl(.12, .25, .9));
+    }
+  }
+
+  function gameInit(){
+    setCameraPos(vec2(0, 0));
+    setCameraScale(38);
+    canvasClearColor = hsl(.1, .24, .9);
+
+    loadSave();
+    applyTexts();
+    updateMissionBoards();
+    setTitle();
+
+    ui.startBtn.addEventListener('click', startRun);
+    ui.retryBtn.addEventListener('click', startRun);
+    ui.homeBtn.addEventListener('click', setTitle);
+    for (let i = 0; i < 3; i++) {
+      ui.routes[i].addEventListener('click', () => rotateRoute(i));
+      ui.vents[i].addEventListener('click', () => ventTank(i));
+    }
+
+    try {
+      window.Leaderboard?.getTop?.(GAME_ID)?.then(rows => window.Leaderboard?.renderBoard?.('leaderboard', rows));
+    } catch (_) {}
+  }
+
+  function gameUpdate(){
+    if (gameState === 'play') updatePlay();
+  }
+
+  function gameUpdatePost(){}
+
+  function gameRender(){
+    drawBackground();
+    drawRoutes();
+    drawPulse();
+    for (let i = 0; i < 3; i++) drawTank(i);
+    drawText(`${T('demand')} ${demand.toFixed(1)}`, vec2(0, -4.95), .5, hsl(.11, .35, .3), .08, hsl(.1, .22, .9));
+    if (goldenWindowActive > 0) {
+      drawText(T('bannerGolden'), vec2(0, 3.1), .72, hsl(.13, .8, .45), .08, hsl(.1, .24, .95));
+    }
+  }
+
+  function gameRenderPost(){
+    if (gameState !== 'play') return;
+    drawTextScreen(T('hint'), vec2(mainCanvasSize.x / 2, mainCanvasSize.y - 34), 17, hsl(.1, .18, .28), 3, hsl(.1, .24, .93));
+  }
+
+  window.__tideRefinery = {
+    getState: () => ({
+      gameState,
+      score: Math.floor(score),
+      level,
+      totalOutput: Math.floor(totalOutput),
+      integrity: Math.floor(integrity),
+      tanks: tanks.map(v => Math.round(v)),
+      vents,
+      missions: { ...missions },
+      goldenWindows,
+      lastDirective,
+      forecast: surgeQueue.slice(0, 3)
+    }),
+    forceDirective: () => { if (gameState === 'play') openDirectiveDraft(); },
+    forceGolden: () => { if (gameState === 'play') triggerGoldenWindow(); },
+    forceGameOver: () => { if (gameState === 'play') { integrity = 0; endRun(); } },
+    setTanks: (values) => {
+      if (!Array.isArray(values) || values.length !== 3) return;
+      tanks = values.map(v => clamp(Number(v) || 0, 0, 100));
+      updateHUD();
+    }
+  };
+
+  if (typeof setShowSplashScreen === 'function') setShowSplashScreen(false);
+  engineInit(gameInit, gameUpdate, gameUpdatePost, gameRender, gameRenderPost);
+})();
+</script>
+</body>
+</html>

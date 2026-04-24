@@ -1,0 +1,1317 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <title>Infinite Dungeon Tap — 인피니트 던전 탭</title>
+  <meta name="description" content="하강하는 3개의 던전 문 중 하나를 정확히 탭해 돌파하고, 유물 드래프트로 빌드를 바꾸며 끝없는 심연을 내려가는 판정형 로그라이크 아케이드." />
+  <meta property="og:title" content="Infinite Dungeon Tap — 인피니트 던전 탭" />
+  <meta property="og:description" content="3개의 문 중 하나를 정확한 타이밍에 돌파하고, 유물 드래프트로 빌드를 바꾸며 심연을 내려가세요." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://games.eastsea.xyz/infinite-dungeon-tap/" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="canonical" href="https://games.eastsea.xyz/infinite-dungeon-tap/" />
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"VideoGame","name":"Infinite Dungeon Tap","description":"Tap one of three falling dungeon doors on the breach line, draft relics, and descend the abyss.","genre":"Action Roguelike","gamePlatform":"Web Browser","operatingSystem":"Any","url":"https://games.eastsea.xyz/infinite-dungeon-tap/"}</script>
+  <script defer src="/games/_engine/littlejs.min.js"></script>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f3e4c8;
+      --panel: rgba(255, 248, 235, 0.88);
+      --panel-strong: rgba(255, 247, 231, 0.96);
+      --line: rgba(97, 71, 40, 0.18);
+      --ink: #2f2219;
+      --muted: #725845;
+      --gold: #d49a2a;
+      --teal: #2f7f7b;
+      --wine: #713f59;
+      --wine-deep: #48243e;
+      --jade: #4f946f;
+      --danger: #a34747;
+      --shadow: rgba(38, 20, 9, 0.16);
+      font-family: "Pretendard", "Noto Sans KR", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background:
+        radial-gradient(circle at 50% -20%, rgba(255, 251, 242, 0.95) 0%, rgba(246, 233, 204, 0.92) 42%, rgba(227, 204, 169, 0.98) 100%),
+        linear-gradient(180deg, #f6e6ca 0%, #e6cda3 100%);
+      color: var(--ink);
+    }
+
+    body {
+      display: flex;
+      justify-content: center;
+      padding:
+        calc(env(safe-area-inset-top) + 10px)
+        10px
+        calc(env(safe-area-inset-bottom) + 14px);
+      touch-action: manipulation;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .app {
+      width: min(100%, 520px);
+      display: grid;
+      gap: 10px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 2px 2px 0;
+    }
+
+    .eyebrow {
+      font-size: 0.72rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 900;
+    }
+
+    .title {
+      margin: 2px 0 0;
+      font-size: clamp(1rem, 3.6vw, 1.28rem);
+      line-height: 1.12;
+      font-weight: 950;
+    }
+
+    .tagline {
+      margin: 2px 0 0;
+      font-size: 0.8rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    .badge {
+      flex: 0 0 auto;
+      padding: 9px 12px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.62);
+      border: 1px solid var(--line);
+      box-shadow: 0 8px 22px var(--shadow);
+      font-size: 0.78rem;
+      font-weight: 850;
+      color: var(--wine-deep);
+    }
+
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .card {
+      padding: 9px 8px;
+      border-radius: 16px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      box-shadow: 0 10px 24px var(--shadow);
+      backdrop-filter: blur(8px);
+      text-align: center;
+    }
+
+    .card span {
+      display: block;
+      font-size: 0.66rem;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      text-transform: uppercase;
+      font-weight: 850;
+    }
+
+    .card strong {
+      display: block;
+      margin-top: 4px;
+      font-size: 1rem;
+      line-height: 1.1;
+    }
+
+    .stage {
+      position: relative;
+      overflow: hidden;
+      border-radius: 24px;
+      border: 1px solid rgba(96, 70, 41, 0.18);
+      box-shadow: 0 22px 42px rgba(69, 34, 18, 0.16);
+      background: #f4dcc0;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+      aspect-ratio: 390 / 844;
+      background: linear-gradient(180deg, #f4e8d3 0%, #dbc7a0 36%, #6c4563 100%);
+      touch-action: none;
+    }
+
+    .overlay,
+    .toast,
+    .banner {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 4;
+    }
+
+    .overlay {
+      inset: 0;
+      left: 0;
+      transform: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      background: linear-gradient(180deg, rgba(91, 56, 45, 0.15), rgba(54, 28, 47, 0.42));
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 160ms ease;
+    }
+
+    .overlay.show {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .overlay-card {
+      width: min(100%, 364px);
+      padding: 18px;
+      border-radius: 24px;
+      background: var(--panel-strong);
+      border: 1px solid rgba(103, 76, 44, 0.18);
+      box-shadow: 0 20px 40px rgba(62, 31, 14, 0.2);
+    }
+
+    .overlay-title {
+      margin: 0 0 10px;
+      font-size: 1.46rem;
+      line-height: 1.05;
+      font-weight: 950;
+    }
+
+    .overlay-sub {
+      margin: 0 0 14px;
+      font-size: 0.92rem;
+      line-height: 1.5;
+      color: var(--muted);
+    }
+
+    .mini-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .mini {
+      padding: 10px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.64);
+      border: 1px solid rgba(98, 69, 39, 0.12);
+      font-size: 0.82rem;
+      line-height: 1.42;
+    }
+
+    .mini b {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 0.74rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .ledger {
+      display: grid;
+      gap: 6px;
+      margin-bottom: 14px;
+      padding: 10px 12px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.56);
+      border: 1px solid rgba(104, 73, 43, 0.12);
+      font-size: 0.84rem;
+      line-height: 1.35;
+    }
+
+    .ledger-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .ledger-row small {
+      color: var(--muted);
+    }
+
+    .relic-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.68);
+      border: 1px solid rgba(98, 68, 39, 0.12);
+      font-size: 0.76rem;
+      font-weight: 800;
+      color: var(--muted);
+    }
+
+    .controls,
+    .choices {
+      display: grid;
+      gap: 8px;
+    }
+
+    .controls {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .choices {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      margin-top: 12px;
+    }
+
+    button {
+      appearance: none;
+      border: 1px solid rgba(112, 80, 49, 0.18);
+      border-radius: 18px;
+      background: linear-gradient(180deg, rgba(255, 249, 240, 0.96), rgba(247, 228, 199, 0.96));
+      color: var(--ink);
+      padding: 13px 12px;
+      font: inherit;
+      font-size: 0.94rem;
+      font-weight: 850;
+      letter-spacing: 0.02em;
+      box-shadow: 0 12px 24px rgba(83, 44, 20, 0.12);
+      cursor: pointer;
+      transition: transform 100ms ease, box-shadow 100ms ease, border-color 100ms ease;
+      min-height: 58px;
+    }
+
+    button:active,
+    button.on {
+      transform: translateY(1px) scale(0.99);
+      box-shadow: 0 6px 14px rgba(83, 44, 20, 0.16);
+      border-color: rgba(112, 80, 49, 0.32);
+    }
+
+    .primary {
+      background: linear-gradient(180deg, #b77b3f, #875234);
+      color: #fffdf8;
+      border-color: rgba(82, 48, 24, 0.18);
+    }
+
+    .lane-btn[data-lane="0"] { color: #7f3b4f; }
+    .lane-btn[data-lane="1"] { color: #285f68; }
+    .lane-btn[data-lane="2"] { color: #8d642f; }
+
+    .hint {
+      margin: 0;
+      padding: 2px 4px 0;
+      text-align: center;
+      font-size: 0.8rem;
+      line-height: 1.45;
+      color: var(--muted);
+    }
+
+    .toast {
+      top: 12px;
+      max-width: calc(100% - 28px);
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(47, 34, 25, 0.84);
+      color: #fffdf6;
+      font-size: 0.84rem;
+      font-weight: 850;
+      letter-spacing: 0.02em;
+      box-shadow: 0 10px 22px rgba(0, 0, 0, 0.18);
+      opacity: 0;
+      transition: opacity 140ms ease;
+      pointer-events: none;
+    }
+
+    .toast.show { opacity: 1; }
+
+    .banner {
+      top: 72px;
+      padding: 10px 16px;
+      border-radius: 999px;
+      background: rgba(255, 247, 226, 0.92);
+      border: 1px solid rgba(107, 73, 42, 0.14);
+      color: #844f6a;
+      font-weight: 950;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      box-shadow: 0 12px 24px rgba(83, 44, 20, 0.12);
+      opacity: 0;
+      transition: opacity 140ms ease;
+      pointer-events: none;
+    }
+
+    .banner.show { opacity: 1; }
+
+    .hidden { display: none !important; }
+
+    @media (max-width: 440px) {
+      .title { font-size: 1rem; }
+      .overlay-card { padding: 16px; }
+      .overlay-title { font-size: 1.32rem; }
+      button { font-size: 0.88rem; padding: 12px 8px; }
+      .hud { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="topbar">
+      <div>
+        <div class="eyebrow">Abyss Ledger</div>
+        <h1 class="title">Infinite Dungeon Tap</h1>
+        <p class="tagline">문을 읽고, 라인에 맞춰 돌파하고, 유물로 런의 규칙을 바꾸세요.</p>
+      </div>
+      <div class="badge" id="bestBadge">BEST 0</div>
+    </section>
+
+    <section class="hud">
+      <div class="card"><span>Score</span><strong id="scoreValue">0</strong></div>
+      <div class="card"><span>Depth</span><strong id="depthValue">0</strong></div>
+      <div class="card"><span>HP / Ward</span><strong id="hpValue">4 / 0</strong></div>
+      <div class="card"><span>Combo</span><strong id="comboValue">0</strong></div>
+    </section>
+
+    <section class="stage">
+      <canvas id="game" width="390" height="844"></canvas>
+      <div class="toast" id="toast"></div>
+      <div class="banner" id="banner"></div>
+
+      <div class="overlay show" id="titleOverlay">
+        <div class="overlay-card">
+          <h2 class="overlay-title">문 세 개, 선택은 한 번</h2>
+          <p class="overlay-sub">브리치 라인에 닿는 순간 좌문, 중문, 우문 중 하나를 탭하세요. Perfect가 쌓이면 <b>PHANTOM BREACH</b>가 열리고, 6층마다 유물 제단이 나타납니다.</p>
+          <div class="mini-grid">
+            <div class="mini"><b>입력 훅</b>라인 정확히 맞추기. Perfect일수록 점수와 콤보 상승.</div>
+            <div class="mini"><b>선택 훅</b>코인, 회복, 엘리트, 함정, 유물 가치가 모두 미리 보입니다.</div>
+            <div class="mini"><b>쇼오프</b>Perfect 5연속이면 잔상과 대형 배너가 터집니다.</div>
+            <div class="mini"><b>리텐션</b>계약 장부와 최고 심도 저장으로 재도전 이유를 남깁니다.</div>
+          </div>
+          <div class="ledger" id="contractList"></div>
+          <div class="controls">
+            <button class="primary" id="startBtn">시작</button>
+            <button id="resetProgressBtn">기록 초기화</button>
+            <button id="howBtn">조작 다시 보기</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="overlay" id="altarOverlay">
+        <div class="overlay-card">
+          <h2 class="overlay-title">유물 제단</h2>
+          <p class="overlay-sub">이번 런의 규칙을 바꿀 유물을 한 개 고르세요.</p>
+          <div class="choices">
+            <button id="relicBtn0"></button>
+            <button id="relicBtn1"></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="overlay" id="gameoverOverlay">
+        <div class="overlay-card">
+          <h2 class="overlay-title">원정 종료</h2>
+          <p class="overlay-sub" id="gameoverSummary">이번 런의 기록을 정리합니다.</p>
+          <div class="mini-grid">
+            <div class="mini"><b>점수</b><span id="finalScore">0</span></div>
+            <div class="mini"><b>깊이</b><span id="finalDepth">0</span></div>
+            <div class="mini"><b>랭크</b><span id="finalRank">Bronze</span></div>
+            <div class="mini"><b>Perfect</b><span id="finalPerfect">0</span></div>
+          </div>
+          <div class="ledger" id="runRelics"></div>
+          <div class="controls">
+            <button class="primary" id="retryBtn">다시 도전</button>
+            <button id="backTitleBtn">타이틀</button>
+            <button id="keepGoingBtn">기록 보기</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="controls" id="laneControls">
+      <button class="lane-btn" data-lane="0">좌문</button>
+      <button class="lane-btn" data-lane="1">중문</button>
+      <button class="lane-btn" data-lane="2">우문</button>
+    </section>
+
+    <p class="hint">모바일은 하단 버튼 탭, 키보드는 A / S / D 또는 ← / ↑ / →. Perfect 5연속 시 팬텀 브리치 발동.</p>
+  </main>
+
+  <script>
+    (() => {
+      const canvas = document.getElementById('game');
+      const ctx = canvas.getContext('2d');
+      const scoreValue = document.getElementById('scoreValue');
+      const depthValue = document.getElementById('depthValue');
+      const hpValue = document.getElementById('hpValue');
+      const comboValue = document.getElementById('comboValue');
+      const bestBadge = document.getElementById('bestBadge');
+      const toastEl = document.getElementById('toast');
+      const bannerEl = document.getElementById('banner');
+      const titleOverlay = document.getElementById('titleOverlay');
+      const altarOverlay = document.getElementById('altarOverlay');
+      const gameoverOverlay = document.getElementById('gameoverOverlay');
+      const contractList = document.getElementById('contractList');
+      const gameoverSummary = document.getElementById('gameoverSummary');
+      const finalScore = document.getElementById('finalScore');
+      const finalDepth = document.getElementById('finalDepth');
+      const finalRank = document.getElementById('finalRank');
+      const finalPerfect = document.getElementById('finalPerfect');
+      const runRelics = document.getElementById('runRelics');
+      const relicBtn0 = document.getElementById('relicBtn0');
+      const relicBtn1 = document.getElementById('relicBtn1');
+      const laneButtons = [...document.querySelectorAll('.lane-btn')];
+
+      const W = canvas.width;
+      const H = canvas.height;
+      const BREACH_Y = 660;
+      const DOOR_W = 102;
+      const DOOR_H = 116;
+      const ROW_GAP = 166;
+      const SAVE_KEY = 'infiniteDungeonTapSave_v1';
+      const laneXs = [24, 144, 264];
+      const perfectWindowBase = 26;
+      const goodWindowBase = 54;
+      const typeColors = {
+        coin: ['#f7c65b', '#c88a24'],
+        heal: ['#7fd1a1', '#3d8f66'],
+        ward: ['#81c2df', '#2d6e8f'],
+        spike: ['#d78686', '#8d4242'],
+        elite: ['#c59ef0', '#6b4a94'],
+        frenzy: ['#f0a166', '#b15f2a']
+      };
+      const typeLabels = {
+        coin: 'COIN',
+        heal: 'HEAL',
+        ward: 'WARD',
+        spike: 'SPIKE',
+        elite: 'ELITE',
+        frenzy: 'FRENZY'
+      };
+
+      const relicCatalog = [
+        {
+          id: 'wideWindow',
+          name: '정밀 확대경',
+          desc: 'Perfect 판정 창이 넓어집니다.',
+          apply: state => { state.relicEffects.windowBonus += 8; }
+        },
+        {
+          id: 'ironWard',
+          name: '철문 부적',
+          desc: 'Ward 문이 2충전으로 바뀌고 즉시 보호막 1을 얻습니다.',
+          apply: state => {
+            state.relicEffects.wardBoost = true;
+            state.ward = Math.min(5, state.ward + 1);
+          }
+        },
+        {
+          id: 'goldLedger',
+          name: '금박 장부',
+          desc: 'COIN과 ELITE Perfect 점수가 커집니다.',
+          apply: state => { state.relicEffects.goldBonus += 30; }
+        },
+        {
+          id: 'echoPrism',
+          name: '에코 프리즘',
+          desc: 'FRENZY 지속시간이 늘고 Phantom 발동이 4연속으로 줄어듭니다.',
+          apply: state => {
+            state.relicEffects.frenzyBonus += 2;
+            state.relicEffects.phantomThreshold = 4;
+          }
+        },
+        {
+          id: 'vitalSeal',
+          name: '생명 봉인',
+          desc: 'HEAL 문이 체력 2 회복으로 강화됩니다.',
+          apply: state => { state.relicEffects.healBoost = true; }
+        },
+        {
+          id: 'abyssLens',
+          name: '심연 렌즈',
+          desc: '깊이가 높을수록 점수 배율이 추가됩니다.',
+          apply: state => { state.relicEffects.depthBonus = true; }
+        }
+      ];
+
+      const defaultSave = () => ({
+        bestScore: 0,
+        bestDepth: 0,
+        bestRank: 'NONE',
+        totalRelics: 0,
+        contracts: {
+          depth18: false,
+          perfect8: false,
+          relic3: false
+        }
+      });
+
+      let save = loadSave();
+      let toastTimer = 0;
+      let bannerTimer = 0;
+      let currentRelicChoices = [];
+      let lastTime = 0;
+      let sparkles = [];
+      let state = createRunState();
+
+      function createRunState() {
+        return {
+          mode: 'title',
+          rows: [],
+          score: 0,
+          depth: 0,
+          hp: 4,
+          ward: 0,
+          combo: 0,
+          perfectChain: 0,
+          perfectTotal: 0,
+          elapsed: 0,
+          frenzyTimer: 0,
+          phantomTimer: 0,
+          lastAltarDepth: 0,
+          laneFlash: [0, 0, 0],
+          relics: [],
+          relicEffects: {
+            windowBonus: 0,
+            wardBoost: false,
+            goldBonus: 0,
+            frenzyBonus: 0,
+            healBoost: false,
+            depthBonus: false,
+            phantomThreshold: 5
+          }
+        };
+      }
+
+      function loadSave() {
+        try {
+          const raw = localStorage.getItem(SAVE_KEY);
+          if (!raw) return defaultSave();
+          const parsed = JSON.parse(raw);
+          return {
+            ...defaultSave(),
+            ...parsed,
+            contracts: {
+              ...defaultSave().contracts,
+              ...(parsed.contracts || {})
+            }
+          };
+        } catch (error) {
+          return defaultSave();
+        }
+      }
+
+      function persistSave() {
+        localStorage.setItem(SAVE_KEY, JSON.stringify(save));
+      }
+
+      function updateContractSave(runState) {
+        if (runState.depth >= 18) save.contracts.depth18 = true;
+        if (runState.perfectTotal >= 8) save.contracts.perfect8 = true;
+        if (save.totalRelics >= 3 || runState.relics.length >= 3) save.contracts.relic3 = true;
+      }
+
+      function renderContracts() {
+        const rows = [
+          {
+            done: save.contracts.depth18,
+            name: '심도 18 도달',
+            hint: `현재 최고 ${save.bestDepth}`
+          },
+          {
+            done: save.contracts.perfect8,
+            name: '한 런에 Perfect 8회',
+            hint: `현재 최고 연습 중`
+          },
+          {
+            done: save.contracts.relic3,
+            name: '유물 3회 선택',
+            hint: `누적 ${save.totalRelics}`
+          }
+        ];
+        contractList.innerHTML = rows.map(row => `
+          <div class="ledger-row">
+            <strong>${row.done ? '완료' : '진행중'} · ${row.name}</strong>
+            <small>${row.hint}</small>
+          </div>
+        `).join('');
+      }
+
+      function setOverlay(overlay, show) {
+        overlay.classList.toggle('show', show);
+      }
+
+      function showToast(message) {
+        toastEl.textContent = message;
+        toastTimer = 1.2;
+        toastEl.classList.add('show');
+      }
+
+      function showBanner(message) {
+        bannerEl.textContent = message;
+        bannerTimer = 1.5;
+        bannerEl.classList.add('show');
+      }
+
+      function updateHud() {
+        scoreValue.textContent = Math.floor(state.score).toString();
+        depthValue.textContent = state.depth.toString();
+        hpValue.textContent = `${state.hp} / ${state.ward}`;
+        comboValue.textContent = state.combo.toString();
+        bestBadge.textContent = `BEST ${save.bestScore}`;
+      }
+
+      function rankForScore(score) {
+        if (score >= 3600) return 'VOIDWALKER';
+        if (score >= 2400) return 'GOLD';
+        if (score >= 1400) return 'SILVER';
+        if (score >= 700) return 'BRONZE';
+        return 'EMBER';
+      }
+
+      function randomChoice(list) {
+        return list[Math.floor(Math.random() * list.length)];
+      }
+
+      function shuffle(list) {
+        const clone = [...list];
+        for (let i = clone.length - 1; i > 0; i -= 1) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [clone[i], clone[j]] = [clone[j], clone[i]];
+        }
+        return clone;
+      }
+
+      function rowTemplates(depth) {
+        const early = [
+          ['coin', 'heal', 'spike'],
+          ['coin', 'ward', 'spike'],
+          ['heal', 'coin', 'elite'],
+          ['coin', 'frenzy', 'spike'],
+          ['ward', 'coin', 'heal'],
+          ['coin', 'elite', 'spike']
+        ];
+        const late = [
+          ['elite', 'coin', 'spike'],
+          ['spike', 'frenzy', 'coin'],
+          ['elite', 'ward', 'spike'],
+          ['heal', 'elite', 'spike'],
+          ['coin', 'spike', 'spike'],
+          ['frenzy', 'elite', 'coin']
+        ];
+        const pool = depth < 10 ? early : early.concat(late);
+        return shuffle(randomChoice(pool));
+      }
+
+      function spawnRow(forceY) {
+        const types = rowTemplates(state.depth);
+        const row = {
+          y: typeof forceY === 'number' ? forceY : -120,
+          resolved: false,
+          doors: types.map((type, lane) => ({ lane, type }))
+        };
+        state.rows.push(row);
+      }
+
+      function refillRows() {
+        while (state.rows.length < 6) {
+          const last = state.rows[state.rows.length - 1];
+          const startY = last ? last.y - ROW_GAP : -120;
+          spawnRow(startY);
+        }
+      }
+
+      function startGame() {
+        state = createRunState();
+        state.mode = 'play';
+        state.rows = [];
+        refillRows();
+        setOverlay(titleOverlay, false);
+        setOverlay(altarOverlay, false);
+        setOverlay(gameoverOverlay, false);
+        showToast('문을 읽고 라인에 맞춰 돌파하세요');
+        updateHud();
+      }
+
+      function returnToTitle() {
+        state = createRunState();
+        setOverlay(titleOverlay, true);
+        setOverlay(altarOverlay, false);
+        setOverlay(gameoverOverlay, false);
+        renderContracts();
+        updateHud();
+      }
+
+      function resetProgress() {
+        localStorage.removeItem(SAVE_KEY);
+        save = defaultSave();
+        renderContracts();
+        updateHud();
+        showToast('저장 기록을 초기화했습니다');
+      }
+
+      function getPerfectWindow() {
+        return perfectWindowBase + state.relicEffects.windowBonus;
+      }
+
+      function getGoodWindow() {
+        return goodWindowBase + state.relicEffects.windowBonus;
+      }
+
+      function phantomThreshold() {
+        return state.relicEffects.phantomThreshold;
+      }
+
+      function scoreMultiplier() {
+        let mult = 1 + Math.min(0.45, state.combo * 0.05);
+        if (state.frenzyTimer > 0) mult += 0.4;
+        if (state.phantomTimer > 0) mult += 0.65;
+        if (state.relicEffects.depthBonus) mult += Math.min(0.45, state.depth * 0.015);
+        return mult;
+      }
+
+      function activeRow() {
+        const candidates = state.rows.filter(row => !row.resolved);
+        if (!candidates.length) return null;
+        candidates.sort((a, b) => Math.abs((a.y + DOOR_H / 2) - BREACH_Y) - Math.abs((b.y + DOOR_H / 2) - BREACH_Y));
+        return candidates[0];
+      }
+
+      function triggerPhantom() {
+        state.phantomTimer = 4.6;
+        state.score += 200;
+        showBanner('PHANTOM BREACH');
+        burst(BREACH_Y, '#fff0cc', 24);
+      }
+
+      function burst(y, color, count) {
+        for (let i = 0; i < count; i += 1) {
+          sparkles.push({
+            x: W * 0.5 + (Math.random() - 0.5) * 180,
+            y,
+            vx: (Math.random() - 0.5) * 120,
+            vy: -50 - Math.random() * 180,
+            life: 0.8 + Math.random() * 0.5,
+            radius: 2 + Math.random() * 4,
+            color
+          });
+        }
+      }
+
+      function applyDoorEffect(type, judge) {
+        const judgeScale = judge === 'Perfect' ? 1.25 : judge === 'Good' ? 1 : 0.65;
+        const mult = scoreMultiplier();
+        const goldBonus = state.relicEffects.goldBonus;
+
+        if (type === 'coin') {
+          state.score += (70 + state.depth * 3 + goldBonus) * judgeScale * mult;
+          showToast(`${judge} · 장부 회수`);
+          burst(BREACH_Y, '#f7c65b', 12);
+          return;
+        }
+        if (type === 'heal') {
+          const healAmount = state.relicEffects.healBoost ? 2 : 1;
+          state.hp = Math.min(4, state.hp + healAmount);
+          state.score += 28 * judgeScale * mult;
+          showToast(`회복 +${healAmount}`);
+          burst(BREACH_Y, '#91d3a7', 10);
+          return;
+        }
+        if (type === 'ward') {
+          const wardAmount = state.relicEffects.wardBoost ? 2 : 1;
+          state.ward = Math.min(5, state.ward + wardAmount);
+          state.score += 24 * judgeScale * mult;
+          showToast(`Ward +${wardAmount}`);
+          burst(BREACH_Y, '#81c2df', 10);
+          return;
+        }
+        if (type === 'frenzy') {
+          state.frenzyTimer = Math.max(state.frenzyTimer, 6 + state.relicEffects.frenzyBonus);
+          state.score += 35 * judgeScale * mult;
+          showToast('Frenzy 가속');
+          burst(BREACH_Y, '#f0a166', 14);
+          return;
+        }
+        if (type === 'spike') {
+          if (state.ward > 0) {
+            state.ward -= 1;
+            state.score += 15 * mult;
+            showToast('Ward가 함정을 막았습니다');
+            burst(BREACH_Y, '#cce7f5', 10);
+          } else {
+            state.hp -= 1;
+            state.combo = 0;
+            state.score = Math.max(0, state.score - 20);
+            showToast('함정 피해 -1');
+            burst(BREACH_Y, '#d78686', 16);
+          }
+          return;
+        }
+        if (type === 'elite') {
+          if (judge === 'Perfect') {
+            state.score += (120 + state.depth * 4 + goldBonus) * mult;
+            showToast('엘리트 제압');
+            burst(BREACH_Y, '#d8c0ff', 18);
+          } else {
+            state.hp -= 1;
+            state.score += 30;
+            state.combo = 0;
+            showToast('엘리트 반격 -1');
+            burst(BREACH_Y, '#b47ed7', 18);
+          }
+        }
+      }
+
+      function maybeOpenAltar() {
+        if (state.hp <= 0) return;
+        if (state.depth > 0 && state.depth % 6 === 0 && state.lastAltarDepth !== state.depth) {
+          state.mode = 'altar';
+          state.lastAltarDepth = state.depth;
+          const available = shuffle(relicCatalog).slice(0, 2);
+          currentRelicChoices = available;
+          [relicBtn0, relicBtn1].forEach((button, index) => {
+            const relic = available[index];
+            button.innerHTML = `<strong>${relic.name}</strong><br><small>${relic.desc}</small>`;
+          });
+          setOverlay(altarOverlay, true);
+          showBanner('RELIC DRAFT');
+        }
+      }
+
+      function resolveDoor(lane) {
+        if (state.mode !== 'play') return;
+        const row = activeRow();
+        if (!row) return;
+        const centerY = row.y + DOOR_H / 2;
+        const delta = Math.abs(centerY - BREACH_Y);
+        if (centerY < BREACH_Y - 110 || centerY > BREACH_Y + 110) {
+          showToast('아직 브리치 구간이 아닙니다');
+          return;
+        }
+
+        const judge = delta <= getPerfectWindow() ? 'Perfect' : delta <= getGoodWindow() ? 'Good' : 'Late';
+        const chosen = row.doors[lane];
+        row.resolved = true;
+        state.depth += 1;
+        state.laneFlash[lane] = 0.18;
+
+        if (judge === 'Perfect') {
+          state.combo += 1;
+          state.perfectTotal += 1;
+          state.perfectChain += 1;
+        } else if (judge === 'Good') {
+          state.combo += 1;
+          state.perfectChain = 0;
+        } else {
+          state.combo = 0;
+          state.perfectChain = 0;
+        }
+
+        applyDoorEffect(chosen.type, judge);
+
+        if (state.perfectChain >= phantomThreshold() && state.phantomTimer <= 0) {
+          triggerPhantom();
+        }
+
+        if (state.hp <= 0) {
+          finishRun();
+          return;
+        }
+
+        maybeOpenAltar();
+        updateContractsLive();
+        updateHud();
+      }
+
+      function updateContractsLive() {
+        updateContractSave(state);
+        persistSave();
+        renderContracts();
+      }
+
+      function missRow(row) {
+        row.resolved = true;
+        state.depth += 1;
+        state.hp -= 1;
+        state.combo = 0;
+        state.perfectChain = 0;
+        showToast('문을 놓쳤습니다');
+        burst(BREACH_Y, '#d78686', 12);
+        if (state.hp <= 0) {
+          finishRun();
+          return;
+        }
+        maybeOpenAltar();
+        updateContractsLive();
+        updateHud();
+      }
+
+      function chooseRelic(index) {
+        if (state.mode !== 'altar') return;
+        const relic = currentRelicChoices[index];
+        if (!relic) return;
+        state.relics.push(relic.name);
+        save.totalRelics += 1;
+        relic.apply(state);
+        persistSave();
+        renderContracts();
+        setOverlay(altarOverlay, false);
+        state.mode = 'play';
+        showToast(`${relic.name} 획득`);
+        updateHud();
+      }
+
+      function finishRun() {
+        state.mode = 'gameover';
+        const rank = rankForScore(state.score);
+        save.bestScore = Math.max(save.bestScore, Math.floor(state.score));
+        save.bestDepth = Math.max(save.bestDepth, state.depth);
+        const rankOrder = ['NONE', 'EMBER', 'BRONZE', 'SILVER', 'GOLD', 'VOIDWALKER'];
+        if (rankOrder.indexOf(rank) > rankOrder.indexOf(save.bestRank)) save.bestRank = rank;
+        updateContractSave(state);
+        persistSave();
+        renderContracts();
+        updateHud();
+
+        finalScore.textContent = Math.floor(state.score).toString();
+        finalDepth.textContent = state.depth.toString();
+        finalRank.textContent = rank;
+        finalPerfect.textContent = state.perfectTotal.toString();
+        gameoverSummary.textContent = `${state.depth}층까지 내려가며 ${state.relics.length}개의 유물을 선택했습니다. 다음 런에서는 다른 빌드로 깊이를 더 밀어보세요.`;
+        runRelics.innerHTML = `
+          <div class="ledger-row"><strong>획득 유물</strong><small>${state.relics.length ? state.relics.join(' · ') : '없음'}</small></div>
+          <div class="ledger-row"><strong>최고 기록</strong><small>${save.bestScore}점 / ${save.bestDepth}층 / ${save.bestRank}</small></div>
+        `;
+        setOverlay(gameoverOverlay, true);
+      }
+
+      function update(dt) {
+        if (toastTimer > 0) {
+          toastTimer -= dt;
+          if (toastTimer <= 0) toastEl.classList.remove('show');
+        }
+        if (bannerTimer > 0) {
+          bannerTimer -= dt;
+          if (bannerTimer <= 0) bannerEl.classList.remove('show');
+        }
+
+        sparkles = sparkles.filter(spark => spark.life > 0);
+        sparkles.forEach(spark => {
+          spark.life -= dt;
+          spark.x += spark.vx * dt;
+          spark.y += spark.vy * dt;
+          spark.vy += 220 * dt;
+        });
+
+        for (let i = 0; i < state.laneFlash.length; i += 1) {
+          state.laneFlash[i] = Math.max(0, state.laneFlash[i] - dt);
+        }
+
+        if (state.mode !== 'play') return;
+
+        state.elapsed += dt;
+        state.frenzyTimer = Math.max(0, state.frenzyTimer - dt);
+        state.phantomTimer = Math.max(0, state.phantomTimer - dt);
+
+        const baseSpeed = 165 + Math.min(165, state.elapsed * 4 + Math.max(0, state.depth - 6) * 2.8);
+        const speed = baseSpeed * (state.phantomTimer > 0 ? 0.92 : 1);
+        state.rows.forEach(row => {
+          if (!row.resolved) row.y += speed * dt;
+          else row.y += speed * dt * 1.2;
+        });
+
+        state.rows.filter(row => !row.resolved).forEach(row => {
+          if (row.y + DOOR_H / 2 > BREACH_Y + 90) {
+            missRow(row);
+          }
+        });
+
+        state.rows = state.rows.filter(row => row.y < H + 180);
+        refillRows();
+        updateHud();
+      }
+
+      function drawBackground() {
+        const top = ctx.createLinearGradient(0, 0, 0, H);
+        top.addColorStop(0, '#efe1c8');
+        top.addColorStop(0.36, '#d8c29a');
+        top.addColorStop(1, '#5b3654');
+        ctx.fillStyle = top;
+        ctx.fillRect(0, 0, W, H);
+
+        ctx.save();
+        ctx.globalAlpha = 0.28;
+        for (let i = 0; i < 8; i += 1) {
+          const y = (i * 112 + (state.elapsed * 24) % 112) - 120;
+          ctx.strokeStyle = i % 2 ? '#8a6b72' : '#e6d5b6';
+          ctx.lineWidth = 1.4;
+          ctx.beginPath();
+          ctx.moveTo(26, y + 18);
+          ctx.bezierCurveTo(112, y - 6, 268, y + 34, 364, y + 8);
+          ctx.stroke();
+        }
+        ctx.restore();
+
+        ctx.fillStyle = 'rgba(58, 38, 55, 0.24)';
+        ctx.fillRect(0, BREACH_Y + 48, W, H - BREACH_Y - 48);
+      }
+
+      function drawBreachLine() {
+        ctx.save();
+        ctx.strokeStyle = '#fff3d0';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(20, BREACH_Y);
+        ctx.lineTo(W - 20, BREACH_Y);
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(255, 245, 218, 0.88)';
+        ctx.fillRect(28, BREACH_Y - 7, W - 56, 14);
+
+        ctx.strokeStyle = 'rgba(110, 68, 84, 0.58)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(44, BREACH_Y - 18);
+        ctx.lineTo(W - 44, BREACH_Y - 18);
+        ctx.stroke();
+
+        ctx.fillStyle = '#78465f';
+        ctx.font = '900 14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('BREACH LINE', W / 2, BREACH_Y - 24);
+        ctx.restore();
+      }
+
+      function drawDoor(row, door) {
+        const x = laneXs[door.lane];
+        const y = row.y;
+        const [fill, edge] = typeColors[door.type];
+        const active = Math.abs((y + DOOR_H / 2) - BREACH_Y) < 70;
+
+        ctx.save();
+        ctx.shadowColor = 'rgba(48, 24, 18, 0.18)';
+        ctx.shadowBlur = 16;
+        ctx.shadowOffsetY = 10;
+        ctx.fillStyle = fill;
+        ctx.strokeStyle = edge;
+        ctx.lineWidth = active ? 4 : 3;
+        roundRect(ctx, x, y, DOOR_W, DOOR_H, 18, true, true);
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
+
+        ctx.fillStyle = 'rgba(255,255,255,0.16)';
+        roundRect(ctx, x + 10, y + 10, DOOR_W - 20, 28, 10, true, false);
+        ctx.strokeStyle = 'rgba(255,255,255,0.44)';
+        ctx.lineWidth = 1.4;
+        ctx.strokeRect(x + 17, y + 48, DOOR_W - 34, DOOR_H - 64);
+
+        ctx.fillStyle = '#1b1310';
+        ctx.font = '900 16px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(typeLabels[door.type], x + DOOR_W / 2, y + 30);
+
+        ctx.font = '700 12px sans-serif';
+        ctx.fillStyle = 'rgba(27,19,16,0.8)';
+        ctx.fillText(door.type === 'coin' ? '+score' : door.type === 'heal' ? '+hp' : door.type === 'ward' ? '+ward' : door.type === 'frenzy' ? 'boost' : door.type === 'elite' ? 'perfect' : 'risk', x + DOOR_W / 2, y + 88);
+
+        if (active) {
+          ctx.strokeStyle = 'rgba(255, 248, 230, 0.85)';
+          ctx.lineWidth = 2;
+          roundRect(ctx, x - 4, y - 4, DOOR_W + 8, DOOR_H + 8, 20, false, true);
+        }
+        ctx.restore();
+      }
+
+      function drawRunInfo() {
+        ctx.save();
+        ctx.fillStyle = 'rgba(255,247,232,0.84)';
+        roundRect(ctx, 18, 18, 162, 58, 16, true, false);
+        ctx.fillStyle = '#4a3040';
+        ctx.font = '900 16px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(`BEST ${save.bestDepth}F`, 32, 42);
+        ctx.font = '700 12px sans-serif';
+        ctx.fillStyle = '#6e5760';
+        ctx.fillText(`RANK ${save.bestRank}`, 32, 61);
+
+        ctx.fillStyle = 'rgba(255,247,232,0.84)';
+        roundRect(ctx, 214, 18, 158, 58, 16, true, false);
+        ctx.fillStyle = '#2d5f62';
+        ctx.font = '900 15px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(`Perfect ${state.perfectTotal}`, 228, 42);
+        ctx.font = '700 12px sans-serif';
+        ctx.fillStyle = '#6e5760';
+        ctx.fillText(`Relics ${state.relics.length}`, 228, 61);
+        ctx.restore();
+      }
+
+      function drawLaneFlashes() {
+        ctx.save();
+        state.laneFlash.forEach((value, lane) => {
+          if (value <= 0) return;
+          ctx.fillStyle = `rgba(255, 247, 214, ${value * 2.4})`;
+          ctx.fillRect(laneXs[lane] - 4, BREACH_Y - 64, DOOR_W + 8, 104);
+        });
+        ctx.restore();
+      }
+
+      function drawRelicChips() {
+        ctx.save();
+        if (!state.relics.length) {
+          ctx.fillStyle = 'rgba(255,247,232,0.8)';
+          roundRect(ctx, 18, H - 98, 124, 36, 18, true, false);
+          ctx.fillStyle = '#6e5760';
+          ctx.font = '800 13px sans-serif';
+          ctx.fillText('유물 없음', 80, H - 75);
+          ctx.restore();
+          return;
+        }
+
+        let x = 18;
+        let y = H - 110;
+        ctx.font = '800 11px sans-serif';
+        state.relics.slice(-3).forEach(name => {
+          const width = Math.min(128, Math.max(70, ctx.measureText(name).width + 22));
+          ctx.fillStyle = 'rgba(255,247,232,0.84)';
+          roundRect(ctx, x, y, width, 28, 14, true, false);
+          ctx.fillStyle = '#5e4850';
+          ctx.fillText(name, x + width / 2, y + 18);
+          x += width + 8;
+          if (x > W - 90) {
+            x = 18;
+            y += 34;
+          }
+        });
+        ctx.restore();
+      }
+
+      function drawSparkles() {
+        sparkles.forEach(spark => {
+          ctx.save();
+          ctx.globalAlpha = Math.max(0, spark.life);
+          ctx.fillStyle = spark.color;
+          ctx.beginPath();
+          ctx.arc(spark.x, spark.y, spark.radius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        });
+      }
+
+      function drawPhantomAura() {
+        if (state.phantomTimer <= 0) return;
+        ctx.save();
+        const alpha = Math.min(0.22, state.phantomTimer * 0.08);
+        const grad = ctx.createRadialGradient(W / 2, BREACH_Y, 30, W / 2, BREACH_Y, 260);
+        grad.addColorStop(0, `rgba(255, 240, 212, ${alpha})`);
+        grad.addColorStop(1, 'rgba(255, 240, 212, 0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, BREACH_Y - 220, W, 420);
+        ctx.restore();
+      }
+
+      function draw() {
+        ctx.clearRect(0, 0, W, H);
+        drawBackground();
+        drawRunInfo();
+        drawPhantomAura();
+        drawLaneFlashes();
+        state.rows.forEach(row => row.doors.forEach(door => drawDoor(row, door)));
+        drawBreachLine();
+        drawRelicChips();
+        drawSparkles();
+      }
+
+      function roundRect(context, x, y, width, height, radius, fill, stroke) {
+        const r = Math.min(radius, width / 2, height / 2);
+        context.beginPath();
+        context.moveTo(x + r, y);
+        context.arcTo(x + width, y, x + width, y + height, r);
+        context.arcTo(x + width, y + height, x, y + height, r);
+        context.arcTo(x, y + height, x, y, r);
+        context.arcTo(x, y, x + width, y, r);
+        context.closePath();
+        if (fill) context.fill();
+        if (stroke) context.stroke();
+      }
+
+      function loop(timestamp) {
+        if (!lastTime) lastTime = timestamp;
+        const dt = Math.min(0.033, (timestamp - lastTime) / 1000);
+        lastTime = timestamp;
+        update(dt);
+        draw();
+        requestAnimationFrame(loop);
+      }
+
+      function laneInput(lane) {
+        laneButtons.forEach((button, idx) => button.classList.toggle('on', idx === lane));
+        setTimeout(() => laneButtons.forEach(button => button.classList.remove('on')), 90);
+        resolveDoor(lane);
+      }
+
+      document.getElementById('startBtn').addEventListener('click', startGame);
+      document.getElementById('retryBtn').addEventListener('click', () => {
+        setOverlay(gameoverOverlay, false);
+        startGame();
+      });
+      document.getElementById('backTitleBtn').addEventListener('click', returnToTitle);
+      document.getElementById('keepGoingBtn').addEventListener('click', () => showToast('기록은 타이틀 장부에서도 확인할 수 있습니다'));
+      document.getElementById('resetProgressBtn').addEventListener('click', resetProgress);
+      document.getElementById('howBtn').addEventListener('click', () => showToast('좌문, 중문, 우문을 브리치 라인에 맞춰 탭하세요'));
+      relicBtn0.addEventListener('click', () => chooseRelic(0));
+      relicBtn1.addEventListener('click', () => chooseRelic(1));
+      laneButtons.forEach(button => {
+        button.addEventListener('pointerdown', event => {
+          event.preventDefault();
+          laneInput(Number(button.dataset.lane));
+        });
+      });
+
+      window.addEventListener('keydown', event => {
+        if ((event.key === 'Enter' || event.key === ' ') && state.mode === 'title') {
+          event.preventDefault();
+          startGame();
+          return;
+        }
+        if (state.mode === 'gameover' && (event.key === 'Enter' || event.key === ' ')) {
+          event.preventDefault();
+          setOverlay(gameoverOverlay, false);
+          startGame();
+          return;
+        }
+        if (state.mode === 'altar') return;
+        if (event.key === 'ArrowLeft' || event.key.toLowerCase() === 'a') laneInput(0);
+        if (event.key === 'ArrowUp' || event.key.toLowerCase() === 's') laneInput(1);
+        if (event.key === 'ArrowRight' || event.key.toLowerCase() === 'd') laneInput(2);
+      });
+
+      renderContracts();
+      updateHud();
+      refillRows();
+      requestAnimationFrame(loop);
+    })();
+  </script>
+</body>
+</html>

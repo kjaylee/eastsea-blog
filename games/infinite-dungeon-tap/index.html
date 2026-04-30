@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
   <title>Infinite Dungeon Tap — 인피니트 던전 탭</title>
-  <meta name="description" content="하강하는 3개의 던전 문을 브리치 라인에 맞춰 돌파하고, 다음 행 예고와 봉인 인장으로 리스크를 뒤집으며 심연 원정 규칙을 바꾸는 로그라이크 아케이드." />
+  <meta name="description" content="하강하는 3개의 던전 문을 브리치 라인에 맞춰 돌파하고, 다음 행 예고와 봉인 인장, 오늘의 계약으로 리스크를 뒤집는 로그라이크 아케이드." />
   <meta property="og:title" content="Infinite Dungeon Tap — 인피니트 던전 탭" />
   <meta property="og:description" content="3개의 문 중 하나를 정확한 타이밍에 돌파하고, 유물 드래프트로 빌드를 바꾸며 심연을 내려가세요." />
   <meta property="og:type" content="website" />
@@ -409,7 +409,7 @@
       <div>
         <div class="eyebrow">Abyss Ledger</div>
         <h1 class="title">Infinite Dungeon Tap</h1>
-        <p class="tagline">문을 읽고, 다음 두 줄을 예측하고, 봉인 인장으로 위험을 뒤집으세요.</p>
+        <p class="tagline">문을 읽고, 다음 두 줄을 예측하고, 봉인 인장과 오늘의 계약으로 위험을 뒤집으세요.</p>
       </div>
       <div class="badge" id="bestBadge">BEST 0</div>
     </section>
@@ -434,7 +434,7 @@
             <div class="mini"><b>입력 훅</b>라인 정확히 맞추기. Perfect일수록 점수와 콤보 상승.</div>
             <div class="mini"><b>선택 훅</b>현재 줄뿐 아니라 다음 두 줄 예고를 보고 인장을 어디에 쓸지 결정합니다.</div>
             <div class="mini"><b>쇼오프</b>Perfect 연속으로 인장을 충전하고 Phantom Breach를 열면 장부 전체가 번쩍입니다.</div>
-            <div class="mini"><b>리텐션</b>계약 장부, 최고 심도, 오늘의 구간 오멘이 다음 런 목표를 남깁니다.</div>
+            <div class="mini"><b>리텐션</b>계약 장부, 최고 심도, 오늘의 계약이 다음 런 목표를 남깁니다.</div>
           </div>
           <div class="ledger" id="contractList"></div>
           <div class="controls">
@@ -649,11 +649,47 @@
         }
       ];
 
+      const dailyContractCatalog = [
+        {
+          id: 'depth12',
+          name: '오늘의 계약 · 심도 12',
+          desc: '한 런에서 12층 도달',
+          progress: runState => `현재 ${runState.depth}/12층`,
+          check: runState => runState.depth >= 12
+        },
+        {
+          id: 'perfect5',
+          name: '오늘의 계약 · Perfect 5',
+          desc: '한 런에서 Perfect 5회',
+          progress: runState => `현재 ${runState.perfectTotal}/5회`,
+          check: runState => runState.perfectTotal >= 5
+        },
+        {
+          id: 'relic2',
+          name: '오늘의 계약 · 유물 2회',
+          desc: '한 런에서 유물 2개 선택',
+          progress: runState => `현재 ${runState.relics.length}/2개`,
+          check: runState => runState.relics.length >= 2
+        },
+        {
+          id: 'phantom1',
+          name: '오늘의 계약 · 팬텀 개방',
+          desc: '한 런에서 Phantom Breach 1회',
+          progress: runState => `현재 ${runState.phantomBursts}/1회`,
+          check: runState => runState.phantomBursts >= 1
+        }
+      ];
+
       const defaultSave = () => ({
         bestScore: 0,
         bestDepth: 0,
         bestRank: 'NONE',
         totalRelics: 0,
+        daily: {
+          stamp: '',
+          id: 'depth12',
+          done: false
+        },
         contracts: {
           depth18: false,
           perfect8: false,
@@ -685,6 +721,7 @@
           combo: 0,
           seals: 0,
           perfectChain: 0,
+          phantomBursts: 0,
           perfectTotal: 0,
           elapsed: 0,
           frenzyTimer: 0,
@@ -713,6 +750,10 @@
           return {
             ...defaultSave(),
             ...parsed,
+            daily: {
+              ...defaultSave().daily,
+              ...(parsed.daily || {})
+            },
             contracts: {
               ...defaultSave().contracts,
               ...(parsed.contracts || {})
@@ -727,14 +768,60 @@
         localStorage.setItem(SAVE_KEY, JSON.stringify(save));
       }
 
+      function dailyStamp() {
+        const now = new Date();
+        const yyyy = now.getFullYear();
+        const mm = String(now.getMonth() + 1).padStart(2, '0');
+        const dd = String(now.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+      }
+
+      function contractForStamp(stamp) {
+        const digits = stamp.replace(/\D/g, '') || '0';
+        const seed = digits.split('').reduce((acc, ch) => acc + Number(ch), 0);
+        return dailyContractCatalog[seed % dailyContractCatalog.length] || dailyContractCatalog[0];
+      }
+
+      function ensureDailyContract() {
+        const stamp = dailyStamp();
+        if (save.daily.stamp === stamp && dailyContractCatalog.some(contract => contract.id === save.daily.id)) return;
+        const contract = contractForStamp(stamp);
+        save.daily = {
+          stamp,
+          id: contract.id,
+          done: false
+        };
+        persistSave();
+      }
+
+      function currentDailyContract() {
+        ensureDailyContract();
+        return dailyContractCatalog.find(contract => contract.id === save.daily.id) || dailyContractCatalog[0];
+      }
+
+      function updateDailyContract(runState) {
+        const contract = currentDailyContract();
+        if (!save.daily.done && contract.check(runState)) {
+          save.daily.done = true;
+          showToast('오늘의 계약 달성');
+        }
+      }
+
       function updateContractSave(runState) {
+        updateDailyContract(runState);
         if (runState.depth >= 18) save.contracts.depth18 = true;
         if (runState.perfectTotal >= 8) save.contracts.perfect8 = true;
         if (save.totalRelics >= 3 || runState.relics.length >= 3) save.contracts.relic3 = true;
       }
 
       function renderContracts() {
+        const dailyContract = currentDailyContract();
         const rows = [
+          {
+            done: save.daily.done,
+            name: dailyContract.name,
+            hint: `${dailyContract.desc} · ${dailyContract.progress(state)}`
+          },
           {
             done: save.contracts.depth18,
             name: '심도 18 도달',
@@ -786,7 +873,9 @@
         forecastValue.textContent = preview.length ? preview.map((row, index) => `${index === 0 ? '지금' : index === 1 ? '다음' : '그다음'} ${row.join(' · ')}`).join(' / ') : '예고 준비 중';
         forecastSub.textContent = preview.length ? `${preview.length}줄 선행 예고, 위험 문은 미리 읽을 수 있습니다.` : '문 예고를 준비 중입니다.';
         omenValue.textContent = `${omen.name} · Seal ${state.seals}`;
-        sealSub.textContent = `${omen.hint} Perfect 3회마다 인장 +1, 함정/놓침을 한 번 뒤집을 수 있습니다.`;
+        const nextOmenDepth = state.depth < 6 ? 6 : state.depth < 12 ? 12 : state.depth < 18 ? 18 : null;
+        const nextOmenText = nextOmenDepth ? `다음 오멘 ${nextOmenDepth}층.` : '최종 오멘 구간입니다.';
+        sealSub.textContent = `${omen.hint} ${nextOmenText} Perfect 3회마다 인장 +1, 함정/놓침을 한 번 뒤집을 수 있습니다.`;
       }
 
       function rankForScore(score) {
@@ -862,6 +951,7 @@
       }
 
       function startGame() {
+        ensureDailyContract();
         state = createRunState();
         state.mode = 'play';
         state.rows = [];
@@ -875,6 +965,7 @@
       }
 
       function returnToTitle() {
+        ensureDailyContract();
         state = createRunState();
         setOverlay(titleOverlay, true);
         setOverlay(altarOverlay, false);
@@ -886,6 +977,7 @@
       function resetProgress() {
         localStorage.removeItem(SAVE_KEY);
         save = defaultSave();
+        ensureDailyContract();
         renderContracts();
         updateHud();
         showToast('저장 기록을 초기화했습니다');
@@ -920,6 +1012,7 @@
 
       function triggerPhantom() {
         state.phantomTimer = 4.6;
+        state.phantomBursts += 1;
         state.score += 200;
         showBanner('PHANTOM BREACH');
         burst(BREACH_Y, '#fff0cc', 24);
@@ -1137,9 +1230,11 @@
         finalDepth.textContent = state.depth.toString();
         finalRank.textContent = rank;
         finalPerfect.textContent = state.perfectTotal.toString();
-        gameoverSummary.textContent = `${state.depth}층까지 내려가며 ${state.relics.length}개의 유물을 선택했고 봉인 인장 ${state.seals}개를 남겼습니다. 다음 런에서는 다른 오멘 구간과 계약 목표를 노려보세요.`;
+        const dailyResult = save.daily.done ? '오늘의 계약도 완료했습니다.' : '오늘의 계약은 다음 런으로 남았습니다.';
+        gameoverSummary.textContent = `${state.depth}층까지 내려가며 ${state.relics.length}개의 유물을 선택했고 봉인 인장 ${state.seals}개를 남겼습니다. ${dailyResult}`;
         runRelics.innerHTML = `
           <div class="ledger-row"><strong>획득 유물</strong><small>${state.relics.length ? state.relics.join(' · ') : '없음'}</small></div>
+          <div class="ledger-row"><strong>${currentDailyContract().name}</strong><small>${save.daily.done ? '완료' : currentDailyContract().progress(state)}</small></div>
           <div class="ledger-row"><strong>최고 기록</strong><small>${save.bestScore}점 / ${save.bestDepth}층 / ${save.bestRank}</small></div>
         `;
         setOverlay(gameoverOverlay, true);
@@ -1461,10 +1556,17 @@
           combo: state.combo,
           perfectTotal: state.perfectTotal,
           perfectChain: state.perfectChain,
+          phantomBursts: state.phantomBursts,
           omen: currentOmen().name,
           forecast: getForecastRows(),
           pageErrors,
           undefinedTexts: [...document.querySelectorAll('body *:not(script):not(style)')].filter(node => /undefined/i.test((node.textContent || '').trim())).length,
+          dailyContract: {
+            id: currentDailyContract().id,
+            name: currentDailyContract().name,
+            done: save.daily.done,
+            progress: currentDailyContract().progress(state)
+          },
           contracts: { ...save.contracts }
         }),
         injectRow: (types, centerY = BREACH_Y) => {
@@ -1498,6 +1600,7 @@
         }
       };
 
+      ensureDailyContract();
       renderContracts();
       updateHud();
       refillRows();

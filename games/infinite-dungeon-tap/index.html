@@ -697,6 +697,12 @@
         }
       });
 
+      const qaParams = new URLSearchParams(window.location.search);
+      const qaMode = qaParams.get('qa') === '1';
+      const qaAutostart = qaParams.get('autostart') === '1';
+      const qaScenario = qaParams.get('scenario') || '';
+      let qaSnapshotNode = null;
+
       let save = loadSave();
       let toastTimer = 0;
       let bannerTimer = 0;
@@ -766,6 +772,31 @@
 
       function persistSave() {
         localStorage.setItem(SAVE_KEY, JSON.stringify(save));
+      }
+
+      function ensureQaSnapshotNode() {
+        if (!qaMode) return null;
+        if (qaSnapshotNode && qaSnapshotNode.isConnected) return qaSnapshotNode;
+        qaSnapshotNode = document.createElement('pre');
+        qaSnapshotNode.id = 'qaSnapshot';
+        qaSnapshotNode.style.cssText = 'margin:10px 0 0;padding:10px;border-radius:14px;background:rgba(47,34,25,0.92);color:#f8f1dd;font-size:11px;line-height:1.45;white-space:pre-wrap;word-break:break-word;border:1px solid rgba(255,255,255,0.12);';
+        qaSnapshotNode.setAttribute('aria-live', 'polite');
+        document.querySelector('.app').appendChild(qaSnapshotNode);
+        document.body.dataset.qaMode = '1';
+        return qaSnapshotNode;
+      }
+
+      function syncQaSnapshot() {
+        if (!qaMode || !window.__infiniteDungeonTap) return;
+        const node = ensureQaSnapshotNode();
+        if (!node) return;
+        node.textContent = JSON.stringify(window.__infiniteDungeonTap.snapshot(), null, 2);
+      }
+
+      function countUndefinedTexts() {
+        return [...document.querySelectorAll('body *:not(script):not(style):not(#qaSnapshot)')]
+          .filter(node => node.children.length === 0)
+          .filter(node => /undefined/i.test((node.textContent || '').trim())).length;
       }
 
       function dailyStamp() {
@@ -1544,6 +1575,7 @@
       window.__infiniteDungeonTap = {
         start: () => {
           startGame();
+          syncQaSnapshot();
           return window.__infiniteDungeonTap.snapshot();
         },
         snapshot: () => ({
@@ -1560,7 +1592,7 @@
           omen: currentOmen().name,
           forecast: getForecastRows(),
           pageErrors,
-          undefinedTexts: [...document.querySelectorAll('body *:not(script):not(style)')].filter(node => /undefined/i.test((node.textContent || '').trim())).length,
+          undefinedTexts: countUndefinedTexts(),
           dailyContract: {
             id: currentDailyContract().id,
             name: currentDailyContract().name,
@@ -1577,25 +1609,36 @@
           };
           state.rows.unshift(row);
           updateHud();
+          syncQaSnapshot();
           return window.__infiniteDungeonTap.snapshot();
         },
         lane: lane => {
           laneInput(lane);
+          syncQaSnapshot();
           return window.__infiniteDungeonTap.snapshot();
         },
         forceAltar: () => {
-          state.depth = Math.max(state.depth, 5);
+          state.depth = Math.max(state.depth, 6);
+          if (state.depth % 6 !== 0) state.depth += 6 - (state.depth % 6);
           maybeOpenAltar();
           updateHud();
+          syncQaSnapshot();
           return window.__infiniteDungeonTap.snapshot();
         },
         chooseRelic: index => {
           chooseRelic(index);
+          syncQaSnapshot();
+          return window.__infiniteDungeonTap.snapshot();
+        },
+        finishRun: () => {
+          finishRun();
+          syncQaSnapshot();
           return window.__infiniteDungeonTap.snapshot();
         },
         setRunState: patch => {
           Object.assign(state, patch || {});
           updateHud();
+          syncQaSnapshot();
           return window.__infiniteDungeonTap.snapshot();
         }
       };
@@ -1604,6 +1647,20 @@
       renderContracts();
       updateHud();
       refillRows();
+      if (qaMode) {
+        ensureQaSnapshotNode();
+        if (qaAutostart && state.mode === 'title') startGame();
+        if (qaScenario === 'altar') {
+          if (state.mode === 'title') startGame();
+          window.__infiniteDungeonTap.forceAltar();
+        } else if (qaScenario === 'gameover') {
+          if (state.mode === 'title') startGame();
+          window.__infiniteDungeonTap.setRunState({ score: 321, depth: 9, hp: 0, seals: 1, relics: ['장막 룬'] });
+          window.__infiniteDungeonTap.finishRun();
+        }
+        syncQaSnapshot();
+        setInterval(syncQaSnapshot, 200);
+      }
       requestAnimationFrame(loop);
     })();
   </script>

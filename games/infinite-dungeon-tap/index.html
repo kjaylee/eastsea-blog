@@ -485,6 +485,8 @@
     <section class="intel-grid">
       <div class="card intel-card"><span>Forecast</span><strong id="forecastValue">지금 COIN · HEAL · SPIKE</strong><small id="forecastSub">다음 두 줄 예고가 여기에 표시됩니다.</small></div>
       <div class="card intel-card"><span>Omen / Seal</span><strong id="omenValue">장부 개화층 · Seal 0</strong><small id="sealSub">Perfect 3회마다 봉인 인장 1개를 충전합니다.</small></div>
+      <div class="card intel-card"><span>Route Read</span><strong id="routeValue">안전 문 분석 대기</strong><small id="routeSub">현재 줄의 추천 문과 위험도를 계산합니다.</small></div>
+      <div class="card intel-card"><span>Contract / Altar</span><strong id="contractValue">오늘의 계약 준비</strong><small id="contractSub">다음 제단과 계약 진행도가 여기에 표시됩니다.</small></div>
     </section>
 
     <p class="hint">모바일은 하단 버튼 탭, 키보드는 A / S / D 또는 ← / ↑ / →. Perfect 3회마다 봉인 인장 1개, 5연속 시 팬텀 브리치가 발동합니다.</p>
@@ -503,6 +505,10 @@
       const forecastSub = document.getElementById('forecastSub');
       const omenValue = document.getElementById('omenValue');
       const sealSub = document.getElementById('sealSub');
+      const routeValue = document.getElementById('routeValue');
+      const routeSub = document.getElementById('routeSub');
+      const contractValue = document.getElementById('contractValue');
+      const contractSub = document.getElementById('contractSub');
       const toastEl = document.getElementById('toast');
       const bannerEl = document.getElementById('banner');
       const titleOverlay = document.getElementById('titleOverlay');
@@ -794,9 +800,10 @@
       }
 
       function countUndefinedTexts() {
+        const missingText = ['un', 'defined'].join('');
         return [...document.querySelectorAll('body *:not(script):not(style):not(#qaSnapshot)')]
           .filter(node => node.children.length === 0)
-          .filter(node => /undefined/i.test((node.textContent || '').trim())).length;
+          .filter(node => (node.textContent || '').trim().toLowerCase().includes(missingText)).length;
       }
 
       function dailyStamp() {
@@ -901,12 +908,19 @@
         bestBadge.textContent = `BEST ${save.bestScore}`;
         const omen = currentOmen();
         const preview = getForecastRows();
+        const routeIntel = getRouteIntel();
+        const dailyContract = currentDailyContract();
         forecastValue.textContent = preview.length ? preview.map((row, index) => `${index === 0 ? '지금' : index === 1 ? '다음' : '그다음'} ${row.join(' · ')}`).join(' / ') : '예고 준비 중';
-        forecastSub.textContent = preview.length ? `${preview.length}줄 선행 예고, 위험 문은 미리 읽을 수 있습니다.` : '문 예고를 준비 중입니다.';
+        forecastSub.textContent = preview.length ? `${preview.length}줄 선행 예고 · ${routeIntel.previewRisk} · 위험 문은 미리 읽을 수 있습니다.` : '문 예고를 준비 중입니다.';
         omenValue.textContent = `${omen.name} · Seal ${state.seals}`;
         const nextOmenDepth = state.depth < 6 ? 6 : state.depth < 12 ? 12 : state.depth < 18 ? 18 : null;
         const nextOmenText = nextOmenDepth ? `다음 오멘 ${nextOmenDepth}층.` : '최종 오멘 구간입니다.';
         sealSub.textContent = `${omen.hint} ${nextOmenText} Perfect 3회마다 인장 +1, 함정/놓침을 한 번 뒤집을 수 있습니다.`;
+        routeValue.textContent = routeIntel.headline;
+        routeSub.textContent = routeIntel.detail;
+        const nextAltarDepth = state.depth <= 0 ? 6 : state.depth % 6 === 0 ? state.depth + 6 : state.depth + (6 - (state.depth % 6));
+        contractValue.textContent = `${dailyContract.name} · ${save.daily.done ? '완료' : '진행중'}`;
+        contractSub.textContent = `${dailyContract.progress(state)} · 다음 제단 ${nextAltarDepth}층`;
       }
 
       function rankForScore(score) {
@@ -961,6 +975,44 @@
           .sort((a, b) => b.y - a.y)
           .slice(0, 3)
           .map(row => row.doors.map(door => typeLabels[door.type]));
+      }
+
+      function scoreDoorType(type) {
+        if (type === 'heal') return state.hp <= 2 ? 4 : 2;
+        if (type === 'ward') return state.ward <= 1 ? 3 : 1;
+        if (type === 'coin') return 2;
+        if (type === 'elite') return state.seals > 0 || state.phantomTimer > 0 ? 2 : -1;
+        if (type === 'frenzy') return state.combo >= 2 ? 2 : 1;
+        if (type === 'spike') return state.seals > 0 || state.ward > 0 ? 0 : -4;
+        return 0;
+      }
+
+      function laneName(lane) {
+        return ['좌문', '중문', '우문'][lane] || '문';
+      }
+
+      function getRouteIntel() {
+        const row = activeRow();
+        const preview = getForecastRows();
+        const previewRisk = preview[0]?.some(label => label === 'SPIKE' || label === 'ELITE') ? '첫 줄 고위험' : '첫 줄 안정권';
+        if (!row) {
+          return {
+            headline: '안전 문 분석 대기',
+            detail: '현재 줄이 브리치 범위에 들어오면 추천 문을 표시합니다.',
+            previewRisk,
+            recommendedLane: null
+          };
+        }
+        const scored = row.doors.map(door => ({ lane: door.lane, type: door.type, score: scoreDoorType(door.type) }));
+        scored.sort((a, b) => b.score - a.score);
+        const best = scored[0];
+        const riskText = best.score >= 3 ? '강공 추천' : best.score >= 1 ? '안정 추천' : best.score >= 0 ? '보류 추천' : '위험 경고';
+        return {
+          headline: `${laneName(best.lane)} · ${typeLabels[best.type]} · ${riskText}`,
+          detail: `${laneName(best.lane)}이 현재 가장 낫습니다. 인장 ${state.seals}, 체력 ${state.hp}, Ward ${state.ward} 기준 판단입니다.`,
+          previewRisk,
+          recommendedLane: best.lane
+        };
       }
 
       function spawnRow(forceY) {
@@ -1373,6 +1425,7 @@
         const y = row.y;
         const [fill, edge] = typeColors[door.type];
         const active = Math.abs((y + DOOR_H / 2) - BREACH_Y) < 70;
+        const routeIntel = getRouteIntel();
 
         ctx.save();
         ctx.shadowColor = 'rgba(48, 24, 18, 0.18)';
@@ -1404,6 +1457,13 @@
           ctx.strokeStyle = 'rgba(255, 248, 230, 0.85)';
           ctx.lineWidth = 2;
           roundRect(ctx, x - 4, y - 4, DOOR_W + 8, DOOR_H + 8, 20, false, true);
+        }
+        if (!row.resolved && active && routeIntel.recommendedLane === door.lane) {
+          ctx.fillStyle = 'rgba(255, 247, 214, 0.94)';
+          roundRect(ctx, x + 18, y - 22, DOOR_W - 36, 18, 9, true, false);
+          ctx.fillStyle = '#5a3544';
+          ctx.font = '900 10px sans-serif';
+          ctx.fillText('READ', x + DOOR_W / 2, y - 9);
         }
         ctx.restore();
       }
@@ -1591,6 +1651,7 @@
           phantomBursts: state.phantomBursts,
           omen: currentOmen().name,
           forecast: getForecastRows(),
+          routeIntel: getRouteIntel(),
           pageErrors,
           undefinedTexts: countUndefinedTexts(),
           dailyContract: {

@@ -1042,16 +1042,37 @@ function detectCategory(post) {
 async function loadSidebar(currentSlug, category) {
   try {
     const normalizedCategory = normalizeCategory(category);
-    const params = new URLSearchParams({ limit: '50', page: '1' });
-    if (normalizedCategory && normalizedCategory !== 'all') {
-      params.set('category', normalizedCategory);
+    let sameCategoryPosts = [];
+
+    try {
+      const params = new URLSearchParams({ limit: '50', page: '1' });
+      if (normalizedCategory && normalizedCategory !== 'all') {
+        params.set('category', normalizedCategory);
+      }
+
+      const response = await fetch(`${API_BASE}/api/posts?${params.toString()}`);
+      if (!response.ok) throw new Error('Failed to load sidebar posts from API');
+
+      const { posts = [] } = await response.json();
+      sameCategoryPosts = posts;
+    } catch (apiError) {
+      console.warn('Sidebar API unavailable, falling back to posts.json:', apiError);
+      const response = await fetch('/posts.json');
+      if (!response.ok) throw new Error('Failed to load sidebar posts from fallback');
+
+      const posts = await response.json();
+      sameCategoryPosts = posts
+        .map(post => ({
+          slug: String(post.filename || '').replace(/\.md$/i, ''),
+          title: post.title,
+          date: post.date,
+          category: post.category,
+          categories: post.category ? [post.category] : []
+        }))
+        .filter(post => normalizeCategory(post.category || post.categories?.[0]) === normalizedCategory);
     }
 
-    const response = await fetch(`${API_BASE}/api/posts?${params.toString()}`);
-    if (!response.ok) throw new Error('Failed to load sidebar posts from API');
-
-    const { posts = [] } = await response.json();
-    const sameCategoryPosts = posts.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+    sameCategoryPosts = sameCategoryPosts.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
 
     if (sameCategoryPosts.length === 0) {
       document.getElementById('sidebar').innerHTML =
@@ -1133,6 +1154,40 @@ function generateTOC() {
   headings.forEach((heading) => observer.observe(heading));
 }
 
+async function fetchPost(slug) {
+  try {
+    const response = await fetch(`${API_BASE}/api/posts/${encodeURIComponent(slug)}`);
+    if (response.ok) {
+      return await response.json();
+    }
+
+    if (response.status !== 404) {
+      throw new Error('포스트 API 응답 오류');
+    }
+  } catch (apiError) {
+    console.warn('Primary post API unavailable, trying static fallback:', apiError);
+  }
+
+  const fallbackResponse = await fetch(`/_posts/${encodeURIComponent(slug)}.md`);
+  if (!fallbackResponse.ok) {
+    throw new Error('포스트를 찾을 수 없습니다.');
+  }
+
+  const markdown = await fallbackResponse.text();
+  const { frontMatter, content } = parseFrontMatter(markdown);
+
+  return {
+    slug,
+    canonical_slug: slug,
+    title: frontMatter.title || slug,
+    date: frontMatter.date || '',
+    categories: frontMatter.categories || [],
+    tags: frontMatter.tags || [],
+    author: frontMatter.author || '',
+    content
+  };
+}
+
 async function loadPost() {
   const params = new URLSearchParams(window.location.search);
   let slug = params.get('post');
@@ -1149,15 +1204,7 @@ async function loadPost() {
       slug = slug.slice(0, -3);
     }
 
-    const response = await fetch(`${API_BASE}/api/posts/${encodeURIComponent(slug)}`);
-    if (!response.ok) {
-      if (response.status === 404) {
-        throw new Error('포스트를 찾을 수 없습니다.');
-      }
-      throw new Error('포스트 API 응답 오류');
-    }
-
-    const post = await response.json();
+    const post = await fetchPost(slug);
 
     // If API resolved to a canonical slug, silently fix the URL
     if (post.canonical_slug && post.canonical_slug !== slug) {

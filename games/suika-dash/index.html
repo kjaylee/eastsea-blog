@@ -9,12 +9,12 @@
 <meta property="og:type" content="website" />
 <meta property="og:title" content="Suika Dash — 물리 머지 러너" />
 <meta property="og:description" content="Perfect Squeeze와 Encore Crowd Order가 붙은 압축 대시 머지 러너. Vault/Blend 선택과 기류 예고로 매 런이 달라집니다." />
-<meta property="og:url" content="https://eastsea-blog.pages.dev/games/suika-dash/" />
-<meta property="og:image" content="https://eastsea-blog.pages.dev/games/suika-dash/og.png" />
+<meta property="og:url" content="https://games.eastsea.xyz/suika-dash/" />
+<meta property="og:image" content="https://games.eastsea.xyz/suika-dash/og.png" />
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="Suika Dash — 물리 머지 러너" />
 <meta name="twitter:description" content="Perfect Squeeze와 Encore Crowd Order가 붙은 압축 대시 머지 러너. 오늘의 계약과 기류 예고로 런을 뒤집으세요." />
-<meta name="twitter:image" content="https://eastsea-blog.pages.dev/games/suika-dash/og.png" />
+<meta name="twitter:image" content="https://games.eastsea.xyz/suika-dash/og.png" />
 <style>
 :root{
   --bg1:#fff7ec;
@@ -106,8 +106,8 @@ canvas{display:block;width:100%;height:auto;aspect-ratio:390 / 844;background:li
   "@context": "https://schema.org",
   "@type": "VideoGame",
   "name": "Suika Dash",
-  "url": "https://eastsea-blog.pages.dev/games/suika-dash/",
-  "image": "https://eastsea-blog.pages.dev/games/suika-dash/og.png",
+  "url": "https://games.eastsea.xyz/suika-dash/",
+  "image": "https://games.eastsea.xyz/suika-dash/og.png",
   "description": "눌러 압축하고 놓아 대시하는 물리 머지 러너. Perfect Squeeze, Vault/Blend 선택, 기류 예고, Encore Crowd Order로 런의 성격을 바꾸는 모바일 원핸드 게임.",
   "applicationCategory": "Game",
   "genre": ["Action", "Runner", "Merge"],
@@ -468,6 +468,7 @@ canvas{display:block;width:100%;height:auto;aspect-ratio:390 / 844;background:li
     weatherIndex: 0,
     weatherTimer: 0,
     weatherLead: 0,
+    nextWeatherIndex: null,
     activeOrder: null,
     contractId: '',
     contractConsumed: false,
@@ -640,8 +641,17 @@ canvas{display:block;width:100%;height:auto;aspect-ratio:390 / 844;background:li
     return TIERS[clampInt(level, 0, TIERS.length - 1)].name;
   }
 
-  function getWeatherPhase() {
+  function getActiveWeather() {
     return WEATHER_PHASES[state.weatherIndex] || WEATHER_PHASES[0];
+  }
+
+  function getForecastWeather() {
+    if (state.nextWeatherIndex == null) return getActiveWeather();
+    return WEATHER_PHASES[state.nextWeatherIndex] || getActiveWeather();
+  }
+
+  function getWeatherPhase() {
+    return state.weatherLead > 0 ? getForecastWeather() : getActiveWeather();
   }
 
   function showShowoff(title, subtext) {
@@ -689,9 +699,18 @@ canvas{display:block;width:100%;height:auto;aspect-ratio:390 / 844;background:li
   }
 
   function advanceWeather() {
-    state.weatherIndex = (state.weatherIndex + 1) % WEATHER_PHASES.length;
-    state.weatherTimer = getWeatherPhase().duration;
+    if (state.weatherLead > 0 && state.nextWeatherIndex != null) {
+      state.weatherIndex = state.nextWeatherIndex;
+      state.nextWeatherIndex = null;
+      state.weatherLead = 0;
+      state.weatherTimer = getActiveWeather().duration;
+      showToast(`기류 변화: ${getActiveWeather().name}`);
+      state.splashes.push({ text: getActiveWeather().name.toUpperCase(), time: 1.15, color: '#ff9d3d' });
+      return;
+    }
+    state.nextWeatherIndex = (state.weatherIndex + 1) % WEATHER_PHASES.length;
     state.weatherLead = 2.6;
+    state.weatherTimer = 0;
   }
 
   function createPlayer() {
@@ -728,21 +747,18 @@ canvas{display:block;width:100%;height:auto;aspect-ratio:390 / 844;background:li
   }
 
   function getCurrentWeather() {
-    return WEATHER_PHASES[state.weatherIndex] || WEATHER_PHASES[0];
+    return getActiveWeather();
   }
 
   function activateNextWeather(force) {
     if (force) {
       state.weatherIndex = 0;
       state.weatherTimer = WEATHER_PHASES[0].duration;
-      state.weatherLead = 4;
+      state.weatherLead = 0;
+      state.nextWeatherIndex = null;
       return;
     }
-    state.weatherIndex = (state.weatherIndex + 1) % WEATHER_PHASES.length;
-    state.weatherTimer = getCurrentWeather().duration;
-    state.weatherLead = 3.2;
-    showToast(`기류 변화: ${getCurrentWeather().name}`);
-    state.splashes.push({ text: getCurrentWeather().name.toUpperCase(), time: 1.15, color: '#ff9d3d' });
+    advanceWeather();
   }
 
   function triggerShowoffCard(title, subtext) {
@@ -845,7 +861,8 @@ canvas{display:block;width:100%;height:auto;aspect-ratio:390 / 844;background:li
     state.triggeredJuicefall = false;
     state.weatherIndex = 0;
     state.weatherTimer = WEATHER_PHASES[0].duration;
-    state.weatherLead = 2.6;
+    state.weatherLead = 0;
+    state.nextWeatherIndex = null;
     state.activeOrder = null;
     state.contractConsumed = Boolean(state.save.dailyContract.done);
     state.contractJustTriggered = false;
@@ -900,7 +917,7 @@ canvas{display:block;width:100%;height:auto;aspect-ratio:390 / 844;background:li
 
     ui.finalScore.textContent = Math.round(state.score).toLocaleString('ko-KR');
     ui.finalDistance.textContent = `${Math.round(state.distance)}m`;
-    ui.finalTier.textContent = tierName(state.player.level);
+    ui.finalTier.textContent = tierName(state.runMaxTier);
     ui.finalRank.textContent = getRank(Math.round(state.score));
     ui.finalPostcards.textContent = String(state.runPostcards);
     ui.finalNextRank.textContent = getNextRankText(state.score);
@@ -1205,7 +1222,7 @@ canvas{display:block;width:100%;height:auto;aspect-ratio:390 / 844;background:li
 
   function spawnDynamicRow() {
     const rowY = -80;
-    const weather = getWeatherPhase();
+    const weather = getCurrentWeather();
     const level = clampInt(state.player.level + (Math.random() < (state.frenzy > 0 ? 0.55 + weather.sameTierBias : 0.28 + weather.sameTierBias) ? 0 : (Math.random() < 0.6 ? -1 : 1)), 0, TIERS.length - 1);
     const pattern = Math.random();
     const sameLevel = clampInt(state.player.level, 0, TIERS.length - 1);
@@ -1310,7 +1327,7 @@ canvas{display:block;width:100%;height:auto;aspect-ratio:390 / 844;background:li
 
   function updatePlayer(dt) {
     const player = state.player;
-    const weather = getWeatherPhase();
+    const weather = getCurrentWeather();
     player.flash = Math.max(0, player.flash - dt);
     player.invuln = Math.max(0, player.invuln - dt);
     player.dashTimer = Math.max(0, player.dashTimer - dt);
@@ -1361,7 +1378,7 @@ canvas{display:block;width:100%;height:auto;aspect-ratio:390 / 844;background:li
   function updateEntities(dt) {
     const player = state.player;
     const playerRadius = getPlayerRadius();
-    const weather = getWeatherPhase();
+    const weather = getCurrentWeather();
 
     state.entities.forEach((entity) => {
       if (!entity.alive) return;
@@ -1448,15 +1465,19 @@ canvas{display:block;width:100%;height:auto;aspect-ratio:390 / 844;background:li
     if (state.paused) return;
     const timeScale = state.player.charging ? 0.7 : 1;
     const step = dt * timeScale;
-    const weather = getWeatherPhase();
+    const weather = getCurrentWeather();
     state.elapsed += step;
     state.distance += state.speed * step * 0.1;
     state.speed = clamp(250 + state.distance * 0.21 + state.player.level * 12 + (state.frenzy > 0 ? 28 : 0) + (weather.id === 'heatwave' ? 26 : 0), 250, 560);
     state.frenzy = Math.max(0, state.frenzy - step);
     state.shake = Math.max(0, state.shake - step * 16);
-    state.weatherTimer = Math.max(0, state.weatherTimer - step);
-    state.weatherLead = Math.max(0, state.weatherLead - step);
-    if (state.weatherTimer <= 0) advanceWeather();
+    if (state.weatherLead > 0) {
+      state.weatherLead = Math.max(0, state.weatherLead - step);
+      if (state.weatherLead <= 0) advanceWeather();
+    } else {
+      state.weatherTimer = Math.max(0, state.weatherTimer - step);
+      if (state.weatherTimer <= 0) advanceWeather();
+    }
     if (!state.activeOrder && state.distance > 240 && state.spawnIndex > 5 && Math.random() < 0.012) createCrowdOrder();
     if (state.activeOrder) {
       state.activeOrder.timeLeft -= step;
@@ -1512,7 +1533,7 @@ canvas{display:block;width:100%;height:auto;aspect-ratio:390 / 844;background:li
       ctx.fillRect(TRACK_LEFT + 14, stripeY, TRACK_RIGHT - TRACK_LEFT - 28, 24);
     }
 
-    const weather = getWeatherPhase();
+    const weather = getCurrentWeather();
     if (weather.wind !== 0) {
       ctx.strokeStyle = 'rgba(95,142,219,.26)';
       ctx.lineWidth = 3;
@@ -1906,6 +1927,12 @@ canvas{display:block;width:100%;height:auto;aspect-ratio:390 / 844;background:li
         id: getWeatherPhase().id,
         name: getWeatherPhase().name,
         wind: getWeatherPhase().wind,
+        activeId: getCurrentWeather().id,
+        activeName: getCurrentWeather().name,
+        activeWind: getCurrentWeather().wind,
+        forecastId: state.nextWeatherIndex == null ? null : getForecastWeather().id,
+        forecastName: state.nextWeatherIndex == null ? null : getForecastWeather().name,
+        forecastWind: state.nextWeatherIndex == null ? 0 : getForecastWeather().wind,
         lead: Number(state.weatherLead.toFixed(2)),
         remaining: Number(state.weatherTimer.toFixed(2))
       },

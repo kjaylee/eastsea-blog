@@ -346,6 +346,12 @@
     .lane-btn[data-lane="1"] { color: #285f68; }
     .lane-btn[data-lane="2"] { color: #8d642f; }
 
+    .lane-btn.read {
+      background: linear-gradient(180deg, rgba(255, 245, 224, 0.98), rgba(241, 211, 164, 0.98));
+      border-color: rgba(166, 112, 40, 0.44);
+      box-shadow: 0 12px 28px rgba(176, 118, 43, 0.22);
+    }
+
     .hint {
       margin: 0;
       padding: 2px 4px 0;
@@ -533,6 +539,7 @@
       const ROW_GAP = 166;
       const SAVE_KEY = 'infiniteDungeonTapSave_v1';
       const laneXs = [24, 144, 264];
+      const laneButtonLabels = ['좌문', '중문', '우문'];
       const perfectWindowBase = 26;
       const goodWindowBase = 54;
       const typeColors = {
@@ -906,6 +913,38 @@
         bannerEl.classList.add('show');
       }
 
+      function nextAltarDepth() {
+        return state.depth <= 0 ? 6 : state.depth % 6 === 0 ? state.depth + 6 : state.depth + (6 - (state.depth % 6));
+      }
+
+      function nextOmenDepth() {
+        return state.depth < 6 ? 6 : state.depth < 12 ? 12 : state.depth < 18 ? 18 : null;
+      }
+
+      function updateLaneButtons(routeIntel) {
+        laneButtons.forEach((button, index) => {
+          const isReadLane = state.mode === 'play' && routeIntel.recommendedLane === index;
+          button.classList.toggle('read', isReadLane);
+          button.textContent = isReadLane ? `${laneButtonLabels[index]} · READ` : laneButtonLabels[index];
+        });
+      }
+
+      function runChronicle(runState = state) {
+        const contract = currentDailyContract();
+        const omenName = omenCatalog[omenIndexForDepth(runState.depth)]?.name || currentOmen().name;
+        return [
+          `팬텀 ${runState.phantomBursts}회`,
+          `심도 ${runState.depth}층`,
+          omenName,
+          `${contract.name} ${save.daily.done ? '완료' : '진행중'}`
+        ].join(' · ');
+      }
+
+      function stageIntelText() {
+        const omenDepth = nextOmenDepth();
+        return [`제단 ${nextAltarDepth()}층`, omenDepth ? `오멘 ${omenDepth}층` : '최종 오멘', `KST ${save.daily.stamp}`].join(' · ');
+      }
+
       function updateHud() {
         scoreValue.textContent = Math.floor(state.score).toString();
         depthValue.textContent = state.depth.toString();
@@ -919,15 +958,14 @@
         forecastValue.textContent = preview.length ? preview.map((row, index) => `${index === 0 ? '지금' : index === 1 ? '다음' : '그다음'} ${row.join(' · ')}`).join(' / ') : '예고 준비 중';
         forecastSub.textContent = preview.length ? `${preview.length}줄 선행 예고 · ${routeIntel.previewRisk} · 위험 문은 미리 읽을 수 있습니다.` : '문 예고를 준비 중입니다.';
         omenValue.textContent = `${omen.name} · Seal ${state.seals}`;
-        const nextOmenDepth = state.depth < 6 ? 6 : state.depth < 12 ? 12 : state.depth < 18 ? 18 : null;
-        const nextOmenText = nextOmenDepth ? `다음 오멘 ${nextOmenDepth}층.` : '최종 오멘 구간입니다.';
+        const omenDepth = nextOmenDepth();
+        const nextOmenText = omenDepth ? `다음 오멘 ${omenDepth}층.` : '최종 오멘 구간입니다.';
         sealSub.textContent = `${omen.hint} ${nextOmenText} Perfect 3회마다 인장 +1, 함정/놓침을 한 번 뒤집을 수 있습니다.`;
         routeValue.textContent = routeIntel.headline;
         routeSub.textContent = routeIntel.detail;
-        const nextAltarDepth = state.depth <= 0 ? 6 : state.depth % 6 === 0 ? state.depth + 6 : state.depth + (6 - (state.depth % 6));
-        const nextOmenDepthForContract = state.depth < 6 ? 6 : state.depth < 12 ? 12 : state.depth < 18 ? 18 : null;
         contractValue.textContent = `${dailyContract.name} · ${save.daily.done ? '완료' : '진행중'} · KST ${save.daily.stamp}`;
-        contractSub.textContent = `${dailyContract.progress(state)} · 다음 제단 ${nextAltarDepth}층 · ${nextOmenDepthForContract ? `다음 오멘 ${nextOmenDepthForContract}층` : '최종 오멘 진행중'}`;
+        contractSub.textContent = `${dailyContract.progress(state)} · 다음 제단 ${nextAltarDepth()}층 · ${omenDepth ? `다음 오멘 ${omenDepth}층` : '최종 오멘 진행중'}`;
+        updateLaneButtons(routeIntel);
       }
 
       function rankForScore(score) {
@@ -1325,6 +1363,7 @@
         runRelics.innerHTML = `
           <div class="ledger-row"><strong>획득 유물</strong><small>${state.relics.length ? state.relics.join(' · ') : '없음'}</small></div>
           <div class="ledger-row"><strong>${currentDailyContract().name}</strong><small>${save.daily.done ? '완료' : currentDailyContract().progress(state)}</small></div>
+          <div class="ledger-row"><strong>런 연대기</strong><small>${runChronicle()}</small></div>
           <div class="ledger-row"><strong>최고 기록</strong><small>${save.bestScore}점 / ${save.bestDepth}층 / ${save.bestRank}</small></div>
         `;
         setOverlay(gameoverOverlay, true);
@@ -1496,6 +1535,13 @@
         ctx.font = '700 12px sans-serif';
         ctx.fillStyle = '#6e5760';
         ctx.fillText(`Relics ${state.relics.length}`, 228, 61);
+
+        ctx.fillStyle = 'rgba(255,247,232,0.84)';
+        roundRect(ctx, 44, 84, 302, 28, 14, true, false);
+        ctx.fillStyle = '#6e5760';
+        ctx.font = '800 11px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(stageIntelText(), W / 2, 102);
         ctx.restore();
       }
 
@@ -1659,6 +1705,8 @@
           omen: currentOmen().name,
           forecast: getForecastRows(),
           routeIntel: getRouteIntel(),
+          stageIntel: stageIntelText(),
+          runChronicle: runChronicle(),
           pageErrors,
           undefinedTexts: countUndefinedTexts(),
           dailyContract: {

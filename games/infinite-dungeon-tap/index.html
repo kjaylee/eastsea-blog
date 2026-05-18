@@ -439,7 +439,7 @@
           <div class="mini-grid">
             <div class="mini"><b>입력 훅</b>라인 정확히 맞추기. Perfect일수록 점수와 콤보 상승.</div>
             <div class="mini"><b>선택 훅</b>현재 줄뿐 아니라 다음 두 줄 예고를 보고 인장을 어디에 쓸지 결정합니다.</div>
-            <div class="mini"><b>쇼오프</b>Perfect 연속으로 인장을 충전하고 Phantom Breach를 열면 장부 전체가 번쩍입니다.</div>
+            <div class="mini"><b>쇼오프</b>Perfect 연속으로 인장을 충전하고 Phantom Breach를 연 뒤, 런 종료 시 연대기를 바로 복사해 자랑할 수 있습니다.</div>
             <div class="mini"><b>리텐션</b>KST 계약 장부, 최고 심도, 다음 오멘 목표가 다음 런 이유를 남깁니다.</div>
           </div>
           <div class="ledger" id="contractList"></div>
@@ -476,7 +476,7 @@
           <div class="controls">
             <button class="primary" id="retryBtn">다시 도전</button>
             <button id="backTitleBtn">타이틀</button>
-            <button id="keepGoingBtn">기록 보기</button>
+            <button id="keepGoingBtn">연대기 복사</button>
           </div>
         </div>
       </div>
@@ -724,6 +724,7 @@
       let lastTime = 0;
       let sparkles = [];
       let pageErrors = 0;
+      let lastShareText = '';
       let state = createRunState();
 
       window.addEventListener('error', () => {
@@ -943,6 +944,48 @@
       function stageIntelText() {
         const omenDepth = nextOmenDepth();
         return [`제단 ${nextAltarDepth()}층`, omenDepth ? `오멘 ${omenDepth}층` : '최종 오멘', `KST ${save.daily.stamp}`].join(' · ');
+      }
+
+      function buildShareText(runState = state) {
+        const contract = currentDailyContract();
+        const rank = rankForScore(runState.score);
+        return [
+          'Infinite Dungeon Tap — Abyss Chronicle',
+          `점수 ${Math.floor(runState.score)} · 심도 ${runState.depth} · 랭크 ${rank}`,
+          `팬텀 ${runState.phantomBursts}회 · Perfect ${runState.perfectTotal}회`,
+          `${contract.name} · ${save.daily.done ? '완료' : contract.progress(runState)} · KST ${save.daily.stamp}`,
+          `런 연대기: ${runChronicle(runState)}`,
+          'https://eastsea.monster/games/infinite-dungeon-tap/'
+        ].join('\n');
+      }
+
+      async function copyRunChronicle() {
+        if (!lastShareText) lastShareText = buildShareText(state);
+        const text = lastShareText;
+        let copied = false;
+        if (navigator.clipboard?.writeText) {
+          try {
+            await navigator.clipboard.writeText(text);
+            copied = true;
+          } catch (error) {
+            copied = false;
+          }
+        }
+        if (!copied) {
+          const helper = document.createElement('textarea');
+          helper.value = text;
+          helper.setAttribute('readonly', 'readonly');
+          helper.style.position = 'absolute';
+          helper.style.left = '-9999px';
+          document.body.appendChild(helper);
+          helper.select();
+          copied = document.execCommand('copy');
+          helper.remove();
+        }
+        window.__infiniteDungeonTap._copiedText = text;
+        showToast(copied ? '연대기를 복사했습니다' : '연대기를 준비했습니다');
+        syncQaSnapshot();
+        return text;
       }
 
       function updateHud() {
@@ -1360,6 +1403,7 @@
         finalPerfect.textContent = state.perfectTotal.toString();
         const dailyResult = save.daily.done ? '오늘의 계약도 완료했습니다.' : '오늘의 계약은 다음 런으로 남았습니다.';
         gameoverSummary.textContent = `${state.depth}층까지 내려가며 ${state.relics.length}개의 유물을 선택했고 봉인 인장 ${state.seals}개를 남겼습니다. ${dailyResult}`;
+        lastShareText = buildShareText(state);
         runRelics.innerHTML = `
           <div class="ledger-row"><strong>획득 유물</strong><small>${state.relics.length ? state.relics.join(' · ') : '없음'}</small></div>
           <div class="ledger-row"><strong>${currentDailyContract().name}</strong><small>${save.daily.done ? '완료' : currentDailyContract().progress(state)}</small></div>
@@ -1655,7 +1699,7 @@
         startGame();
       });
       document.getElementById('backTitleBtn').addEventListener('click', returnToTitle);
-      document.getElementById('keepGoingBtn').addEventListener('click', () => showToast('기록은 타이틀 장부에서도 확인할 수 있습니다'));
+      document.getElementById('keepGoingBtn').addEventListener('click', () => { copyRunChronicle(); });
       document.getElementById('resetProgressBtn').addEventListener('click', resetProgress);
       document.getElementById('howBtn').addEventListener('click', () => showToast('좌문, 중문, 우문을 브리치 라인에 맞춰 탭하세요'));
       relicBtn0.addEventListener('click', () => chooseRelic(0));
@@ -1717,6 +1761,7 @@
             stamp: save.daily.stamp,
             timezone: SEOUL_TIME_ZONE
           },
+          shareCardPreview: lastShareText || buildShareText(state),
           contracts: { ...save.contracts }
         }),
         injectRow: (types, centerY = BREACH_Y) => {
@@ -1758,7 +1803,15 @@
           updateHud();
           syncQaSnapshot();
           return window.__infiniteDungeonTap.snapshot();
-        }
+        },
+        copyShareCard: async () => {
+          const text = await copyRunChronicle();
+          return {
+            copiedText: text,
+            snapshot: window.__infiniteDungeonTap.snapshot()
+          };
+        },
+        _copiedText: ''
       };
 
       ensureDailyContract();

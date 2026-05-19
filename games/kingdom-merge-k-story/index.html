@@ -351,6 +351,7 @@
         score: 0,
         turn: 0,
         relics: 0,
+        relicTotal: 0,
         logs: [],
         nextQueue: [],
         activeEdict: null,
@@ -416,12 +417,18 @@
         state.logs = state.logs.slice(0, 5);
       }
 
-      function seedLogs() {
-        state.logs = [
-          '왕조를 시작하려면 Start Chronicle을 누르세요.',
-          '유물 칸 위 승급은 파편을 남깁니다.',
-          '4턴마다 칙령을 선택할 수 있습니다.'
-        ];
+      function seedLogs(mode = 'title') {
+        state.logs = mode === 'play'
+          ? [
+              '새 왕조가 즉위했습니다. 첫 영지를 배치하세요.',
+              '유물 칸 위 승급은 파편을 남깁니다.',
+              '4턴마다 칙령을 선택할 수 있습니다.'
+            ]
+          : [
+              '왕조를 시작하려면 Start Chronicle을 누르세요.',
+              '유물 칸 위 승급은 파편을 남깁니다.',
+              '4턴마다 칙령을 선택할 수 있습니다.'
+            ];
       }
 
       function refillQueue() {
@@ -434,12 +441,13 @@
         state.score = 0;
         state.turn = 0;
         state.relics = 0;
+        state.relicTotal = 0;
         state.activeEdict = null;
         state.availableEdicts = [];
         state.nextQueue = [randomTile(), randomTile(2)];
         state.pendingDrop = false;
+        seedLogs('play');
         els.resultPanel.classList.remove('show');
-        log('새 왕조가 즉위했습니다. 첫 영지를 배치하세요.');
         update();
       }
 
@@ -541,6 +549,7 @@
             log(`${tileMeta(anchor.clan).name} 영지가 ${anchor.tier}단계로 승급했습니다. ${tale}`);
             if (relicCells.has(`${ar},${ac}`)) {
               state.relics += 1;
+              state.relicTotal += 1;
               log('유물 칸에서 파편을 발굴했습니다.');
               if (state.relics >= 3) triggerArchive();
             }
@@ -548,7 +557,9 @@
           collapseColumns();
         }
         if (cascade >= 2 && state.activeEdict?.onCascade) {
-          state.relics += state.activeEdict.onCascade(cascade);
+          const bonusRelics = state.activeEdict.onCascade(cascade);
+          state.relics += bonusRelics;
+          state.relicTotal += bonusRelics;
           if (state.relics >= 3) triggerArchive();
         }
         return cascade;
@@ -627,7 +638,7 @@
         if (state.score > state.bestScore) state.bestScore = state.score;
         if (eras.findIndex(e => e.name === era) > eras.findIndex(e => e.name === state.bestEra)) state.bestEra = era;
         if (titles.findIndex(t => t.name === title) > titles.findIndex(t => t.name === state.bestTitle)) state.bestTitle = title;
-        if (state.relics > state.bestRelic) state.bestRelic = state.relics;
+        if (state.relicTotal > state.bestRelic) state.bestRelic = state.relicTotal;
         persistBest();
         els.finalScore.textContent = String(state.score);
         els.finalEra.textContent = era;
@@ -717,6 +728,8 @@
         board[4][0] = { clan: 'sun', tier: 1 };
         state.board = board;
         state.score = 0;
+        state.relics = 0;
+        state.relicTotal = 0;
         state.nextQueue = [{ clan: 'sun', tier: 1 }, { clan: 'river', tier: 1 }];
         state.mode = 'play';
         const dropped = dropInColumn(0);
@@ -726,9 +739,16 @@
         localStorage.setItem(saveKey, JSON.stringify({ bestScore: 77, bestEra: '왕국', bestTitle: '군주', bestRelic: 2 }));
         loadSave();
         if (state.bestScore !== 77 || state.bestEra !== '왕국') failures.push('save load failed');
+        state.score = 520;
+        state.relics = 1;
+        state.relicTotal = 4;
+        state.bestRelic = 2;
+        endGame();
+        const savedBest = JSON.parse(localStorage.getItem(saveKey) || '{}');
+        if (state.bestRelic !== 4 || savedBest.bestRelic !== 4) failures.push('best relic total failed');
         const pass = failures.length === 0;
         els.autotestPanel.classList.add('show');
-        els.autotestPanel.innerHTML = `<strong>${pass ? 'PASS' : 'FAIL'}</strong><div style="margin-top:6px;">${pass ? 'drop/merge/save smoke ok' : failures.join(', ')}</div>`;
+        els.autotestPanel.innerHTML = `<strong>${pass ? 'PASS' : 'FAIL'}</strong><div style="margin-top:6px;">${pass ? 'drop/merge/save/bestRelic smoke ok' : failures.join(', ')}</div>`;
         console.log('autotest', pass ? 'PASS' : failures);
       }
 

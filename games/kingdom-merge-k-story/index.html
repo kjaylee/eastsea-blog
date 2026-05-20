@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
   <meta name="theme-color" content="#efe4c8" />
   <title>Kingdom Merge: K-Story — 킹덤 머지 K-스토리</title>
-  <meta name="description" content="열 선택 드롭과 자동 연쇄 승급, 칙령 3지선다, 유물 발굴이 결합된 한국사풍 머지 전략 게임." />
+  <meta name="description" content="열 선택 드롭과 자동 연쇄 승급, 칙령 3지선다, 유물 발굴, KST 데일리 연대기가 결합된 한국사풍 머지 전략 게임." />
   <meta property="og:title" content="Kingdom Merge: K-Story — 킹덤 머지 K-스토리" />
-  <meta property="og:description" content="타일을 원하는 열에 떨어뜨려 왕조를 성장시키고 연대기 콤보를 완성하세요." />
+  <meta property="og:description" content="타일을 원하는 열에 떨어뜨려 왕조를 성장시키고, KST 데일리 과업과 결산 공유 카드까지 완성하세요." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://eastsea-blog.pages.dev/games/kingdom-merge-k-story/" />
   <meta name="twitter:card" content="summary_large_image" />
@@ -47,6 +47,7 @@
     }
     button { font: inherit; }
     .app { width: min(100%, 520px); display: grid; gap: 10px; }
+    .app > * { min-width: 0; }
     .panel {
       background: var(--panel);
       border: 1px solid var(--line);
@@ -57,7 +58,7 @@
     .hero {
       padding: 14px;
       display: grid;
-      grid-template-columns: 1.25fr repeat(3, .8fr);
+      grid-template-columns: 1.2fr repeat(4, .78fr);
       gap: 8px;
     }
     .eyebrow {
@@ -183,6 +184,19 @@
     .result { display: none; }
     .result.show { display: block; }
     .result-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 0 12px; }
+    .result-actions { display: flex; gap: 8px; }
+    .share-preview {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 16px;
+      border: 1px solid rgba(89, 63, 31, .12);
+      background: rgba(255,255,255,.7);
+      color: var(--muted);
+      font-size: .78rem;
+      line-height: 1.45;
+      white-space: pre-line;
+      overflow-wrap: anywhere;
+    }
     .overlay {
       position: fixed; inset: 0; background: rgba(41, 29, 18, .38); display: none; align-items: center; justify-content: center; padding: 16px;
     }
@@ -200,7 +214,10 @@
     .hidden { display: none !important; }
     @media (max-width: 430px) {
       .hero { grid-template-columns: 1fr 1fr; }
+      .hero > :first-child { grid-column: 1 / -1; }
       .hud { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .result-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .result-actions { flex-direction: column; }
     }
   </style>
 </head>
@@ -215,6 +232,7 @@
       <div class="stat"><span>최고 점수</span><strong id="bestScore">0</strong></div>
       <div class="stat"><span>최고 시대</span><strong id="bestEra">부족 연맹</strong></div>
       <div class="stat"><span>최고 칭호</span><strong id="bestTitle">촌주</strong></div>
+      <div class="stat"><span>오늘 과업</span><strong id="dailyBadge">KST 준비중</strong></div>
     </section>
 
     <section class="panel banner" id="statusBanner">
@@ -258,8 +276,13 @@
         <div class="chip"><span>최종 점수</span><strong id="finalScore">0</strong></div>
         <div class="chip"><span>도달 시대</span><strong id="finalEra">부족 연맹</strong></div>
         <div class="chip"><span>칭호</span><strong id="finalTitle">촌주</strong></div>
+        <div class="chip"><span>오늘 과업</span><strong id="finalDaily">대기 중</strong></div>
       </div>
-      <button class="btn" id="resultRestartBtn">다시 서술하기</button>
+      <div class="result-actions">
+        <button class="btn" id="resultRestartBtn">다시 서술하기</button>
+        <button class="btn alt" id="resultShareBtn">결산 복사</button>
+      </div>
+      <div class="share-preview" id="sharePreview">왕조 결산 카드가 여기에 표시됩니다.</div>
     </section>
 
     <section class="panel autotest" id="autotestPanel"></section>
@@ -280,6 +303,8 @@
       const cols = 5;
       const maxTier = 5;
       const saveKey = 'kingdomMergeKStorySave_v1';
+      const SEOUL_TIME_ZONE = 'Asia/Seoul';
+      const GAME_URL = 'https://eastsea-blog.pages.dev/games/kingdom-merge-k-story/';
       const clans = [
         { id: 'sun', name: '해', css: 'sun', glyph: '☀' },
         { id: 'jade', name: '비취', css: 'jade', glyph: '옥' },
@@ -314,6 +339,42 @@
         '대동강 나루가 장사꾼으로 붐볐습니다.',
         '봄 제사가 열려 민심이 모였습니다.'
       ];
+      const dailyChallenges = [
+        {
+          id: 'kingdom-rise',
+          name: '왕국 도달',
+          desc: '오늘의 왕조를 왕국 이상으로 끌어올리세요.',
+          progress: current => getEra(current.score).name === '부족 연맹' ? '부족 연맹' : getEra(current.score).name,
+          done: current => getEra(current.score).name !== '부족 연맹'
+        },
+        {
+          id: 'double-chronicle',
+          name: '2연쇄 연대기',
+          desc: '한 번의 드롭으로 연쇄 2회 이상을 만드세요.',
+          progress: current => `${Math.max(0, current.bestCascade || 0)} / 2`,
+          done: current => (current.bestCascade || 0) >= 2
+        },
+        {
+          id: 'archive-open',
+          name: '왕실 문고 개방',
+          desc: 'Royal Archive를 1회 이상 발동하세요.',
+          progress: current => `${current.archiveBursts || 0} / 1`,
+          done: current => (current.archiveBursts || 0) >= 1
+        },
+        {
+          id: 'court-420',
+          name: '420점 기록',
+          desc: '한 런에서 420점 이상을 기록하세요.',
+          progress: current => `${current.score || 0} / 420`,
+          done: current => (current.score || 0) >= 420
+        }
+      ];
+      const pageErrors = [];
+
+      window.addEventListener('error', event => {
+        const message = event?.error?.message || event?.message || 'unknown';
+        pageErrors.push(String(message));
+      });
 
       const els = {
         board: document.getElementById('board'),
@@ -328,6 +389,7 @@
         bestScore: document.getElementById('bestScore'),
         bestEra: document.getElementById('bestEra'),
         bestTitle: document.getElementById('bestTitle'),
+        dailyBadge: document.getElementById('dailyBadge'),
         bestRelic: document.getElementById('bestRelic'),
         next0: document.getElementById('next0'),
         next1: document.getElementById('next1'),
@@ -340,6 +402,9 @@
         finalScore: document.getElementById('finalScore'),
         finalEra: document.getElementById('finalEra'),
         finalTitle: document.getElementById('finalTitle'),
+        finalDaily: document.getElementById('finalDaily'),
+        resultShareBtn: document.getElementById('resultShareBtn'),
+        sharePreview: document.getElementById('sharePreview'),
         edictOverlay: document.getElementById('edictOverlay'),
         edictList: document.getElementById('edictList'),
         autotestPanel: document.getElementById('autotestPanel')
@@ -357,11 +422,55 @@
         activeEdict: null,
         availableEdicts: [],
         pendingDrop: false,
+        bestCascade: 0,
+        archiveBursts: 0,
+        dailyCompletedStamp: '',
+        lastShareText: '',
         bestScore: 0,
         bestEra: '부족 연맹',
         bestTitle: '촌주',
         bestRelic: 0
       };
+
+      function kstStamp() {
+        return new Intl.DateTimeFormat('en-CA', {
+          timeZone: SEOUL_TIME_ZONE,
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        }).format(new Date());
+      }
+
+      function currentDailyChallenge() {
+        const stamp = kstStamp();
+        const seed = stamp.split('-').reduce((acc, part) => acc + Number(part), 0);
+        return dailyChallenges[seed % dailyChallenges.length];
+      }
+
+      function dailyDone() {
+        return state.dailyCompletedStamp === kstStamp();
+      }
+
+      function dailyStatusLabel(current = state) {
+        const challenge = currentDailyChallenge();
+        return dailyDone() ? `${challenge.name} 완료` : `${challenge.name} · ${challenge.progress(current)}`;
+      }
+
+      function countUndefinedTexts() {
+        const text = document.body.innerText || '';
+        return (text.match(/undefined|null/g) || []).length;
+      }
+
+      function layoutMetrics() {
+        const root = document.documentElement;
+        const appRect = document.querySelector('.app')?.getBoundingClientRect();
+        return {
+          viewportWidth: window.innerWidth,
+          scrollWidth: root.scrollWidth,
+          overflowX: root.scrollWidth > window.innerWidth + 1,
+          appWidth: appRect ? Math.round(appRect.width) : 0
+        };
+      }
 
       function cloneTile(tile) {
         return tile ? { clan: tile.clan, tier: tile.tier } : null;
@@ -384,6 +493,7 @@
           state.bestEra = saved.bestEra || '부족 연맹';
           state.bestTitle = saved.bestTitle || '촌주';
           state.bestRelic = saved.bestRelic || 0;
+          state.dailyCompletedStamp = saved.dailyCompletedStamp || '';
         } catch (e) {}
       }
 
@@ -392,7 +502,8 @@
           bestScore: state.bestScore,
           bestEra: state.bestEra,
           bestTitle: state.bestTitle,
-          bestRelic: state.bestRelic
+          bestRelic: state.bestRelic,
+          dailyCompletedStamp: state.dailyCompletedStamp
         }));
       }
 
@@ -442,8 +553,11 @@
         state.turn = 0;
         state.relics = 0;
         state.relicTotal = 0;
+        state.bestCascade = 0;
+        state.archiveBursts = 0;
         state.activeEdict = null;
         state.availableEdicts = [];
+        state.lastShareText = '';
         state.nextQueue = [randomTile(), randomTile(2)];
         state.pendingDrop = false;
         seedLogs('play');
@@ -504,6 +618,7 @@
 
       function triggerArchive() {
         state.relics = 0;
+        state.archiveBursts += 1;
         state.score += 90;
         let cleared = false;
         for (let tier = 1; tier <= maxTier && !cleared; tier++) {
@@ -519,6 +634,40 @@
         }
         collapseColumns();
         log('왕실 문고가 열려 혼란한 영지 하나를 정리했습니다.');
+      }
+
+      function maybeCompleteDaily() {
+        const challenge = currentDailyChallenge();
+        if (!dailyDone() && challenge.done(state)) {
+          state.dailyCompletedStamp = kstStamp();
+          log(`오늘의 과업 달성 — ${challenge.name}`);
+          persistBest();
+        }
+      }
+
+      function buildShareText() {
+        const challenge = currentDailyChallenge();
+        const lines = [
+          'Kingdom Merge: K-Story — 왕조 결산',
+          `${getTitle()} · ${getEra().name}`,
+          `점수 ${state.score} / 유물 누적 ${state.relicTotal} / 최고 유물 ${state.bestRelic}`,
+          `오늘의 KST 과업: ${challenge.name} · ${dailyDone() ? '완료' : challenge.progress(state)} · ${kstStamp()}`,
+          `최근 연대기: ${state.logs[0] || '새 왕조가 곧 시작됩니다.'}`,
+          GAME_URL
+        ];
+        return lines.join('\n');
+      }
+
+      async function copyShareText() {
+        const text = buildShareText();
+        state.lastShareText = text;
+        if (navigator.clipboard?.writeText) {
+          try {
+            await navigator.clipboard.writeText(text);
+          } catch (e) {}
+        }
+        els.sharePreview.textContent = text;
+        return text;
       }
 
       function scoreMultiplier(tile, cascadeStep) {
@@ -562,6 +711,8 @@
           state.relicTotal += bonusRelics;
           if (state.relics >= 3) triggerArchive();
         }
+        state.bestCascade = Math.max(state.bestCascade, cascade);
+        maybeCompleteDaily();
         return cascade;
       }
 
@@ -601,6 +752,7 @@
           }
         }
         if (cascade >= 2) log(`연대기 콤보 x${(1 + (cascade - 1) * 0.35).toFixed(2)}!`);
+        maybeCompleteDaily();
         if (state.turn % 4 === 0 && hasAnyMoves()) {
           openEdict();
           return;
@@ -639,10 +791,14 @@
         if (eras.findIndex(e => e.name === era) > eras.findIndex(e => e.name === state.bestEra)) state.bestEra = era;
         if (titles.findIndex(t => t.name === title) > titles.findIndex(t => t.name === state.bestTitle)) state.bestTitle = title;
         if (state.relicTotal > state.bestRelic) state.bestRelic = state.relicTotal;
+        maybeCompleteDaily();
+        state.lastShareText = buildShareText();
         persistBest();
         els.finalScore.textContent = String(state.score);
         els.finalEra.textContent = era;
         els.finalTitle.textContent = title;
+        els.finalDaily.textContent = dailyDone() ? '완료' : currentDailyChallenge().progress(state);
+        els.sharePreview.textContent = state.lastShareText;
         els.resultPanel.classList.add('show');
         log('사관이 이번 왕조의 기록을 봉인했습니다.');
         update();
@@ -702,18 +858,19 @@
         els.bestScore.textContent = String(state.bestScore);
         els.bestEra.textContent = state.bestEra;
         els.bestTitle.textContent = state.bestTitle;
+        els.dailyBadge.textContent = dailyStatusLabel();
         els.bestRelic.textContent = `${state.bestRelic} 파편`;
         els.relicCounter.textContent = `${state.relics} / 3`;
         els.next0.innerHTML = state.nextQueue[0] ? drawTileMarkup(state.nextQueue[0], true) : '-';
         els.next1.innerHTML = state.nextQueue[1] ? drawTileMarkup(state.nextQueue[1], true) : '-';
         els.phaseLabel.textContent = state.mode === 'title' ? '대기 중' : state.mode === 'play' ? '연대기 진행 중' : state.mode === 'edict' ? '칙령 선택' : '왕조 종료';
         els.phaseSub.textContent = state.mode === 'title'
-          ? 'Start Chronicle로 새 왕조를 시작하세요.'
+          ? `${currentDailyChallenge().desc} · KST ${kstStamp()}`
           : state.mode === 'edict'
             ? '이번 턴의 흐름을 바꿀 칙령을 고르는 순간입니다.'
             : state.mode === 'gameover'
-              ? '결산을 마친 뒤 바로 새 왕조를 열 수 있습니다.'
-              : '유물 칸 위 승급과 연쇄 콤보를 함께 노리세요.';
+              ? `${dailyDone() ? '오늘 과업 완료' : '오늘 과업 진행중'} · 결산을 복사한 뒤 새 왕조를 열 수 있습니다.`
+              : `${currentDailyChallenge().name} · ${dailyDone() ? '완료' : currentDailyChallenge().progress(state)} · KST ${kstStamp()}`;
         els.logList.innerHTML = state.logs.map(item => `<div>• ${item}</div>`).join('');
         els.edictOverlay.classList.toggle('show', state.mode === 'edict');
         if (state.mode !== 'gameover') els.resultPanel.classList.remove('show');
@@ -742,19 +899,57 @@
         state.score = 520;
         state.relics = 1;
         state.relicTotal = 4;
+        state.bestCascade = 2;
+        state.archiveBursts = 1;
         state.bestRelic = 2;
         endGame();
         const savedBest = JSON.parse(localStorage.getItem(saveKey) || '{}');
         if (state.bestRelic !== 4 || savedBest.bestRelic !== 4) failures.push('best relic total failed');
+        const shareText = buildShareText();
+        if (!shareText.includes(GAME_URL) || !shareText.includes(kstStamp())) failures.push('share text failed');
+        if (!dailyStatusLabel().includes(currentDailyChallenge().name)) failures.push('daily label failed');
+        if (pageErrors.length !== 0) failures.push('pageerror failed');
+        if (countUndefinedTexts() !== 0) failures.push('undefined text failed');
+        const metrics = layoutMetrics();
+        if (metrics.overflowX) failures.push(`overflow failed ${metrics.scrollWidth}>${metrics.viewportWidth}`);
         const pass = failures.length === 0;
         els.autotestPanel.classList.add('show');
-        els.autotestPanel.innerHTML = `<strong>${pass ? 'PASS' : 'FAIL'}</strong><div style="margin-top:6px;">${pass ? 'drop/merge/save/bestRelic smoke ok' : failures.join(', ')}</div>`;
+        els.autotestPanel.innerHTML = `<strong>${pass ? 'PASS' : 'FAIL'}</strong><div style="margin-top:6px;">${pass ? 'drop/merge/save/bestRelic/daily/share smoke ok' : failures.join(', ')}</div><div style="margin-top:6px;">viewport ${metrics.viewportWidth} / scroll ${metrics.scrollWidth} / app ${metrics.appWidth}</div>`;
         console.log('autotest', pass ? 'PASS' : failures);
       }
 
       els.startBtn.addEventListener('click', startGame);
       els.restartBtn.addEventListener('click', startGame);
       els.resultRestartBtn.addEventListener('click', startGame);
+      els.resultShareBtn.addEventListener('click', () => { copyShareText(); });
+
+      window.__kingdomMergeKStory = {
+        snapshot: () => ({
+          mode: state.mode,
+          score: state.score,
+          turn: state.turn,
+          era: getEra().name,
+          title: getTitle(),
+          relics: state.relics,
+          relicTotal: state.relicTotal,
+          bestRelic: state.bestRelic,
+          bestCascade: state.bestCascade,
+          archiveBursts: state.archiveBursts,
+          daily: {
+            id: currentDailyChallenge().id,
+            name: currentDailyChallenge().name,
+            stamp: kstStamp(),
+            timezone: SEOUL_TIME_ZONE,
+            done: dailyDone(),
+            progress: currentDailyChallenge().progress(state)
+          },
+          shareText: state.lastShareText || buildShareText(),
+          layout: layoutMetrics(),
+          pageErrors: [...pageErrors],
+          undefinedTexts: countUndefinedTexts()
+        }),
+        copyShare: async () => copyShareText()
+      };
 
       loadSave();
       seedLogs();

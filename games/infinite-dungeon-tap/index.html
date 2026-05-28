@@ -415,7 +415,7 @@
       <div>
         <div class="eyebrow">Abyss Ledger</div>
         <h1 class="title">Infinite Dungeon Tap</h1>
-        <p class="tagline">문을 읽고, 다음 두 줄을 예측하고, 봉인 인장과 오늘의 계약으로 위험을 뒤집으세요.</p>
+        <p class="tagline">문을 읽고, READ 연속 예언창·봉인 에코·최후 생환으로 위험을 뒤집으세요.</p>
       </div>
       <div class="badge" id="bestBadge">BEST 0</div>
     </section>
@@ -435,12 +435,13 @@
       <div class="overlay show" id="titleOverlay">
         <div class="overlay-card">
           <h2 class="overlay-title">문 세 개, 선택은 한 번</h2>
-          <p class="overlay-sub">브리치 라인에 닿는 순간 좌문, 중문, 우문 중 하나를 탭하세요. 다음 두 줄 예고와 봉인 인장을 읽어 위험을 뒤집고, 6층마다 유물 제단으로 런 규칙을 바꾸세요. 오늘의 계약은 KST 자정 기준으로 회전합니다.</p>
+          <p class="overlay-sub">브리치 라인에 닿는 순간 좌문, 중문, 우문 중 하나를 탭하세요. READ 연속 성공으로 예언창을 열고, 봉인 인장 에코와 최후 생환 Ward를 굴리며, 6층마다 유물 제단 시너지까지 읽어야 합니다. 오늘의 계약은 KST 자정 기준으로 회전합니다.</p>
           <div class="mini-grid">
-            <div class="mini"><b>입력 훅</b>라인 정확히 맞추기. Perfect일수록 점수와 콤보 상승.</div>
-            <div class="mini"><b>선택 훅</b>현재 줄뿐 아니라 다음 두 줄 예고를 보고 인장을 어디에 쓸지 결정합니다.</div>
-            <div class="mini"><b>쇼오프</b>Perfect 연속으로 인장을 충전하고 Phantom Breach를 연 뒤, 런 종료 시 연대기를 바로 복사해 자랑할 수 있습니다.</div>
-            <div class="mini"><b>리텐션</b>KST 계약 장부, 최고 심도, 다음 오멘 목표가 다음 런 이유를 남깁니다.</div>
+            <div class="mini"><b>입력 훅</b>READ 추천을 3번 연속 맞추면 Prophecy Lock이 열려 한동안 점수와 판정이 강화됩니다.</div>
+            <div class="mini"><b>에스컬레이션 훅</b>봉인 인장으로 함정이나 놓침을 뒤집으면 Seal Echo가 켜져 다음 몇 초가 공격 구간으로 바뀝니다.</div>
+            <div class="mini"><b>선택 훅</b>제단은 유물 설명만이 아니라 오늘 계약과 현재 체력 기준 시너지 코멘트까지 함께 제시합니다.</div>
+            <div class="mini"><b>쇼오프</b>체력 1에서 Perfect를 맞히면 Last Stand가 터지고, 런 종료 시 원정 칭호와 Abyss Chronicle을 바로 복사할 수 있습니다.</div>
+            <div class="mini"><b>리텐션</b>KST 계약 장부, 최고 심도, 원정 칭호, 다음 오멘 목표가 다음 런 이유를 남깁니다.</div>
           </div>
           <div class="ledger" id="contractList"></div>
           <div class="controls">
@@ -495,7 +496,7 @@
       <div class="card intel-card"><span>Stage Intel / Contract</span><strong id="contractValue">오늘의 계약 준비</strong><small id="contractSub">KST 계약 창, 다음 제단, 다음 오멘이 여기에 표시됩니다.</small></div>
     </section>
 
-    <p class="hint">모바일은 하단 버튼 탭, 키보드는 A / S / D 또는 ← / ↑ / →. Perfect 3회마다 봉인 인장 1개, 5연속 시 팬텀 브리치가 발동합니다.</p>
+    <p class="hint">모바일은 하단 버튼 탭, 키보드는 A / S / D 또는 ← / ↑ / →. READ 3연속이면 Prophecy Lock, Perfect 3회마다 봉인 인장 1개, 체력 1에서 Perfect면 Last Stand Ward, 5연속이면 팬텀 브리치가 발동합니다.</p>
   </main>
 
   <script>
@@ -741,12 +742,19 @@
           ward: 0,
           combo: 0,
           seals: 0,
+          sealsSpent: 0,
           perfectChain: 0,
           phantomBursts: 0,
+          prophecyBursts: 0,
           perfectTotal: 0,
+          readStreak: 0,
           elapsed: 0,
           frenzyTimer: 0,
           phantomTimer: 0,
+          prophecyTimer: 0,
+          sealEchoTimer: 0,
+          lastStandTimer: 0,
+          lastStandSaves: 0,
           omenIndex: 0,
           lastAltarDepth: 0,
           laneFlash: [0, 0, 0],
@@ -930,11 +938,22 @@
         });
       }
 
+      function epithetForRun(runState = state) {
+        if (runState.prophecyBursts >= 2 && runState.phantomBursts >= 1) return '예언 문지기';
+        if (runState.depth >= 12 && runState.lastStandSaves >= 1) return '오멘 생환자';
+        if (runState.depth >= 12) return '오멘 잠수자';
+        if (runState.lastStandSaves >= 2) return '심연 생환자';
+        if (runState.sealsSpent >= 3) return '봉인 전술가';
+        if (runState.perfectTotal >= 10) return '정밀 파쇄자';
+        return '초입 정찰자';
+      }
+
       function runChronicle(runState = state) {
         const contract = currentDailyContract();
         const omenName = omenCatalog[omenIndexForDepth(runState.depth)]?.name || currentOmen().name;
         return [
           `팬텀 ${runState.phantomBursts}회`,
+          `예언 ${runState.prophecyBursts}회`,
           `심도 ${runState.depth}층`,
           omenName,
           `${contract.name} ${save.daily.done ? '완료' : '진행중'}`
@@ -951,12 +970,40 @@
         const rank = rankForScore(runState.score);
         return [
           'Infinite Dungeon Tap — Abyss Chronicle',
-          `점수 ${Math.floor(runState.score)} · 심도 ${runState.depth} · 랭크 ${rank}`,
-          `팬텀 ${runState.phantomBursts}회 · Perfect ${runState.perfectTotal}회`,
+          `칭호 ${epithetForRun(runState)} · 점수 ${Math.floor(runState.score)} · 심도 ${runState.depth} · 랭크 ${rank}`,
+          `팬텀 ${runState.phantomBursts}회 · 예언 ${runState.prophecyBursts}회 · Perfect ${runState.perfectTotal}회`,
           `${contract.name} · ${save.daily.done ? '완료' : contract.progress(runState)} · KST ${save.daily.stamp}`,
           `런 연대기: ${runChronicle(runState)}`,
           'https://eastsea.monster/games/infinite-dungeon-tap/'
         ].join('\n');
+      }
+
+      function relicSynergyText(relic) {
+        const dailyContract = currentDailyContract();
+        if (dailyContract.id === 'perfect5' && relic.id === 'wideWindow') return '계약 시너지 · Perfect 계약 가속';
+        if (dailyContract.id === 'phantom1' && relic.id === 'echoPrism') return '계약 시너지 · 팬텀 개방 턴 단축';
+        if (dailyContract.id === 'relic2') return state.relics.length === 1 ? '계약 시너지 · 이번 선택으로 계약 마감 직전' : '계약 시너지 · 제단 진척 확보';
+        if (state.hp <= 2 && (relic.id === 'ironWard' || relic.id === 'vitalSeal')) return '생존 시너지 · 저체력 복구 우선';
+        if (state.seals === 0 && relic.id === 'echoPrism') return '운영 시너지 · READ/팬텀 재가속';
+        if (state.depth >= 10 && relic.id === 'abyssLens') return '후반 시너지 · 심도 배율 극대화';
+        if (relic.id === 'goldLedger') return '운영 시너지 · 안정 점수 수확';
+        return '운영 시너지 · 현재 런 안정화';
+      }
+
+      function activateProphecyLock() {
+        state.prophecyTimer = 5.4;
+        state.prophecyBursts += 1;
+        showBanner('PROPHECY LOCK');
+        showToast('READ 연속 성공으로 예언창이 열렸습니다');
+        burst(BREACH_Y, '#dff8ff', 22);
+      }
+
+      function activateSealEcho() {
+        state.sealEchoTimer = 4.2;
+        state.sealsSpent += 1;
+        showBanner('SEAL ECHO');
+        showToast('봉인 인장이 다음 몇 초를 공격 구간으로 바꿉니다');
+        burst(BREACH_Y, '#efe4a8', 16);
       }
 
       async function copyRunChronicle() {
@@ -1003,7 +1050,7 @@
         omenValue.textContent = `${omen.name} · Seal ${state.seals}`;
         const omenDepth = nextOmenDepth();
         const nextOmenText = omenDepth ? `다음 오멘 ${omenDepth}층.` : '최종 오멘 구간입니다.';
-        sealSub.textContent = `${omen.hint} ${nextOmenText} Perfect 3회마다 인장 +1, 함정/놓침을 한 번 뒤집을 수 있습니다.`;
+        sealSub.textContent = `${omen.hint} ${nextOmenText} Perfect 3회마다 인장 +1, 함정/놓침을 한 번 뒤집으면 Seal Echo가 켜집니다.`;
         routeValue.textContent = routeIntel.headline;
         routeSub.textContent = routeIntel.detail;
         contractValue.textContent = `${dailyContract.name} · ${save.daily.done ? '완료' : '진행중'} · KST ${save.daily.stamp}`;
@@ -1095,9 +1142,10 @@
         scored.sort((a, b) => b.score - a.score);
         const best = scored[0];
         const riskText = best.score >= 3 ? '강공 추천' : best.score >= 1 ? '안정 추천' : best.score >= 0 ? '보류 추천' : '위험 경고';
+        const streakText = state.prophecyTimer > 0 ? '예언창 활성' : `READ 연속 ${state.readStreak}/3`;
         return {
           headline: `${laneName(best.lane)} · ${typeLabels[best.type]} · ${riskText}`,
-          detail: `${laneName(best.lane)}이 현재 가장 낫습니다. 인장 ${state.seals}, 체력 ${state.hp}, Ward ${state.ward} 기준 판단입니다.`,
+          detail: `${laneName(best.lane)}이 현재 가장 낫습니다. 인장 ${state.seals}, 체력 ${state.hp}, Ward ${state.ward} 기준 · ${streakText}.`,
           previewRisk,
           recommendedLane: best.lane
         };
@@ -1132,7 +1180,7 @@
         setOverlay(titleOverlay, false);
         setOverlay(altarOverlay, false);
         setOverlay(gameoverOverlay, false);
-        showToast('문을 읽고 라인에 맞춰 돌파하세요');
+        showToast('문을 읽고 READ 3연속으로 예언창을 여세요');
         updateHud();
       }
 
@@ -1158,11 +1206,11 @@
       }
 
       function getPerfectWindow() {
-        return perfectWindowBase + state.relicEffects.windowBonus;
+        return perfectWindowBase + state.relicEffects.windowBonus + (state.prophecyTimer > 0 ? 6 : 0);
       }
 
       function getGoodWindow() {
-        return goodWindowBase + state.relicEffects.windowBonus;
+        return goodWindowBase + state.relicEffects.windowBonus + (state.prophecyTimer > 0 ? 8 : 0) + (state.sealEchoTimer > 0 ? 4 : 0);
       }
 
       function phantomThreshold() {
@@ -1173,6 +1221,9 @@
         let mult = 1 + Math.min(0.45, state.combo * 0.05);
         if (state.frenzyTimer > 0) mult += 0.4;
         if (state.phantomTimer > 0) mult += 0.65;
+        if (state.prophecyTimer > 0) mult += 0.35;
+        if (state.sealEchoTimer > 0) mult += 0.18;
+        if (state.lastStandTimer > 0) mult += 0.12;
         if (state.relicEffects.depthBonus) mult += Math.min(0.45, state.depth * 0.015);
         return mult;
       }
@@ -1245,8 +1296,7 @@
             state.seals -= 1;
             state.ward = Math.min(5, state.ward + 1);
             state.score += 52 * mult;
-            showToast('봉인 인장이 함정을 보상 문으로 뒤집었습니다');
-            burst(BREACH_Y, '#f3f1c2', 16);
+            activateSealEcho();
           } else if (state.ward > 0) {
             state.ward -= 1;
             state.score += 15 * mult;
@@ -1285,7 +1335,7 @@
           currentRelicChoices = available;
           [relicBtn0, relicBtn1].forEach((button, index) => {
             const relic = available[index];
-            button.innerHTML = `<strong>${relic.name}</strong><br><small>${relic.desc}</small>`;
+            button.innerHTML = `<strong>${relic.name}</strong><br><small>${relic.desc}</small><br><small>${relicSynergyText(relic)}</small>`;
           });
           setOverlay(altarOverlay, true);
           showBanner('RELIC DRAFT');
@@ -1296,6 +1346,7 @@
         if (state.mode !== 'play') return;
         const row = activeRow();
         if (!row) return;
+        const routeIntel = getRouteIntel();
         const centerY = row.y + DOOR_H / 2;
         const delta = Math.abs(centerY - BREACH_Y);
         if (centerY < BREACH_Y - 110 || centerY > BREACH_Y + 110) {
@@ -1323,6 +1374,28 @@
         } else {
           state.combo = 0;
           state.perfectChain = 0;
+        }
+
+        if (state.prophecyTimer > 0) {
+          state.readStreak = 0;
+        } else if (judge !== 'Late' && routeIntel.recommendedLane === lane) {
+          state.readStreak += 1;
+          if (state.readStreak >= 3 && state.prophecyTimer <= 0) {
+            activateProphecyLock();
+            state.readStreak = 0;
+          }
+        } else {
+          state.readStreak = 0;
+        }
+
+        if (state.hp === 1 && judge === 'Perfect') {
+          state.ward = Math.min(5, state.ward + 1);
+          state.lastStandTimer = 3.2;
+          state.lastStandSaves += 1;
+          state.score += 90;
+          showBanner('LAST STAND');
+          showToast('체력 1에서 Perfect · Ward +1');
+          burst(BREACH_Y, '#ffd8cf', 18);
         }
 
         applyDoorEffect(chosen.type, judge);
@@ -1355,8 +1428,7 @@
         if (state.seals > 0) {
           state.seals -= 1;
           state.score += 35;
-          showToast('봉인 인장이 놓친 문을 대신 봉인했습니다');
-          burst(BREACH_Y, '#efe4a8', 14);
+          activateSealEcho();
         } else {
           state.hp -= 1;
           showToast('문을 놓쳤습니다');
@@ -1364,6 +1436,7 @@
         }
         state.combo = 0;
         state.perfectChain = 0;
+        state.readStreak = 0;
         if (state.hp <= 0) {
           finishRun();
           return;
@@ -1405,9 +1478,10 @@
         finalRank.textContent = rank;
         finalPerfect.textContent = state.perfectTotal.toString();
         const dailyResult = save.daily.done ? '오늘의 계약도 완료했습니다.' : '오늘의 계약은 다음 런으로 남았습니다.';
-        gameoverSummary.textContent = `${state.depth}층까지 내려가며 ${state.relics.length}개의 유물을 선택했고 봉인 인장 ${state.seals}개를 남겼습니다. ${dailyResult}`;
+        gameoverSummary.textContent = `${state.depth}층까지 내려가며 ${state.relics.length}개의 유물을 선택했고 봉인 인장 ${state.seals}개를 남겼습니다. 오늘의 칭호는 ${epithetForRun(state)}. ${dailyResult}`;
         lastShareText = buildShareText(state);
         runRelics.innerHTML = `
+          <div class="ledger-row"><strong>원정 칭호</strong><small>${epithetForRun(state)} · 예언 ${state.prophecyBursts}회 · Last Stand ${state.lastStandSaves}회</small></div>
           <div class="ledger-row"><strong>획득 유물</strong><small>${state.relics.length ? state.relics.join(' · ') : '없음'}</small></div>
           <div class="ledger-row"><strong>${currentDailyContract().name}</strong><small>${save.daily.done ? '완료' : currentDailyContract().progress(state)}</small></div>
           <div class="ledger-row"><strong>런 연대기</strong><small>${runChronicle()}</small></div>
@@ -1443,10 +1517,13 @@
         state.elapsed += dt;
         state.frenzyTimer = Math.max(0, state.frenzyTimer - dt);
         state.phantomTimer = Math.max(0, state.phantomTimer - dt);
+        state.prophecyTimer = Math.max(0, state.prophecyTimer - dt);
+        state.sealEchoTimer = Math.max(0, state.sealEchoTimer - dt);
+        state.lastStandTimer = Math.max(0, state.lastStandTimer - dt);
 
         const baseSpeed = 165 + Math.min(165, state.elapsed * 4 + Math.max(0, state.depth - 6) * 2.8);
         const omenSpeed = currentOmen().speedMult;
-        const speed = baseSpeed * omenSpeed * (state.phantomTimer > 0 ? 0.92 : 1);
+        const speed = baseSpeed * omenSpeed * (state.phantomTimer > 0 ? 0.92 : 1) * (state.prophecyTimer > 0 ? 0.93 : 1) * (state.sealEchoTimer > 0 ? 0.95 : 1);
         state.rows.forEach(row => {
           if (!row.resolved) row.y += speed * dt;
           else row.y += speed * dt * 1.2;
@@ -1486,6 +1563,36 @@
 
         ctx.fillStyle = 'rgba(58, 38, 55, 0.24)';
         ctx.fillRect(0, BREACH_Y + 48, W, H - BREACH_Y - 48);
+
+        if (state.hp === 1 || state.lastStandTimer > 0) {
+          ctx.fillStyle = `rgba(186, 77, 68, ${state.lastStandTimer > 0 ? 0.16 : 0.08})`;
+          ctx.fillRect(0, 0, W, H);
+        }
+      }
+
+      function drawStateAuras() {
+        if (state.prophecyTimer > 0) {
+          const routeIntel = getRouteIntel();
+          if (routeIntel.recommendedLane != null) {
+            const x = laneXs[routeIntel.recommendedLane] - 10;
+            const width = DOOR_W + 20;
+            const glow = ctx.createLinearGradient(0, 0, 0, H);
+            glow.addColorStop(0, 'rgba(215,248,255,0.28)');
+            glow.addColorStop(1, 'rgba(215,248,255,0)');
+            ctx.save();
+            ctx.fillStyle = glow;
+            ctx.fillRect(x, 0, width, H);
+            ctx.restore();
+          }
+        }
+
+        if (state.sealEchoTimer > 0) {
+          ctx.save();
+          ctx.strokeStyle = 'rgba(243, 227, 165, 0.7)';
+          ctx.lineWidth = 6;
+          ctx.strokeRect(10, 10, W - 20, H - 20);
+          ctx.restore();
+        }
       }
 
       function drawBreachLine() {
@@ -1661,6 +1768,7 @@
       function draw() {
         ctx.clearRect(0, 0, W, H);
         drawBackground();
+        drawStateAuras();
         drawRunInfo();
         drawPhantomAura();
         drawLaneFlashes();
@@ -1706,7 +1814,7 @@
       document.getElementById('backTitleBtn').addEventListener('click', returnToTitle);
       document.getElementById('keepGoingBtn').addEventListener('click', () => { copyRunChronicle(); });
       document.getElementById('resetProgressBtn').addEventListener('click', resetProgress);
-      document.getElementById('howBtn').addEventListener('click', () => showToast('좌문, 중문, 우문을 브리치 라인에 맞춰 탭하세요'));
+      document.getElementById('howBtn').addEventListener('click', () => showToast('READ 3연속이면 Prophecy Lock, 체력 1 Perfect면 Last Stand입니다'));
       relicBtn0.addEventListener('click', () => chooseRelic(0));
       relicBtn1.addEventListener('click', () => chooseRelic(1));
       laneButtons.forEach(button => {
@@ -1747,15 +1855,22 @@
           hp: state.hp,
           ward: state.ward,
           seals: state.seals,
+          sealsSpent: state.sealsSpent,
           combo: state.combo,
           perfectTotal: state.perfectTotal,
           perfectChain: state.perfectChain,
           phantomBursts: state.phantomBursts,
+          prophecyBursts: state.prophecyBursts,
+          readStreak: state.readStreak,
+          prophecyTimer: Number(state.prophecyTimer.toFixed(2)),
+          sealEchoTimer: Number(state.sealEchoTimer.toFixed(2)),
+          lastStandSaves: state.lastStandSaves,
           omen: currentOmen().name,
           forecast: getForecastRows(),
           routeIntel: getRouteIntel(),
           stageIntel: stageIntelText(),
           runChronicle: runChronicle(),
+          epithet: epithetForRun(state),
           pageErrors,
           undefinedTexts: countUndefinedTexts(),
           dailyContract: {

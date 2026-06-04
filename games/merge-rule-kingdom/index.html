@@ -11,6 +11,7 @@
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://games.eastsea.xyz/merge-rule-kingdom/" />
   <meta name="twitter:card" content="summary_large_image" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext x='50%25' y='54%25' dominant-baseline='middle' text-anchor='middle' font-size='42'%3E👑%3C/text%3E%3C/svg%3E" />
   <link rel="canonical" href="https://games.eastsea.xyz/merge-rule-kingdom/" />
   <style>
     :root {
@@ -417,6 +418,8 @@
 
     .modal {
       width: min(100%, 420px);
+      max-height: calc(100vh - 36px);
+      overflow: auto;
       background: var(--paper-strong);
       border: 1px solid rgba(121, 89, 48, .18);
       border-radius: 26px;
@@ -448,6 +451,7 @@
 
     .hero-badge,
     .mini-stat {
+      max-width: 100%;
       padding: 8px 10px;
       border-radius: 999px;
       background: rgba(255,255,255,.74);
@@ -455,6 +459,9 @@
       font-size: .78rem;
       font-weight: 850;
       color: #6f5135;
+      text-align: center;
+      white-space: normal;
+      overflow-wrap: anywhere;
     }
 
     .choice-grid {
@@ -527,6 +534,43 @@
       line-height: 1.1;
     }
 
+    .share-panel {
+      margin-top: 14px;
+      padding: 14px;
+      border-radius: 18px;
+      background: rgba(255,255,255,.72);
+      border: 1px solid rgba(118, 88, 44, .14);
+      display: grid;
+      gap: 7px;
+    }
+
+    .share-panel strong {
+      font-size: .92rem;
+      color: #6b4f34;
+    }
+
+    .share-line {
+      font-size: .82rem;
+      line-height: 1.5;
+      color: var(--muted);
+    }
+
+    .share-line.copy {
+      padding-top: 6px;
+      border-top: 1px dashed rgba(118, 88, 44, .2);
+      color: #5a412c;
+    }
+
+    .share-feedback {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: rgba(242, 249, 232, .92);
+      border: 1px solid rgba(98, 141, 82, .18);
+      font-size: .8rem;
+      color: #49643d;
+    }
+
     .autotest {
       margin-top: 12px;
       padding: 10px 12px;
@@ -552,8 +596,25 @@
       .topbar { grid-template-columns: 1fr 1fr; }
       .brand { grid-column: 1 / -1; }
       .hud-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .modal { padding: 16px; }
+      .overlay { padding: 10px; }
+      .modal {
+        width: calc(100vw - 20px);
+        max-width: calc(100vw - 20px);
+        margin: 0 auto;
+        padding: 16px;
+        border-radius: 22px;
+      }
       .modal h2 { font-size: 1.52rem; }
+      .hero-badges,
+      .mini-stats,
+      .actions {
+        display: grid;
+        grid-template-columns: 1fr;
+      }
+      .actions button,
+      .hero-action {
+        width: 100%;
+      }
     }
   </style>
 </head>
@@ -767,10 +828,13 @@
     turn: 0,
     bestScore: 0,
     bestTitle: '소영주',
+    bestEpithet: '왕실 소영주',
     decreeStats: { success: 0, fail: 0 },
     activeDecree: null,
     pendingChoices: [],
     lastMergeInfo: null,
+    runStats: null,
+    shareFeedback: '',
     log: [],
     pauseAutotestRender: false
   };
@@ -787,6 +851,48 @@
     return current;
   }
 
+  function titleRank(label) {
+    return Math.max(0, TITLES.findIndex((entry) => entry.label === label));
+  }
+
+  function emptyRunStats() {
+    return {
+      longestPath: 0,
+      surgeBursts: 0,
+      familyMerges: { sun: 0, wave: 0, oak: 0, rose: 0 },
+      decreesChosen: 0,
+      decreesSucceeded: 0
+    };
+  }
+
+  function dominantFamilyKey() {
+    const entries = Object.entries(state.runStats?.familyMerges || {});
+    entries.sort((a, b) => b[1] - a[1]);
+    return entries.length && entries[0][1] > 0 ? entries[0][0] : null;
+  }
+
+  function epithetFromRun() {
+    const familyKey = dominantFamilyKey();
+    const familyLabel = familyKey ? FAMILIES[familyKey].name : '왕실';
+    const title = titleFromScore(state.score);
+    if ((state.runStats?.surgeBursts || 0) >= 3) return `연쇄의 ${familyLabel} ${title}`;
+    if ((state.runStats?.longestPath || 0) >= 6) return `장행의 ${familyLabel} ${title}`;
+    if ((state.runStats?.decreesSucceeded || 0) >= 2) return `칙령의 ${familyLabel} ${title}`;
+    return `${familyLabel} ${title}`;
+  }
+
+  function buildShareText() {
+    const familyKey = dominantFamilyKey();
+    const familyLabel = familyKey ? FAMILIES[familyKey].name : '균형';
+    return [
+      `👑 ${epithetFromRun()} · ${titleFromScore(state.score)}`,
+      `점수 ${state.score.toLocaleString('ko-KR')} / 턴 ${state.turn}`,
+      `최장 경로 ${state.runStats.longestPath}칸 · Royal Surge ${state.runStats.surgeBursts}회`,
+      `주력 가문 ${familyLabel} · 왕령 성공 ${state.runStats.decreesSucceeded}회`,
+      `https://games.eastsea.xyz/merge-rule-kingdom/`
+    ].join('\n');
+  }
+
   function loadSave() {
     try {
       const raw = localStorage.getItem(SAVE_KEY);
@@ -794,6 +900,7 @@
       const saved = JSON.parse(raw);
       state.bestScore = Number(saved.bestScore || 0);
       state.bestTitle = saved.bestTitle || '소영주';
+      state.bestEpithet = saved.bestEpithet || '왕실 소영주';
       state.decreeStats.success = Number(saved.decreeSuccess || 0);
       state.decreeStats.fail = Number(saved.decreeFail || 0);
     } catch (error) {
@@ -803,13 +910,18 @@
 
   function saveProgress() {
     const currentTitle = titleFromScore(state.score);
+    const currentEpithet = epithetFromRun();
     if (state.score > state.bestScore) state.bestScore = state.score;
-    if (TITLES.findIndex((t) => t.label === currentTitle) > TITLES.findIndex((t) => t.label === state.bestTitle)) {
+    if (titleRank(currentTitle) > titleRank(state.bestTitle)) {
       state.bestTitle = currentTitle;
+    }
+    if (!state.bestEpithet || state.score >= state.bestScore || titleRank(currentTitle) >= titleRank(state.bestTitle)) {
+      state.bestEpithet = currentEpithet;
     }
     const payload = {
       bestScore: state.bestScore,
       bestTitle: state.bestTitle,
+      bestEpithet: state.bestEpithet,
       decreeSuccess: state.decreeStats.success,
       decreeFail: state.decreeStats.fail
     };
@@ -1009,12 +1121,14 @@
         <p>같은 가문, 같은 레벨 타일을 드래그 경로로 연결하면 마지막 칸이 승격됩니다. 3턴마다 왕령 2지선다가 열리고, 선택한 규칙은 다음 3턴 동안 왕국 전체에 적용됩니다.</p>
         <div class="hero-badges">
           <div class="hero-badge">첫 훅: 드래그 경로 머지</div>
+          <div class="hero-badge">선택: 3턴 왕령 드래프트</div>
           <div class="hero-badge">쇼오프: Royal Surge 연쇄</div>
-          <div class="hero-badge">리텐션: 왕조 칭호 저장</div>
+          <div class="hero-badge">메타: 런별 왕조 별칭</div>
         </div>
         <div class="mini-stats">
           <div class="mini-stat">최고 점수 ${state.bestScore.toLocaleString('ko-KR')}</div>
           <div class="mini-stat">최고 칭호 ${state.bestTitle}</div>
+          <div class="mini-stat">대표 별칭 ${state.bestEpithet}</div>
           <div class="mini-stat">왕령 성적 ${state.decreeStats.success}승 ${state.decreeStats.fail}패</div>
         </div>
         <div class="actions">
@@ -1045,22 +1159,36 @@
     if (state.screen === SCREEN.gameover) {
       const currentTitle = titleFromScore(state.score);
       const streak = state.activeDecree ? `${state.activeDecree.name} 진행 중` : '활성 왕령 없음';
+      const dominantFamily = dominantFamilyKey();
+      const dominantFamilyLabel = dominantFamily ? FAMILIES[dominantFamily].name : '균형';
+      const shareText = buildShareText().replace(/\n/g, '<br>');
+      const shareFeedback = state.shareFeedback ? `<div class="share-feedback">${state.shareFeedback}</div>` : '';
       setOverlay(`
         <h2>${currentTitle}에서 막혔습니다</h2>
-        <p>합법적인 머지 경로가 더는 남지 않았습니다. 더 긴 경로를 만들고 Royal Surge를 노리면 다음 런에서 더 높은 칭호에 닿을 수 있습니다.</p>
+        <p>합법적인 머지 경로가 더는 남지 않았습니다. 더 긴 경로를 만들고 Royal Surge를 노리면 다음 런에서 더 높은 칭호와 다른 별칭에 닿을 수 있습니다.</p>
         <div class="result-grid">
           <div class="result-card"><small>점수</small><strong>${state.score.toLocaleString('ko-KR')}</strong></div>
           <div class="result-card"><small>칭호</small><strong>${currentTitle}</strong></div>
           <div class="result-card"><small>턴</small><strong>${state.turn}</strong></div>
           <div class="result-card"><small>상태</small><strong>${streak}</strong></div>
         </div>
+        <div class="share-panel">
+          <strong>왕실 결산 카드</strong>
+          <div class="share-line">이번 런 별칭: ${epithetFromRun()}</div>
+          <div class="share-line">최장 경로 ${state.runStats.longestPath}칸 · Royal Surge ${state.runStats.surgeBursts}회</div>
+          <div class="share-line">주력 가문 ${dominantFamilyLabel} · 왕령 성공 ${state.runStats.decreesSucceeded}회</div>
+          <div class="share-line copy">${shareText}</div>
+        </div>
+        ${shareFeedback}
         <div class="mini-stats">
           <div class="mini-stat">최고 점수 ${state.bestScore.toLocaleString('ko-KR')}</div>
           <div class="mini-stat">최고 칭호 ${state.bestTitle}</div>
+          <div class="mini-stat">대표 별칭 ${state.bestEpithet}</div>
           <div class="mini-stat">왕령 성적 ${state.decreeStats.success}승 ${state.decreeStats.fail}패</div>
         </div>
         <div class="actions">
           <button class="hero-action primary" type="button" data-action="restart">다시 통치하기</button>
+          <button class="hero-action secondary" type="button" data-action="share">결산 카드 복사</button>
           <button class="hero-action secondary" type="button" data-action="title">타이틀로</button>
         </div>
       `);
@@ -1107,6 +1235,8 @@
     state.activeDecree = null;
     state.pendingChoices = [];
     state.lastMergeInfo = null;
+    state.runStats = emptyRunStats();
+    state.shareFeedback = '';
     state.log = [];
     seedBoard();
     pushLog('새 런 시작. 첫 승격으로 왕실 연대기를 여세요.');
@@ -1138,6 +1268,7 @@
       progress: {}
     };
     if (typeof picked.onChoose === 'function') picked.onChoose(state.activeDecree);
+    state.runStats.decreesChosen += 1;
     state.activeDecree.behavior = picked;
     state.screen = SCREEN.play;
     pushLog(`왕령 채택: ${picked.name}. ${picked.rule}`);
@@ -1259,6 +1390,10 @@
     state.score += info.baseScore + info.extraScore;
     state.turn += 1;
     state.lastMergeInfo = info;
+    state.runStats.longestPath = Math.max(state.runStats.longestPath, path.length);
+    state.runStats.surgeBursts += info.surgeCount;
+    state.runStats.familyMerges[family] += 1;
+    state.shareFeedback = '';
     state.path = [];
     state.pathFamily = null;
     state.pathLevel = null;
@@ -1281,6 +1416,7 @@
         const success = state.activeDecree.behavior.success(state.activeDecree);
         if (success) {
           state.decreeStats.success += 1;
+          state.runStats.decreesSucceeded += 1;
           showBanner('왕령 달성');
           pushLog(`왕령 성공: ${state.activeDecree.name}`);
         } else {
@@ -1323,6 +1459,7 @@
     localStorage.removeItem(SAVE_KEY);
     state.bestScore = 0;
     state.bestTitle = '소영주';
+    state.bestEpithet = '왕실 소영주';
     state.decreeStats.success = 0;
     state.decreeStats.fail = 0;
     showBanner('기록 초기화', 'fail');
@@ -1331,6 +1468,31 @@
 
   function openRulesToast() {
     showBanner('같은 가문, 같은 레벨을 그려 마지막 칸을 올리세요', 'river');
+  }
+
+  async function copyShareSummary() {
+    const text = buildShareText();
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.setAttribute('readonly', 'readonly');
+        textarea.style.position = 'absolute';
+        textarea.style.left = '-9999px';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        textarea.remove();
+      }
+      state.shareFeedback = '결산 카드 문구를 복사했습니다.';
+      showBanner('결산 카드 복사');
+    } catch (error) {
+      state.shareFeedback = '복사에 실패했습니다. 결과 카드의 문구를 직접 복사해 주세요.';
+      showBanner('복사 실패', 'fail');
+    }
+    if (state.screen === SCREEN.gameover) renderOverlay();
   }
 
   function runAutotest() {
@@ -1362,9 +1524,14 @@
       const pickedId = state.pendingChoices[0].id;
       chooseDecree(pickedId);
       assert(state.activeDecree && state.activeDecree.id === pickedId, '왕령 선택이 활성 상태로 저장된다');
+      state.screen = SCREEN.gameover;
+      const shareText = buildShareText();
+      assert(shareText.includes('Royal Surge'), '결산 카드 텍스트가 Royal Surge 기록을 포함한다');
+      assert(epithetFromRun().length > 0, '런별 왕조 별칭이 생성된다');
       saveProgress();
       const saved = JSON.parse(localStorage.getItem(SAVE_KEY) || '{}');
       assert(saved.bestScore !== void 0, 'localStorage 저장 키가 존재한다');
+      assert(Boolean(saved.bestEpithet), '대표 별칭이 localStorage에 저장된다');
       document.body.dataset.autotest = 'pass';
       ui.autotestStatus.classList.add('show');
       ui.autotestStatus.textContent = log.join('\n');
@@ -1404,6 +1571,7 @@
     if (action === 'restart') startGame();
     if (action === 'title') { state.screen = SCREEN.title; renderAll(); }
     if (action === 'howto') openRulesToast();
+    if (action === 'share') copyShareSummary();
     if (action === 'choose-decree') chooseDecree(button.dataset.id);
   });
 

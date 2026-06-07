@@ -5,22 +5,72 @@
 <meta name="google-adsense-account" content="ca-pub-7252382819928130">
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7252382819928130" crossorigin="anonymous"></script>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
-<title>Sigil Forge Rogue | 무료 HTML5 게임</title>
-<meta name="description" content="무료 시뮬레이션 게임 Sigil Forge Rogue | 무료 HTML5 게임을(를) 브라우저에서 바로 플레이하세요. 마우스/터치로 조작하며 진행 저장 지원, 점수 경쟁, 다양한 레벨. 다운로드 없이 PC·모바일 모두 지원.">
+<title>Sigil Forge Rogue — 시길 포지 로그</title>
+<meta name="description" content="룬 체인을 드래그해 주문을 주조하고 데일리 오멘·봉인 초안·계약 보너스로 런을 바꾸는 모바일 로그라이크 액션.">
 <meta name="keywords" content="roguelike,rpg,canvas,html5,룬,로그라이크,모바일게임" />
-<meta property="og:title" content="Sigil Forge Rogue" />
-<meta property="og:description" content="룬 체인을 연결해 주문을 발동하는 모바일 로그라이크 액션." />
+<meta property="og:title" content="Sigil Forge Rogue — 시길 포지 로그" />
+<meta property="og:description" content="룬 체인을 드래그해 주문을 주조하고 데일리 오멘·봉인 초안·계약 보너스로 런을 바꾸는 모바일 로그라이크 액션." />
 <meta property="og:type" content="website" />
-<meta property="og:url" content="https://games.eastsea.xyz/sigil-forge-rogue/" />
-<meta property="og:image" content="https://games.eastsea.xyz/sigil-forge-rogue/og-image.png" />
+<meta property="og:url" content="https://eastsea-blog.pages.dev/games/sigil-forge-rogue/" />
+<meta property="og:image" content="https://eastsea-blog.pages.dev/games/sigil-forge-rogue/og-image.png" />
 <meta name="twitter:card" content="summary_large_image" />
-<link rel="canonical" href="https://games.eastsea.xyz/sigil-forge-rogue/" />
+<link rel="canonical" href="https://eastsea-blog.pages.dev/games/sigil-forge-rogue/" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23d9c3a0'/%3E%3Cpath d='M32 12l14 8v16L32 52 18 36V20z' fill='%233b2f2a'/%3E%3Cpath d='M32 20l7 4v8l-7 4-7-4v-8z' fill='%23f3ead7'/%3E%3C/svg%3E" />
 <link rel="manifest" href="/games/manifest.json" />
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<script src="../i18n.js"></script>
-<script src="../tg-sdk-wrapper.js"></script>
-<script src="../shared/sound-manager.js"></script>
-<script src="../shared/leaderboard.js"></script>
+<script>
+  window.GameI18n = window.GameI18n || function createI18n(dict) {
+    let currentLang = (document.documentElement.lang || 'ko').startsWith('ko') ? 'ko' : 'en';
+    return Object.assign(function translate(key, vars = {}) {
+      const entry = dict[key] || {};
+      let text = entry[currentLang] || entry.ko || entry.en || key;
+      return String(text).replace(/\{(\w+)\}/g, (_, name) => vars[name] ?? `{${name}}`);
+    }, {
+      setLang(lang) { currentLang = lang && String(lang).startsWith('en') ? 'en' : 'ko'; },
+      getLang() { return currentLang; }
+    });
+  };
+
+  window.TG = window.TG || {
+    init() {},
+    haptic() {},
+    save(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch (_) {} },
+    load(key) {
+      try {
+        const raw = localStorage.getItem(key);
+        return raw ? JSON.parse(raw) : null;
+      } catch (_) {
+        return null;
+      }
+    }
+  };
+
+  window.Leaderboard = window.Leaderboard || {
+    key: 'sigil_forge_local_leaderboard',
+    getTop(gameId, limit = 8) {
+      try {
+        const raw = JSON.parse(localStorage.getItem(this.key) || '[]');
+        return Promise.resolve(raw.filter(row => row.gameId === gameId).sort((a, b) => b.score - a.score).slice(0, limit));
+      } catch (_) {
+        return Promise.resolve([]);
+      }
+    },
+    submit(gameId, name, score, extra = {}) {
+      try {
+        const raw = JSON.parse(localStorage.getItem(this.key) || '[]');
+        raw.push({ gameId, name, score, extra, at: Date.now() });
+        localStorage.setItem(this.key, JSON.stringify(raw.slice(-40)));
+      } catch (_) {}
+    },
+    renderBoard(id, rows = []) {
+      const root = document.getElementById(id);
+      if (!root) return;
+      root.innerHTML = rows.length
+        ? rows.map((row, index) => `<div class="leader-row"><span>#${index + 1} ${row.name || 'Rune'}</span><strong>${Number(row.score || 0).toLocaleString()}</strong></div>`).join('')
+        : '<div class="leader-empty">첫 기록을 남겨보세요.</div>';
+    }
+  };
+</script>
 <style>
   :root {
     --ink:#2f2432;
@@ -120,6 +170,62 @@
     padding:8px;
     font-size:12px;
   }
+  .mini-row {
+    display:grid;
+    grid-template-columns:repeat(2, minmax(0,1fr));
+    gap:8px;
+    margin-top:10px;
+  }
+  .status-card {
+    background:rgba(47,72,88,.08);
+    border:1px solid rgba(47,36,50,.12);
+    border-radius:12px;
+    padding:10px;
+    text-align:left;
+  }
+  .status-card strong {
+    display:block;
+    font-size:12px;
+    margin-bottom:4px;
+    color:var(--deep);
+  }
+  .status-card span {
+    display:block;
+    font-size:12px;
+    line-height:1.4;
+    color:rgba(47,36,50,.84);
+  }
+  .draft-grid {
+    margin-top:12px;
+    display:grid;
+    grid-template-columns:1fr;
+    gap:8px;
+  }
+  .draft-btn {
+    width:100%;
+    min-width:0;
+    text-align:left;
+    color:var(--deep);
+    background:linear-gradient(135deg, rgba(255,255,255,.98), rgba(244,232,210,.92));
+    border:1px solid rgba(47,36,50,.12);
+    box-shadow:none;
+  }
+  .draft-btn b {
+    display:block;
+    margin-bottom:3px;
+    font-size:14px;
+  }
+  .draft-btn small {
+    display:block;
+    opacity:.84;
+    line-height:1.4;
+  }
+  .result-note {
+    margin-top:6px;
+    font-size:13px;
+    color:rgba(47,36,50,.88);
+    line-height:1.45;
+  }
   .hidden { display:none !important; }
   #toast {
     position:fixed; left:50%; bottom:calc(18px + env(safe-area-inset-bottom)); transform:translateX(-50%);
@@ -183,12 +289,30 @@
   </div>
 
   <div class="hint" id="controlHint">Drag across runes to forge a spell. 3+ unique runes = Nova, same start/end rune = Ward.</div>
+
+  <div class="mini-row">
+    <div class="status-card">
+      <strong id="omenTitle">오늘의 오멘</strong>
+      <span id="omenText">룬 주조 규칙이 매일 달라집니다.</span>
+    </div>
+    <div class="status-card">
+      <strong id="contractTitle">데일리 계약</strong>
+      <span id="contractText">특수 목표를 달성해 보너스 샤드를 획득하세요.</span>
+    </div>
+  </div>
+</section>
+
+<section id="sealDraft" class="panel hidden">
+  <h1 id="draftTitle">Seal Draft</h1>
+  <p id="draftDesc">웨이브 돌파 보상으로 다음 각인을 하나 고르세요.</p>
+  <div id="draftChoices" class="draft-grid"></div>
 </section>
 
 <section id="gameOverScreen" class="panel hidden">
   <h1 id="gameOverTitle">Run Complete</h1>
   <p id="resultSummary">Score 0</p>
   <p id="resultShard">+0 Shards</p>
+  <p id="resultExtra" class="result-note"></p>
   <div class="btn-row">
     <button id="retryBtn">Retry</button>
     <button id="homeBtn" class="alt">Title</button>
@@ -233,7 +357,17 @@
     toastChain: { ko: '공허 연쇄 발동', en: 'Void chain triggered' },
     boonVital: { ko: '레벨업: 최대 HP 상승', en: 'Level up: Vitality increased' },
     boonFocus: { ko: '레벨업: 캐스팅 속도 상승', en: 'Level up: Casting speed improved' },
-    boonPower: { ko: '레벨업: 화력 상승', en: 'Level up: Spell power increased' }
+    boonPower: { ko: '레벨업: 화력 상승', en: 'Level up: Spell power increased' },
+    draftTitle: { ko: '봉인 초안', en: 'Seal Draft' },
+    draftDesc: { ko: '웨이브 돌파 보상으로 다음 각인을 하나 고르세요.', en: 'Choose one seal to reshape the run.' },
+    omenTitle: { ko: '오늘의 오멘', en: 'Daily Omen' },
+    contractTitle: { ko: '데일리 계약', en: 'Daily Contract' },
+    surgeToast: { ko: '포지 서지! 적 흐름이 거칠어집니다.', en: 'Forge Surge! The enemy rhythm spikes.' },
+    contractReady: { ko: '계약 달성! 보너스 샤드가 준비됐습니다.', en: 'Contract complete! Bonus shards are ready.' },
+    contractClaimed: { ko: '오늘 계약 보상 수령 완료', en: 'Today\'s contract reward claimed' },
+    resultEpithet: { ko: '칭호 {name} · {contract}', en: 'Epithet {name} · {contract}' },
+    contractDoneLine: { ko: '계약 성공 +{amount} 샤드', en: 'Contract success +{amount} shards' },
+    contractMissLine: { ko: '계약 미달성', en: 'Contract missed' }
   });
 
   const canvas = document.getElementById('game');
@@ -266,9 +400,18 @@
     buyGuardBtn: document.getElementById('buyGuardBtn'),
     buyFocusBtn: document.getElementById('buyFocusBtn'),
     controlHint: document.getElementById('controlHint'),
+    omenTitle: document.getElementById('omenTitle'),
+    omenText: document.getElementById('omenText'),
+    contractTitle: document.getElementById('contractTitle'),
+    contractText: document.getElementById('contractText'),
+    sealDraft: document.getElementById('sealDraft'),
+    draftTitle: document.getElementById('draftTitle'),
+    draftDesc: document.getElementById('draftDesc'),
+    draftChoices: document.getElementById('draftChoices'),
     gameOverTitle: document.getElementById('gameOverTitle'),
     resultSummary: document.getElementById('resultSummary'),
     resultShard: document.getElementById('resultShard'),
+    resultExtra: document.getElementById('resultExtra'),
     retryBtn: document.getElementById('retryBtn'),
     homeBtn: document.getElementById('homeBtn'),
     toast: document.getElementById('toast')
@@ -304,7 +447,21 @@
     combo: 0,
     comboTimer: 0,
     castCd: 680,
-    lastCastMs: -9999
+    lastCastMs: -9999,
+    maxChain: 4,
+    draftEvery: 2,
+    nextDraftWave: 3,
+    draftOpen: false,
+    draftChoices: [],
+    scoreMul: 1,
+    burnBonus: 0,
+    slowBonus: 0,
+    contractBonus: 0,
+    surgeTimer: 0,
+    omen: null,
+    contract: null,
+    contractReadyToast: false,
+    stats: { nova: 0, ward: 0, chain: 0, brutes: 0 }
   };
 
   let enemies = [];
@@ -327,8 +484,31 @@
     relicPower: 0,
     relicGuard: 0,
     relicFocus: 0,
-    runs: 0
+    runs: 0,
+    lastContractClaim: ''
   };
+
+  const DAILY_OMENS = [
+    { id: 'ember-tax', name: 'Ember Tax', nameKo: '엠버 택스', desc: '적 이동이 빨라지지만 화상 룬이 더 뜨겁습니다.', descKo: '적 이동이 빨라지지만 화상 룬이 더 뜨겁습니다.', enemySpeed: 1.12, burnBonus: 1.1, scoreMul: 1.04 },
+    { id: 'warden-bell', name: 'Warden Bell', nameKo: '워든 벨', desc: '배리어가 오래 남고 받는 압박이 약간 느려집니다.', descKo: '배리어가 오래 남고 적 스폰이 살짝 느려집니다.', barrierBonus: 1.2, spawnMul: 0.92, contractBonus: 1 },
+    { id: 'glass-orbit', name: 'Glass Orbit', nameKo: '글래스 오빗', desc: '시전이 빨라지지만 브루트 비율이 조금 오릅니다.', descKo: '시전이 빨라지지만 브루트 비율이 조금 오릅니다.', castDelta: -36, bruteBias: 0.08, scoreMul: 1.03 },
+    { id: 'moss-ledger', name: 'Moss Ledger', nameKo: '모스 레저', desc: '회복과 경험치가 늘어 장기전이 쉬워집니다.', descKo: '회복과 경험치가 늘어 장기전이 쉬워집니다.', healBonus: 4, xpBonus: 2, scoreMul: 1.02 }
+  ];
+
+  const DAILY_CONTRACTS = [
+    { id: 'nova-5', name: 'Nova Archivist', nameKo: '노바 서기관', desc: '삼중 공명 5회 시전', descKo: '삼중 공명 5회 시전', reward: 6, check: () => world.stats.nova >= 5 },
+    { id: 'ward-4', name: 'Ward Steward', nameKo: '워드 집행관', desc: '순환 봉인 4회 발동', descKo: '순환 봉인 4회 발동', reward: 6, check: () => world.stats.ward >= 4 },
+    { id: 'wave-6', name: 'Forge Cartographer', nameKo: '포지 항해사', desc: '웨이브 6 도달', descKo: '웨이브 6 도달', reward: 7, check: () => world.wave >= 6 },
+    { id: 'brute-10', name: 'Anvil Hunter', nameKo: '앤빌 헌터', desc: '브루트 10기 처치', descKo: '브루트 10기 처치', reward: 7, check: () => world.stats.brutes >= 10 }
+  ];
+
+  const DRAFT_SEALS = [
+    { id: 'ember-edge', title: 'Ember Edge', titleKo: '엠버 엣지', desc: '기본 피해 +3, 화상 지속 강화', descKo: '기본 피해 +3, 화상 지속 강화', apply: () => { player.damage += 3; world.burnBonus += 0.9; } },
+    { id: 'guard-loom', title: 'Guard Loom', titleKo: '가드 룸', desc: '최대 HP +16, 즉시 보호막 2초', descKo: '최대 HP +16, 즉시 보호막 2초', apply: () => { player.maxHp += 16; player.hp = Math.min(player.maxHp, player.hp + 16); world.barrier = Math.max(world.barrier, 2); } },
+    { id: 'swift-sigil', title: 'Swift Sigil', titleKo: '스위프트 시길', desc: '시전 쿨다운 55ms 감소', descKo: '시전 쿨다운 55ms 감소', apply: () => { world.castCd = Math.max(220, world.castCd - 55); } },
+    { id: 'chain-crown', title: 'Chain Crown', titleKo: '체인 크라운', desc: '최대 체인 길이 +1, 점수 승수 소폭 증가', descKo: '최대 체인 길이 +1, 점수 승수 소폭 증가', apply: () => { world.maxChain = Math.min(6, world.maxChain + 1); world.scoreMul += 0.04; } },
+    { id: 'ledger-mark', title: 'Ledger Mark', titleKo: '레저 마크', desc: '계약 보상 +2, 점수 즉시 +35', descKo: '계약 보상 +2, 점수 즉시 +35', apply: () => { world.contractBonus += 2; world.score += 35; } }
+  ];
 
   let sound = null;
 
@@ -385,7 +565,92 @@
       meta.relicGuard = Number(loaded.relicGuard || 0);
       meta.relicFocus = Number(loaded.relicFocus || 0);
       meta.runs = Number(loaded.runs || 0);
+      meta.lastContractClaim = String(loaded.lastContractClaim || '');
     }
+  }
+
+  function koreaDayKey() {
+    const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' });
+    return fmt.format(new Date());
+  }
+
+  function pickDailyEntry(list, seed) {
+    let hash = 0;
+    for (let i = 0; i < seed.length; i++) hash = (hash * 33 + seed.charCodeAt(i)) % 2147483647;
+    return list[hash % list.length];
+  }
+
+  function omenLabel() {
+    if (!world.omen) return '';
+    return `${world.omen.nameKo} · ${world.omen.descKo}`;
+  }
+
+  function contractStatusLabel() {
+    if (!world.contract) return '';
+    if (meta.lastContractClaim === koreaDayKey()) return T('contractClaimed');
+    const done = world.contract.check();
+    return `${world.contract.nameKo} — ${world.contract.descKo}${done ? ' · 완료' : ''}`;
+  }
+
+  function prepareDailySystems() {
+    const key = koreaDayKey();
+    world.omen = { ...pickDailyEntry(DAILY_OMENS, `omen:${key}`), key };
+    world.contract = { ...pickDailyEntry(DAILY_CONTRACTS, `contract:${key}`), key };
+  }
+
+  function updateContractUI() {
+    ui.omenTitle.textContent = T('omenTitle');
+    ui.omenText.textContent = omenLabel();
+    ui.contractTitle.textContent = T('contractTitle');
+    ui.contractText.textContent = contractStatusLabel();
+  }
+
+  function resolveEpithet() {
+    if (world.stats.nova >= 6) return '노바 기록관';
+    if (world.stats.ward >= 5) return '배리어 시종장';
+    if (world.wave >= 7) return '포지 원정대장';
+    if (world.combo >= 4 || world.stats.chain >= 10) return '룬 무도사';
+    return '잿불 견습생';
+  }
+
+  function refreshDraftPanel() {
+    ui.draftTitle.textContent = T('draftTitle');
+    ui.draftDesc.textContent = T('draftDesc');
+    ui.draftChoices.innerHTML = '';
+    world.draftChoices.forEach((choice) => {
+      const btn = document.createElement('button');
+      btn.className = 'draft-btn';
+      btn.innerHTML = `<b>${choice.titleKo}</b><small>${choice.descKo}</small>`;
+      btn.addEventListener('click', () => applyDraftChoice(choice.id));
+      ui.draftChoices.appendChild(btn);
+    });
+  }
+
+  function showSealDraft() {
+    world.draftOpen = true;
+    world.draftChoices = [...DRAFT_SEALS].sort(() => Math.random() - 0.5).slice(0, 3);
+    refreshDraftPanel();
+    ui.sealDraft.classList.remove('hidden');
+    haptic('impact', 'medium');
+  }
+
+  function applyDraftChoice(id) {
+    const choice = world.draftChoices.find((item) => item.id === id);
+    if (!choice) return;
+    choice.apply();
+    world.draftOpen = false;
+    ui.sealDraft.classList.add('hidden');
+    updateContractUI();
+    showToast(`${choice.titleKo} 채택`);
+    playSfx('clear');
+  }
+
+  function maybeCompleteContract() {
+    if (!world.contract || meta.lastContractClaim === koreaDayKey()) return 0;
+    if (!world.contract.check()) return 0;
+    const reward = world.contract.reward + world.contractBonus;
+    meta.lastContractClaim = koreaDayKey();
+    return reward;
   }
 
   function resolvePlayerName() {
@@ -453,12 +718,14 @@
     ui.buyPowerBtn.disabled = meta.shards < powerCost();
     ui.buyGuardBtn.disabled = meta.shards < guardCost();
     ui.buyFocusBtn.disabled = meta.shards < focusCost();
+    updateContractUI();
   }
 
   function showTitle() {
     state = STATE.title;
     ui.titleScreen.classList.remove('hidden');
     ui.gameOverScreen.classList.add('hidden');
+    ui.sealDraft.classList.add('hidden');
     ui.hud.classList.add('hidden');
     updateTitleUI();
   }
@@ -486,8 +753,29 @@
     world.comboTimer = 0;
     world.castCd = Math.max(320, 680 - meta.relicFocus * 36);
     world.lastCastMs = -9999;
+    world.maxChain = 4;
+    world.draftEvery = 2;
+    world.nextDraftWave = 3;
+    world.draftOpen = false;
+    world.draftChoices = [];
+    world.scoreMul = 1;
+    world.burnBonus = 0;
+    world.slowBonus = 0;
+    world.contractBonus = 0;
+    world.surgeTimer = 0;
+    world.contractReadyToast = false;
+    world.stats = { nova: 0, ward: 0, chain: 0, brutes: 0 };
+
+    if (world.omen) {
+      world.scoreMul *= world.omen.scoreMul || 1;
+      world.burnBonus += world.omen.burnBonus || 0;
+      world.contractBonus += world.omen.contractBonus || 0;
+      world.spawnBase *= world.omen.spawnMul || 1;
+      world.castCd = Math.max(220, world.castCd + (world.omen.castDelta || 0));
+    }
 
     player.maxHp = 100 + meta.relicGuard * 10;
+    if (world.omen && world.omen.healBonus) player.maxHp += world.omen.healBonus;
     player.hp = player.maxHp;
     player.damage = 14 + meta.relicPower * 2;
 
@@ -500,7 +788,10 @@
     state = STATE.play;
     ui.titleScreen.classList.add('hidden');
     ui.gameOverScreen.classList.add('hidden');
+    ui.sealDraft.classList.add('hidden');
+    ui.resultExtra.textContent = '';
     ui.hud.classList.remove('hidden');
+    updateContractUI();
     haptic('impact', 'light');
     playSfx('click');
   }
@@ -508,7 +799,11 @@
   function endRun() {
     if (state !== STATE.play) return;
     state = STATE.gameover;
-    const gain = Math.max(1, Math.floor(world.score / 90) + Math.floor(world.level * 0.5));
+    const baseGain = Math.max(1, Math.floor(world.score / 90) + Math.floor(world.level * 0.5));
+    const contractGain = maybeCompleteContract();
+    const gain = baseGain + contractGain;
+    const contractLine = contractGain > 0 ? tr('contractDoneLine', { amount: contractGain }) : T('contractMissLine');
+    const epithet = resolveEpithet();
 
     meta.shards += gain;
     meta.best = Math.max(meta.best, world.score);
@@ -522,11 +817,13 @@
       kills: world.kills
     });
     ui.resultShard.textContent = tr('shardGain', { amount: gain });
+    ui.resultExtra.textContent = tr('resultEpithet', { name: epithet, contract: contractLine });
     ui.retryBtn.textContent = T('retry');
     ui.homeBtn.textContent = T('home');
 
     ui.hud.classList.add('hidden');
     ui.gameOverScreen.classList.remove('hidden');
+    updateContractUI();
 
     submitScore();
     refreshBoard();
@@ -602,7 +899,7 @@
     let touch = 10;
     let color = '#8d5a44';
 
-    if (tier > 0.72 || world.wave > 4) {
+    if (tier > 0.72 - (world.omen && world.omen.bruteBias ? world.omen.bruteBias : 0) || world.wave > 4) {
       kind = 'brute';
       hp = 44 + world.level * 8;
       speed = 34 + world.level * 1.2;
@@ -700,6 +997,7 @@
 
   function castSpell(seq) {
     if (!seq.length) return;
+    world.stats.chain += 1;
 
     const nowMs = world.time * 1000;
     if (nowMs - world.lastCastMs < world.castCd) return;
@@ -710,9 +1008,10 @@
 
     if (seq.length >= 3 && seq[0] === seq[seq.length - 1]) {
       world.barrier = Math.min(6, world.barrier + 3);
-      player.hp = Math.min(player.maxHp, player.hp + 9 + meta.relicGuard * 2);
+      player.hp = Math.min(player.maxHp, player.hp + 9 + meta.relicGuard * 2 + (world.omen && world.omen.healBonus ? world.omen.healBonus : 0));
       bursts.push({ x: player.x, y: player.y, r: 34, max: 95, life: 0.45, color: 'rgba(76,149,108,0.38)' });
       world.score += 12;
+      world.stats.ward += 1;
       showToast(T('toastWard'));
       playSfx('success');
       haptic('impact', 'medium');
@@ -724,6 +1023,7 @@
       world.combo += 1;
       world.comboTimer = 2.2;
       world.score += 18;
+      world.stats.nova += 1;
       showToast(T('toastNova'));
       playSfx('whoosh');
       haptic('impact', 'heavy');
@@ -743,8 +1043,8 @@
     if (!target) return;
 
     let damage = base * (1 + 0.2 * Math.max(0, seq.length - 1));
-    if (seq.includes(0) && seq.includes(1)) target.burn = Math.max(target.burn, 2.7);
-    if (seq.includes(2) && seq.includes(3)) target.slow = Math.max(target.slow, 2.4);
+    if (seq.includes(0) && seq.includes(1)) target.burn = Math.max(target.burn, 2.7 + world.burnBonus);
+    if (seq.includes(2) && seq.includes(3)) target.slow = Math.max(target.slow, 2.4 + world.slowBonus);
 
     const color = runes[seq[seq.length - 1]].color;
     shootProjectile(target, damage, color);
@@ -773,13 +1073,15 @@
   }
 
   function handleKillsAndLevel() {
+    let waveBefore = world.wave;
     for (let i = enemies.length - 1; i >= 0; i--) {
       const e = enemies[i];
       if (e.hp > 0) continue;
 
       world.kills += 1;
       world.score += Math.floor(10 + e.maxHp * 0.75 + world.combo * 1.3);
-      world.xp += 8 + (e.kind === 'brute' ? 4 : 0);
+      world.xp += 8 + (e.kind === 'brute' ? 4 : 0) + (world.omen && world.omen.xpBonus ? world.omen.xpBonus : 0);
+      if (e.kind === 'brute') world.stats.brutes += 1;
       enemies.splice(i, 1);
 
       if (world.kills % 12 === 0) world.wave += 1;
@@ -789,6 +1091,23 @@
       world.xp -= world.xpNeed;
       levelUp();
     }
+
+    if (world.wave !== waveBefore) {
+      if (world.wave % 3 === 0) {
+        world.surgeTimer = 8;
+        showToast(T('surgeToast'));
+      }
+      if (world.wave >= world.nextDraftWave) {
+        world.nextDraftWave += world.draftEvery;
+        showSealDraft();
+      }
+    }
+
+    if (!world.contractReadyToast && world.contract && meta.lastContractClaim !== koreaDayKey() && world.contract.check()) {
+      world.contractReadyToast = true;
+      showToast(T('contractReady'));
+      updateContractUI();
+    }
   }
 
   function update(dt) {
@@ -796,7 +1115,19 @@
 
     world.time += dt;
 
+    if (world.draftOpen) {
+      const hpRate = Math.max(0, player.hp / player.maxHp);
+      const xpRate = Math.max(0, Math.min(1, world.xp / world.xpNeed));
+      ui.hpFill.style.width = `${(hpRate * 100).toFixed(1)}%`;
+      ui.xpFill.style.width = `${(xpRate * 100).toFixed(1)}%`;
+      ui.hudScore.textContent = `${T('score')} ${Math.floor(world.score).toLocaleString()}`;
+      ui.hudLevel.textContent = `Lv ${world.level}`;
+      ui.hudWave.textContent = `${T('wave')} ${world.wave}`;
+      return;
+    }
+
     if (world.barrier > 0) world.barrier = Math.max(0, world.barrier - dt);
+    if (world.surgeTimer > 0) world.surgeTimer = Math.max(0, world.surgeTimer - dt);
     if (world.comboTimer > 0) {
       world.comboTimer -= dt;
       if (world.comboTimer <= 0) world.combo = 0;
@@ -805,7 +1136,8 @@
     world.spawnCd -= dt;
     if (world.spawnCd <= 0) {
       spawnEnemy();
-      const scale = Math.max(0.35, world.spawnBase - world.level * 0.035 - world.wave * 0.025);
+      const surgeMul = world.surgeTimer > 0 ? 0.72 : 1;
+      const scale = Math.max(0.35, (world.spawnBase - world.level * 0.035 - world.wave * 0.025) * surgeMul);
       world.spawnCd = 0.4 + Math.random() * scale;
     }
 
@@ -820,7 +1152,9 @@
       const dx = player.x - e.x;
       const dy = player.y - e.y;
       const dist = Math.hypot(dx, dy) || 1;
-      const speed = e.speed * (e.slow > 0 ? 0.48 : 1);
+      const omenSpeed = world.omen && world.omen.enemySpeed ? world.omen.enemySpeed : 1;
+      const surgeSpeed = world.surgeTimer > 0 ? 1.12 : 1;
+      const speed = e.speed * omenSpeed * surgeSpeed * (e.slow > 0 ? 0.48 : 1);
       e.vx = (dx / dist) * speed;
       e.vy = (dy / dist) * speed;
       e.x += e.vx * dt;
@@ -878,7 +1212,7 @@
 
     handleKillsAndLevel();
 
-    world.score += dt * (1 + world.level * 0.25 + world.wave * 0.12);
+    world.score += dt * (1 + world.level * 0.25 + world.wave * 0.12) * world.scoreMul;
 
     if (player.hp <= 0) {
       player.hp = 0;
@@ -1076,6 +1410,22 @@
       ctx.fillText(`COMBO x${world.combo}`, width * 0.5, 124);
     }
 
+    if (world.surgeTimer > 0) {
+      ctx.fillStyle = 'rgba(173,108,59,0.16)';
+      ctx.fillRect(0, 0, width, height);
+      ctx.fillStyle = 'rgba(47,36,50,0.86)';
+      ctx.font = 'bold 16px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('FORGE SURGE', width * 0.5, 148);
+    }
+
+    if (world.contract) {
+      ctx.fillStyle = 'rgba(47,36,50,0.72)';
+      ctx.font = '12px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(world.contract.descKo, 16, height - 44);
+    }
+
     const cd = Math.max(0, (world.castCd - (world.time * 1000 - world.lastCastMs)) / world.castCd);
     const cw = 120;
     const cx = width * 0.5 - cw / 2;
@@ -1108,7 +1458,7 @@
       const d = Math.hypot(x - r.x, y - r.y);
       if (d <= 24) {
         if (chain.length === 0 || chain[chain.length - 1] !== i) {
-          if (chain.length < 4) {
+          if (chain.length < world.maxChain) {
             chain.push(i);
             playSfx('pop');
             haptic('selection', 'light');
@@ -1137,7 +1487,7 @@
     pointerX = p.x;
     pointerY = p.y;
 
-    if (state === STATE.play) {
+    if (state === STATE.play && !world.draftOpen) {
       drawing = true;
       tracePoints = [p];
       chain = [];
@@ -1152,7 +1502,7 @@
     pointerX = p.x;
     pointerY = p.y;
 
-    if (!drawing || state !== STATE.play) return;
+    if (!drawing || state !== STATE.play || world.draftOpen) return;
     tracePoints.push(p);
     if (tracePoints.length > 32) tracePoints.shift();
     addRuneByPointer(p.x, p.y);
@@ -1160,7 +1510,7 @@
   }
 
   function onPointerUp(ev) {
-    if (state !== STATE.play || !drawing) return;
+    if (state !== STATE.play || !drawing || world.draftOpen) return;
     drawing = false;
     castSpell(chain.slice());
     chain = [];
@@ -1193,6 +1543,8 @@
     ui.gameOverTitle.textContent = T('runComplete');
     ui.retryBtn.textContent = T('retry');
     ui.homeBtn.textContent = T('home');
+    ui.draftTitle.textContent = T('draftTitle');
+    ui.draftDesc.textContent = T('draftDesc');
   }
 
   function initSound() {
@@ -1217,19 +1569,22 @@
     } catch (_) {}
 
     loadMeta();
+    prepareDailySystems();
     initSound();
     initText();
     bindEvents();
     resize();
     updateTitleUI();
     refreshBoard();
+    if (location.hostname === '127.0.0.1' || location.hostname === 'localhost') {
+      window.__SIGIL_DEBUG__ = { world, player, meta, startRun, endRun, showSealDraft, applyDraftChoice, updateTitleUI };
+    }
     requestAnimationFrame(frame);
   }
 
   init();
 })();
 </script>
-<script src="../cross-promo.js"></script>
 <footer style="text-align:center;padding:12px 8px;font-size:12px;opacity:0.6;font-family:system-ui,sans-serif">
   <a href="/" style="color:inherit;text-decoration:none">Home</a> ·
   <a href="/about.html" style="color:inherit;text-decoration:none">About</a> ·
@@ -1239,22 +1594,23 @@
   <div style="margin-top:4px">© 2026 eastsea.monster</div>
 </footer>
 
-<section class="game-info" style="max-width:780px;margin:20px auto;padding:20px;font-family:'Pretendard','Noto Sans KR',system-ui,sans-serif;color:#e0e0e0;line-height:1.7;background:rgba(0,0,0,0.3);border-radius:12px">
-  <h2 style="font-size:20px;margin-bottom:12px;color:#fff">Sigil Forge Rogue | 무료 HTML5 게임 — 무료 브라우저 게임</h2>
-  <p>Sigil Forge Rogue | 무료 HTML5 게임은(는) 브라우저에서 바로 플레이할 수 있는 무료 HTML5 시뮬레이션 게임입니다. 다운로드 없이 PC와 모바일 모두에서 즐길 수 있습니다.</p>
+<section class="game-info" style="max-width:780px;margin:20px auto;padding:20px;font-family:'Pretendard','Noto Sans KR',system-ui,sans-serif;color:#e0e0e0;line-height:1.7;background:rgba(64,45,34,0.42);border-radius:12px">
+  <h2 style="font-size:20px;margin-bottom:12px;color:#fff">Sigil Forge Rogue — 시길 포지 로그</h2>
+  <p>Sigil Forge Rogue는 룬 체인을 그려 주문을 주조하는 모바일 로그라이크 액션입니다. 한 번의 런마다 봉인 초안을 골라 빌드를 바꾸고, 오늘의 오멘과 데일리 계약으로 다시 도전할 이유를 남깁니다.</p>
 
   <h3 style="font-size:16px;margin-top:16px;color:#4fc3f7">🎮 조작 방법</h3>
   <ul style="padding-left:20px;margin-top:8px">
-    <li>마우스 클릭 또는 화면 탭으로 조작</li>
+    <li>룬 노드를 드래그로 연결해 주문 체인을 만듭니다.</li>
+    <li>서로 다른 룬 3개 이상 = 노바, 시작/끝 룬 동일 = 배리어, 공허 룬 포함 = 연쇄 번개</li>
   </ul>
 
   <h3 style="font-size:16px;margin-top:16px;color:#4fc3f7">✨ 게임 특징</h3>
   <ul style="padding-left:20px;margin-top:8px">
-    <li>100% 무료 — 설치 없이 브라우저에서 바로 플레이</li>
-    <li>점수 시스템으로 실력을 기록하고 최고 기록에 도전하세요</li>
-    <li>다양한 레벨과 스테이지에 도전하세요</li>
-    <li>자동 저장 — 언제든 이어서 플레이</li>
-    <li>PC와 모바일 모두 지원</li>
+    <li>첫 10초부터 손맛이 느껴지는 드래그 룬 체인 입력</li>
+    <li>웨이브 돌파 시 봉인 초안을 고르는 런 중 선택 훅</li>
+    <li>포지 서지와 데일리 오멘으로 30~90초 구간이 급격히 살아나는 에스컬레이션</li>
+    <li>엔드카드 칭호와 계약 성공 보너스로 스코어 자랑이 쉬운 쇼오프 순간</li>
+    <li>데일리 계약·영구 유물·최고 기록 저장으로 재도전 동기 유지</li>
   </ul>
 
   <h3 style="font-size:16px;margin-top:16px;color:#4fc3f7">📖 게임 소개</h3>

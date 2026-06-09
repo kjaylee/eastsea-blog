@@ -1,0 +1,1178 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Harbor Signal House — 항로 시그널 하우스</title>
+  <meta name="description" content="Dock · Fuel · Tow 신호 깃발을 4칸 미래 레일에 드래그해 폭풍 속 선박을 처리하는 모바일 항만 운영 시뮬레이션." />
+  <meta property="og:title" content="Harbor Signal House — 항로 시그널 하우스" />
+  <meta property="og:description" content="깃발을 미래 슬롯에 먼저 꽂아 두고, 자동 입항 선박을 정확한 타이밍에 처리하세요." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://eastsea-blog.pages.dev/games/harbor-signal-house/" />
+  <link rel="canonical" href="https://eastsea-blog.pages.dev/games/harbor-signal-house/" />
+  <link rel="icon" href="data:," />
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"VideoGame","name":"Harbor Signal House","genre":"Simulation","gamePlatform":"Web Browser","applicationCategory":"Game","operatingSystem":"Any","description":"Timeline harbor dispatch game with drag-and-drop future command rail.","url":"https://eastsea-blog.pages.dev/games/harbor-signal-house/"}</script>
+  <style>
+    :root {
+      --sky: #f5efe2;
+      --sea: #6ba7b4;
+      --sea-deep: #376c7d;
+      --pier: #7c5f46;
+      --panel: rgba(255, 250, 242, 0.78);
+      --panel-strong: rgba(255, 250, 242, 0.92);
+      --line: rgba(53, 70, 80, 0.16);
+      --text: #22323d;
+      --muted: #5d727d;
+      --dock: #d08c49;
+      --fuel: #3e9d89;
+      --tow: #d35f5f;
+      --warn: #d67154;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: linear-gradient(180deg, #f8f0de 0%, #c8ddd7 46%, #8fb5be 100%);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      touch-action: none;
+    }
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    #app {
+      position: relative;
+      width: min(100vw, 430px);
+      height: 100vh;
+      max-height: 100vh;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 50% 0%, rgba(255,255,255,0.45), transparent 36%),
+        linear-gradient(180deg, #f6efdf 0%, #bad5ce 36%, #7ba9b7 100%);
+    }
+    canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .hud,
+    .rail,
+    .palette,
+    .overlay,
+    .flare-banner,
+    .storm-banner,
+    .drag-ghost {
+      position: absolute;
+      z-index: 4;
+    }
+    .hud {
+      left: 12px;
+      right: 12px;
+      top: calc(var(--safe-top) + 10px);
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid rgba(255,255,255,0.6);
+      border-radius: 16px;
+      box-shadow: 0 10px 24px rgba(70, 91, 99, 0.12);
+      backdrop-filter: blur(10px);
+    }
+    .hud-card {
+      padding: 10px 11px;
+      min-width: 0;
+    }
+    .label-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .value {
+      font-weight: 800;
+      font-size: 18px;
+      letter-spacing: -0.02em;
+    }
+    .mini {
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+    .bar {
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(34, 50, 61, 0.08);
+      overflow: hidden;
+      margin-top: 6px;
+    }
+    .bar > span {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      width: 0%;
+      background: linear-gradient(90deg, #3e9d89 0%, #d08c49 100%);
+    }
+    .storm-banner {
+      top: calc(var(--safe-top) + 112px);
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(255, 250, 242, 0.85);
+      color: #6b5140;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .rail {
+      left: 14px;
+      right: 14px;
+      top: calc(var(--safe-top) + 146px);
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+    .rail-slot {
+      min-height: 72px;
+      padding: 10px 8px;
+      border-radius: 16px;
+      border: 1px dashed rgba(34, 50, 61, 0.16);
+      background: rgba(255, 250, 242, 0.62);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 4px;
+      text-align: center;
+    }
+    .rail-slot strong {
+      font-size: 12px;
+      letter-spacing: 0.03em;
+      color: var(--muted);
+    }
+    .rail-slot .slot-command {
+      font-size: 15px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+    .rail-slot.filled[data-service="dock"] { background: rgba(208, 140, 73, 0.18); }
+    .rail-slot.filled[data-service="fuel"] { background: rgba(62, 157, 137, 0.18); }
+    .rail-slot.filled[data-service="tow"] { background: rgba(211, 95, 95, 0.18); }
+    .palette {
+      left: 12px;
+      right: 12px;
+      bottom: calc(var(--safe-bottom) + 14px);
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+    .flag {
+      min-height: 74px;
+      padding: 12px 10px;
+      border-radius: 18px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      font-weight: 800;
+      user-select: none;
+      position: relative;
+    }
+    .flag small {
+      font-size: 11px;
+      font-weight: 700;
+      color: rgba(34, 50, 61, 0.72);
+      margin-top: 4px;
+    }
+    .flag[data-service="dock"] { background: rgba(208, 140, 73, 0.9); color: #fff9f1; }
+    .flag[data-service="fuel"] { background: rgba(62, 157, 137, 0.92); color: #f5fffb; }
+    .flag[data-service="tow"] { background: rgba(211, 95, 95, 0.92); color: #fff7f7; }
+    .drag-ghost {
+      width: 84px;
+      height: 56px;
+      border-radius: 16px;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 800;
+      color: white;
+      pointer-events: none;
+      transform: translate(-50%, -50%) scale(1.02);
+      box-shadow: 0 10px 24px rgba(34, 50, 61, 0.2);
+    }
+    .drag-ghost[data-service="dock"] { background: rgba(208, 140, 73, 0.96); }
+    .drag-ghost[data-service="fuel"] { background: rgba(62, 157, 137, 0.96); }
+    .drag-ghost[data-service="tow"] { background: rgba(211, 95, 95, 0.96); }
+    .overlay {
+      inset: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 18px;
+      background: rgba(114, 146, 155, 0.18);
+      pointer-events: none;
+    }
+    .overlay.hidden { display: none; }
+    .overlay-panel {
+      width: 100%;
+      max-width: 360px;
+      padding: 20px 18px;
+      background: var(--panel-strong);
+      pointer-events: auto;
+    }
+    .tag {
+      display: inline-flex;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.55);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      margin-bottom: 12px;
+    }
+    h1, h2, p { margin: 0; }
+    h1 { font-size: 31px; line-height: 1.02; margin-bottom: 10px; letter-spacing: -0.03em; }
+    h2 { font-size: 28px; line-height: 1.04; margin-bottom: 10px; letter-spacing: -0.02em; }
+    .copy {
+      font-size: 14px;
+      line-height: 1.45;
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+    .info-grid,
+    .decree-grid,
+    .button-row {
+      display: grid;
+      gap: 10px;
+    }
+    .info-grid { margin-bottom: 16px; }
+    .info-item,
+    .decree-item {
+      padding: 12px;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.52);
+      border: 1px solid rgba(34, 50, 61, 0.08);
+    }
+    .decree-item strong,
+    .info-item strong { display: block; margin-bottom: 4px; }
+    button {
+      appearance: none;
+      border: 0;
+      border-radius: 16px;
+      padding: 14px 16px;
+      font-size: 15px;
+      font-weight: 800;
+      color: #fffaf3;
+      background: linear-gradient(135deg, #477c89 0%, #d08c49 100%);
+      box-shadow: 0 10px 22px rgba(71, 124, 137, 0.2);
+    }
+    button.secondary {
+      background: rgba(255,255,255,0.7);
+      color: var(--text);
+      box-shadow: none;
+      border: 1px solid rgba(34, 50, 61, 0.08);
+    }
+    .flare-banner {
+      left: 50%;
+      top: calc(var(--safe-top) + 230px);
+      transform: translateX(-50%);
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(255, 245, 228, 0.95);
+      color: #6b4d32;
+      font-size: 13px;
+      font-weight: 900;
+      letter-spacing: 0.04em;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 180ms ease;
+    }
+    .flare-banner.active { opacity: 1; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <canvas id="game" width="390" height="844" aria-label="Harbor Signal House game canvas"></canvas>
+
+    <div class="hud">
+      <div class="card hud-card">
+        <div class="label-row"><span>Wave</span><span id="waveValue">1</span></div>
+        <div class="value" id="scoreValue">0</div>
+        <div class="mini" id="quotaValue">0 / 8 quota</div>
+      </div>
+      <div class="card hud-card">
+        <div class="label-row"><span>Hull</span><span id="hullValue">100</span></div>
+        <div class="bar"><span id="hullBar"></span></div>
+        <div class="mini" id="comboValue">Combo 0</div>
+      </div>
+      <div class="card hud-card">
+        <div class="label-row"><span>Storm</span><span id="phaseValue">Calm</span></div>
+        <div class="bar"><span id="stormBar"></span></div>
+        <div class="mini" id="timerValue">Tick 2.8s</div>
+      </div>
+    </div>
+
+    <div class="storm-banner card" id="stormBanner">Calm Harbor · plan 4 moves ahead</div>
+
+    <div class="rail" id="rail"></div>
+
+    <div class="flare-banner" id="flareBanner">Perfect Convoy!</div>
+
+    <div class="palette" id="palette">
+      <div class="flag card" data-service="dock">Dock<small>berth signal</small></div>
+      <div class="flag card" data-service="fuel">Fuel<small>bunker order</small></div>
+      <div class="flag card" data-service="tow">Tow<small>tug assist</small></div>
+    </div>
+
+    <div class="drag-ghost" id="dragGhost"></div>
+
+    <div class="overlay" id="titleOverlay">
+      <div class="card overlay-panel">
+        <div class="tag">WOW Launch Circle 1 · harbor sim</div>
+        <h1>Harbor Signal House</h1>
+        <p class="copy">Dock / Fuel / Tow 깃발을 4칸 미래 레일에 먼저 꽂아 두고, 자동 전진하는 배들이 정확한 슬롯에서 서비스를 받게 하세요.</p>
+        <div class="info-grid" id="ledgerGrid"></div>
+        <div class="info-grid">
+          <div class="info-item"><strong>Future Slot Drag Rail</strong><div class="mini">실제 드래그로 4칸 명령 타임라인을 설계합니다.</div></div>
+          <div class="info-item"><strong>Storm Front Escalation</strong><div class="mini">30초 이후부터 convoy 압박이 강해집니다.</div></div>
+          <div class="info-item"><strong>Harbor Decree</strong><div class="mini">quota 클리어마다 3개 decree 중 하나를 고릅니다.</div></div>
+        </div>
+        <div class="button-row">
+          <button id="startBtn">Launch Harbor Run</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="overlay hidden" id="upgradeOverlay">
+      <div class="card overlay-panel">
+        <div class="tag">Harbor decree</div>
+        <h2>Choose the next decree</h2>
+        <p class="copy">quota를 채웠습니다. 다음 wave 운영 방식을 바꿀 3개의 decree 중 하나를 고르세요.</p>
+        <div class="decree-grid" id="decreeGrid"></div>
+      </div>
+    </div>
+
+    <div class="overlay hidden" id="gameoverOverlay">
+      <div class="card overlay-panel">
+        <div class="tag">Harbor closed</div>
+        <h2>Signal house overwhelmed</h2>
+        <p class="copy" id="gameoverText">더 빠른 반응보다 한 수 앞선 rail 배치가 중요합니다.</p>
+        <div class="info-grid">
+          <div class="info-item"><strong id="finalScore">Score 0</strong><div class="mini" id="finalWave">Wave 1</div></div>
+          <div class="info-item"><strong id="finalLedger">Perfect convoys 0</strong><div class="mini" id="finalDecree">Last decree none</div></div>
+        </div>
+        <div class="button-row">
+          <button id="retryBtn">Retry Run</button>
+          <button id="backBtn" class="secondary">Back to Title</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      const WIDTH = 390;
+      const HEIGHT = 844;
+      const SERVICES = ["dock", "fuel", "tow"];
+      const SERVICE_META = {
+        dock: { label: "DOCK", color: "#d08c49", tint: "rgba(208, 140, 73, 0.22)" },
+        fuel: { label: "FUEL", color: "#3e9d89", tint: "rgba(62, 157, 137, 0.22)" },
+        tow: { label: "TOW", color: "#d35f5f", tint: "rgba(211, 95, 95, 0.22)" }
+      };
+      const SAVE_KEY = "harbor-signal-house-ledger-v1";
+      const DEFAULT_LEDGER = {
+        bestScore: 0,
+        bestWave: 1,
+        runs: 0,
+        perfectConvoys: 0,
+        lastDecree: "none"
+      };
+      const PHASES = [
+        { name: "Calm", threshold: 0, banner: "Calm Harbor · plan 4 moves ahead", tick: 2.8, storm: 0.15 },
+        { name: "Storm Front", threshold: 30, banner: "Storm Front · tow traffic rising", tick: 2.45, storm: 0.42 },
+        { name: "Convoy Surge", threshold: 60, banner: "Convoy Surge · arrivals stack faster", tick: 2.1, storm: 0.72 },
+        { name: "Red Tide", threshold: 90, banner: "Red Tide · no idle slots left", tick: 1.85, storm: 1 }
+      ];
+      const DECREE_POOL = [
+        { id: "forecast", title: "Lantern Forecast", desc: "+30 service score and clearer storm buffer", apply: (state) => { state.scoreBonus += 30; state.stormBuffer += 0.04; } },
+        { id: "triage", title: "Harbor Triage", desc: "Wrong calls deal 4 less hull damage", apply: (state) => { state.damageGuard += 4; } },
+        { id: "long-pier", title: "Long Pier", desc: "+18 hull and next wave starts calmer", apply: (state) => { state.hull = Math.min(state.maxHull, state.hull + 18); state.phaseShift -= 8; } },
+        { id: "quartermaster", title: "Quartermaster Drill", desc: "Correct Tow/Fuel orders auto-fill the last empty slot", apply: (state) => { state.autoFillChance += 0.35; } },
+        { id: "convoy-bonus", title: "Convoy Bonus", desc: "Perfect Convoy flare grants +120 extra score", apply: (state) => { state.flareBonus += 120; } }
+      ];
+
+      const canvas = document.getElementById("game");
+      const ctx = canvas.getContext("2d");
+      const railEl = document.getElementById("rail");
+      const ledgerGrid = document.getElementById("ledgerGrid");
+      const decreeGrid = document.getElementById("decreeGrid");
+      const dragGhost = document.getElementById("dragGhost");
+      const flareBanner = document.getElementById("flareBanner");
+      const ui = {
+        waveValue: document.getElementById("waveValue"),
+        scoreValue: document.getElementById("scoreValue"),
+        quotaValue: document.getElementById("quotaValue"),
+        hullValue: document.getElementById("hullValue"),
+        hullBar: document.getElementById("hullBar"),
+        comboValue: document.getElementById("comboValue"),
+        phaseValue: document.getElementById("phaseValue"),
+        stormBar: document.getElementById("stormBar"),
+        timerValue: document.getElementById("timerValue"),
+        stormBanner: document.getElementById("stormBanner"),
+        titleOverlay: document.getElementById("titleOverlay"),
+        upgradeOverlay: document.getElementById("upgradeOverlay"),
+        gameoverOverlay: document.getElementById("gameoverOverlay"),
+        startBtn: document.getElementById("startBtn"),
+        retryBtn: document.getElementById("retryBtn"),
+        backBtn: document.getElementById("backBtn"),
+        finalScore: document.getElementById("finalScore"),
+        finalWave: document.getElementById("finalWave"),
+        finalLedger: document.getElementById("finalLedger"),
+        finalDecree: document.getElementById("finalDecree"),
+        gameoverText: document.getElementById("gameoverText")
+      };
+
+      const state = {
+        mode: "title",
+        wave: 1,
+        score: 0,
+        hull: 100,
+        maxHull: 100,
+        quota: 8,
+        served: 0,
+        elapsed: 0,
+        tickTimer: 0,
+        tickLength: 2.8,
+        rail: [null, null, null, null],
+        boats: [],
+        nextBoatId: 1,
+        combo: 0,
+        perfectConvoys: 0,
+        flareTimer: 0,
+        flareFlash: 0,
+        mapPulse: 0,
+        particles: [],
+        decrees: [],
+        lastDecree: "none",
+        scoreBonus: 0,
+        damageGuard: 0,
+        autoFillChance: 0,
+        flareBonus: 0,
+        phaseShift: 0,
+        stormBuffer: 0,
+        stormPhase: PHASES[0],
+        ledger: loadLedger(),
+        lastTime: performance.now(),
+        drag: { active: false, service: null },
+        convoyCounter: 0
+      };
+
+      function clone(value) {
+        return JSON.parse(JSON.stringify(value));
+      }
+
+      function loadLedger() {
+        try {
+          const raw = localStorage.getItem(SAVE_KEY);
+          if (!raw) return clone(DEFAULT_LEDGER);
+          const parsed = JSON.parse(raw);
+          return {
+            bestScore: Number(parsed.bestScore) || 0,
+            bestWave: Number(parsed.bestWave) || 1,
+            runs: Number(parsed.runs) || 0,
+            perfectConvoys: Number(parsed.perfectConvoys) || 0,
+            lastDecree: parsed.lastDecree || "none"
+          };
+        } catch (error) {
+          return clone(DEFAULT_LEDGER);
+        }
+      }
+
+      function saveLedger() {
+        localStorage.setItem(SAVE_KEY, JSON.stringify(state.ledger));
+      }
+
+      function resetRun() {
+        state.mode = "title";
+        state.wave = 1;
+        state.score = 0;
+        state.hull = 100;
+        state.maxHull = 100;
+        state.quota = 8;
+        state.served = 0;
+        state.elapsed = 0;
+        state.tickLength = 2.8;
+        state.tickTimer = state.tickLength;
+        state.rail = [null, null, null, null];
+        state.boats = [];
+        state.nextBoatId = 1;
+        state.combo = 0;
+        state.perfectConvoys = 0;
+        state.flareTimer = 0;
+        state.flareFlash = 0;
+        state.mapPulse = 0;
+        state.particles = [];
+        state.decrees = [];
+        state.lastDecree = "none";
+        state.scoreBonus = 0;
+        state.damageGuard = 0;
+        state.autoFillChance = 0;
+        state.flareBonus = 0;
+        state.phaseShift = 0;
+        state.stormBuffer = 0;
+        state.stormPhase = PHASES[0];
+        state.convoyCounter = 0;
+        setOverlayVisibility();
+        renderRail();
+        renderLedger();
+        syncHud();
+      }
+
+      function startRun() {
+        resetRun();
+        state.mode = "play";
+        seedBoats(4);
+        setOverlayVisibility();
+        syncHud();
+      }
+
+      function renderLedger() {
+        ledgerGrid.innerHTML = "";
+        const items = [
+          { title: "Captain's Ledger", desc: `Best ${state.ledger.bestScore} · Wave ${state.ledger.bestWave}` },
+          { title: "Total Runs", desc: `${state.ledger.runs} sorties logged` },
+          { title: "Perfect Convoys", desc: `${state.ledger.perfectConvoys} harbor flares` },
+          { title: "Last Decree", desc: state.ledger.lastDecree }
+        ];
+        items.forEach((item) => {
+          const el = document.createElement("div");
+          el.className = "info-item";
+          el.innerHTML = `<strong>${item.title}</strong><div class="mini">${item.desc}</div>`;
+          ledgerGrid.appendChild(el);
+        });
+      }
+
+      function renderRail() {
+        railEl.innerHTML = "";
+        state.rail.forEach((service, index) => {
+          const slot = document.createElement("div");
+          slot.className = `rail-slot card${service ? " filled" : ""}`;
+          slot.dataset.index = String(index);
+          slot.dataset.service = service || "";
+          slot.innerHTML = `<strong>ETA ${index}</strong><div class="slot-command">${service ? SERVICE_META[service].label : "EMPTY"}</div><div class="mini">tap to clear</div>`;
+          if (service) {
+            slot.querySelector(".slot-command").style.color = SERVICE_META[service].color;
+          }
+          slot.addEventListener("pointerup", (event) => {
+            if (state.drag.active && state.drag.service) {
+              dropOnRail(index);
+            } else if (!state.drag.active && state.mode === "play") {
+              clearRailSlot(index);
+            }
+            event.preventDefault();
+          });
+          railEl.appendChild(slot);
+        });
+      }
+
+      function beginDrag(service, x, y) {
+        if (state.mode !== "play") return;
+        state.drag.active = true;
+        state.drag.service = service;
+        dragGhost.style.display = "flex";
+        dragGhost.dataset.service = service;
+        dragGhost.textContent = SERVICE_META[service].label;
+        updateGhost(x, y);
+      }
+
+      function updateGhost(x, y) {
+        if (!state.drag.active) return;
+        dragGhost.style.left = `${x}px`;
+        dragGhost.style.top = `${y}px`;
+      }
+
+      function endDrag() {
+        state.drag.active = false;
+        state.drag.service = null;
+        dragGhost.style.display = "none";
+      }
+
+      function dropOnRail(index) {
+        if (!state.drag.service) return;
+        state.rail[index] = state.drag.service;
+        renderRail();
+        endDrag();
+      }
+
+      function clearRailSlot(index) {
+        state.rail[index] = null;
+        renderRail();
+      }
+
+      function buildBoat(eta = 3, forcedService = null) {
+        const service = forcedService || weightedService();
+        return {
+          id: state.nextBoatId++,
+          service,
+          eta,
+          lane: Math.floor(Math.random() * 3),
+          pulse: 0,
+          failFlash: 0,
+          successFlash: 0,
+          x: -40,
+          y: 350 + Math.floor(Math.random() * 3) * 78
+        };
+      }
+
+      function weightedService() {
+        const phase = state.stormPhase.name;
+        const roll = Math.random();
+        if (phase === "Storm Front" && roll > 0.68) return "tow";
+        if (phase === "Convoy Surge" && roll > 0.58) return Math.random() > 0.5 ? "tow" : "fuel";
+        if (phase === "Red Tide" && roll > 0.52) return Math.random() > 0.38 ? "tow" : "fuel";
+        return SERVICES[Math.floor(Math.random() * SERVICES.length)];
+      }
+
+      function seedBoats(count) {
+        state.boats = [];
+        for (let i = 0; i < count; i += 1) {
+          state.boats.push(buildBoat(3 - Math.min(i, 3)));
+        }
+        normalizeQueue();
+      }
+
+      function normalizeQueue() {
+        state.boats.sort((a, b) => a.eta - b.eta || a.id - b.id);
+        state.boats.forEach((boat, index) => {
+          boat.eta = Math.max(0, Math.min(3, index));
+          boat.y = 352 + (index % 3) * 76;
+        });
+      }
+
+      function currentPhase() {
+        const value = Math.max(0, state.elapsed + state.phaseShift);
+        let phase = PHASES[0];
+        for (const candidate of PHASES) {
+          if (value >= candidate.threshold) phase = candidate;
+        }
+        return phase;
+      }
+
+      function updatePhase() {
+        state.stormPhase = currentPhase();
+        state.tickLength = Math.max(1.6, state.stormPhase.tick - state.stormBuffer);
+      }
+
+      function advanceTimeline() {
+        const command = state.rail[0];
+        resolveFrontBoat(command);
+        state.rail.shift();
+        state.rail.push(null);
+        state.boats.forEach((boat) => {
+          boat.eta = Math.max(0, boat.eta - 1);
+        });
+        replenishBoats();
+        normalizeQueue();
+        renderRail();
+        syncHud();
+      }
+
+      function replenishBoats() {
+        const targetCount = state.stormPhase.name === "Calm" ? 4 : state.stormPhase.name === "Storm Front" ? 5 : 6;
+        while (state.boats.length < targetCount) {
+          state.boats.push(buildBoat(3));
+        }
+        if (state.stormPhase.name === "Red Tide" && Math.random() > 0.55 && state.boats.length < 7) {
+          state.boats.push(buildBoat(3, "tow"));
+        }
+      }
+
+      function resolveFrontBoat(command) {
+        const frontIndex = state.boats.findIndex((boat) => boat.eta === 0);
+        if (frontIndex === -1) return;
+        const boat = state.boats[frontIndex];
+        if (command && command === boat.service) {
+          handleSuccess(boat);
+        } else {
+          handleFailure(boat, command);
+        }
+        state.boats.splice(frontIndex, 1);
+      }
+
+      function handleSuccess(boat) {
+        state.served += 1;
+        state.combo += 1;
+        state.convoyCounter += 1;
+        boat.successFlash = 1;
+        const gain = 100 + state.scoreBonus + (state.combo >= 3 ? 30 : 0);
+        state.score += gain;
+        spawnParticles(boat.x, boat.y, SERVICE_META[boat.service].color, 12);
+        maybeAutoFill(boat.service);
+        if (state.combo > 0 && state.combo % 4 === 0) {
+          triggerPerfectConvoy();
+        }
+        if (state.served >= state.quota) {
+          enterUpgrade();
+        }
+      }
+
+      function handleFailure(boat, command) {
+        state.combo = 0;
+        boat.failFlash = 1;
+        const damage = Math.max(6, 14 - state.damageGuard);
+        state.hull = Math.max(0, state.hull - damage);
+        spawnParticles(boat.x, boat.y, "#d67154", 10);
+        if (!command) {
+          state.score = Math.max(0, state.score - 20);
+        }
+        if (state.hull <= 0) {
+          toGameOver();
+        }
+      }
+
+      function maybeAutoFill(service) {
+        if (state.autoFillChance <= 0) return;
+        if (service !== "tow" && service !== "fuel") return;
+        if (Math.random() > state.autoFillChance) return;
+        for (let i = state.rail.length - 1; i >= 0; i -= 1) {
+          if (!state.rail[i]) {
+            state.rail[i] = service;
+            break;
+          }
+        }
+        renderRail();
+      }
+
+      function triggerPerfectConvoy() {
+        state.perfectConvoys += 1;
+        state.score += 120 + state.flareBonus;
+        state.flareTimer = 2.2;
+        state.flareFlash = 1;
+        state.mapPulse = 1;
+        flareBanner.classList.add("active");
+        spawnParticles(WIDTH * 0.5, 270, "#f0b05d", 24);
+      }
+
+      function enterUpgrade() {
+        if (state.mode !== "play") return;
+        state.mode = "upgrade";
+        state.decrees = pickDecrees();
+        renderDecrees();
+        setOverlayVisibility();
+      }
+
+      function pickDecrees() {
+        const pool = DECREE_POOL.map((item) => ({ ...item }));
+        const result = [];
+        while (result.length < 3 && pool.length) {
+          const index = Math.floor(Math.random() * pool.length);
+          result.push(pool.splice(index, 1)[0]);
+        }
+        return result;
+      }
+
+      function renderDecrees() {
+        decreeGrid.innerHTML = "";
+        state.decrees.forEach((decree, index) => {
+          const item = document.createElement("div");
+          item.className = "decree-item";
+          item.innerHTML = `<strong>${decree.title}</strong><div class="mini">${decree.desc}</div>`;
+          const button = document.createElement("button");
+          button.textContent = `Choose ${index + 1}`;
+          button.style.marginTop = "10px";
+          button.addEventListener("click", () => chooseDecree(index));
+          item.appendChild(button);
+          decreeGrid.appendChild(item);
+        });
+      }
+
+      function chooseDecree(index) {
+        const decree = state.decrees[index];
+        if (!decree) return;
+        decree.apply(state);
+        state.lastDecree = decree.title;
+        state.ledger.lastDecree = decree.title;
+        startWave(state.wave + 1);
+      }
+
+      function startWave(nextWave) {
+        state.wave = nextWave;
+        state.quota = 6 + state.wave * 2;
+        state.served = 0;
+        state.mode = "play";
+        state.tickTimer = state.tickLength;
+        replenishBoats();
+        normalizeQueue();
+        setOverlayVisibility();
+        syncHud();
+      }
+
+      function toGameOver() {
+        if (state.mode === "gameover") return;
+        state.mode = "gameover";
+        state.ledger.runs += 1;
+        state.ledger.bestScore = Math.max(state.ledger.bestScore, state.score);
+        state.ledger.bestWave = Math.max(state.ledger.bestWave, state.wave);
+        state.ledger.perfectConvoys += state.perfectConvoys;
+        state.ledger.lastDecree = state.lastDecree;
+        saveLedger();
+        renderLedger();
+        ui.finalScore.textContent = `Score ${state.score}`;
+        ui.finalWave.textContent = `Wave ${state.wave}`;
+        ui.finalLedger.textContent = `Perfect convoys ${state.perfectConvoys}`;
+        ui.finalDecree.textContent = `Last decree ${state.lastDecree}`;
+        ui.gameoverText.textContent = state.combo === 0 ? "빈 슬롯을 너무 오래 두지 말고, tow 수요가 늘어나는 순간을 먼저 읽어 보세요." : "콤보를 놓치기 전에 다음 두 슬롯을 미리 채워 두는 편이 안전합니다.";
+        setOverlayVisibility();
+      }
+
+      function setOverlayVisibility() {
+        ui.titleOverlay.classList.toggle("hidden", state.mode !== "title");
+        ui.upgradeOverlay.classList.toggle("hidden", state.mode !== "upgrade");
+        ui.gameoverOverlay.classList.toggle("hidden", state.mode !== "gameover");
+      }
+
+      function syncHud() {
+        updatePhase();
+        ui.waveValue.textContent = String(state.wave);
+        ui.scoreValue.textContent = String(state.score);
+        ui.quotaValue.textContent = `${state.served} / ${state.quota} quota`;
+        ui.hullValue.textContent = String(Math.round(state.hull));
+        ui.hullBar.style.width = `${(state.hull / state.maxHull) * 100}%`;
+        ui.comboValue.textContent = `Combo ${state.combo}`;
+        ui.phaseValue.textContent = state.stormPhase.name;
+        ui.stormBar.style.width = `${state.stormPhase.storm * 100}%`;
+        ui.timerValue.textContent = `Tick ${state.tickLength.toFixed(2)}s`;
+        ui.stormBanner.textContent = state.stormPhase.banner;
+      }
+
+      function update(dt) {
+        if (state.mode !== "play") {
+          decayEffects(dt);
+          return;
+        }
+        state.elapsed += dt;
+        updatePhase();
+        state.tickTimer -= dt;
+        if (state.tickTimer <= 0) {
+          advanceTimeline();
+          state.tickTimer = state.tickLength;
+        }
+        state.boats.forEach((boat) => {
+          boat.pulse += dt * 2.4;
+          const progress = 1 - Math.min(1, (boat.eta + state.tickTimer / state.tickLength) / 4);
+          boat.x = 48 + progress * 286;
+          boat.successFlash = Math.max(0, boat.successFlash - dt * 2.4);
+          boat.failFlash = Math.max(0, boat.failFlash - dt * 2.4);
+        });
+        decayEffects(dt);
+        syncHud();
+      }
+
+      function decayEffects(dt) {
+        state.flareTimer = Math.max(0, state.flareTimer - dt);
+        state.flareFlash = Math.max(0, state.flareFlash - dt * 0.85);
+        state.mapPulse = Math.max(0, state.mapPulse - dt * 0.7);
+        if (state.flareTimer <= 0) {
+          flareBanner.classList.remove("active");
+        }
+        for (let i = state.particles.length - 1; i >= 0; i -= 1) {
+          const particle = state.particles[i];
+          particle.life -= dt;
+          particle.x += particle.vx * dt;
+          particle.y += particle.vy * dt;
+          particle.vx *= 0.98;
+          particle.vy *= 0.98;
+          if (particle.life <= 0) state.particles.splice(i, 1);
+        }
+      }
+
+      function spawnParticles(x, y, color, count) {
+        for (let i = 0; i < count; i += 1) {
+          const angle = (Math.PI * 2 * i) / count;
+          state.particles.push({
+            x,
+            y,
+            vx: Math.cos(angle) * (20 + Math.random() * 40),
+            vy: Math.sin(angle) * (20 + Math.random() * 40),
+            life: 0.7 + Math.random() * 0.5,
+            color
+          });
+        }
+      }
+
+      function drawBackground() {
+        const gradient = ctx.createLinearGradient(0, 0, 0, HEIGHT);
+        gradient.addColorStop(0, "#f5efdf");
+        gradient.addColorStop(0.38, "#b6d3cc");
+        gradient.addColorStop(1, "#78a5b2");
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+        ctx.fillStyle = "rgba(255,255,255,0.24)";
+        ctx.beginPath();
+        ctx.arc(WIDTH * 0.5, 92, 54, 0, Math.PI * 2);
+        ctx.fill();
+
+        const pulse = state.mapPulse;
+        ctx.fillStyle = `rgba(255, 244, 220, ${0.22 + pulse * 0.2})`;
+        ctx.fillRect(34, 250, WIDTH - 68, 320);
+
+        ctx.strokeStyle = `rgba(255,255,255, ${0.22 + pulse * 0.28})`;
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 4; i += 1) {
+          ctx.beginPath();
+          ctx.moveTo(46, 298 + i * 76);
+          ctx.lineTo(WIDTH - 46, 298 + i * 76);
+          ctx.stroke();
+        }
+
+        ctx.strokeStyle = "rgba(60, 99, 112, 0.16)";
+        ctx.beginPath();
+        ctx.moveTo(54, 236);
+        ctx.lineTo(84, 202);
+        ctx.lineTo(130, 212);
+        ctx.lineTo(180, 184);
+        ctx.lineTo(225, 208);
+        ctx.lineTo(292, 188);
+        ctx.lineTo(336, 214);
+        ctx.stroke();
+      }
+
+      function drawHarbor() {
+        ctx.fillStyle = "rgba(124, 95, 70, 0.18)";
+        ctx.fillRect(26, 292, 338, 250);
+        ctx.fillStyle = "rgba(255, 250, 242, 0.9)";
+        ctx.fillRect(320, 278, 22, 284);
+        ctx.fillStyle = "#7c5f46";
+        ctx.fillRect(316, 278, 30, 12);
+        ctx.fillRect(316, 548, 30, 12);
+        ctx.fillStyle = `rgba(214, 113, 84, ${0.16 + state.stormPhase.storm * 0.2})`;
+        ctx.beginPath();
+        ctx.arc(338, 420, 28 + state.stormPhase.storm * 12, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      function drawBoats() {
+        state.boats.forEach((boat) => {
+          const meta = SERVICE_META[boat.service];
+          const bob = Math.sin(boat.pulse + boat.id) * 3;
+          ctx.save();
+          ctx.translate(boat.x, boat.y + bob);
+          ctx.fillStyle = meta.tint;
+          ctx.beginPath();
+          ctx.arc(0, 0, 22, 0, Math.PI * 2);
+          ctx.fill();
+          if (boat.successFlash > 0) {
+            ctx.fillStyle = `rgba(240, 176, 93, ${boat.successFlash * 0.5})`;
+            ctx.beginPath();
+            ctx.arc(0, 0, 28, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          if (boat.failFlash > 0) {
+            ctx.fillStyle = `rgba(214, 113, 84, ${boat.failFlash * 0.5})`;
+            ctx.beginPath();
+            ctx.arc(0, 0, 28, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.fillStyle = "#fff8ee";
+          ctx.beginPath();
+          ctx.moveTo(-16, 10);
+          ctx.lineTo(16, 10);
+          ctx.lineTo(8, -10);
+          ctx.lineTo(-10, -10);
+          ctx.closePath();
+          ctx.fill();
+          ctx.fillStyle = meta.color;
+          ctx.fillRect(-4, -18, 8, 20);
+          ctx.beginPath();
+          ctx.moveTo(4, -18);
+          ctx.lineTo(18, -10);
+          ctx.lineTo(4, -2);
+          ctx.closePath();
+          ctx.fill();
+          ctx.fillStyle = "rgba(34, 50, 61, 0.82)";
+          ctx.font = "700 10px -apple-system, sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText(meta.label, 0, 28);
+          ctx.fillText(`ETA ${boat.eta}`, 0, 40);
+          ctx.restore();
+        });
+      }
+
+      function drawForewarnings() {
+        ctx.fillStyle = "rgba(255,250,242,0.85)";
+        ctx.font = "700 12px -apple-system, sans-serif";
+        ctx.textAlign = "left";
+        ctx.fillText("ENTRY", 36, 284);
+        ctx.fillText("SIGNAL HOUSE", 130, 284);
+        ctx.fillText("PIER", 300, 284);
+        if (state.flareTimer > 0) {
+          ctx.fillStyle = `rgba(240, 176, 93, ${0.28 + state.flareFlash * 0.42})`;
+          ctx.beginPath();
+          ctx.moveTo(194, 236);
+          ctx.lineTo(208, 196);
+          ctx.lineTo(222, 236);
+          ctx.closePath();
+          ctx.fill();
+        }
+      }
+
+      function drawParticles() {
+        state.particles.forEach((particle) => {
+          ctx.globalAlpha = Math.max(0, particle.life);
+          ctx.fillStyle = particle.color;
+          ctx.beginPath();
+          ctx.arc(particle.x, particle.y, 2.4, 0, Math.PI * 2);
+          ctx.fill();
+        });
+        ctx.globalAlpha = 1;
+      }
+
+      function render() {
+        drawBackground();
+        drawHarbor();
+        drawForewarnings();
+        drawBoats();
+        drawParticles();
+      }
+
+      function frame(now) {
+        const dt = Math.min(0.033, (now - state.lastTime) / 1000 || 0.016);
+        state.lastTime = now;
+        update(dt);
+        render();
+        requestAnimationFrame(frame);
+      }
+
+      function pointerPosition(event) {
+        const rect = document.getElementById("app").getBoundingClientRect();
+        return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+      }
+
+      document.querySelectorAll(".flag").forEach((flag) => {
+        flag.addEventListener("pointerdown", (event) => {
+          const point = pointerPosition(event);
+          beginDrag(flag.dataset.service, point.x, point.y);
+          event.preventDefault();
+        });
+      });
+
+      window.addEventListener("pointermove", (event) => {
+        if (!state.drag.active) return;
+        const point = pointerPosition(event);
+        updateGhost(point.x, point.y);
+      });
+
+      window.addEventListener("pointerup", (event) => {
+        if (!state.drag.active) return;
+        const point = pointerPosition(event);
+        const slot = document.elementFromPoint(event.clientX, event.clientY);
+        if (slot && slot.closest) {
+          const container = slot.closest(".rail-slot");
+          if (container) {
+            const index = Number(container.dataset.index);
+            if (Number.isInteger(index)) {
+              dropOnRail(index);
+              return;
+            }
+          }
+        }
+        updateGhost(point.x, point.y);
+        endDrag();
+      });
+
+      ui.startBtn.addEventListener("click", startRun);
+      ui.retryBtn.addEventListener("click", startRun);
+      ui.backBtn.addEventListener("click", () => {
+        resetRun();
+        state.mode = "title";
+        setOverlayVisibility();
+      });
+
+      window.__harborSignalHouse = {
+        state: () => ({
+          mode: state.mode,
+          wave: state.wave,
+          score: state.score,
+          hull: state.hull,
+          quota: state.quota,
+          served: state.served,
+          combo: state.combo,
+          rail: state.rail.slice(),
+          boats: state.boats.map((boat) => ({ id: boat.id, service: boat.service, eta: boat.eta })),
+          phase: state.stormPhase.name,
+          ledger: clone(state.ledger)
+        }),
+        setRail: (nextRail) => {
+          if (!Array.isArray(nextRail)) return state.rail.slice();
+          state.rail = [0, 1, 2, 3].map((index) => SERVICES.includes(nextRail[index]) ? nextRail[index] : null);
+          renderRail();
+          return state.rail.slice();
+        },
+        forceResolve: (service) => {
+          const forced = SERVICES.includes(service) ? service : "dock";
+          state.boats.unshift(buildBoat(0, forced));
+          normalizeQueue();
+          state.rail[0] = forced;
+          advanceTimeline();
+          return state.score;
+        },
+        fillQuota: () => {
+          state.served = state.quota;
+          enterUpgrade();
+          return state.mode;
+        },
+        forceStorm: (phaseName = "Storm Front") => {
+          const phase = PHASES.find((item) => item.name === phaseName) || PHASES[1];
+          state.elapsed = phase.threshold;
+          updatePhase();
+          syncHud();
+          return state.stormPhase.name;
+        },
+        chooseDecree: (index) => {
+          chooseDecree(index);
+          return state.lastDecree;
+        },
+        forceGameOver: () => {
+          state.hull = 0;
+          toGameOver();
+          return state.mode;
+        },
+        step: () => {
+          advanceTimeline();
+          return state.mode;
+        },
+        getSave: () => clone(state.ledger),
+        resetSave: () => {
+          localStorage.removeItem(SAVE_KEY);
+          state.ledger = clone(DEFAULT_LEDGER);
+          saveLedger();
+          renderLedger();
+          return clone(state.ledger);
+        }
+      };
+
+      renderRail();
+      renderLedger();
+      syncHud();
+      setOverlayVisibility();
+      requestAnimationFrame(frame);
+    })();
+  </script>
+</body>
+</html>

@@ -94,7 +94,7 @@
     }
     .hud {
       display: grid;
-      grid-template-columns: repeat(5, 1fr);
+      grid-template-columns: repeat(6, 1fr);
       gap: 8px;
     }
     .panel {
@@ -382,6 +382,7 @@
       <div class="metric"><div class="label">SCORE</div><div id="scoreValue" class="value">0</div></div>
       <div class="metric"><div class="label">SYNC</div><div id="syncValue" class="value">0%</div></div>
       <div class="metric"><div class="label">CHAIN</div><div id="chainValue" class="value">0</div></div>
+      <div class="metric"><div class="label">ALERT</div><div id="alertValue" class="value">--</div></div>
       <div class="metric"><div class="label">BEST</div><div id="bestValue" class="value">0</div></div>
     </section>
 
@@ -430,6 +431,7 @@
     (() => {
       const SAVE_KEY = 'moonwellMicrogridWarden_v2';
       const stateNames = ['title', 'play', 'upgrade', 'gameover'];
+      const todayKey = new Date().toISOString().slice(0, 10);
       const districtDefs = [
         { name: 'Tide Ward', flavor: '정수 재순환과 승무원 휴식 구역' },
         { name: 'Beacon Row', flavor: '외곽 신호와 정찰 드론 구역' },
@@ -518,6 +520,38 @@
           apply(run) { run.syncBonus += 45; }
         }
       ];
+      const dailyChallenges = {
+        'cooling-subsidy': {
+          label: 'Cold Window',
+          detail: 'Cool 4회 + 최대 Heat 85 이하 유지',
+          progress(run) {
+            return `${Math.min(run.actionCounts.cool, 4)}/4 cool · max heat ${Math.round(run.maxHeatThisRun)}`;
+          },
+          check(run) {
+            return run.actionCounts.cool >= 4 && run.maxHeatThisRun <= 85;
+          }
+        },
+        'festival-shift': {
+          label: 'Choir Shift',
+          detail: 'Support 6회 + Full Sync 1회 달성',
+          progress(run) {
+            return `${Math.min(run.actionCounts.support, 6)}/6 support · sync ${run.totalSyncs}`;
+          },
+          check(run) {
+            return run.actionCounts.support >= 6 && run.totalSyncs >= 1;
+          }
+        },
+        'route-tax': {
+          label: 'Tax Relay',
+          detail: 'Route 4회 + Chain 2 이상 달성',
+          progress(run) {
+            return `${Math.min(run.actionCounts.route, 4)}/4 route · best chain ${run.bestChain}`;
+          },
+          check(run) {
+            return run.actionCounts.route >= 4 && run.bestChain >= 2;
+          }
+        }
+      };
 
       const overlay = document.getElementById('overlay');
       const districtGrid = document.getElementById('districtGrid');
@@ -528,6 +562,7 @@
       const scoreValue = document.getElementById('scoreValue');
       const syncValue = document.getElementById('syncValue');
       const chainValue = document.getElementById('chainValue');
+      const alertValue = document.getElementById('alertValue');
       const bestValue = document.getElementById('bestValue');
 
       const loadSave = () => {
@@ -539,10 +574,14 @@
             bestChain: Number(parsed.bestChain || 0),
             runs: Number(parsed.runs || 0),
             perfectWaves: Number(parsed.perfectWaves || 0),
-            notes: Array.isArray(parsed.notes) ? parsed.notes : []
+            notes: Array.isArray(parsed.notes) ? parsed.notes : [],
+            dailyDate: parsed.dailyDate === todayKey ? parsed.dailyDate : todayKey,
+            dailyBest: parsed.dailyDate === todayKey ? Number(parsed.dailyBest || 0) : 0,
+            dailyClears: parsed.dailyDate === todayKey ? Number(parsed.dailyClears || 0) : 0,
+            lastGrade: typeof parsed.lastGrade === 'string' ? parsed.lastGrade : '—'
           };
         } catch (_) {
-          return { bestScore: 0, bestWave: 1, bestChain: 0, runs: 0, perfectWaves: 0, notes: [] };
+          return { bestScore: 0, bestWave: 1, bestChain: 0, runs: 0, perfectWaves: 0, notes: [], dailyDate: todayKey, dailyBest: 0, dailyClears: 0, lastGrade: '—' };
         }
       };
 
@@ -552,6 +591,7 @@
         const seed = now.getFullYear() + (now.getMonth() + 1) * 37 + now.getDate() * 101;
         return policies[Math.abs(seed) % policies.length];
       })();
+      const todayChallenge = dailyChallenges[todayPolicy.id];
 
       const runtime = {
         mode: 'title',
@@ -581,6 +621,11 @@
         syncBonus: todayPolicy.syncBonus || 0,
         criticalThisWave: false,
         activeNotes: [...save.notes],
+        dailyChallenge: todayChallenge,
+        actionCounts: { support: 0, charge: 0, cool: 0, route: 0 },
+        maxHeatThisRun: 0,
+        challengeClearedAnnounced: false,
+        dailyClearAwarded: false,
         districts: []
       };
 
@@ -668,13 +713,41 @@
         }
       }
 
+      function dailyChallengeClear() {
+        return runtime.dailyChallenge ? runtime.dailyChallenge.check(runtime) : false;
+      }
+
+      function dailyChallengeStatus() {
+        if (!runtime.dailyChallenge) return '오늘 목표 없음';
+        const progress = runtime.dailyChallenge.progress(runtime);
+        const status = dailyChallengeClear() ? 'CLEAR' : 'IN PROGRESS';
+        return `${runtime.dailyChallenge.label} · ${progress} · ${status}`;
+      }
+
+      function computeShiftGrade() {
+        const composite = runtime.score + runtime.bestChain * 120 + runtime.perfectWaves * 90 + runtime.wave * 80 + (dailyChallengeClear() ? 180 : 0);
+        if (composite >= 1900) return { grade: 'S', title: 'Lunar Maestro' };
+        if (composite >= 1350) return { grade: 'A', title: 'Sync Marshal' };
+        if (composite >= 850) return { grade: 'B', title: 'Night Warden' };
+        return { grade: 'C', title: 'Relay Keeper' };
+      }
+
       function persist() {
+        save.dailyDate = todayKey;
         save.bestScore = Math.max(save.bestScore, Math.floor(runtime.score));
         save.bestWave = Math.max(save.bestWave, runtime.wave);
         save.bestChain = Math.max(save.bestChain, runtime.bestChain);
         save.runs = runtime.runs;
         save.perfectWaves = Math.max(save.perfectWaves, runtime.perfectWaves);
         save.notes = [...new Set(runtime.activeNotes)];
+        if (runtime.mode === 'gameover') {
+          save.dailyBest = Math.max(save.dailyBest, Math.floor(runtime.score));
+          if (dailyChallengeClear() && !runtime.dailyClearAwarded) {
+            save.dailyClears += 1;
+            runtime.dailyClearAwarded = true;
+          }
+          save.lastGrade = computeShiftGrade().grade;
+        }
         localStorage.setItem(SAVE_KEY, JSON.stringify(save));
       }
 
@@ -686,6 +759,7 @@
         if (runtime.mode !== 'play') return;
         ensureAudio();
         applyFocus(index);
+        runtime.actionCounts.support += 1;
         const d = runtime.districts[index];
         d.morale = clamp(d.morale + 14 + runtime.supportBonus + todayPolicy.supportBonus, 0, 100);
         d.energy = clamp(d.energy - 8, 0, 100);
@@ -701,6 +775,7 @@
         if (runtime.mode !== 'play') return;
         ensureAudio();
         applyFocus(index);
+        runtime.actionCounts.charge += 1;
         const d = runtime.districts[index];
         d.energy = clamp(d.energy + 20, 0, 100);
         d.heat = clamp(d.heat + 10 + todayPolicy.chargeHeatPenalty, 0, 100);
@@ -716,6 +791,7 @@
         if (runtime.mode !== 'play') return;
         ensureAudio();
         applyFocus(index);
+        runtime.actionCounts.cool += 1;
         const d = runtime.districts[index];
         d.heat = clamp(d.heat - (18 + runtime.coolBonus + todayPolicy.coolBonus), 0, 100);
         d.morale = clamp(d.morale - 3, 0, 100);
@@ -731,6 +807,7 @@
         if (runtime.mode !== 'play' || fromIndex === toIndex) return;
         ensureAudio();
         applyFocus(toIndex);
+        runtime.actionCounts.route += 1;
         const from = runtime.districts[fromIndex];
         const to = runtime.districts[toIndex];
         const transfer = clamp(14 + runtime.routeBonus - todayPolicy.routePenalty, 8, 30);
@@ -868,10 +945,17 @@
         }
 
         runtime.score += stableCount * 2 + runtime.wave;
+        runtime.maxHeatThisRun = Math.max(runtime.maxHeatThisRun, ...runtime.districts.map((district) => district.heat));
 
         if (runtime.syncGauge >= runtime.syncTarget) {
           fullSync();
           return;
+        }
+
+        if (dailyChallengeClear() && !runtime.challengeClearedAnnounced) {
+          runtime.challengeClearedAnnounced = true;
+          markBanner('Night Policy Clear', `${runtime.dailyChallenge.label} 달성 · ${runtime.dailyChallenge.detail}`, `${runtime.wave}W`);
+          beep(900, 0.08, 'sine', 0.05);
         }
 
         render();
@@ -894,6 +978,7 @@
         scoreValue.textContent = String(Math.floor(runtime.score));
         syncValue.textContent = `${Math.round((runtime.syncGauge / runtime.syncTarget) * 100)}%`;
         chainValue.textContent = String(runtime.chain);
+        alertValue.textContent = runtime.front ? `${Math.max(0, runtime.frontTimer).toFixed(1)}s` : '--';
         bestValue.textContent = String(Math.floor(Math.max(save.bestScore, runtime.score)));
         policyChip.textContent = `Tonight · ${todayPolicy.name} — ${todayPolicy.desc}`;
       }
@@ -943,6 +1028,8 @@
         ledger.innerHTML = `
           <strong>Commander Ledger</strong><br />
           Best Score <strong>${Math.floor(save.bestScore)}</strong> · Best Wave <strong>${save.bestWave}</strong> · Runs <strong>${runtime.runs}</strong> · Perfect Shifts <strong>${runtime.perfectWaves}</strong><br />
+          Daily Best <strong>${Math.floor(save.dailyBest || 0)}</strong> · Daily Clears <strong>${save.dailyClears || 0}</strong> · Last Grade <strong>${save.lastGrade}</strong><br />
+          Daily Objective <strong>${runtime.dailyChallenge ? runtime.dailyChallenge.label : '—'}</strong> · ${dailyChallengeStatus()}<br />
           Notes <strong>${runtime.activeNotes.length}</strong> · ${noteText}
         `;
       }
@@ -963,9 +1050,12 @@
               <p>세 구역 카드를 직접 조작해 Full Sync를 연쇄시키고, 웨이브마다 Protocol Draft로 빌드를 바꾸세요.</p>
               <div class="stats-list">
                 <div class="row"><span>오늘의 정책</span><strong>${todayPolicy.name}</strong></div>
+                <div class="row"><span>Daily Objective</span><strong>${runtime.dailyChallenge.label}</strong></div>
+                <div class="row"><span>Objective Detail</span><strong>${runtime.dailyChallenge.detail}</strong></div>
                 <div class="row"><span>Best Score</span><strong>${Math.floor(save.bestScore)}</strong></div>
-                <div class="row"><span>Best Wave</span><strong>${save.bestWave}</strong></div>
+                <div class="row"><span>Best Wave / Daily Best</span><strong>${save.bestWave} / ${Math.floor(save.dailyBest || 0)}</strong></div>
                 <div class="row"><span>Runs / Notes</span><strong>${runtime.runs} / ${runtime.activeNotes.length}</strong></div>
+                <div class="row"><span>Daily Clears / Last Grade</span><strong>${save.dailyClears || 0} / ${save.lastGrade}</strong></div>
               </div>
               <div class="actions">
                 <button id="startRunBtn">Start Shift</button>
@@ -1007,6 +1097,7 @@
         }
 
         if (runtime.mode === 'gameover') {
+          const grade = computeShiftGrade();
           overlay.innerHTML = `
             <div class="sheet">
               <h3>Grid Collapse</h3>
@@ -1016,6 +1107,8 @@
                 <div class="row"><span>Best Score</span><strong>${Math.floor(save.bestScore)}</strong></div>
                 <div class="row"><span>Best Wave / Best Chain</span><strong>${save.bestWave} / ${Math.max(save.bestChain, runtime.bestChain)}</strong></div>
                 <div class="row"><span>Perfect Shifts / Notes</span><strong>${runtime.perfectWaves} / ${runtime.activeNotes.length}</strong></div>
+                <div class="row"><span>Shift Grade</span><strong>${grade.grade} · ${grade.title}</strong></div>
+                <div class="row"><span>Daily Objective</span><strong>${dailyChallengeClear() ? 'CLEAR' : dailyChallengeStatus()}</strong></div>
               </div>
               <div class="actions">
                 <button id="retryBtn">Retry Shift</button>
@@ -1058,7 +1151,12 @@
         runtime.frontShield = 0;
         runtime.syncBonus = todayPolicy.syncBonus || 0;
         runtime.criticalThisWave = false;
+        runtime.actionCounts = { support: 0, charge: 0, cool: 0, route: 0 };
+        runtime.maxHeatThisRun = 0;
+        runtime.challengeClearedAnnounced = false;
+        runtime.dailyClearAwarded = false;
         runtime.districts = districtDefs.map(makeDistrict);
+        runtime.maxHeatThisRun = Math.max(...runtime.districts.map((district) => district.heat));
         runtime.focusIndex = 0;
         runtime.runs += 1;
         assignFront(true);
@@ -1137,6 +1235,39 @@
       stateNames.forEach(() => {});
       refreshNotes();
       markBanner('Moonwell Ready', '카드 제스처로 세 구역을 동시 안정화하세요.', todayPolicy.name);
+      window.__moonwellQA = {
+        startRun,
+        support: (index = runtime.focusIndex) => applySupport(index),
+        charge: (index = runtime.focusIndex) => applyCharge(index),
+        cool: (index = runtime.focusIndex) => applyCool(index),
+        route: (fromIndex = runtime.focusIndex, toIndex = weakestDistrictIndex(fromIndex)) => applyRoute(fromIndex, toIndex),
+        forceDraft: openDraft,
+        chooseUpgrade,
+        forceGameOver: (reason = 'QA forced collapse') => gameOver(reason),
+        tick: (seconds = 0.35) => tick(seconds),
+        snapshot: () => ({
+          mode: runtime.mode,
+          wave: runtime.wave,
+          score: Math.floor(runtime.score),
+          chain: runtime.chain,
+          bestChain: runtime.bestChain,
+          syncGauge: runtime.syncGauge,
+          front: runtime.front ? { name: runtime.front.name, districtIndex: runtime.front.districtIndex, timer: Number(runtime.frontTimer.toFixed(2)) } : null,
+          dailyObjective: runtime.dailyChallenge ? {
+            label: runtime.dailyChallenge.label,
+            detail: runtime.dailyChallenge.detail,
+            status: dailyChallengeStatus(),
+            cleared: dailyChallengeClear()
+          } : null,
+          shiftGrade: computeShiftGrade(),
+          districts: runtime.districts.map((district) => ({
+            name: district.name,
+            energy: Number(district.energy.toFixed(2)),
+            heat: Number(district.heat.toFixed(2)),
+            morale: Number(district.morale.toFixed(2))
+          }))
+        })
+      };
       render();
       requestAnimationFrame(loop);
     })();

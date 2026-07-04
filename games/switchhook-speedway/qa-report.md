@@ -1,6 +1,6 @@
 # Switchhook Speedway QA Report
 
-- Date: 2026-07-02
+- Date: 2026-07-05
 - Local URL: `http://127.0.0.1:8765/games/switchhook-speedway/`
 - Live URL target: `https://eastsea-blog.pages.dev/games/switchhook-speedway/`
 
@@ -39,6 +39,7 @@
 - `gameover-view.png`
 
 ## Launch Verification
-- Git push commit: `f0e0a0d3`
+- Git push commit: `baa99858`
 - Checked live URL: `https://eastsea-blog.pages.dev/games/switchhook-speedway/`
-- Result: `404` persisted across 6 retry checks after push, so live propagation is currently blocked even though repo push succeeded.
+- Result: game page is reachable with `200`, and raw GitHub `master` reflects the refreshed `games-list.json` entry with `added: 2026-07-05`.
+- Residual risk: `https://eastsea-blog.pages.dev/games/games-list.json` still served the cached `added: 2026-07-02` metadata during post-push checks, so catalog propagation is lagging behind the pushed repo state.

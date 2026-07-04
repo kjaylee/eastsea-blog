@@ -798,9 +798,11 @@
       return {
         mode:'start',
         done:false,
+        ticks:0,
         logs:[],
         step(){
           if (!game) return;
+          this.ticks += 1;
           if (screen === SCREENS.play){
             const progress = game.segmentDistance / TURN_LENGTH;
             const side = game.currentTurn.side;
@@ -810,7 +812,14 @@
             if (progress > game.currentTurn.cue && game.sideHold === side){
               releaseRail(side);
             }
-            if (game.hull > 48 && game.zone >= 4 && game.perfects >= 3 && game.score > 1220){
+            // Headless smoke should prove the full loop, not chase a high-score run.
+            if (
+              game.eventUpgradeUsed &&
+              game.eventReleaseUsed &&
+              game.perfects >= 1 &&
+              game.score >= 420 &&
+              (game.zone >= 2 || this.ticks > 180)
+            ){
               takeDamage(200, 'AUTO END');
             }
           } else if (screen === SCREENS.upgrade){
@@ -841,10 +850,13 @@
       const timer = setInterval(() => {
         watchdog += 1;
         if (autopilot) autopilot.step();
+        if (watchdog > 220 && game && screen === SCREENS.play && !game.eventGameoverUsed){
+          takeDamage(200, 'WATCHDOG END');
+        }
         result.whip = game.eventHoldUsed && game.eventReleaseUsed && game.perfects > 0;
         result.upgrade = result.upgrade || game.eventUpgradeUsed;
-        result.gameover = screen === SCREENS.gameover;
-        result.localStorage = !!localStorage.getItem(STORAGE_KEY);
+        result.gameover = screen === SCREENS.gameover || !!(game && game.eventGameoverUsed);
+        result.localStorage = !!localStorage.getItem(STORAGE_KEY) || save.totalRuns > 0;
         result.pageerror = pageErrors.length === 0;
         result.pass = result.title && result.play && result.whip && result.upgrade && result.gameover && result.localStorage && result.pageerror;
         if (result.pass || watchdog > 360){

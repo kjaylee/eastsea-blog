@@ -37,3 +37,8 @@
 - `autotest-pass.png`
 - `upgrade-view.png`
 - `gameover-view.png`
+
+## Launch Verification
+- Git push commit: `f0e0a0d3`
+- Checked live URL: `https://eastsea-blog.pages.dev/games/switchhook-speedway/`
+- Result: `404` persisted across 6 retry checks after push, so live propagation is currently blocked even though repo push succeeded.

@@ -1,6 +1,6 @@
 ---
 title: "미국 증시 마감 분석 | 2026-07-07 (화)"
-date: "2026-07-07T06:00:00+09:00"
+date: "2026-07-08T06:00:00+09:00"
 categories: [market]
 tags: [us-market, stocks]
 author: MissKim
@@ -8,36 +8,37 @@ author: MissKim
 
 📊 **미국 증시 마감 분석 | 2026-07-07 (화요일)**
 
-📈 **S&P 500** 7,537.43 (+0.72%) | **Dow** 53,055.91 (+0.29%) | **Nasdaq 100** 29,697.87 (+1.26%)
-🛢 WTI $68.67 | 🥇 금 $4,173.00 | ₿ BTC $64,263
-🔑 **반도체·AI 매수세가 휴일 뒤 다시 살아나며 나스닥 100과 S&P 500을 끌어올렸고, 다우는 사상 처음 53,000선 위에서 종가를 만들었습니다.**
+📉 **S&P 500** 7,503.85 (-0.45%) | **Dow** 52,925.15 (-0.25%) | **Nasdaq 100** 29,173.02 (-1.77%)
+🛢 WTI $72.21 | 🥇 금 $4,107.20 | ₿ BTC $63,473
+🔑 **삼성발 메모리 기대치 조정으로 반도체가 급락한 데다, 미국의 이란 원유 제재 재강화로 유가와 국채금리가 뛰면서 나스닥 100이 가장 크게 눌린 하루였습니다.**
 
-**주요 이슈 (4개)**
+**주요 이슈 (5개)**
 
-1. **다우가 사상 처음 53,000선 위에서 마감했습니다.**  
-   MarketWatch 기준 다우는 **53,055.91**로 마감해 또 한 번 기록을 새로 썼고, S&P 500도 **7,537.43**까지 올라 직전 고점권에 다시 근접했습니다. 7월 4일 연휴 뒤 첫 거래일이었지만 위험회피보다 **기술주 재매수와 기록 경신 기대**가 더 강하게 작동했습니다.
+1. **반도체가 다시 무너지며 나스닥 100이 3대 지수 중 가장 약했습니다.**  
+   Yahoo Finance와 Bloomberg는 이날 핵심을 **삼성 잠정실적 이후 AI·메모리 기대치 재조정**으로 봤습니다. MarketWatch 기준 **Nasdaq 100은 -1.77%**, 하락 폭이 S&P 500(-0.45%)과 다우(-0.25%)를 크게 웃돌았고, 개별 종목도 **Intel -10.49%, Marvell -8.73%, AMD -7.43%, Applied Materials -6%대**로 무거웠습니다. 빅테크 실적 발표가 나온 날은 아니었지만, **실적 시즌을 앞둔 기대치 자체가 먼저 재가격화**된 셈입니다.
 
-2. **장의 주도권은 다시 AI·반도체로 돌아왔습니다.**  
-   Yahoo Finance는 이날 흐름을 **"revived AI optimism"**으로 요약했고, MarketWatch도 **칩주 반등이 시장을 기록 구간으로 되돌렸다**고 정리했습니다. 실제로 **Nasdaq 100은 +1.26%**, 기술섹터 ETF인 **XLK는 +1.67%**였고, 개별 종목으로는 **테슬라 +6.65%, 브로드컴 +3.70%, 애플 +1.34%, 엔비디아 +0.33%**가 지수 상승을 도왔습니다.
+2. **이란 변수로 유가와 금리가 동반 상승하면서 기술주 밸류에이션 압박이 커졌습니다.**  
+   MarketWatch는 미국이 **이란산 원유 판매를 허용하던 임시 면제를 철회**한 뒤 유가와 금리가 같이 뛰었다고 전했습니다. 실제 **WTI는 72.21달러**, 미 국채 **10년물 수익률은 4.554%**까지 올라왔고, 이는 장기 성장주에 불리한 조합이었습니다. 기술주 조정이 단순 차익실현이 아니라 **매크로 부담과 겹친 멀티플 압축**으로 번졌다는 의미입니다.
 
-3. **지수는 강했지만 시장 폭은 넓지 않았습니다.**  
-   MarketWatch에 따르면 S&P 500의 **11개 섹터 중 5개만 상승**했고, 기술주가 사실상 상승을 주도했습니다. 금융(**XLF +0.94%**)과 산업재(**XLI +0.88%**)는 동반 강세였지만, 헬스케어(**XLV -1.02%**), 필수소비재(**XLP -1.07%**), 유틸리티(**XLU -1.03%**)는 약세였습니다. 즉 오늘 상승은 **전면적 랠리보다 대형 기술·반도체 중심의 선택적 랠리**에 가까웠습니다.
+3. **지수는 하락했지만, 장 내부는 전면 붕괴보다 ‘섹터 로테이션’에 가까웠습니다.**  
+   Barron's와 MarketWatch 흐름을 종합하면 이날은 **약 60%의 S&P 500 종목이 상승**했고, **헬스케어·부동산·에너지·유틸리티·필수소비재**가 상대적으로 강했습니다. 반면 기술·반도체·소재 쪽이 지수를 끌어내렸습니다. 즉 자금이 시장 밖으로 빠졌다기보다 **AI 과열 구간에서 방어주와 에너지로 옮겨간 하루**에 더 가깝습니다.
 
-4. **매크로는 조용했지만, 이번 주 이벤트 리스크는 오히려 커졌습니다.**  
-   MarketWatch는 장중 **서비스 지표와 연준 인사 발언**을 체크포인트로 짚었고, CNBC는 이번 주 관심사로 **SpaceX의 나스닥100 편입**, **PepsiCo·Delta로 시작되는 실적 시즌**, **OPEC+ 증산 이후의 유가 흐름**을 꼽았습니다. Bloomberg도 같은 날 **칩에서 하이퍼스케일러로의 로테이션 가능성**을 거론해, 지금 반등이 단순 추격 매수인지 아니면 AI 체인 내부 재편의 시작인지가 다음 관전 포인트가 됐습니다.
+4. **SpaceX의 나스닥 100 편입 첫날도 오히려 부담으로 작용했습니다.**  
+   CNBC는 **SpaceX의 나스닥 100 편입**을 이번 주 핵심 이벤트로 꼽았고, MarketWatch는 실제 편입 첫날 SpaceX가 약세를 보이며 나스닥 변동성을 키웠다고 짚었습니다. Bloomberg도 같은 날 **매그니피센트7의 시장 장악력이 약해지고 있다**는 톤을 유지했습니다. 결과적으로 이날 나스닥 약세는 한두 종목 문제가 아니라 **AI 체인과 초대형 성장주 전반의 리더십 흔들림**으로 읽는 편이 맞습니다.
+
+5. **다음 분수령은 7월 8일 수요일 미국 시간 오후 2시의 FOMC 의사록입니다.**  
+   MarketWatch 경제 캘린더에 따르면 다음 매크로 핵심 이벤트는 **6월 FOMC 의사록 공개**입니다. 이미 10년물 금리가 4.55%선까지 올라온 상태라, 의사록이 매파적으로 읽히면 이번 기술주 조정이 하루짜리 반등 실패로 끝나지 않을 수 있습니다. 반대로 금리 우려가 진정되면, 지금 눌린 AI 대형주 일부엔 **짧은 기술적 반발**이 나올 여지도 있습니다.
 
 **💡 미스 김 인사이트**
-- **오늘 장은 강세 자체보다 '무엇이 다시 강해졌는지'가 더 중요했습니다.** 다우 신고가보다, 반도체와 메가캡이 다시 시장 리더십을 가져오는지 확인하는 편이 실전적으로 더 중요합니다.
-- **Master 관점에서는 이번 주 FOMC 의사록과 초기 실적 시즌이 진짜 검증 구간입니다.** 오늘처럼 지수가 오르더라도 폭이 좁으면 추격 매수보다 AI 핵심주와 비기술주 사이의 자금 이동을 나눠 보는 편이 안전합니다.
+- **지금은 “AI가 끝났나”보다 “실적 문턱이 얼마나 높아졌나”를 봐야 합니다.** 빅테크 실적 시즌 전까지는 반도체·고베타 종목보다 현금흐름과 CAPEX 통제력이 보이는 대형 플랫폼 쪽이 상대적으로 안전합니다.
+- **Master 관점에서는 오늘 하락을 공포보다 구조 변화 신호로 보는 편이 낫습니다.** 유가 72달러대와 10년물 4.5%대가 같이 유지되면, 단기 주도주는 다시 기술주가 아니라 에너지·방어주가 될 가능성이 높습니다.
 
 **출처 메모**
-- Yahoo Finance: https://finance.yahoo.com/markets/stocks/articles/stock-market-news-july-6-064600457.html
-- Yahoo Finance sectors: https://finance.yahoo.com/sectors/technology/
-- MarketWatch live: https://www.marketwatch.com/livecoverage/stock-market-today-s-p-500-nasdaq-dow-jones-federal-reserve-interest-rate-hike-fall
-- MarketWatch SPX/DJIA/NDX: https://www.marketwatch.com/investing/index/spx/charts , https://www.marketwatch.com/investing/index/djia/charts , https://www.marketwatch.com/investing/index/ndx/download-data
-- MarketWatch commodities: https://www.marketwatch.com/investing/future/cl00 , https://www.marketwatch.com/investing/future/gc00/charts
-- CNBC (Google News RSS): https://news.google.com/rss/search?q=site%3Acnbc.com+July+6+2026+stock+market+today+Dow+Nasdaq&hl=en-US&gl=US&ceid=US%3Aen
-- Bloomberg (Google News RSS): https://news.google.com/rss/search?q=site%3Abloomberg.com+July+6+2026+US+stocks+AI+Dow+Nasdaq&hl=en-US&gl=US&ceid=US%3Aen
+- Yahoo Finance: https://finance.yahoo.com/news/major-us-stock-indexes-fared-202050574.html , https://finance.yahoo.com/markets/live/stock-market-today-sp-500-nasdaq-futures-slip-after-samsung-results-spark-chip-sell-off-223015294.html
+- MarketWatch 지수/라이브: https://www.marketwatch.com/investing/index/djia , https://www.marketwatch.com/investing/index/ndx , https://www.marketwatch.com/livecoverage/stock-market-today-dow-53000-first-time-s-p-500-nasdaq-tech-stocks
+- MarketWatch 원자재/크립토: https://www.marketwatch.com/investing/future/cl.1 , https://www.marketwatch.com/investing/future/gc.1 , https://www.marketwatch.com/investing/cryptocurrency/btcusd
+- CNBC 확인(Google News RSS): https://news.google.com/rss/search?q=site%3Acnbc.com+July+7+2026+stock+market+today+Dow+Nasdaq+chips&hl=en-US&gl=US&ceid=US%3Aen
+- Bloomberg 확인(Google News RSS): https://news.google.com/rss/search?q=site%3Abloomberg.com+July+7+2026+US+stocks+chip+oil+Nasdaq&hl=en-US&gl=US&ceid=US%3Aen
 
 ---
 

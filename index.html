@@ -632,85 +632,197 @@ function extractTags(post) {
   return [];
 }
 
-// Load posts from Cloudflare Worker API
-async function renderPosts(filter = 'all') {
+// --- Infinite scroll state ---
+let currentPage = 1;
+let currentFilter = 'all';
+let isLoading = false;
+let hasMore = true;
+let totalLoaded = 0;
+const PAGE_SIZE = 24;
+const MAX_POSTS = 500; // safety cap
+let sentinelObserver = null;
+
+function sortPosts(posts) {
+  return posts.sort((a, b) => {
+    const ts = (p) => {
+      const src = String(p.date || '').trim();
+      if (src && /\d{4}-\d{2}-\d{2}[\sT]\d{2}:\d{2}/.test(src)) {
+        const t = new Date(src.replace(' ', 'T').replace(/([+-]\d{2})(\d{2})$/, '$1:$2')).getTime();
+        if (t) return t;
+      }
+      const cu = String(p.created_at || '').trim();
+      if (cu) {
+        const t = new Date(cu.replace(' ', 'T') + 'Z').getTime();
+        if (t) return t;
+      }
+      return new Date(String(p.date || '').slice(0, 10)).getTime() || 0;
+    };
+    return ts(b) - ts(a);
+  });
+}
+
+function buildPostCard(post) {
+  const postDate = escapeHtml(formatPostDate(post.date, post.created_at));
+  const postExcerpt = escapeHtml(clampText(stripMarkdown(post.excerpt), 170));
+  const postTitle = escapeHtml(post.title || '제목 없음');
+  const postSlug = encodeURIComponent(String(post.slug || ''));
+  const category = post.category || 'other';
+  const categoryLabel = escapeHtml(CATEGORY_LABELS[category] || category);
+  const tags = extractTags(post)
+    .map(tag => String(tag || '').replace(/^#/, '').replace(/^\[|\]$/g, '').trim())
+    .filter(Boolean)
+    .slice(0, 6);
+  const tagsHTML = tags.length > 0
+    ? `<div class="post-tags">${tags.map(tag => `<span class="post-tag">#${escapeHtml(tag)}</span>`).join('')}</div>`
+    : '';
+
+  return `
+    <article class="post-card" data-href="/view.html?post=${postSlug}">
+      <div class="post-meta">
+        <span class="post-date">${postDate}</span>
+        <span class="post-category ${category}">${categoryLabel}</span>
+      </div>
+      <h2 class="post-title">${postTitle}</h2>
+      <p class="post-excerpt">${postExcerpt}</p>
+      ${tagsHTML}
+      <span class="post-link">전체 보기 →</span>
+    </article>
+  `;
+}
+
+function attachCardClicks(container) {
+  container.querySelectorAll('.post-card[data-href]:not([data-click-bound])').forEach(card => {
+    card.dataset.clickBound = '1';
+    card.addEventListener('click', () => {
+      if (window.getSelection().toString().length > 0) return;
+      window.location.href = card.dataset.href;
+    });
+  });
+}
+
+async function loadPage(page, normalizedFilter) {
+  const params = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) });
+  const response = await fetch(`${API_BASE}/api/posts?${params.toString()}`);
+  if (!response.ok) throw new Error('Failed to load posts from API');
+  const { posts: apiPosts = [] } = await response.json();
+  const filtered = sortPosts(
+    apiPosts
+      .map(post => ({ ...post, category: detectCategory(post) }))
+      .filter(post => normalizedFilter === 'all' || post.category === normalizedFilter)
+  );
+  return filtered;
+}
+
+async function renderPosts(filter = 'all', append = false) {
+  if (isLoading) return;
   const container = document.getElementById('posts-container');
   const normalizedFilter = filter === 'all' ? 'all' : normalizeCategory(filter);
 
+  if (!append) {
+    currentPage = 1;
+    currentFilter = filter;
+    hasMore = true;
+    totalLoaded = 0;
+    container.innerHTML = '<div class="loading">포스트 로딩 중</div>';
+  }
+
+  isLoading = true;
+
+  // Update or create sentinel
+  let sentinel = document.getElementById('scroll-sentinel');
+  if (sentinel) sentinel.style.display = 'block';
+
   try {
-    const params = new URLSearchParams({ page: '1', limit: '50' });
-    const response = await fetch(`${API_BASE}/api/posts?${params.toString()}`);
-    if (!response.ok) throw new Error('Failed to load posts from API');
+    const newPosts = await loadPage(currentPage, normalizedFilter);
 
-    const { posts: apiPosts = [] } = await response.json();
-    const posts = apiPosts
-      .map(post => ({ ...post, category: detectCategory(post) }))
-      .filter(post => normalizedFilter === 'all' || post.category === normalizedFilter)
-      .sort((a, b) => {
-        const ts = (p) => {
-          const src = String(p.date || '').trim();
-          if (src && /\d{4}-\d{2}-\d{2}[\sT]\d{2}:\d{2}/.test(src)) {
-            const t = new Date(src.replace(' ', 'T').replace(/([+-]\d{2})(\d{2})$/, '$1:$2')).getTime();
-            if (t) return t;
-          }
-          const cu = String(p.created_at || '').trim();
-          if (cu) {
-            const t = new Date(cu.replace(' ', 'T') + 'Z').getTime();
-            if (t) return t;
-          }
-          return new Date(String(p.date || '').slice(0, 10)).getTime() || 0;
-        };
-        return ts(b) - ts(a);
-      });
-
-    if (posts.length === 0) {
+    if (!append && newPosts.length === 0) {
       container.innerHTML = '<div class="empty-state">이 카테고리에 포스트가 없습니다.</div>';
+      hasMore = false;
       return;
     }
 
-    const postsHTML = posts.map(post => {
-      const postDate = escapeHtml(formatPostDate(post.date, post.created_at));
-      const postExcerpt = escapeHtml(clampText(stripMarkdown(post.excerpt), 170));
-      const postTitle = escapeHtml(post.title || '제목 없음');
-      const postSlug = encodeURIComponent(String(post.slug || ''));
-      const category = post.category || 'other';
-      const categoryLabel = escapeHtml(CATEGORY_LABELS[category] || category);
-      const tags = extractTags(post)
-        .map(tag => String(tag || '').replace(/^#/, '').replace(/^\[|\]$/g, '').trim())
-        .filter(Boolean)
-        .slice(0, 6);
-      const tagsHTML = tags.length > 0
-        ? `<div class="post-tags">${tags.map(tag => `<span class="post-tag">#${escapeHtml(tag)}</span>`).join('')}</div>`
-        : '';
+    // Get or create grid
+    let grid = container.querySelector('.posts-grid');
+    if (!grid) {
+      container.innerHTML = '';
+      grid = document.createElement('div');
+      grid.className = 'posts-grid';
+      container.appendChild(grid);
+    }
 
-      return `
-        <article class="post-card" data-href="/view.html?post=${postSlug}">
-          <div class="post-meta">
-            <span class="post-date">${postDate}</span>
-            <span class="post-category ${category}">${categoryLabel}</span>
-          </div>
-          <h2 class="post-title">${postTitle}</h2>
-          <p class="post-excerpt">${postExcerpt}</p>
-          ${tagsHTML}
-          <span class="post-link">전체 보기 →</span>
-        </article>
-      `;
-    }).join('');
+    // Append new cards
+    grid.insertAdjacentHTML('beforeend', newPosts.map(buildPostCard).join(''));
+    attachCardClicks(grid);
+    totalLoaded += newPosts.length;
 
-    container.innerHTML = `<div class="posts-grid">${postsHTML}</div>`;
-
-    // Clean card click handler - ignores text selection
-    container.querySelectorAll('.post-card[data-href]').forEach(card => {
-      card.addEventListener('click', (e) => {
-        // Ignore if user is selecting text
-        if (window.getSelection().toString().length > 0) return;
-        window.location.href = card.dataset.href;
-      });
-    });
+    // Determine if more pages exist
+    if (newPosts.length < PAGE_SIZE || totalLoaded >= MAX_POSTS) {
+      hasMore = false;
+    }
   } catch (error) {
-    container.innerHTML = '<div class="empty-state">포스트를 불러올 수 없습니다. 잠시 후 다시 시도해주세요.</div>';
+    if (!append) {
+      container.innerHTML = '<div class="empty-state">포스트를 불러올 수 없습니다. 잠시 후 다시 시도해주세요.</div>';
+    }
     console.error('Error loading posts:', error);
+  } finally {
+    isLoading = false;
+    updateSentinel();
   }
+}
+
+function updateSentinel() {
+  const container = document.getElementById('posts-container');
+  let sentinel = document.getElementById('scroll-sentinel');
+
+  if (!hasMore) {
+    if (sentinel) sentinel.style.display = 'none';
+    let endMsg = document.getElementById('scroll-end-msg');
+    if (totalLoaded > 0 && !endMsg) {
+      endMsg = document.createElement('div');
+      endMsg.id = 'scroll-end-msg';
+      endMsg.className = 'empty-state';
+      endMsg.style.padding = '2rem';
+      endMsg.textContent = '모든 포스트를 불러왔습니다.';
+      container.appendChild(endMsg);
+    }
+    return;
+  }
+
+  // Remove end message if it exists
+  const endMsg = document.getElementById('scroll-end-msg');
+  if (endMsg) endMsg.remove();
+
+  if (!sentinel) {
+    sentinel = document.createElement('div');
+    sentinel.id = 'scroll-sentinel';
+    sentinel.className = 'loading';
+    sentinel.style.padding = '2rem';
+    sentinel.textContent = '더 불러오는 중';
+    container.appendChild(sentinel);
+  }
+  sentinel.style.display = 'block';
+}
+
+function setupIntersectionObserver() {
+  const container = document.getElementById('posts-container');
+  sentinelObserver = new IntersectionObserver(async (entries) => {
+    if (entries[0].isIntersecting && hasMore && !isLoading) {
+      currentPage++;
+      await renderPosts(currentFilter, true);
+    }
+  }, { rootMargin: '600px' });
+
+  // Observe sentinel (created dynamically, so observe after render)
+  const checkAndObserve = () => {
+    const sentinel = document.getElementById('scroll-sentinel');
+    if (sentinel) {
+      sentinelObserver.observe(sentinel);
+    } else {
+      // If no sentinel yet, retry shortly (when hasMore becomes false it's removed)
+      if (hasMore) setTimeout(checkAndObserve, 300);
+    }
+  };
+  checkAndObserve();
 }
 
 // Filter handlers
@@ -719,12 +831,13 @@ document.querySelectorAll('.filter-btn').forEach(btn => {
     document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     const filter = btn.getAttribute('data-filter');
-    renderPosts(filter);
+    if (sentinelObserver) sentinelObserver.disconnect();
+    renderPosts(filter).then(() => setupIntersectionObserver());
   });
 });
 
-// Initial render
-renderPosts();
+// Initial render + setup observer
+renderPosts().then(() => setupIntersectionObserver());
 </script>
 </body>
 </html>

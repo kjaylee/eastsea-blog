@@ -55,3 +55,14 @@
 - 배포 순간 D1 데이터가 쓰이면 총계가 바뀌어 배포가 실패할 수 있다. 이는 누락된 투영을 배포하는 것보다 안전하며 다음 실행에서 회복된다.
 - 공개 목록은 D1 가용성에 의존한다. 배포된 `posts.json`은 읽기 전용 장애 폴백으로 남는다.
 - 저장소 전체의 기존 31개 회귀 실패는 별도 정합성 정리가 필요하다.
+
+## 프로덕션 검증
+
+- 구현 커밋: `44496bf5`
+- Cloudflare Pages 배포: `https://abdda0ee.eastsea-blog.pages.dev`
+- 사용자 도메인 `https://eastsea.monster/`: HTTP 200
+- 라이브 홈페이지에 `MAX_POSTS` 없음, `totalAvailable` 종료 조건 존재
+- 라이브 D1 API / `posts.json` / 사이트맵 게시물 수: 1,550 / 1,550 / 1,550
+- 라이브 `posts.json` 고유 filename: 1,550
+- `rss.xml`, `atom.xml`, `feed.xml`: 모두 HTTP 200
+- RSS/Atom 응답 형식: `application/xml`

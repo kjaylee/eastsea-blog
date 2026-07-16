@@ -177,6 +177,12 @@ PY
     return 1
   fi
 
+  if ! python3 scripts/generate-d1-projections.py --output-dir "$stage_dir"; then
+    echo "D1_PROJECTION_GENERATION_FAILED" >&2
+    rm -rf "$stage_dir"
+    return 1
+  fi
+
   printf '%s\n' "$stage_dir"
 }
 

@@ -1,6 +1,6 @@
 ---
 title: "Medium 트렌드 다이제스트 — 에이전트의 병목은 모델 밖에 있다"
-date: 2026-07-22 06:04:44 +0900
+date: 2026-07-22 12:29:33 +0900
 categories: [digest]
 tags: [medium, trends]
 author: MissKim
@@ -10,7 +10,7 @@ author: MissKim
 
 - 오늘 추천면의 중심은 더 강한 모델이 아니라 **입력의 신뢰 경계, 업무 의미, 권한 범위, 유지 책임**이다.
 - 인공지능이 구현을 빠르게 만들수록 무엇을 만들지, 어떤 데이터를 믿을지, 누가 결과를 책임질지 결정하는 비용이 전면에 나온다.
-- 프로그래밍 추천면은 에이전트 문맥 구성부터 8비트 마이크로컨트롤러 실습까지 넓어졌고, 새 도구와 오래된 제약을 함께 다루는 글이 상위에 올랐다.
+- 프로그래밍 추천면은 인공지능이 바꾼 오픈웹의 보상 구조와 BEAM/OTP의 오래된 동시성 해법을 함께 조명하며, 새 문제의 답이 반드시 새 기술은 아니라는 흐름을 보였다.
 
 ## 소스 원장
 
@@ -22,7 +22,7 @@ author: MissKim
 | 보도·분석 | The Register, GamesRadar, Gallup |
 | 커뮤니티·연구자 원문 | 독립 보안 연구자 시연, Steam 데이터 분석 뉴스레터 |
 
-태그별 추천 상위 5개씩 15개 후보를 확인한 뒤, Medium 밖의 근거를 붙일 수 있고 독립 개발자에게 의미가 큰 12개를 선별했다. Medium 추천면은 시각·캐시·개인화에 따라 순서가 달라질 수 있으므로, 아래 순위는 2026년 7월 22일 이른 아침의 발견 표본을 근거 강도와 실용성으로 다시 배열한 것이다.
+태그별 추천 상위 5개씩 15개 후보를 확인한 뒤, Medium 밖의 근거를 붙일 수 있고 독립 개발자에게 의미가 큰 12개를 선별했다. Medium 추천면은 시각·캐시·개인화에 따라 순서가 달라질 수 있으므로, 아래 순위는 2026년 7월 22일 점심의 발견 표본을 근거 강도와 실용성으로 다시 배열한 것이다.
 
 ## 핵심 트렌드 12선
 
@@ -131,27 +131,27 @@ author: MissKim
 → Medium: [Thinking in Events](https://medium.com/gitconnected/thinking-in-events-2033b92ea220)
 → 공식 보강: [Event Sourcing pattern](https://learn.microsoft.com/en-us/azure/architecture/patterns/event-sourcing)
 
-### 10. 에이전트 문맥은 전부 선적하기보다 필요할 때 찾는 혼합형이 유리하다
+### 10. 오픈웹의 교환 조건은 ‘콘텐츠 대신 트래픽’에서 ‘콘텐츠 대신 보상’으로 이동한다
 
-**[Harnesses: Eager vs. Just-in-Time](https://medium.com/towards-artificial-intelligence/harnesses-eager-vs-just-in-time-4209bf1b0953)**
+**[The End Of The Naive Internet](https://medium.com/gitconnected/the-end-of-the-naive-internet-0fe4e3acb186)**
 
-**무엇:** 코딩 에이전트가 저장소 구조를 시작할 때 모두 주입하는 선제형과 작업 중 필요한 정보만 검색하는 적시형 하네스를 비교한 글이다.
-**근거:** Aider의 저장소 지도는 트리시터로 식별자를 추출하고 페이지랭크로 관련 심볼을 압축해 제한된 토큰 예산 안에 넣는 구현을 공개하며, 전량 주입과 무정보 검색 사이의 혼합 경로를 보여준다.
-**시사점:** 작은 저장소는 고정 지도가 빠를 수 있지만 큰 저장소는 문맥 노후화와 캐시 무효화 비용이 커지므로, 정적 구조 요약과 작업별 검색을 실제 성공률·토큰·지연으로 비교해야 한다.
+**무엇:** 개발자와 창작자가 공개한 지식이 검색 트래픽으로 되돌아오던 암묵적 계약이 인공지능 요약과 학습 데이터 수집으로 무너지고 있다는 비판이다.
+**근거:** Cloudflare도 인공지능 크롤러가 원문으로 보내는 트래픽이 극히 적어 기존 교환이 성립하지 않는다며 기본 차단과 유료 크롤링 시장을 발표했다.
+**시사점:** 독립 개발자는 문서·블로그를 단순 유입 채널로 보지 말고, 원문 출처 표시·크롤러 정책·뉴스레터·직접 결제처럼 배포와 보상을 함께 통제하는 구조를 준비해야 한다.
 
-→ Medium: [Harnesses: Eager vs. Just-in-Time](https://medium.com/towards-artificial-intelligence/harnesses-eager-vs-just-in-time-4209bf1b0953)
-→ 구현 보강: [Aider repository map](https://aider.chat/2023/10/22/repomap.html)
+→ Medium: [The End Of The Naive Internet](https://medium.com/gitconnected/the-end-of-the-naive-internet-0fe4e3acb186)
+→ 공식 보강: [Content Independence Day: no AI crawl without compensation](https://blog.cloudflare.com/content-independence-day-no-ai-crawl-without-compensation/)
 
-### 11. 저가 8비트 칩도 도구 생태계가 연결되면 다시 실용적인 시제품 경로가 된다
+### 11. 동시성의 새 유행 상당수는 BEAM/OTP가 이미 오래전에 풀었던 문제다
 
-**[Programming The ATTiny 85](https://medium.com/@lfoster.se.be/programming-the-attiny-85-51e0cad2ad9c)**
+**[Elixir & We’ve Been There Before](https://medium.com/@krisguttenbergovitz/elixir-weve-been-there-before-or-the-aqueduct-had-running-water-all-along-c38cccd98370)**
 
-**무엇:** 저가형 MPLAB SNAP 프로그래머로 ATtiny85를 플래시하는 과정을 통해 PIC 계열 도구와 AVR 계열 칩의 실용적 연결을 보여주는 실습 글이다.
-**근거:** Microchip의 공식 제품 자료는 MPLAB SNAP이 AVR과 PIC 계열을 포함한 다양한 대상을 지원하고, 회로 내 직렬 프로그래밍과 디버깅을 제공한다고 명시한다.
-**시사점:** 센서·조명·간단한 주변기기 시제품은 고성능 보드부터 선택하기보다 필요한 입출력, 전력, 디버깅 지원과 양산 단가를 기준으로 작은 칩을 다시 검토할 가치가 있다.
+**무엇:** 격리된 경량 프로세스, 메시지 전달, 선점형 스케줄링, 감독 트리가 현대 분산 시스템의 핵심 요구를 수십 년 전부터 다뤄 왔다는 재평가다.
+**근거:** Elixir 공식 문서는 프로세스가 운영체제 프로세스와 달리 가볍고 격리되며 메시지로 통신한다고 설명하고, 이 모델이 동시성과 장애 격리의 기반임을 명시한다.
+**시사점:** 실시간 연결과 장기 실행 작업이 많은 제품은 새 오케스트레이션 계층을 쌓기 전에 BEAM/OTP가 요구를 더 단순한 실행 모델로 해결하는지 검토할 가치가 있다.
 
-→ Medium: [Programming The ATTiny 85](https://medium.com/@lfoster.se.be/programming-the-attiny-85-51e0cad2ad9c)
-→ 공식 보강: [MPLAB SNAP](https://www.microchip.com/en-us/development-tool/PG164100)
+→ Medium: [Elixir & We’ve Been There Before](https://medium.com/@krisguttenbergovitz/elixir-weve-been-there-before-or-the-aqueduct-had-running-water-all-along-c38cccd98370)
+→ 공식 보강: [Processes — Elixir](https://elixir.hexdocs.pm/processes.html)
 
 ### 12. 첫 유료 고객은 광고 최적화보다 좁고 반복적인 대화에서 나온다
 
@@ -174,6 +174,6 @@ Jay에게 바로 적용할 기준은 새 자동화나 게임 후보마다 `믿�
 
 ## 수집 메모
 
-- 확인 시각: 2026-07-22 06:04 KST
+- 확인 시각: 2026-07-22 12:29 KST
 - 발견 경로: [Programming](https://medium.com/tag/programming), [Artificial Intelligence](https://medium.com/tag/artificial-intelligence), [Startup](https://medium.com/tag/startup)
 - 후보 15건 중 12건을 채택했다. 집계·추천면은 발견에만 사용했고, 모든 채택 항목에 Medium 밖의 공식·연구·보도·커뮤니티 근거를 최소 1개 연결했다.

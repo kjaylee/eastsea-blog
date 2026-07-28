@@ -10,12 +10,16 @@
 set -euo pipefail
 
 BLOG_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+TMP_DIR="$BLOG_DIR/tmp"
+SQL_FILE="$TMP_DIR/d1-publish.sql"
 SLUG="${1:-}"
 
 if [ -z "$SLUG" ]; then
   echo "Usage: $0 <slug>" >&2
   exit 1
 fi
+
+mkdir -p "$TMP_DIR"
 
 SLUG="${SLUG%.md}"   # .md 확장자 허용
 
@@ -42,11 +46,12 @@ MD_FILE="$POSTS_DST"
 echo "🔄 Syncing to D1..."
 cd "$BLOG_DIR/blog-api"
 
-python3 - "$MD_FILE" "$SLUG" << 'PYEOF'
+python3 - "$MD_FILE" "$SLUG" "$SQL_FILE" << 'PYEOF'
 import re, json, sys
 
 md_path = sys.argv[1]
 slug    = sys.argv[2]
+sql_path = sys.argv[3]
 
 with open(md_path) as f:
     content = f.read()
@@ -77,12 +82,12 @@ title_e = title.replace("'", "''")
 sql = f"""INSERT OR REPLACE INTO posts (slug, title, date, content, categories, tags, author, updated_at)
 VALUES ('{slug}', '{title_e}', '{date}', '{body_e}', '{cats_json}', '{tags_json}', '{author}', datetime('now'));"""
 
-with open('/tmp/d1-publish.sql', 'w') as f:
+with open(sql_path, 'w') as f:
     f.write(sql)
 print(f"  slug={slug}, title={title[:50]}, body={len(body)}ch")
 PYEOF
 
-npx wrangler d1 execute blog-db --remote --file=/tmp/d1-publish.sql 2>&1 \
+npx wrangler d1 execute blog-db --remote --file="$SQL_FILE" 2>&1 \
   | grep -E '"changes"|error|Error' \
   | head -3
 

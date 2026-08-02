@@ -12,7 +12,7 @@ author: MissKim
 
 ## 핵심 트렌드 다이제스트
 
-**[1] Recreating Conway’s Game of Life using SwiftUI and Metal (Programming)**
+**[Medium-1] Recreating Conway’s Game of Life using SwiftUI and Metal (Programming)**
 
 Medium 원문: [Recreating Conway’s Game of Life using SwiftUI and Metal](https://medium.com/@dvdmdlc/recreating-conways-game-of-life-using-swiftui-and-metal-02b49fb010d2?source=rss------programming-5)
 
@@ -24,7 +24,7 @@ Medium 원문: [Recreating Conway’s Game of Life using SwiftUI and Metal](http
 
 ---
 
-**[2] Day 7: Stop Copying Docker Commands. Learn How Docker Images Are Really Built (Programming)  ← 최우선**
+**[Medium-2] Day 7: Stop Copying Docker Commands. Learn How Docker Images Are Really Built (Programming)  ← 최우선**
 
 Medium 원문: [Day 7: Stop Copying Docker Commands. Learn How Docker Images Are Really Built](https://pawannatekar220.medium.com/day-7-stop-copying-docker-commands-learn-how-docker-images-are-really-built-987e620f7045?source=rss------programming-5)
 → 원문: [Day 7: Stop Copying Docker Commands](https://medium.com/%40pawannatekar220/day-7-stop-copying-docker-commands-learn-how-docker-images-are-really-built-987e620f7045)
@@ -36,7 +36,7 @@ Medium 원문: [Day 7: Stop Copying Docker Commands. Learn How Docker Images Are
 
 ---
 
-**[3] How Well Do You Know Python Division? (Programming)**
+**[Medium-3] How Well Do You Know Python Division? (Programming)**
 
 Medium 원문: [How Well Do You Know Python Division?](https://medium.com/becomebetter-dev/how-well-do-you-know-python-division-0e0bceeda56d?source=rss------programming-5)
 
@@ -48,7 +48,7 @@ Medium 원문: [How Well Do You Know Python Division?](https://medium.com/become
 
 ---
 
-**[4] Perfectly Pointed Tooltips: Building Corner-Aware Tooltips with Modern CSS (Programming)**
+**[Medium-4] Perfectly Pointed Tooltips: Building Corner-Aware Tooltips with Modern CSS (Programming)**
 
 Medium 원문: [Perfectly Pointed Tooltips: Building Corner-Aware Tooltips with Modern CSS](https://er-raj-aryan.medium.com/perfectly-pointed-tooltips-building-corner-aware-tooltips-with-modern-css-c3742333c2ef?source=rss------programming-5)
 
@@ -60,7 +60,7 @@ Medium 원문: [Perfectly Pointed Tooltips: Building Corner-Aware Tooltips with 
 
 ---
 
-**[5] Spring’s Creator Is Back: 60% Fewer LLM Calls (Programming)**
+**[Medium-5] Spring’s Creator Is Back: 60% Fewer LLM Calls (Programming)**
 
 Medium 원문: [Spring’s Creator Is Back: 60% Fewer LLM Calls](https://medium.com/@coolercoder/springs-creator-is-back-60-fewer-llm-calls-e8fa9ad3655f?source=rss------programming-5)
 
@@ -72,7 +72,7 @@ Medium 원문: [Spring’s Creator Is Back: 60% Fewer LLM Calls](https://medium.
 
 ---
 
-**[6] The Biggest AI Mistakes Beginners Still Make in 2026 (Artificial Intelligence)  ← 최우선**
+**[Medium-6] The Biggest AI Mistakes Beginners Still Make in 2026 (Artificial Intelligence)  ← 최우선**
 
 Medium 원문: [The Biggest AI Mistakes Beginners Still Make in 2026](https://medium.com/@kishan.kumar792/the-biggest-ai-mistakes-beginners-still-make-in-2026-29c3b2628169?source=rss------artificial_intelligence-5)
 → 원문: [The Biggest AI Mistakes Beginners Still Make in 2026](https://medium.com/@kishan.kumar792/the-biggest-ai-mistakes-beginners-still-make-in-2026-29c3b2628169)
@@ -84,7 +84,7 @@ Medium 원문: [The Biggest AI Mistakes Beginners Still Make in 2026](https://me
 
 ---
 
-**[7] 7 Spring Boot Mistakes AI Makes That Senior Developers Catch Immediately (Artificial Intelligence)**
+**[Medium-7] 7 Spring Boot Mistakes AI Makes That Senior Developers Catch Immediately (Artificial Intelligence)**
 
 Medium 원문: [7 Spring Boot Mistakes AI Makes That Senior Developers Catch Immediately](https://medium.com/@kaurharjeet122/7-spring-boot-mistakes-ai-makes-that-senior-developers-catch-immediately-abe7bd907574?source=rss------artificial_intelligence-5)
 
@@ -96,7 +96,7 @@ Medium 원문: [7 Spring Boot Mistakes AI Makes That Senior Developers Catch Imm
 
 ---
 
-**[8] 10 AI SEO Tips to Get Qualified Leads for a Plumbing Business (Artificial Intelligence)**
+**[Medium-8] 10 AI SEO Tips to Get Qualified Leads for a Plumbing Business (Artificial Intelligence)**
 
 Medium 원문: [10 AI SEO Tips to Get Qualified Leads for a Plumbing Business](https://medium.com/@subarnakhadka007/10-ai-seo-tips-to-get-qualified-leads-for-a-plumbing-business-e76f032c7f52?source=rss------artificial_intelligence-5)
 
@@ -108,7 +108,7 @@ Medium 원문: [10 AI SEO Tips to Get Qualified Leads for a Plumbing Business](h
 
 ---
 
-**[9] The Biggest AI Mistakes...의 지역 확장: 한국 실무에서의 적용 (Artificial Intelligence)**
+**[Medium-9] The Biggest AI Mistakes...의 지역 확장: 한국 실무에서의 적용 (Artificial Intelligence)**
 
 Medium 원문: [The Biggest AI Mistakes Beginners Still Make in 2026](https://medium.com/@kishan.kumar792/the-biggest-ai-mistakes-beginners-still-make-in-2026-29c3b2628169?source=rss------artificial_intelligence-5)
 
@@ -120,7 +120,7 @@ Medium 원문: [The Biggest AI Mistakes Beginners Still Make in 2026](https://me
 
 ---
 
-**[10] Introducing Cricket Daily: Scores, Schedules, and News in One Place (Startup)**
+**[Medium-10] Introducing Cricket Daily: Scores, Schedules, and News in One Place (Startup)**
 
 Medium 원문: [Introducing Cricket Daily: Scores, Schedules, and News in One Place (Plus a PDF You Can Keep)](https://cosmicknox.medium.com/introducing-cricket-daily-scores-schedules-and-news-in-one-place-plus-a-pdf-you-can-keep-c50450d3fa1a?source=rss------startup-5)
 
@@ -132,7 +132,7 @@ Medium 원문: [Introducing Cricket Daily: Scores, Schedules, and News in One Pl
 
 ---
 
-**[11] The security review is where good B2B deals quietly die (Startup)  ← 최우선**
+**[Medium-11] The security review is where good B2B deals quietly die (Startup)  ← 최우선**
 
 Medium 원문: [The security review is where good B2B deals quietly die](https://medium.com/@faisalsempa/the-security-review-is-where-good-b2b-deals-quietly-die-ecb97edf13df?source=rss------startup-5)
 → 원문: [The security review is where good B2B deals quietly die](https://medium.com/@faisalsempa/the-security-review-is-where-good-b2b-deals-quietly-die-ecb97edf13df)
@@ -146,7 +146,7 @@ Medium 원문: [The security review is where good B2B deals quietly die](https:/
 
 ---
 
-**[12] I’m a Product Marketer. I Just Shipped a Multi-Agent Product Without an Engineering Team (Startup)**
+**[Medium-12] I’m a Product Marketer. I Just Shipped a Multi-Agent Product Without an Engineering Team (Startup)**
 
 Medium 원문: [I’m a Product Marketer. I Just Shipped a Multi-Agent Product Without an Engineering Team](https://medium.com/@glenn.j.fratangelo/im-a-product-marketer-i-just-shipped-a-multi-agent-product-without-an-engineering-team-c0dc5f4e9767?source=rss------startup-5)
 

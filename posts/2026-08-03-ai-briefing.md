@@ -9,90 +9,94 @@ author: MissKim
 <!--
 source-ledger
 - source families: research / official / community / marketplace / press
-- distinct domains: arxiv.org, kimi.com, paperswithcode.com, huggingface.co, anthropic.com, developers.openai.com, github.com, news.ycombinator.com, qiita.com, producthunt.com, venturebeat.com
-- triangulated items: Kimi K3 / EU AI Act transparency / LLM agent security
+- distinct domains: arxiv.org, paperswithcode.com, huggingface.co, anthropic.com, breachroad.com, github.com, qiita.com, reddit.com, producthunt.com, techcrunch.com, marktechpost.com
+- triangulated items: AgentBench / DeepSeek-V4-Flash-0731 / Anthropic Responsible Scaling Policy
 -->
 
 ## 논문 동향
 
-**[Kimi K3: Open Frontier Intelligence]** ([Papers with Code])
-  Kimi K3는 2.8T 파라미터 MoE 모델로, 활성 파라미터 104B와 100만 토큰 문맥을 내세우며 전면에 나섰습니다. 아카이브와 공식 블로그는 896개 라우팅 전문가 중 토큰당 16개만 활성화하는 Stable LatentMoE, 약 2.5배의 스케일 효율 개선, 장기 실행을 위한 강화학습과 샌드박스 상태를 함께 강조합니다. 시사점은 분명합니다. 오픈웨이트 경쟁은 이제 단순한 덩치 싸움이 아니라, 긴 작업을 얼마나 저비용으로 끝까지 굴릴 수 있는지의 싸움으로 옮겨갔습니다.
-  → 원문: [Kimi K3: Open Frontier Intelligence](https://arxiv.org/abs/2607.24653)
-  → 교차확인: [Kimi K3 Tech Blog: Open Frontier Intelligence](https://www.kimi.com/blog/kimi-k3)
+**[AgentBench: Evaluating LLMs as Agents]** ([Papers with Code])
+AgentBench는 LLM-as-Agent를 평가하는 벤치마크로, 8개 환경을 제공하고 오늘의 핵심 논문으로 다시 떠올랐습니다. arXiv 초록은 27개 API/오픈소스 모델을 시험한 결과 상용 상위 모델과 OSS 사이의 격차가 크고, 장기 추론·의사결정·지시 준수가 아직 병목이라고 적습니다. GitHub 저장소도 평가 패키지와 데이터셋을 공개했고, 저장소 규모가 이미 커뮤니티 표준 도구에 가까워졌다는 점이 중요합니다.
+→ 원문: [AgentBench: Evaluating LLMs as Agents](https://paperswithcode.com/paper/agentbench-evaluating-llms-as-agents)
+→ 교차확인: [AgentBench: Evaluating LLMs as Agents](https://arxiv.org/abs/2308.03688)
 
-**[Transparency as Architecture: Structural Compliance Gaps in EU AI Act Article 50 II]** ([arXiv])
-  이 논문은 EU AI Act 50조 2항이 요구하는 이중 투명성, 즉 인간이 읽을 수 있는 표기와 기계가 검증할 수 있는 표기를 동시에 요구한다는 점을 정면으로 다룹니다. 저자들은 합성 데이터 생성과 자동 팩트체크를 사례로 들며, 사후 라벨링만으로는 대응이 안 되고 교차 플랫폼 표준, 확률적 모델과 규제의 `reliability` 기준 불일치, 사용자 숙련도별 표기 방식이 모두 구조적으로 비어 있다고 지적합니다. 시사점은 규제 대응이 화면 문구 한 줄이 아니라 아키텍처 전체 문제라는 점입니다.
-  → 원문: [Transparency as Architecture: Structural Compliance Gaps in EU AI Act Article 50 II](https://arxiv.org/abs/2603.26983)
-  → 교차확인: [Show HN: Open-source EU AI Act compliance layer for AI agents (8/2026 deadline)](https://news.ycombinator.com/item?id=47141347)
+**[ExtractBench: A Benchmark for Schema-Guided Enterprise Document Extraction]** ([arXiv])
+ExtractBench는 스키마 기반 기업 문서 추출을 위한 벤치마크입니다. 논문은 4,869페이지, 370개 기업 문서, 8개 비즈니스 도메인, 67개 문서 유형을 묶어 값 정확도·기록 완성도·근거·비용을 함께 평가합니다. 이건 OCR보다 더 까다로운 구조화 추출과 근거 추적을 제품화하려는 팀이 바로 참고해야 할 기준선입니다.
+→ 원문: [ExtractBench: A Benchmark for Schema-Guided Enterprise Document Extraction](https://arxiv.org/abs/2607.29677)
+→ 교차확인: [ExtractBench: A Benchmark for Schema-Guided Enterprise Document Extraction](https://huggingface.co/papers/2607.29677)
 
-**[A Framework for Formalizing LLM Agent Security]** ([arXiv])
-  이 논문은 에이전트의 같은 행동도 누가 지시했는지, 어떤 목표를 따르는지에 따라 합법이 될 수도 위반이 될 수도 있다는 점에서 보안을 맥락화합니다. 저자들은 task alignment, action alignment, source authorization, data isolation의 4개 성질을 제시하고, prompt injection과 memory poisoning 같은 공격을 이 성질들의 위반으로 다시 정식화합니다. 시사점은 에이전트 보안의 중심이 프롬프트 필터가 아니라 권한 경계와 상태 격리로 이동했다는 데 있습니다.
-  → 원문: [A Framework for Formalizing LLM Agent Security](https://arxiv.org/abs/2603.19469)
-  → 교차확인: [From prompts to products: One year of Responses](https://developers.openai.com/blog/one-year-of-responses)
+**[Zero-Mem: Zero-Token Memory Operations for LLM Agents]** ([Hugging Face])
+Zero-Mem은 LLM 에이전트의 메모리 조작을 제로 토큰으로 처리하자는 제안입니다. 핵심은 최종 답변을 제외한 메모리 연산에서 추가 LLM 호출을 없애고, 중간 기록 생성과 검색에서 반복되는 토큰과 시간을 줄이는 데 있습니다. 장기 작업 에이전트의 병목이 추론만이 아니라 메모리 오버헤드라는 점을 정면으로 드러냅니다.
+→ 원문: [Zero-Mem: Zero-Token Memory Operations for LLM Agents](https://huggingface.co/papers/2607.29377)
+→ 교차확인: [Zero-Mem: Zero-Token Memory Operations for LLM Agents](https://arxiv.org/abs/2607.29377)
 
-**[Toward Secure LLM Agents: Threat Surfaces, Attacks, Defenses, and Evaluation]** ([arXiv])
-  이 서베이는 247편을 묶어 에이전트 보안을 정보 흐름, 위임 권한, 영속 상태의 상호작용으로 보는 라이프사이클 프레임으로 정리합니다. 논문은 프롬프트 인젝션과 도구 매개 제어 흐름 하이재킹이 여전히 우세하지만, 영속 상태 오염과 멀티 에이전트 전파가 빠르게 커지는 위협이라고 봅니다. 시사점은 방어가 점점 더 장기 상태와 실행 맥락을 전제로 설계돼야 한다는 것입니다.
-  → 원문: [Toward Secure LLM Agents: Threat Surfaces, Attacks, Defenses, and Evaluation](https://arxiv.org/abs/2606.10749)
+**[Self-Play Meets Skill Evolution: Self-Evolving Search Agents that Pose, Solve, and Remember]** ([Hugging Face])
+이 논문은 self-play의 실패가 그래디언트에만 남는 한계를 넘기려는 시도입니다. SESA는 도전자가 문제를 만들고, 별도 파라미터의 solver가 스킬 메모리를 조회하며, 실패를 다음 연습 문제로 증류합니다. 에이전트 학습의 초점이 정답 생성에서 실패를 다음 작업에 어떻게 이식하느냐로 이동하고 있습니다.
+→ 원문: [Self-Play Meets Skill Evolution: Self-Evolving Search Agents that Pose, Solve, and Remember](https://huggingface.co/papers/2607.29468)
+→ 교차확인: [Self-Play Meets Skill Evolution: Self-Evolving Search Agents that Pose, Solve, and Remember](https://arxiv.org/abs/2607.29468)
 
-**[Steering the Verifiability of Multimodal AI Hallucinations]** ([arXiv])
-  이 연구는 멀티모달 모델의 환각을 그냥 하나로 보지 않고, 사람이 쉽게 알아볼 수 있는 `obvious` 유형과 검증이 어려운 `elusive` 유형으로 분리합니다. 저자들은 4,470개의 인간 응답을 묶은 데이터셋으로 두 유형을 나눴고, 각각에 맞는 probe를 학습해 검증 가능성을 조절하는 방식이 더 낫다고 보여줍니다. 시사점은 안전이 단순한 환각 억제가 아니라, 사용자가 실제로 검증할 수 있는 수준까지 조절하는 문제로 바뀌고 있다는 점입니다.
-  → 원문: [Steering the Verifiability of Multimodal AI Hallucinations](https://arxiv.org/abs/2604.06714)
+## 모델·도구
 
-## 모델/도구
+**[DeepSeek-V4-Flash-0731]** ([Hugging Face])
+DeepSeek-V4-Flash-0731는 7월 31일 공개된 공식 릴리스로, preview를 대체했습니다. 모델 카드는 304B 파라미터, 토큰당 13B 활성, 100만 토큰 문맥을 내세우고, 기사 쪽은 API 공용 베타와 2,500 동시성, 저렴한 토큰 단가까지 함께 적습니다. 이건 모델 전쟁이 아니라 운영비 전쟁이며, 에이전트 루프를 돌릴 팀에게는 최고 점수보다 감당 가능한 추론 단가가 더 중요해졌다는 신호입니다.
+→ 원문: [deepseek-ai/DeepSeek-V4-Flash-0731](https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-0731)
+→ 교차확인: [DeepSeek Upgrades DeepSeek-V4-Flash-0731 with Major Agentic and Coding Gains](https://www.marktechpost.com/2026/07/31/deepseek-upgrades-deepseek-v4-flash-0731-with-major-agentic-and-coding-gains/)
 
-**[Introducing Claude Opus 5]** ([Anthropic])
-  Claude Opus 5는 Anthropic이 7월 24일 공개한 새 모델로, Fable 5에 거의 근접하는 지능을 더 낮은 비용으로 내세웁니다. Frontier-Bench, CursorBench, ARC-AGI 3, Zapier AutomationBench, OSWorld 2.0 같은 평가에서 코드, 지식 작업, 컴퓨터 사용, 업무 자동화 성능을 함께 끌어올렸고, 일부 과제에서는 이전 세대 대비 절반 안팎의 비용으로 비슷하거나 더 좋은 결과를 냈습니다. 시사점은 에이전트형 코딩 모델의 승부가 이제 절대 성능보다 `비용 대비 끝맺음`으로 이동했다는 것입니다.
-  → 원문: [Introducing Claude Opus 5](https://www.anthropic.com/news/claude-opus-5)
+**[Anthropic’s Responsible Scaling Policy]** ([Anthropic])
+Anthropic의 Responsible Scaling Policy는 2026년 7월 8일 기준으로 v3.4까지 올라왔습니다. 이번 업데이트는 자동화 R&D 임계값, 내부 위험 보고서 공유 방식, 외부 검토와 위험 보고 체계를 더 촘촘하게 손봅니다. 안전 정책이 선언문에서 운영 프로세스로 내려왔고, frontier 팀은 이제 모델 성능표만큼이나 이런 갱신 주기를 봐야 합니다.
+→ 원문: [Anthropic’s Responsible Scaling Policy](https://www.anthropic.com/responsible-scaling-policy)
+→ 교차확인: [Anthropic RSP 3.4: AI risk thresholds and governance](https://breachroad.com/en/blog/anthropic-rsp-3-4-ai-safety/)
 
-**[From prompts to products: One year of Responses]** ([OpenAI Developers])
-  OpenAI는 Responses API가 나온 지 1년을 돌아보며, 호스티드 도구가 모델을 단순한 챗봇에서 사용자를 대신해 행동하는 시스템으로 바꿨다고 정리합니다. 본문에는 에이전트 행동 모니터링, 실패 탐지, 디버깅 도구를 Responses API로 엮은 Raindrop 사례가 나오고, 더 복잡한 에이전트일수록 백그라운드 분석과 경보 체계가 중요해졌다는 점이 반복됩니다. 시사점은 에이전트의 핵심 부품이 모델 그 자체보다 오케스트레이션, 상태, 관측 가능성이라는 뜻입니다.
-  → 원문: [From prompts to products: One year of Responses](https://developers.openai.com/blog/one-year-of-responses)
-
-**[VibeVoice Technical Report]** ([Hugging Face Trending])
-  VibeVoice는 next-token diffusion과 효율적인 continuous speech tokenizer로 장문 다화자 음성을 합성하는 기술 보고서입니다. Hugging Face의 트렌딩 페이지에는 Microsoft Research의 이 논문이 상단에 올라와 있고, GitHub 51.9k와 업보트 177이 붙어 있어 연구 흥미와 재현 수요가 모두 높다는 점을 보여줍니다. 시사점은 음성 모델의 경쟁축이 이제 단일 발화 품질보다 장시간 대화와 멀티스피커 제어로 옮겨갔다는 것입니다.
-  → 원문: [VibeVoice Technical Report](https://huggingface.co/papers/trending)
+**[Artificial Intelligence]** ([Product Hunt])
+Product Hunt의 AI 카테고리는 AI Agents, LLMs, AI Infrastructure, AI Chatbots, Predictive AI의 5개 하위 축으로 나뉩니다. 페이지는 OpenAI, Claude by Anthropic, Cursor를 대표 예시로 보여 주고, Framer AI Agents를 프로모션 항목으로 올려 두었습니다. 이 카테고리는 모델 자체보다 제품화와 배포 경로가 더 중요한 시장 신호를 보여 주며, 지금 출시 언어가 어디로 가는지 빠르게 훑게 해 줍니다.
+→ 원문: [Artificial Intelligence](https://www.producthunt.com/topics/artificial-intelligence)
 
 ## GitHub/커뮤니티
 
-**[Agent-Reach]** ([GitHub Trending])
-  Agent-Reach는 AI 에이전트에게 Twitter, Reddit, YouTube, GitHub, Bilibili, XiaoHongShu까지 읽고 검색하는 눈을 붙여 주는 Python 프로젝트입니다. GitHub 트렌딩 페이지에는 64.6k 스타와 함께 오늘만 수천 개의 신규 반응이 붙어 있어, 웹 접근성 자체가 에이전트 생태계의 핵심 기능이 되었음을 보여줍니다. 시사점은 외부 API에 묶이지 않는 로컬 웹·소셜 수집 레이어가 에이전트 인프라의 사실상 기본값이 되고 있다는 점입니다.
-  → 원문: [Panniantong/Agent-Reach](https://github.com/Panniantong/agent-reach)
+**[Agent-Reach]** ([GitHub])
+Agent-Reach는 AI 에이전트가 웹 밖 커뮤니티까지 직접 읽고 검색하게 해 주는 CLI입니다. Twitter, Reddit, YouTube, GitHub, Bilibili, XiaoHongShu를 한 번에 다루고 API 비용을 0으로 내세우는 점이 눈에 띕니다. 브리핑 수집 파이프라인 관점에서는 소스 수집 레이어를 에이전트가 직접 먹는 시대가 이미 왔다는 증거입니다.
+→ 원문: [Panniantong/Agent-Reach](https://github.com/Panniantong/Agent-Reach)
 
-**[last30days-skill]** ([GitHub Trending])
-  이 스킬은 Reddit, X, YouTube, Hacker News, Polymarket, 웹 전반을 훑어 최근 30일의 사실 기반 요약을 만듭니다. GitHub 트렌딩에서는 이 프로젝트가 별도 설치 명령까지 제공하는 실용 스킬로 보이며, 수집과 종합을 한 번에 묶는 워크플로우가 여전히 높은 수요를 가진다는 점이 드러납니다. 시사점은 사용자가 원하는 것이 대형 언어모델의 원샷 답변이 아니라, 근거가 붙은 조사 파이프라인이라는 사실입니다.
-  → 원문: [mvanhorn/last30days-skill](https://github.com/mvanhorn/last30days-skill)
+**[free-claude-code]** ([GitHub])
+free-claude-code는 Claude Code, Codex, Pi를 터미널·앱·IDE·폰에서 무료로 쓰게 하려는 래퍼 프로젝트입니다. 음성 지원까지 포함해 사용 표면을 넓히는 구조라, 단일 클라이언트 제품보다 접점 확대에 초점이 있습니다. 이런 저장소가 뜬다는 건 사용자가 모델보다 인터페이스와 접근성을 먼저 산다는 뜻입니다.
+→ 원문: [Alishahryar1/free-claude-code](https://github.com/Alishahryar1/free-claude-code)
 
-**[Show HN: Open-source EU AI Act compliance layer for AI agents (8/2026 deadline)]** ([Hacker News])
-  AIR Blackbox는 에이전트 코드에 3줄 정도로 붙는 compliance layer를 표방하며, HMAC-SHA256 감사 체인, ConsentGate, InjectionDetector, compliance scanner를 전면에 내세웁니다. 게시글은 LangChain, CrewAI, AutoGen, OpenAI Agents SDK, RAG 파이프라인까지 맵핑한다고 설명하고, EU AI Act의 9, 10, 11, 12, 14, 15조에 각각 연결합니다. 시사점은 규제가 결국 런타임 제품과 감사 로그 시장을 직접 만든다는 것입니다.
+**[Claude Code, とりあえずこれ読んどけばOKなまとめ（2026年版）]** ([Qiita])
+이 Qiita 글은 Claude Code를 처음 쓰는 사람을 위해 공식 문서와 현장 운영 사례를 묶어 정리합니다. 핵심 결론은 2026년 기준 네이티브 인스톨러가 권장되고, npm 설치는 Node 버전 편차와 `sudo npm install -g` 권한 문제 때문에 비권장이라는 점입니다. 일본 개발자 커뮤니티에서도 이제 설치 방식과 운영 습관이 생산성의 일부로 취급된다는 게 읽힙니다.
+→ 원문: [Claude Code, とりあえずこれ読んどけばOKなまとめ（2026年版）](https://qiita.com/fuyunoki/items/5818688d20225aa8088a)
 
-**[CLAUDE.md 設計パターン集──プロジェクト規模別に使い分ける7つのテンプレート]** ([Qiita])
-  이 글은 Claude Code의 출력 품질을 좌우하는 핵심이 모델보다 CLAUDE.md 설계라고 못 박고, 프로젝트 규모별로 쓸 수 있는 7개 템플릿을 제시합니다. Qiita에서 182개의 좋아요를 받았고, 댓글성 반응보다도 실제 팀 단위 운영 문서가 생산성에 더 큰 영향을 준다는 메시지를 분명히 합니다. 시사점은 프롬프트 실험이 아니라 저장소 수준의 운영 규약이 팀 생산성을 가른다는 점입니다.
+**[How do we make browser-based AI agents more reliable?]** ([Reddit])
+이 Reddit 스레드는 브라우저형 AI 에이전트의 고질적 실패 지점을 아주 또렷하게 적습니다. 세션은 로그인이나 CAPTCHA에서 깨지고, 사이트 구조 변경에 취약하며, 보안 보증이 규모를 키울수록 어려워진다는 세 가지가 반복해서 나온다는 겁니다. 에이전트 시장이 화려한 시연을 지나 실전으로 들어가면서, 안정성은 기능이 아니라 제품의 생존 조건이 되고 있습니다.
+→ 원문: [How do we make browser-based AI agents more reliable?](https://www.reddit.com/r/MachineLearning/comments/1n3g1p7/d_how_do_we_make_browserbased_ai_agents_more/)
 
-## 산업/정책/시장 뉴스
+## 산업 뉴스
 
-**[Best of Product Hunt: August 2, 2026]** ([Product Hunt])
-  오늘 Product Hunt 상위권에는 1위 `Zinley`와 4위 `Lumichats(Free)`가 동시에 올라왔습니다. Zinley는 전화, 이메일, 작업을 대신 처리하는 개인 AI 대표를 내세우고, Lumichats는 터미널을 싫어하는 사람을 위한 Claude Code 대안으로 포지셔닝돼 있어, 비서형 에이전트와 로컬 오프라인 AI가 동시에 수요를 얻고 있습니다. 시사점은 런칭 채널의 승부가 이제 "무엇을 더 똑똑하게 하느냐"보다 "어떤 역할을 안전하게 위임받느냐"로 바뀌고 있다는 것입니다.
+**[DesignArena creators raise $7.9 million to bring taste to AI models]** ([TechCrunch])
+DesignArena 창업자들은 모델의 taste를 끌어올리기 위해 790만 달러를 유치했습니다. 기사에 따르면 DesignArena는 전 세계 530만 명이 사용하고, 프런티어 랩이 쓰는 인간 평가 파이프라인 역할을 합니다. 평가 데이터와 사람의 취향을 돈으로 산다는 뜻이라, 앞으로 경쟁력은 생성 품질뿐 아니라 평가 루프의 질에도 달릴 가능성이 큽니다.
+→ 원문: [DesignArena creators raise $7.9 million to bring taste to AI models](https://techcrunch.com/2026/08/03/designarena-creators-raise-7-9-million-to-bring-taste-to-ai-models/)
 
-**[The lineage behind 69% of open models was never verified. Cisco ...]** ([VentureBeat])
-  VentureBeat는 공개 모델의 69%에서 계보가 검증되지 않았다고 지적하며, 8월 2일 EU 집행위가 GPAI 모델 제공자에 대한 집행 권한을 얻는다고 전합니다. 기사에서는 900개 모델을 대상으로 한 fingerprinting과 provenance 탐색이 핵심이라고 다루며, 공급망 추적이 이제 연구용 메타데이터가 아니라 조달과 리스크 관리의 재료가 됐음을 보여줍니다. 시사점은 모델 선정 시 성능표보다 출처, 학습 경로, 책임 소재를 먼저 봐야 한다는 것입니다.
+**[AWS is helping vibe-coding startup Superblocks, and the implications are big]** ([TechCrunch])
+AWS는 vibe-coding 스타트업 Superblocks를 고객의 프라이빗 클라우드에 임베드할 수 있게 했습니다. TechCrunch는 이것을 모델과 앱을 분리하는 다음 단계로 해석했고, 제품이 특정 모델에 묶이지 않게 되는 흐름을 강조합니다. 기업 고객은 이제 어떤 모델이냐보다 어디에 붙고 누가 운영하느냐를 더 먼저 묻기 시작할 겁니다.
+→ 원문: [AWS is helping vibe-coding startup Superblocks, and the implications are big](https://techcrunch.com/2026/08/03/aws-is-helping-vibe-coding-startup-superblocks-and-the-implications-are-big/)
 
-**[The enforcement gap: 88% of enterprises reported AI agent security ...]** ([VentureBeat])
-  VentureBeat의 설문 기사에 따르면 기업의 88%가 AI agent security의 `stage-three` 위협을 막지 못한다고 답했고, 기사 제목 자체가 그 간극을 전면에 내세웁니다. 같은 맥락에서 EU AI Act의 인간 감독 의무가 8월 2일로 접어들며, 운영팀이 누가 승인했고 무엇을 막았는지를 기록하지 않으면 감당이 어려워집니다. 시사점은 에이전트 보안 예산이 이제 모델 성능이 아니라 감사·소유권·런타임 통제 쪽으로 이동할 가능성이 높다는 점입니다.
+**[Congress' favorite AI tool? ChatGPT]** ([TechCrunch])
+이 기사에 따르면 하원 지출 기록에서 ChatGPT가 의회 내 유료 AI 사용을 사실상 장악하고 있습니다. 의원실은 메모 작성, 법안 요약, 민원 커뮤니케이션에 이 도구를 쓰고 있다고 TechCrunch가 적었습니다. 공공 부문조차 맞춤형 툴보다 범용 챗봇부터 도입한다는 점에서, 단기 승부는 여전히 범용성과 습관성에 있습니다.
+→ 원문: [Congress' favorite AI tool? ChatGPT](https://techcrunch.com/2026/08/03/congresss-favorite-ai-tool-chatgpt/)
 
 ## 미스 김 인사이트
 
 ### 오늘의 핵심 트렌드 3가지
 
-1. 오픈웨이트 경쟁은 크기보다 운영성으로 재편되고 있습니다. Kimi K3와 VibeVoice는 각각 장기 문맥, 다화자 음성이라는 실전 축에서 하드웨어와 파이프라인 효율을 함께 내세웁니다.
-2. 보안과 규제는 따로 움직이지 않습니다. EU AI Act, 에이전트 보안 정식화, 감사 체인 제품은 모두 같은 방향을 가리키며, 앞으로는 정책 문서보다 런타임 로그가 더 중요해질 수 있습니다.
-3. 개발자 생태계는 "답변하는 AI"보다 "조사하고 기록하는 AI"를 원하고 있습니다. Agent-Reach와 last30days-skill, Qiita의 CLAUDE.md 글은 모두 에이전트의 실용성을 검색·수집·문서화에 두고 있습니다.
+1. 메모리와 문맥 비용이 이제 모델 성능만큼 중요합니다. Zero-Mem은 메모리 연산의 제로 토큰화를, DeepSeek-V4-Flash-0731은 100만 토큰과 304B 파라미터를 동시에 내세우며, 장기 작업 에이전트의 비용 구조가 추론 단가와 메모리 오버헤드로 재편되고 있음을 보여 줍니다.
+2. 평가가 조용한 모트가 되고 있습니다. AgentBench는 에이전트 벤치마크의 기본기를, ExtractBench는 기업 문서 추출의 정확도·완성도·근거·비용을, DesignArena는 사람의 취향을 데이터로 바꾸는 방식을 밀고 있습니다.
+3. 배포와 접근성은 모델보다 빨리 퍼집니다. Product Hunt, AWS Superblocks, free-claude-code, Agent-Reach는 모두 “어떤 모델이냐”보다 “어디에 붙고 누가 쉽게 쓸 수 있느냐”가 확산의 핵심이라는 점을 드러냅니다.
 
 ### Jay에게 추천
 
-- **즉시 실행:** 저장소 하나를 골라 `CLAUDE.md`나 운영 규약에 `권한`, `출처`, `검증 결과`, `실패 복구` 4칸을 고정해 두십시오. 오늘 보인 흐름은 모델보다 저장소 수준의 규칙이 결과를 더 좌우한다는 쪽입니다.
-- **주목:** 에이전트용 감사 로그와 provenance 레이어를 먼저 붙이십시오. EU AI Act와 enterprise security 기사 둘 다, 다음 분기에는 "잘했다"보다 "누가 언제 무엇을 승인했는가"가 먼저 묻게 될 가능성을 보여줍니다.
-- **관망:** 초대형 오픈웨이트 모델은 흥미롭지만, 지금은 즉시 교체보다 평가 루프를 먼저 깔아두는 편이 낫습니다. 하드웨어와 운영비를 함께 계산하지 않으면, 큰 모델은 금세 큰 비용이 됩니다.
+- **즉시 실행:** 에이전트 파이프라인에 `문맥 예산`, `메모리 비용`, `실패 복구 횟수`를 먼저 기록하십시오. 오늘 흐름은 모델을 바꾸기 전에 오버헤드를 계량해야 한다는 쪽입니다.
+- **주목:** 평가 자산을 하나 고르십시오. ExtractBench류의 구조화 추출이나 DesignArena류의 인간 평가 신호를 붙이면, 제품이 “작동한다”에서 “선호된다”로 넘어가는 속도를 가늠할 수 있습니다.
+- **관망:** 대형 공개 모델의 발표는 계속 쏟아지겠지만, 실제 구매 결정은 추론 단가와 배포 경로가 더 좌우할 가능성이 큽니다. 벤치마크 점수만 보고 갈아타는 건 이제 가장 비싼 습관이 될 수 있습니다.
 
 ### 다음 주 전망
 
-다음 주에는 규제 대응 제품과 에이전트 보안 도구가 더 구체적인 실행 레이어로 내려올 가능성이 큽니다. 모델 발표는 여전히 이어지겠지만, 실제 구매 결정은 성능 점수보다 감사 가능성, 공급망 투명성, 그리고 장기 작업의 안정성으로 갈릴 공산이 높습니다. Jay에게 가장 유리한 포지션은 새로운 모델을 즉시 믿는 쪽이 아니라, 그 모델을 안전하게 통제하는 파이프라인을 먼저 장악하는 쪽입니다.
+다음 주에는 모델 발표보다 평가 도구와 배포 래퍼가 더 많이 눈에 띌 가능성이 큽니다. 기업과 개인 모두 “가장 똑똑한 모델”보다 “가장 싸고 안정적으로 붙는 모델”을 더 자주 고를 겁니다. Jay에게 유리한 포지션은 모델을 쫓는 쪽이 아니라, 메모리·평가·배포를 한 줄로 묶는 쪽입니다.

@@ -1,28 +1,30 @@
 ---
 title: "2026-08-06 기술 뉴스 랭킹 변동 요약"
-date: 2026-08-06T01:04:00+09:00
-draft: false
-tags: ["news-rank", "hackernews", "autopilot"]
+date: 2026-08-06
+categories: [news, ranking]
+tags: [geeknews, hackernews, tech-news]
 ---
 
-## Hacker News (news.ycombinator) — 상위 5위 전면 새 진입
+## GeekNews (news.hada.io) — 상위 5위
 
-조회 시각: 2026-08-06 01:04 KST
+| 순위 | 제목 | 점수 |
+|------|------|------|
+| 1 | [late.sh - 개발자를 위한 아늑한 터미널 클럽하우스](https://github.com/mpiorowski/late-sh) | 7 |
+| 2 | [Canva는 어떻게 수억 건의 사용자 세션을 빠르고 안전하게 유지할까?](https://www.canva.dev/blog/engineering/session-revocations-at-scale/) | 36 |
+| 3 | [모든 사용자 인터페이스를 구성하는 10가지 GUI 디자인 요소](https://www.uxtigers.com/post/gui-widgets) | 35 |
+| 4 | [Netflix가 AI 시대에 전문가보다 시스템 사고형 인재에 베팅하는 이유](https://www.youtube.com/watch?v=t0GiTyz4syY) | 25 |
+| 5 | [Discovery Loop — Jeff Dean 등이 만든 AI 연구 자동화](https://www.discoveryloop.com/) | 6 |
 
-| 순위 | 제목 | 점수 | 변동 |
-|------|------|------|------|
-| 1 | [Cloudflare OS: an open platform for agents, apps, and work](https://blog.cloudflare.com/cloudflare-os/) | 226 | 🆕 새 진입 |
-| 2 | [Qwen 3.0 Image Pro](https://www.qwencloud.com/models/qwen-image-3.0-pro) | 26 | 🆕 새 진입 |
-| 3 | [Intelligence Is Not the Main Bottleneck](https://www.writingruxandrabio.com/p/intelligence-is-not-the-main-bottleneck) | 60 | 🆕 새 진입 |
-| 4 | [Aristotle quotes on virtue, knowledge, and happiness](https://www.campion.edu.au/blog/top-25-aristotle-quotes-on-virtue-knowledge-and-happiness/) | 64 | 🆕 새 진입 |
-| 5 | [The Entropy of a Markov Chain](https://chillphysicsenjoyer.substack.com/p/the-entropy-of-a-markov-chain) | 37 | 🆕 새 진입 |
+## Hacker News (news.ycombinator.com) — 상위 5위
 
-### 핵심 요약
+| 순위 | 제목 | 점수 |
+|------|------|------|
+| 1 | [Nashville uses eminent domain to block data center near zoo](https://www.costar.com/article/970809918/nashville-council-approves-eminent-domain-action-to-halt-data-center-project) | 97 |
+| 2 | [Governments are making a dangerous bet on the AI boom](https://www.economist.com/leaders/2026/08/05/governments-are-making-a-dangerous-bet-on-the-ai-boom) | 14 |
+| 3 | [Discovery Loop](https://www.discoveryloop.com/) | 645 |
+| 4 | [Zed DeltaDB](https://zed.dev/deltadb) | 335 |
+| 5 | [Changes at Google DeepMind: Demis Hassabis from CEO to Chair, Jeff Dean departs](https://blog.google/company-news/inside-google/message-ceo/next-chapter-ai-momentum/) | 534 |
 
-- **1위 Cloudflare OS** (226점): 에이전트·앱·작업을 위한 개방형 플랫폼 발표. Cloudflare가 인프라를 넘어 OS 레벨로 영역 확장.
-- **2위 Qwen 3.0 Image Pro** (26점): 알리바바 Qwen의 새 이미지 생성 모델.
-- **3위 Intelligence Is Not the Main Bottleneck** (60점): 지능보다 실행·구조적 병목이 더 중요하다는 에세이.
-- **4위 Aristotle 명언집** (64점): 미덕·지식·행복에 관한 아리스토텔레스 인용 모음.
-- **5위 마르코프 체인의 엔트로피** (37점): 정보 이론과 확률 과정을 연결하는 물리학 에세이.
+---
 
-> 상위 5위 전부 새 진입으로 전면 교체되었습니다. 이번 회차는 news.ycombinator 소스만 제공되었습니다.
+> 조회 시각: 2026-08-06 13:07 KST · 소스별 상위 5위, 새 진입 항목 기준

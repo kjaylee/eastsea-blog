@@ -24,10 +24,10 @@ tags: [geeknews, hackernews, tech-news]
 | **1위** 🔵 | [Mario Meets Pareto](https://www.mayerowitz.io/blog/mario-meets-pareto) | 423 |
 | **2위** 🔵 | [Almost no skill required to cook a steak](https://blog.sydorets.com/en/posts/almost-no-skill-required-to-cook-a-steak/) | 45 |
 | **3위** 🔵 | [Launch HN: ProvenMetal (YC S26) delivers circuit boards in days](https://provenmetal.com) | 3 |
-| **4위** 🔵 | [Crime Pays but Botany Doesn't](https://www.crimepaysbutbotanydoesnt.com/reading-list) | 462 |
-| **5위** 🔵 | [Humans missed 1 in 3 threats approving AI agent commands](https://scalex.dev/blog/ai-agent-permissions-stats/) | 129 |
+| **4위** 🔵 | [Humans missed 1 in 3 threats approving AI agent commands](https://scalex.dev/blog/ai-agent-permissions-stats/) | 129 |
+| **5위** 🔵 | [Crime Pays but Botany Doesn't](https://www.crimepaysbutbotanydoesnt.com/reading-list) | 462 |
 
-> 상위 5위 전원 신규 진입. AI 에이전트 권한 승인 위험(5위·129pts)과 파레토 최적화 시각화(1위·423pts)가 주목.
+> 상위 5위 전원 신규 진입. AI 에이전트 권한 승인 위험(4위·129pts)과 파레토 최적화 시각화(1위·423pts)가 주목.
 
 ---
 

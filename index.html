@@ -10,8 +10,6 @@
 <meta name="keywords" content="무료 웹 도구, HTML5 게임, AI 브리핑, 기술 인사이트, 웹소설, free online tools, browser games, tech briefing, eastsea">
 <meta name="author" content="eastsea">
 <link rel="canonical" href="https://eastsea.monster/">
-<link rel="alternate" type="application/rss+xml" title="동해물과 백두산이 RSS" href="/rss.xml">
-<link rel="alternate" type="application/atom+xml" title="동해물과 백두산이 Atom" href="/atom.xml">
 
 <!-- Open Graph -->
 <meta property="og:type" content="website">
@@ -640,8 +638,8 @@ let currentFilter = 'all';
 let isLoading = false;
 let hasMore = true;
 let totalLoaded = 0;
-let totalAvailable = 0;
 const PAGE_SIZE = 24;
+const MAX_POSTS = 500; // safety cap
 let sentinelObserver = null;
 
 function sortPosts(posts) {
@@ -704,14 +702,15 @@ function attachCardClicks(container) {
 
 async function loadPage(page, normalizedFilter) {
   const params = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) });
-  if (normalizedFilter !== 'all') params.set('category', normalizedFilter);
   const response = await fetch(`${API_BASE}/api/posts?${params.toString()}`);
   if (!response.ok) throw new Error('Failed to load posts from API');
-  const { posts: apiPosts = [], total = 0 } = await response.json();
-  return {
-    posts: sortPosts(apiPosts.map(post => ({ ...post, category: detectCategory(post) }))),
-    total,
-  };
+  const { posts: apiPosts = [] } = await response.json();
+  const filtered = sortPosts(
+    apiPosts
+      .map(post => ({ ...post, category: detectCategory(post) }))
+      .filter(post => normalizedFilter === 'all' || post.category === normalizedFilter)
+  );
+  return filtered;
 }
 
 async function renderPosts(filter = 'all', append = false) {
@@ -724,7 +723,6 @@ async function renderPosts(filter = 'all', append = false) {
     currentFilter = filter;
     hasMore = true;
     totalLoaded = 0;
-    totalAvailable = 0;
     container.innerHTML = '<div class="loading">포스트 로딩 중</div>';
   }
 
@@ -735,8 +733,7 @@ async function renderPosts(filter = 'all', append = false) {
   if (sentinel) sentinel.style.display = 'block';
 
   try {
-    const { posts: newPosts, total } = await loadPage(currentPage, normalizedFilter);
-    totalAvailable = total;
+    const newPosts = await loadPage(currentPage, normalizedFilter);
 
     if (!append && newPosts.length === 0) {
       container.innerHTML = '<div class="empty-state">이 카테고리에 포스트가 없습니다.</div>';
@@ -759,7 +756,7 @@ async function renderPosts(filter = 'all', append = false) {
     totalLoaded += newPosts.length;
 
     // Determine if more pages exist
-    if (newPosts.length === 0 || totalLoaded >= totalAvailable) {
+    if (newPosts.length < PAGE_SIZE || totalLoaded >= MAX_POSTS) {
       hasMore = false;
     }
   } catch (error) {

@@ -34,8 +34,8 @@ draft: false
 | 1위 | [Tencent Releases and Open-Sources Tencent Hy4 Preview](https://www.tencent.com/tencent-releases-and-open-sources-tencent-hy4-preview) | 50.0 |
 | 2위 | [vLLM v0.28.0](https://github.com/vllm-project/vllm/releases/tag/v0.28.0) | 37.0 |
 | 3위 | [Tether: iMessage, SMS, etc. on Linux](https://zackbartel.com/blog/2026/08/tether/) | 217.0 |
-| 4위 | [Calibrate Before You Accelerate: Bias Toward Action in a](https://tucker.wales/writing/bias-towards-action/) | 54.0 |
-| 5위 | [Warp builds self-improving agents on Claude](https://claude.com/blog/how-warp-builds-self-improving-agents) | 44.0 |
+| 4위 | [Calibrate Before You Accelerate: Bias Toward Action in a New Role](https://tucker.wales/writing/bias-towards-action/) | 54.0 |
+| 5위 | [Warp builds self-improving agents on Claude](https://claude.com/blog/how-warp-builds-self-improving-agents-on-claude) | 44.0 |
 
 > 상위 5위가 전원 교체되었다. 점수-랭크 반전(1위 50 < 3위 217, 2위 37 < 4위 54)은 HN의 시간감쇠 랭킹(score/(age+2)^gravity)에서 최신 저득점 글이 오래된 고득점 글보다 위로 오르는 정상 동작이므로 스냅샷 점수를 그대로 보존했다. 제목·URL은 조회 시점 스냅샷 DB 실측으로 매핑했다.
 

@@ -15,7 +15,7 @@ draft: false
 |------|------|------|------|
 | 랭크 상승 | 7위 → 5위 | 7.0 → 5.0 | 2단위 상승 |
 
-> [가짜 고양이 표준 cats.txt가 드러낸 llms.txt와 GEO의 허술한 근거](https://markwilliamscook.substack.com/p/how-cats-txt-exposed-llms-txt)가 7위에서 5위로 올라섰다. 상위 4위(사기판 인터넷·VPS MMORPG·GeoLibre·LLM 메모리)는 그대로 유지되고 있다. (JS 렌더링 소스 — 변동 라벨 기반)
+> [가짜 고양이 표준 cats.txt가 드러낸 llms.txt와 GEO의 허술한 근거](https://markwilliamscook.substack.com/p/how-catstxt-showed-llmstxt-evidence)가 7위에서 5위로 올라섰다. 상위 4위(사기판 인터넷·VPS MMORPG·GeoLibre·LLM 메모리)는 그대로 유지되고 있다. (JS 렌더링 소스 — 변동 라벨 기반)
 
 > **각주**: news.hada.io는 점수가 랭크 번호를 그대로 미러링한다(5위=5.0). 위 표의 점수 변동(Δ-2.0)은 랭크 이동의 중복 표현이다.
 

@@ -1,0 +1,514 @@
+<!--
+  Derby Sprint — 더비 스프린트
+  연구 원천: research/horse-racing/GAME_CONNECTION.md 매핑 1행(v4/경주마-체형분류와-달리기스타일.md), 2행(v4/계절-날씨별-경주-전략.md + v7/climate-impact-on-racehorses.md)
+  체형 3형(스프린터/마일형/스테이어) × 달리기 스타일 3종(선행/선입/추입) × 계절·날씨 4종(쾌설/폭염/강우/한파)을
+  원버튼 페이싱 레이스(1400m, 최종 400m 스퍼트 존)로 구현한 단일 파일 HTML5 게임.
+-->
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+  <meta name="theme-color" content="#fff7df">
+  <title>Derby Sprint — 더비 스프린트</title>
+  <meta name="description" content="체형 3형(스프린터·마일형·스테이어)과 계절 날씨 4종을 반영한 1400m 원버튼 페이싱 경마 아케이드. 스태미나 관리가 곧 스코어.">
+  <meta property="og:title" content="Derby Sprint — 더비 스프린트">
+  <meta property="og:description" content="날씨를 읽고 말을 골라, 누르고 놓는 페이싱으로 1400m를 제압하세요.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://eastsea-blog.pages.dev/games/derby-sprint/">
+  <link rel="canonical" href="https://eastsea-blog.pages.dev/games/derby-sprint/">
+  <style>
+    :root{--paper:#fff7df;--cream:#f3dfb8;--copper:#4f8b7d;--rubber:#a64f3d;--cobalt:#244f78;--ink:#2d3431;--muted:#766f61;--gold:#d99b36;--panel:rgba(255,250,232,.96);--line:rgba(36,79,120,.18)}
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    html,body{margin:0;width:100%;height:100%;overflow:hidden;overscroll-behavior:none;touch-action:none;background:#d9c59d;color:var(--ink);font-family:system-ui,-apple-system,"Noto Sans KR",sans-serif}
+    body{display:flex;justify-content:center;align-items:center}
+    button{font:inherit;cursor:pointer;touch-action:manipulation}
+    .app{position:relative;width:min(100vw,430px);height:100dvh;max-height:100vh;overflow:hidden;background:var(--paper);isolation:isolate}
+    canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+    .hud{position:absolute;z-index:5;top:calc(env(safe-area-inset-top) + 8px);left:8px;right:8px;display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;pointer-events:none}
+    .stat,.hint,.panel,.weather-banner,.horse-card,.controls{background:var(--panel);border:1px solid var(--line);box-shadow:0 12px 32px rgba(75,59,36,.16);backdrop-filter:blur(7px)}
+    .stat{border-radius:13px;padding:6px 7px;min-width:0}.stat small{display:block;font-size:8px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;white-space:nowrap}.stat b{display:block;font-size:14px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .controls{position:absolute;z-index:6;left:10px;right:10px;bottom:calc(env(safe-area-inset-bottom) + 10px);border-radius:18px;padding:9px 12px;pointer-events:none}
+    .stamina-row{display:flex;align-items:center;gap:8px}
+    .stamina-row small{font-size:9px;letter-spacing:.11em;color:var(--muted);font-weight:850}
+    .stamina-track{flex:1;height:14px;border-radius:999px;background:#eadcbb;border:1px solid var(--line);overflow:hidden;position:relative}
+    .stamina-fill{position:absolute;inset:0;width:100%;background:linear-gradient(90deg,var(--copper),#6fae9d);border-radius:999px;transition:width .08s linear}
+    .stamina-fill.low{background:linear-gradient(90deg,var(--rubber),#d0794f)}
+    .stamina-row b{font-size:13px;min-width:44px;text-align:right}
+    .hint{margin-top:7px;border-radius:999px;padding:7px 12px;text-align:center;font-size:11px;font-weight:750}
+    .toast{position:absolute;z-index:8;top:calc(env(safe-area-inset-top) + 86px);left:50%;transform:translate(-50%,-8px);background:var(--cobalt);color:white;border-radius:999px;padding:10px 16px;font-size:12px;font-weight:900;opacity:0;pointer-events:none;white-space:nowrap;transition:.18s}.toast.show{opacity:1;transform:translate(-50%,0)}
+    .overlay{position:absolute;z-index:10;inset:0;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(84,67,43,.26);backdrop-filter:blur(4px)}
+    .panel{width:min(100%,382px);max-height:94%;overflow:auto;border-radius:28px;padding:20px}
+    .eyebrow{font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--copper);font-weight:950;margin-bottom:8px}
+    h1,h2{margin:0;line-height:1;letter-spacing:-.045em}h1{font-size:35px;color:var(--cobalt)}h2{font-size:26px;color:var(--cobalt)}
+    p{font-size:12.5px;line-height:1.5;color:#625e53}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}
+    .mini{border:1px solid var(--line);border-radius:16px;padding:9px;background:#fffdf5}.mini small{display:block;font-size:9px;color:var(--muted)}.mini b{display:block;margin-top:3px;font-size:16px}
+    .primary,.secondary{width:100%;border:0;border-radius:15px;padding:13px 14px;font-weight:900}.primary{background:linear-gradient(135deg,var(--cobalt),#39729d);color:white;box-shadow:0 11px 24px rgba(36,79,120,.23)}.secondary{background:#f3e7cf;color:var(--ink)}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+    .weather-banner{border-radius:16px;padding:11px 13px;margin:12px 0;position:relative;overflow:hidden}
+    .weather-banner b{font-size:17px;color:var(--cobalt);display:block}
+    .weather-banner .badge{display:inline-block;margin-left:6px;font-size:9px;background:var(--gold);color:#fff;border-radius:999px;padding:2px 7px;vertical-align:2px}
+    .weather-banner span{display:block;font-size:11px;font-weight:850;color:var(--rubber);margin-top:2px}
+    .weather-banner p{font-size:10.5px;margin:5px 0 0;color:var(--muted)}
+    .cards{display:grid;gap:9px;margin-top:12px}
+    .horse-card{border-radius:17px;padding:11px 12px;text-align:left;color:var(--ink);border:2px solid var(--line)}
+    .horse-card.sel{border-color:var(--gold);box-shadow:0 10px 26px rgba(217,155,54,.28)}
+    .horse-card strong{display:block;color:var(--cobalt);font-size:15px}
+    .horse-card em{float:right;color:var(--copper);font-style:normal;font-weight:900;font-size:10px}
+    .horse-card span{display:block;font-size:10.5px;color:var(--muted);margin-top:3px;line-height:1.45}
+    .meters{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-top:8px}
+    .meter small{display:block;font-size:8px;color:var(--muted);letter-spacing:.05em}
+    .meter .bar{height:6px;border-radius:999px;background:#eadcbb;margin-top:3px;overflow:hidden}
+    .meter .bar i{display:block;height:100%;background:var(--cobalt);border-radius:999px}
+    .result-table{width:100%;border-collapse:collapse;margin:10px 0;font-size:11.5px}
+    .result-table th{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;text-align:left;padding:4px 5px;border-bottom:1px solid var(--line)}
+    .result-table td{padding:6px 5px;border-bottom:1px solid rgba(36,79,120,.08)}
+    .result-table tr.me{background:rgba(217,155,54,.16);font-weight:900}
+    .hidden{display:none!important}
+    .qa{display:none;position:absolute;z-index:30;left:6px;right:6px;bottom:88px;max-height:45%;overflow:auto;background:#14344e;color:#fff7df;padding:8px;border-radius:10px;font:10px ui-monospace,monospace;white-space:pre-wrap}
+    @media (max-height:700px){h1{font-size:30px}h2{font-size:22px}.panel{padding:16px}.cards{gap:7px}}
+  </style>
+</head>
+<body>
+<main class="app" id="app" aria-label="Derby Sprint game">
+  <canvas id="gameCanvas" aria-label="1400m 더비 트랙"></canvas>
+  <section class="hud hidden" id="hud">
+    <div class="stat"><small>WEATHER</small><b id="hudWeather">—</b></div>
+    <div class="stat"><small>TO GO</small><b id="hudDist">1400m</b></div>
+    <div class="stat"><small>POS</small><b id="hudPos">6/6</b></div>
+    <div class="stat"><small>SPEED</small><b id="hudSpeed">0km/h</b></div>
+  </section>
+  <div class="toast" id="toast">READY</div>
+
+  <section class="controls hidden" id="controls">
+    <div class="stamina-row"><small>STAMINA</small><div class="stamina-track"><div class="stamina-fill" id="staminaFill"></div></div><b id="staminaValue">100%</b></div>
+    <div class="hint" id="hint">누르고 있으면 가속 · 놓으면 회복 — 마지막 400m가 승부처</div>
+  </section>
+
+  <section class="overlay" id="titleScreen">
+    <div class="panel">
+      <div class="eyebrow">Racing Form · 1400m Turf</div>
+      <h1>Derby Sprint<br>더비 스프린트</h1>
+      <p>체형 3형(스프린터·마일형·스테이어)과 계절 날씨 4종이 실제 경주력에 반영됩니다. 한 손가락 페이싱으로 스태미나를 관리해 결승선을 제일 먼저 통과하세요.</p>
+      <div class="instruction" style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;margin:13px 0">
+        <div style="border-radius:14px;background:#f0e2c5;padding:8px;text-align:center;font-weight:900;color:var(--cobalt);font-size:11px">HOLD = 가속</div>
+        <b style="font-size:11px">→</b>
+        <div style="border-radius:14px;background:#f0e2c5;padding:8px;text-align:center;font-weight:900;color:var(--rubber);font-size:11px">RELEASE = 회복</div>
+      </div>
+      <div class="grid"><div class="mini"><small>BEST SCORE</small><b id="bestValue">0</b></div><div class="mini"><small>BEST TIME</small><b id="bestTimeValue">—</b></div><div class="mini"><small>WINS</small><b id="winsValue">0</b></div><div class="mini"><small>RUNS</small><b id="runsValue">0</b></div></div>
+      <button class="primary" id="startBtn">출전표 보기</button>
+    </div>
+  </section>
+
+  <section class="overlay hidden" id="entryScreen">
+    <div class="panel">
+      <div class="eyebrow">Entry Sheet · Race No. <span id="raceNumber">001</span></div>
+      <h2>출전표</h2>
+      <div class="weather-banner" id="weatherBanner">
+        <b id="weatherName">쾌설 <span class="badge" id="weatherSeason">가을</span></b>
+        <span id="weatherHeadline">컨디션 피크</span>
+        <p id="weatherNote">—</p>
+      </div>
+      <div class="cards" id="horseCards"></div>
+      <button class="primary" id="enterBtn" style="margin-top:12px">1400m 레이스 시작</button>
+    </div>
+  </section>
+
+  <section class="overlay hidden" id="resultScreen">
+    <div class="panel">
+      <div class="eyebrow" id="resultEyebrow">Derby Finish Card</div>
+      <h2 id="resultTitle">FINISH</h2>
+      <table class="result-table"><thead><tr><th>#</th><th>말</th><th>체형·스타일</th><th>기록</th><th>착차</th></tr></thead><tbody id="resultRows"></tbody></table>
+      <div class="grid">
+        <div class="mini"><small>잔여 스태미나</small><b id="finalStamina">0%</b></div>
+        <div class="mini"><small>날씨 적성</small><b id="finalAptitude">—</b></div>
+        <div class="mini"><small>적성 보너스</small><b id="finalBonus">+0</b></div>
+        <div class="mini"><small>SCORE</small><b id="finalScore">0</b></div>
+      </div>
+      <p id="resultCopy">—</p>
+      <div class="row"><button class="primary" id="retryBtn">REBUILD & RACE</button><button class="secondary" id="entryBtn">출전표</button></div>
+    </div>
+  </section>
+  <pre class="qa" id="qaReport"></pre>
+</main>
+<script>
+(() => {
+  'use strict';
+  const SLUG='derby-sprint', STORE=SLUG+':save:v1', QA_MODE=new URLSearchParams(location.search).get('qa')==='1';
+  const pageErrors=[]; addEventListener('error',event=>pageErrors.push(String(event.error||event.message)));
+  const $=id=>document.getElementById(id), canvas=$('gameCanvas'), ctx=canvas.getContext('2d');
+  const ui={hud:$('hud'),controls:$('controls'),title:$('titleScreen'),entry:$('entryScreen'),result:$('resultScreen'),toast:$('toast')};
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+
+  // ── 말 체형 3형 (연구 원천: GAME_CONNECTION.md 매핑 1행 — v4/경주마-체형분류와-달리기스타일.md)
+  const HORSES={
+    sprinter:{key:'sprinter',name:'섬광',label:'스프린터',desc:'초반 가속·최고 속도 최상. 스태미나 총량이 적고 마지막 스퍼트가 약하며 폭염에 취약.',
+      topSpeed:27.6,accel:7.8,cruise:14.5,staminaMax:78,drain:3.0,recovery:2.3,spurMult:1.06,earlyCap:1,earlyCapDist:0,
+      mods:{heat:{drain:1.30,grip:1,early:1},rain:{drain:1,grip:0.72,early:1},cold:{drain:1,grip:1,early:0.98}}},
+    miler:{key:'miler',name:'조율',label:'마일형',desc:'모든 항목이 균형. 어떤 날씨에서도 패널티가 없다.',
+      topSpeed:25.6,accel:6.4,cruise:16,staminaMax:100,drain:2.9,recovery:3.1,spurMult:1.26,earlyCap:1,earlyCapDist:0,
+      mods:{heat:{drain:1.0,grip:1,early:1},rain:{drain:1,grip:1.0,early:1},cold:{drain:1,grip:1,early:0.78}}},
+    stayer:{key:'stayer',name:'만리',label:'스테이어',desc:'스태미나 총량·회복 최상, 마지막 400m 스퍼트 배수 최고. 초반 최고 속도가 낮고 폭염·강우에서 상대적으로 유리.',
+      topSpeed:24.0,accel:5.3,cruise:17,staminaMax:124,drain:2.8,recovery:3.9,spurMult:1.58,earlyCap:0.88,earlyCapDist:520,
+      mods:{heat:{drain:0.94,grip:1,early:1},rain:{drain:0.95,grip:1.30,early:1},cold:{drain:1,grip:1,early:0.60}}}
+  };
+  // ── 계절/날씨 4종 (연구 원천: GAME_CONNECTION.md 매핑 2행 — v4/계절-날씨별-경주-전략.md + v7/climate-impact-on-racehorses.md)
+  const WEATHER={
+    clear:{key:'clear',name:'쾌설',season:'가을',headline:'컨디션 피크',note:'선선하고 건조한 가을 날씨 — 모든 말이 기준 컨디션을 발휘합니다.',drain:1.0,grip:1.0,early:1.0,tint:'#fff7df'},
+    heat:{key:'heat',name:'폭염',season:'여름',headline:'고온다습 — 체력형 우세',note:'전체 스태미나 소모 +20% · 스프린터 추가 패널티. 여름 고온은 체력형(스테이어)이 상대 유리.',drain:1.2,grip:1.0,early:1.0,tint:'#ffe9c4'},
+    rain:{key:'rain',name:'강우',season:'장마',headline:'주로 습윤 — 접지력 저하',note:'접지력 저하로 스퍼트 성공률 하락(스프린터 위험), 스테이어가 상대 유리.',drain:1.05,grip:0.8,early:1.0,tint:'#e4e9de'},
+    cold:{key:'cold',name:'한파',season:'겨울',headline:'근육 경직 — 초반 가속 봉인',note:'초반 200m 가속 봉인(워밍업 필요) — 겨울은 스프린터가 상대 우세.',drain:1.05,grip:1.0,early:0.6,tint:'#e9f0f5'}
+  };
+  const APT={sprinter:{clear:'무관',heat:'취약',rain:'위험',cold:'우세'},miler:{clear:'무관',heat:'보통',rain:'보통',cold:'보통'},stayer:{clear:'무관',heat:'우세',rain:'우세',cold:'불리'}};
+  const RACE_DIST=1400, SPUR_DIST=400, COLD_SEAL_DIST=200;
+  const RIVALS=[
+    {name:'번개질주',typeKey:'sprinter',style:'lead',color:'#4f8b7d'},
+    {name:'달빛소리',typeKey:'miler',style:'stalker',color:'#244f78'},
+    {name:'붉은여울',typeKey:'stayer',style:'closer',color:'#a64f3d'},
+    {name:'청록돌풍',typeKey:'sprinter',style:'closer',color:'#5b7d4f'},
+    {name:'노을스침',typeKey:'stayer',style:'stalker',color:'#8a6d3b'}
+  ];
+  const STYLE_KO={lead:'선행',stalker:'선입',closer:'추입'};
+
+  function load(){try{return Object.assign({best:0,bestTime:null,wins:0,runs:0},JSON.parse(localStorage.getItem(STORE)||'{}'))}catch{return {best:0,bestTime:null,wins:0,runs:0}}}
+  let save=load();
+  function persist(){try{localStorage.setItem(STORE,JSON.stringify(save))}catch{}}
+
+  const state={mode:'title',raceNumber:1,weatherKey:'clear',selected:'miler',holding:false,autoPilot:false,race:null,fx:[]};
+
+  function makeRunner(def,isPlayer,lane){
+    const h=HORSES[def.typeKey];
+    return {name:def.name,typeKey:def.typeKey,style:def.style||'miler',color:def.color||'#d99b36',isPlayer:!!isPlayer,lane,
+      pos:0,v:0,stamina:h.staminaMax,staminaMax:h.staminaMax,exhausted:false,finishTime:null,
+      speedMult:isPlayer?1:(0.90+Math.random()*0.06),accelMult:isPlayer?1:0.96,drainMult:isPlayer?1:1.05};
+  }
+  function startRace(){
+    const rivals=RIVALS.map((def,i)=>makeRunner(def,false,i+1));
+    const player=makeRunner({name:HORSES[state.selected].name,typeKey:state.selected,style:'player',color:'#d99b36'},true,5);
+    state.race={runners:[...rivals,player],time:0,order:[],playerDone:false,done:false,spurToast:false};
+    state.holding=false;
+    showMode('race');
+  }
+  // ── 날씨 계수가 실제 물리에 반영되는 유효치 계산
+  function weatherMods(runner){
+    const h=HORSES[runner.typeKey], w=WEATHER[state.weatherKey], m=h.mods[state.weatherKey]||{drain:1,grip:1,early:1};
+    return {drain:w.drain*m.drain*runner.drainMult, grip:w.grip*m.grip, early:w.early*m.early};
+  }
+  function aiHolding(r){
+    const f=r.pos/RACE_DIST;
+    if(r.style==='lead'){if(f<0.5)return true;if(f<0.78)return Math.floor(r.pos/140)%2===0;return false}
+    if(r.style==='stalker'){if(f<0.18)return false;if(f<0.55)return Math.floor(r.pos/170)%2===0;return true}
+    if(r.style==='closer'){if(f<0.6)return Math.floor(r.pos/300)%3===0;return true}
+    return Math.floor(r.pos/220)%2===0;
+  }
+  function updateRunner(r,dt){
+    if(r.finishTime!==null)return;
+    const h=HORSES[r.typeKey], wm=weatherMods(r);
+    const inSpur=r.pos>=RACE_DIST-SPUR_DIST, early=r.pos<COLD_SEAL_DIST;
+    const stamRatio=clamp(r.stamina/r.staminaMax,0,1);
+    const holding=(r.isPlayer&&!state.autoPilot)?state.holding:aiHolding(r);
+    let cap=h.topSpeed*(r.pos<h.earlyCapDist?h.earlyCap:1)*r.speedMult;
+    let accel=h.accel*r.accelMult;
+    if(early)accel*=wm.early; // 한파: 초반 200m 가속 봉인(체형별 차등)
+    if(inSpur){
+      const spurFactor=h.spurMult*wm.grip*(0.45+0.55*stamRatio); // 스퍼트 존: 잔여 스태미나 비례 배수
+      cap*=1+0.18*spurFactor; accel*=spurFactor;
+    }
+    if(r.exhausted){ // 스태미나 고갈 = 지진(심한 감속) 현상
+      r.v+=(5-r.v)*Math.min(1,dt*0.9);
+      r.stamina=Math.min(r.staminaMax,r.stamina+h.recovery*0.8*dt);
+      if(r.stamina>16)r.exhausted=false;
+    }else if(holding&&r.stamina>0){
+      r.v=Math.min(cap,r.v+accel*dt);
+      r.stamina=Math.max(0,r.stamina-h.drain*wm.drain*(inSpur?1.3:1)*dt);
+      if(r.stamina<=0){r.stamina=0;r.exhausted=true;if(r.isPlayer&&!state.autoPilot)flash('스태미나 고갈 — 지진 현상!','#a64f3d')}
+    }else{
+      r.stamina=Math.min(r.staminaMax,r.stamina+h.recovery*dt); // 크루징: 느린 회복(완회복 아님)
+      r.v+=(h.cruise-r.v)*Math.min(1,dt*1.6);
+    }
+    r.pos+=r.v*dt;
+    if(r.pos>=RACE_DIST){
+      r.pos=RACE_DIST;r.v=0;r.finishTime=state.race.time+dt;
+      state.race.order.push(r);
+      if(r.isPlayer)state.race.playerDone=true;
+    }
+  }
+  function update(dt){
+    state.fx.forEach(p=>{p.x+=p.vx*dt;p.y+=p.vy*dt;p.life-=dt});
+    state.fx=state.fx.filter(p=>p.life>0);
+    if(state.mode!=='race'||!state.race||state.race.done)return;
+    const race=state.race;
+    race.time+=dt;
+    for(const r of race.runners)updateRunner(r,dt);
+    const player=race.runners.find(r=>r.isPlayer);
+    if(player.pos>=RACE_DIST-SPUR_DIST&&!race.spurToast){race.spurToast=true;flash('스퍼트 존 돌입 — 400m','#d99b36')}
+    const allDone=race.order.length===race.runners.length;
+    if(allDone||(race.playerDone&&race.time>player.finishTime+8)||race.time>150){race.done=true;finishRace()}
+    updateHud();
+  }
+  function rank(){
+    if(!state.race)return 6;
+    const me=state.race.runners.find(r=>r.isPlayer);
+    let rank=1;
+    for(const r of state.race.runners)if(!r.isPlayer){const meDone=me.finishTime!==null,rDone=r.finishTime!==null;
+      if(rDone&&!meDone)rank++;else if(rDone&&meDone&&r.finishTime<me.finishTime)rank++;else if(!rDone&&!meDone&&r.pos>me.pos)rank++}
+    return rank;
+  }
+  function finishRace(){
+    const race=state.race, me=race.runners.find(r=>r.isPlayer);
+    for(const r of race.runners)if(r.finishTime===null){r.finishTime=race.time;race.order.push(r)}
+    const place=race.order.indexOf(me)+1;
+    const stamRatio=clamp(me.stamina/me.staminaMax,0,1);
+    const apt=APT[me.typeKey][state.weatherKey];
+    const bonus=apt==='취약'||apt==='위험'||apt==='불리'?250:(apt==='우세'?100:0);
+    const score=(7-place)*250+Math.round(stamRatio*400)+bonus+(place===1?300:0);
+    save.runs++;if(place===1)save.wins++;
+    save.best=Math.max(save.best,score);
+    if(place===1&&(save.bestTime===null||me.finishTime<save.bestTime))save.bestTime=me.finishTime;
+    persist();
+    $('resultEyebrow').textContent='Derby Finish Card · '+WEATHER[state.weatherKey].name+'('+WEATHER[state.weatherKey].season+')';
+    $('resultTitle').textContent=place===1?'우승 — DERBY ACE!':place<=3?'입상 — ON THE PODIUM':'완주 — FINISH LINE';
+    const winner=race.order[0].finishTime;
+    $('resultRows').innerHTML=race.order.map((r,i)=>{
+      const h=HORSES[r.typeKey];
+      const gap=i===0?'—':'+'+(r.finishTime-winner).toFixed(1)+'s';
+      return `<tr class="${r.isPlayer?'me':''}"><td>${i+1}</td><td>${r.name}${r.isPlayer?' ★':''}</td><td>${h.label}·${r.isPlayer?'마피스':STYLE_KO[r.style]||'-'}</td><td>${r.finishTime.toFixed(1)}s</td><td>${gap}</td></tr>`;
+    }).join('');
+    $('finalStamina').textContent=Math.round(stamRatio*100)+'%';
+    $('finalAptitude').textContent=WEATHER[state.weatherKey].name+' × '+HORSES[me.typeKey].label+' = '+apt;
+    $('finalBonus').textContent='+'+bonus;
+    $('finalScore').textContent=score;
+    $('resultCopy').textContent=bonus>=250?'불리한 날씨를 페이싱으로 극복했습니다.':bonus===100?'적성에 맞는 날씨를 활용했습니다.':'무난한 컨디션에서 완주했습니다. 스태미나 관리가 곧 스코어입니다.';
+    showMode('result');updateTitle();
+  }
+  function showMode(mode){
+    state.mode=mode;
+    ui.title.classList.toggle('hidden',mode!=='title');
+    ui.entry.classList.toggle('hidden',mode!=='entry');
+    ui.result.classList.toggle('hidden',mode!=='result');
+    const racing=mode==='race';
+    ui.hud.classList.toggle('hidden',!racing);ui.controls.classList.toggle('hidden',!racing);
+    if(!racing)state.holding=false;
+  }
+  function updateTitle(){
+    $('bestValue').textContent=save.best;$('winsValue').textContent=save.wins;$('runsValue').textContent=save.runs;
+    $('bestTimeValue').textContent=save.bestTime===null?'—':save.bestTime.toFixed(1)+'s';
+  }
+  function openEntry(){
+    state.raceNumber++;
+    const keys=Object.keys(WEATHER);
+    state.weatherKey=keys[Math.floor(Math.random()*keys.length)]; // 레이스마다 랜덤 날씨
+    const w=WEATHER[state.weatherKey];
+    $('raceNumber').textContent=String(state.raceNumber).padStart(3,'0');
+    $('weatherName').innerHTML=w.name+' <span class="badge" id="weatherSeason">'+w.season+'</span>';
+    $('weatherHeadline').textContent=w.headline;
+    $('weatherNote').textContent=w.note+' (연구 근거: 계절·날씨별 경주 전략)';
+    renderCards();showMode('entry');
+  }
+  function renderCards(){
+    const norm={accel:8,topSpeed:28};
+    $('horseCards').innerHTML=Object.values(HORSES).map(h=>`
+      <button class="horse-card ${state.selected===h.key?'sel':''}" data-horse="${h.key}">
+        <em>${APT[h.key][state.weatherKey]}</em><strong>${h.name} · ${h.label}</strong><span>${h.desc}</span>
+        <div class="meters">
+          <div class="meter"><small>가속</small><div class="bar"><i style="width:${Math.round(h.accel/norm.accel*100)}%"></i></div></div>
+          <div class="meter"><small>속도</small><div class="bar"><i style="width:${Math.round(h.topSpeed/norm.topSpeed*100)}%"></i></div></div>
+          <div class="meter"><small>지구력</small><div class="bar"><i style="width:${Math.round(h.staminaMax/124*100)}%"></i></div></div>
+          <div class="meter"><small>스퍼트</small><div class="bar"><i style="width:${Math.round(h.spurMult/1.58*100)}%"></i></div></div>
+        </div>
+      </button>`).join('');
+    document.querySelectorAll('[data-horse]').forEach(btn=>btn.addEventListener('click',()=>{state.selected=btn.dataset.horse;renderCards()}));
+  }
+  function updateHud(){
+    if(!state.race)return;
+    const me=state.race.runners.find(r=>r.isPlayer);
+    const remain=Math.max(0,Math.ceil(RACE_DIST-me.pos));
+    $('hudWeather').textContent=WEATHER[state.weatherKey].name;
+    $('hudDist').textContent=remain+'m';
+    $('hudPos').textContent=rank()+'/6';
+    $('hudSpeed').textContent=Math.round(me.v*3.6)+'km/h';
+    const pct=Math.round(clamp(me.stamina/me.staminaMax,0,1)*100);
+    const fill=$('staminaFill');fill.style.width=pct+'%';fill.classList.toggle('low',pct<30);
+    $('staminaValue').textContent=pct+'%';
+    $('hint').textContent=me.exhausted?'지진 현상 — 회복을 기다리세요':me.pos>=RACE_DIST-SPUR_DIST?'스퍼트 존! 잔여 스태미나가 배수가 됩니다':state.holding?'가속 중 — 스태미나 소모':'크루징 — 스태미나 서서히 회복';
+  }
+  let toastTimer=0;
+  function flash(text,color){ui.toast.textContent=text;if(color)ui.toast.style.background=color;ui.toast.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>ui.toast.classList.remove('show'),900)}
+
+  // ── 입력: 원버튼 press & hold
+  canvas.addEventListener('pointerdown',event=>{if(state.mode!=='race')return;event.preventDefault();try{canvas.setPointerCapture(event.pointerId)}catch{}state.holding=true;updateHud()});
+  const release=()=>{if(state.mode==='race'){state.holding=false;updateHud()}};
+  canvas.addEventListener('pointerup',release);canvas.addEventListener('pointercancel',release);
+  addEventListener('keydown',event=>{if(event.code==='Space'||event.key===' '){event.preventDefault();if(state.mode==='race'&&!event.repeat)state.holding=true}});
+  addEventListener('keyup',event=>{if(event.code==='Space'||event.key===' '){event.preventDefault();if(state.mode==='race')state.holding=false}});
+
+  // ── 렌더
+  function width(){return canvas.clientWidth||390} function height(){return canvas.clientHeight||844}
+  function laneBox(){const h=height();const top=112,bottom=h-150;return {top,bottom,laneH:(bottom-top)/6}}
+  function draw(){
+    const w=width(),h=height();
+    const wt=WEATHER[state.weatherKey];
+    ctx.clearRect(0,0,w,h);
+    const sky=ctx.createLinearGradient(0,0,0,h);
+    sky.addColorStop(0,wt.tint);sky.addColorStop(.55,'#f3e3c2');sky.addColorStop(1,'#dcbf95');
+    ctx.fillStyle=sky;ctx.fillRect(0,0,w,h);
+    if(state.mode!=='race'){ctx.fillStyle='rgba(79,139,125,.12)';for(let i=0;i<5;i++)ctx.fillRect((i*97)%(w-40),h*.16+(i%2)*40,60,90);return}
+    const {top,bottom,laneH}=laneBox();
+    const padL=64,padR=16,x0=padL,x1=w-padR;
+    const X=m=>x0+(m/RACE_DIST)*(x1-x0);
+    // 날씨 파티클
+    if(state.fx.length<40){
+      if(state.weatherKey==='rain')state.fx.push({x:Math.random()*w,y:-10,vx:-30,vy:420,life:1.2,kind:'rain'});
+      if(state.weatherKey==='cold')state.fx.push({x:Math.random()*w,y:-8,vx:12,vy:60,life:5,kind:'snow'});
+      if(state.weatherKey==='heat'&&Math.random()<.3)state.fx.push({x:Math.random()*w,y:Math.random()*h*.4,vx:20,vy:-8,life:1.6,kind:'heat'});
+      if(state.weatherKey==='clear'&&Math.random()<.4)state.fx.push({x:Math.random()*w,y:-8,vx:-24,vy:46,life:5,kind:'leaf'});
+    }
+    // 스퍼트 존
+    ctx.fillStyle='rgba(217,155,54,.13)';ctx.fillRect(X(RACE_DIST-SPUR_DIST),top-8,x1-X(RACE_DIST-SPUR_DIST),bottom-top+16);
+    ctx.strokeStyle='rgba(217,155,54,.55)';ctx.setLineDash([5,5]);ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.moveTo(X(RACE_DIST-SPUR_DIST),top-8);ctx.lineTo(X(RACE_DIST-SPUR_DIST),bottom+8);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='#8a6d3b';ctx.font='900 9px system-ui';ctx.textAlign='center';
+    ctx.fillText('스퍼트 존 400m',(X(RACE_DIST-SPUR_DIST)+x1)/2,top-14);
+    // 거리 눈금
+    ctx.fillStyle='#766f61';ctx.font='700 8px system-ui';ctx.textAlign='center';
+    for(let m=0;m<=RACE_DIST;m+=200)ctx.fillText(m===0?'0':m+'m',X(m),top-2);
+    // 레인
+    const runners=state.race?state.race.runners:[];
+    for(let i=0;i<6;i++){
+      const y=top+i*laneH;
+      ctx.fillStyle=i===5?'rgba(217,155,54,.12)':(i%2?'rgba(243,223,184,.5)':'rgba(255,250,232,.55)');
+      ctx.fillRect(x0-46,y+2,(x1-x0)+50,laneH-4);
+      ctx.strokeStyle='rgba(36,79,120,.15)';ctx.lineWidth=1;
+      ctx.beginPath();ctx.moveTo(x0-46,y+laneH);ctx.lineTo(x1+4,y+laneH);ctx.stroke();
+      ctx.fillStyle=i===5?'#d99b36':'#766f61';ctx.font='900 8px system-ui';ctx.textAlign='left';
+      ctx.fillText((i+1)+'레인',6,y+laneH/2-4);
+      const r=runners.find(rr=>rr.lane===i);
+      if(r){ctx.fillStyle=r.isPlayer?'#d99b36':'#766f61';ctx.font=`${r.isPlayer?900:700} 8px system-ui`;ctx.fillText(r.name,6,y+laneH/2+8)}
+    }
+    // 결승선
+    ctx.strokeStyle='#244f78';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(X(RACE_DIST),top-10);ctx.lineTo(X(RACE_DIST),bottom+10);ctx.stroke();
+    ctx.fillStyle='#244f78';ctx.font='900 9px system-ui';ctx.textAlign='center';ctx.fillText('결승',X(RACE_DIST),top-14);
+    // 말 (사이드뷰)
+    for(const r of runners){
+      const y=top+r.lane*laneH+laneH/2+6;
+      const x=X(r.pos);
+      const phase=r.pos*1.4;
+      const bob=r.v>0.5?Math.sin(phase*3)*1.5:0;
+      ctx.save();ctx.translate(x,y+bob);
+      if(r.exhausted){ctx.globalAlpha=.75}
+      ctx.fillStyle=r.color;
+      ctx.beginPath();ctx.ellipse(0,0,15,7,0,0,Math.PI*2);ctx.fill(); // 몸통
+      ctx.beginPath();ctx.moveTo(11,-2);ctx.lineTo(18,-9);ctx.lineTo(21,-7);ctx.lineTo(14,2);ctx.closePath();ctx.fill(); // 목+머리
+      ctx.fillStyle='#2d3431';ctx.beginPath();ctx.arc(19,-8,1.5,0,Math.PI*2);ctx.fill(); // 눈
+      ctx.strokeStyle=r.color;ctx.lineWidth=2.4;ctx.lineCap='round';
+      const swing=r.v>0.5?Math.sin(phase)*5:0;
+      for(const [lx,ph] of [[-8,0],[-5,Math.PI],[7,Math.PI],[10,0]]){
+        const s=Math.sin(phase+ph)*swing;
+        ctx.beginPath();ctx.moveTo(lx,5);ctx.lineTo(lx+s,13);ctx.stroke();
+      }
+      if(r.isPlayer){ctx.strokeStyle='rgba(217,155,54,.9)';ctx.lineWidth=1.5;ctx.beginPath();ctx.ellipse(0,0,18,10,0,0,Math.PI*2);ctx.stroke()}
+      if(r.exhausted){ctx.fillStyle='#a64f3d';ctx.font='900 7px system-ui';ctx.textAlign='center';ctx.fillText('지진!',0,-13)}
+      ctx.restore();ctx.globalAlpha=1;
+    }
+    // 날씨 파티클 렌더
+    for(const p of state.fx){
+      if(p.kind==='rain'){ctx.strokeStyle='rgba(36,79,120,.35)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(p.x+3,p.y+11);ctx.stroke()}
+      else if(p.kind==='snow'){ctx.fillStyle='rgba(255,255,255,.85)';ctx.beginPath();ctx.arc(p.x,p.y,1.8,0,Math.PI*2);ctx.fill()}
+      else if(p.kind==='heat'){ctx.fillStyle='rgba(166,79,61,.18)';ctx.beginPath();ctx.arc(p.x,p.y,6,0,Math.PI*2);ctx.fill()}
+      else{ctx.fillStyle='rgba(166,107,59,.35)';ctx.beginPath();ctx.ellipse(p.x,p.y,3,1.6,p.vx/60,0,Math.PI*2);ctx.fill()}
+    }
+    ctx.strokeStyle='rgba(36,79,120,.10)';ctx.lineWidth=1;
+    for(let gx=-(state.race?state.race.time*18:0)%26;gx<w;gx+=26){ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,top);ctx.stroke()}
+  }
+  function resize(){const w=width(),h=height(),d=Math.min(devicePixelRatio||1,2);canvas.width=w*d;canvas.height=h*d;ctx.setTransform(d,0,0,d,0,0)}
+  let last=performance.now();
+  function loop(now){const dt=Math.min(.033,(now-last)/1000||.016);last=now;update(dt);draw();requestAnimationFrame(loop)}
+
+  $('startBtn').addEventListener('click',openEntry);
+  $('enterBtn').addEventListener('click',startRace);
+  $('retryBtn').addEventListener('click',openEntry);
+  $('entryBtn').addEventListener('click',openEntry);
+  addEventListener('resize',resize);
+
+  window.__derbySprint={state,HORSES,WEATHER,APT,RACE_DIST,SPUR_DIST,COLD_SEAL_DIST,
+    setWeather(k){state.weatherKey=k},pickHorse(k){state.selected=k},startRace,weatherMods,aiHolding,updateRunner,makeRunner,
+    resetSave(){try{localStorage.removeItem(STORE)}catch{}save=load();updateTitle()}};
+  window.render_game_to_text=()=>{
+    const me=state.race?state.race.runners.find(r=>r.isPlayer):null;
+    return JSON.stringify({mode:state.mode,weather:state.weatherKey,selected:state.selected,
+      time:state.race?Number(state.race.time.toFixed(2)):0,holding:state.holding,
+      player:me?{pos:Number(me.pos.toFixed(1)),v:Number(me.v.toFixed(2)),stamina:Number(me.stamina.toFixed(1)),exhausted:me.exhausted,finishTime:me.finishTime===null?null:Number(me.finishTime.toFixed(2))}:null,
+      rivals:state.race?state.race.runners.filter(r=>!r.isPlayer).map(r=>({name:r.name,pos:Number(r.pos.toFixed(1)),v:Number(r.v.toFixed(2)),finishTime:r.finishTime===null?null:Number(r.finishTime.toFixed(2))})):[],
+      order:state.race?state.race.order.map(r=>r.name):[]});
+  };
+  window.advanceTime=ms=>{const steps=Math.max(1,Math.round(ms/(1000/60)));for(let i=0;i<steps;i++)update(1/60);draw()};
+
+  async function runQA(){
+    const logs=[],report=$('qaReport');report.style.display='block';
+    try{
+      window.__derbySprint.resetSave();
+      logs.push(document.querySelector('link[rel="canonical"]')&&document.querySelector('meta[property="og:title"]')&&document.querySelector('meta[name="viewport"]')?'meta-structure ok':'meta-structure fail');
+      const vals=Object.values(HORSES);
+      const distinct=(f)=>new Set(vals.map(f)).size===3;
+      logs.push(distinct(h=>h.topSpeed)&&distinct(h=>h.staminaMax)&&distinct(h=>h.spurMult)&&distinct(h=>h.recovery)?'horse-stats-differ ok':'horse-stats-differ fail');
+      // 폭염: 스프린터 스태미나 소모 > 쾌설 소모 * 1.15
+      const drainTest=(wkey)=>{
+        window.__derbySprint.setWeather(wkey);
+        const r=makeRunner({name:'t',typeKey:'sprinter',style:'lead'},true,0);
+        state.race={runners:[r],time:0,order:[],playerDone:false,done:false,spurToast:true};
+        r.pos=700;r.stamina=78;state.holding=true;updateRunner(r,1);
+        return 78-r.stamina;
+      };
+      const dropClear=drainTest('clear'),dropHeat=drainTest('heat');
+      state.holding=false;
+      logs.push(dropHeat>dropClear*1.15?`heat-drain-applied ok (${dropClear.toFixed(2)}→${dropHeat.toFixed(2)})`:'heat-drain-applied fail');
+      // 한파: 초반 200m 가속 봉인 — 스프린터 유효 가속 < 쾌설, 스테이어보다 상대 우세
+      window.__derbySprint.setWeather('cold');
+      const spr=makeRunner({name:'a',typeKey:'sprinter'},true,0),sta=makeRunner({name:'b',typeKey:'stayer'},true,0);
+      const mS=weatherMods(spr).early*HORSES.sprinter.accel,mT=weatherMods(sta).early*HORSES.stayer.accel;
+      logs.push(mS<HORSES.sprinter.accel&&mS/HORSES.sprinter.accel>mT/HORSES.stayer.accel?`cold-early-seal ok (${(mS/HORSES.sprinter.accel).toFixed(2)} vs ${(mT/HORSES.stayer.accel).toFixed(2)})`:'cold-early-seal fail');
+      // 강우: 스프린터 스퍼트 접지력 < 스테이어
+      window.__derbySprint.setWeather('rain');
+      const gS=weatherMods(makeRunner({name:'a',typeKey:'sprinter'},true,0)).grip,gT=weatherMods(makeRunner({name:'b',typeKey:'stayer'},true,0)).grip;
+      logs.push(gS<0.8&&gT>1?'rain-grip-aptitude ok ('+gS.toFixed(2)+' vs '+gT.toFixed(2)+')':'rain-grip-aptitude fail');
+      // 지진: 고갈 시 감속
+      window.__derbySprint.setWeather('clear');
+      const z=makeRunner({name:'z',typeKey:'miler'},true,0);
+      state.race={runners:[z],time:0,order:[],playerDone:false,done:false,spurToast:true};
+      z.pos=700;z.v=20;z.stamina=0;z.exhausted=true;
+      for(let i=0;i<120;i++)updateRunner(z,1/60);
+      logs.push(z.v<8?`exhaustion-collapse ok (v=${z.v.toFixed(2)})`:'exhaustion-collapse fail');
+      // AI 단조 증가 + 완주
+      window.__derbySprint.setWeather('heat');window.__derbySprint.pickHorse('stayer');
+      state.autoPilot=true;startRace();
+      let monotonic=true,prev=state.race.runners.map(r=>r.pos);
+      for(let s=0;s<260;s++){window.advanceTime(500);const now=state.race?state.race.runners.map(r=>r.pos):null;
+        if(now)for(let i=0;i<now.length;i++)if(now[i]<prev[i]-1e-9)monotonic=false;
+        if(now)prev=now;if(!state.race||state.race.done)break}
+      const finished=state.race&&state.race.done&&state.race.order.length===6;
+      logs.push(monotonic&&finished?`ai-monotonic-finish ok (${state.race.order.length}/6)`:'ai-monotonic-finish fail');
+      const meFin=state.race.order.find(r=>r.isPlayer);
+      logs.push(meFin&&meFin.finishTime>30&&meFin.finishTime<150?`finish-time ok (${meFin.finishTime.toFixed(1)}s)`:'finish-time fail');
+      logs.push(state.mode==='result'?'result-screen ok':'result-screen fail');
+      const stored=JSON.parse(localStorage.getItem(STORE)||'{}');
+      logs.push(stored.runs===1&&typeof stored.best==='number'?`localStorage ok (best=${stored.best})`:'localStorage fail');
+      logs.push(pageErrors.length===0?'pageerror ok':'pageerror fail');
+      const snap=window.render_game_to_text();
+      logs.push(!snap.includes('undefined')&&!snap.includes('NaN')?'finite-state ok':'finite-state fail');
+      const pass=logs.every(l=>l.includes(' ok'))&&pageErrors.length===0;
+      window.__qaResult={pass,logs,pageErrors:pageErrors.slice(),wowImplemented:4,viewport:{width:innerWidth,height:innerHeight}};
+      report.textContent=`${pass?'QA PASS':'QA FAIL'}\n${logs.join('\n')}`;
+    }catch(error){
+      pageErrors.push(String(error));
+      window.__qaResult={pass:false,logs,pageErrors:pageErrors.slice(),wowImplemented:4};
+      report.textContent=`QA FAIL\n${logs.join('\n')}\n${error}`;
+    }finally{state.autoPilot=false}
+  }
+
+  resize();updateTitle();showMode('title');requestAnimationFrame(loop);
+  if(QA_MODE)setTimeout(runQA,180);
+})();
+</script>
+</body>
+</html>

@@ -77,5 +77,5 @@
 
 ## 발행 검증
 
-- 커밋: (아래 기입)
-- 라이브 검증: `https://eastsea-blog.pages.dev/odds-rush/` HTTP 상태 — (아래 기입)
+- 커밋: `b4a8ca1623e8a27a79f819b6826d1277fe2e5c10` (master push, 2026-09-02)
+- 라이브 검증: `https://eastsea-blog.pages.dev/odds-rush/` HTTP **200** (2026-09-02 22:2x KST curl 확인)

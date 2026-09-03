@@ -25,7 +25,7 @@ draft: false
 | 4위 | [The largest electric aircraft just flew](https://www.youtube.com/watch?v=nM86DBOqgPM) | 92.0 |
 | 5위 | [K2 Horizon: A connected fleet of six open models](https://ifm.ai/blog/k2/) | 225.0 |
 
-> 상위 5위가 전원 교체되었다 — OpenAI GPT-6 Astra 공개가 950점으로 정상에 올랐고, Cerebras의 Qwen 3.8 27B 1,500 tok/s, 여섯 개 오픈 모델 연합舰队 K2 Horizon까지 AI 인퍼런스 뉴스가 3건을 차지했다. 점수-랭크 반전(1위 950 < 3위 1142, 2위 350 > 4위 92)은 HN의 시간감쇠 랭킹(score/(age+2)^gravity)에서 최신 글이 오래된 고득점 글보다 위로 오르는 정상 동작이므로 스냅샷 점수를 그대로 보존했다. 제목·URL은 조회 시점 스냅샷 DB 실측으로 매핑했다.
+> 상위 5위가 전원 교체되었다 — OpenAI GPT-6 Astra 공개가 950점으로 정상에 올랐고, Cerebras의 Qwen 3.8 27B 1,500 tok/s, 여섯 개 오픈 모델 연합 함대 K2 Horizon까지 AI 인퍼런스 뉴스가 3건을 차지했다. 점수-랭크 반전(1위 950 < 3위 1142, 2위 350 > 4위 92)은 HN의 시간감쇠 랭킹(score/(age+2)^gravity)에서 최신 글이 오래된 고득점 글보다 위로 오르는 정상 동작이므로 스냅샷 점수를 그대로 보존했다. 제목·URL은 조회 시점 스냅샷 DB 실측으로 매핑했다.
 
 ---
 

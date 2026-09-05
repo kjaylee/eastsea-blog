@@ -153,9 +153,14 @@ rsync -a --delete _posts/ posts/
 
 echo "✅ Done! Posts updated: $(cat posts.json | grep -c filename)"
 
-# --- D1 자동 동기화 (누락 포스트 감지 → INSERT) ---
-echo "🔄 Syncing posts to D1..."
-bash "$BLOG_DIR/scripts/sync-d1.sh" || echo "⚠️ D1 sync failed (non-fatal)"
+# --- D1 자동 동기화 (2026-09-06: 유실된 sync-d1.sh를 감사+백필 스크립트로 교체, 일기 017 이행) ---
+echo "🔄 Syncing posts to D1 (audit+backfill)..."
+D1_TOKEN="$(cat "$(dirname "$BLOG_DIR")/secrets/blog-api-token.txt" 2>/dev/null)"
+if [ -n "$D1_TOKEN" ] && [ -x "$BLOG_DIR/scripts/d1-sync-audit.sh" ]; then
+    BLOG_API_TOKEN="$D1_TOKEN" bash "$BLOG_DIR/scripts/d1-sync-audit.sh" || echo "⚠️ D1 sync failed (non-fatal)"
+else
+    echo "⚠️ D1 sync skipped: token or audit script missing"
+fi
 
 # --- 인사이트 자동 추출 (리서치 포스트에서 아이디어/액션 아이템 수집) ---
 EXTRACT_SCRIPT="$(dirname "$BLOG_DIR")/scripts/extract-insights.sh"

@@ -95,5 +95,5 @@
 
 ## 발행 검증
 
-- 커밋: (아래 기입)
-- 라이브 검증: `https://eastsea-blog.pages.dev/crown-quest/` HTTP 상태 — (아래 기입)
+- 커밋: `88d9102b` (master, 2026-09-08)
+- 라이브 검증: `https://eastsea-blog.pages.dev/crown-quest/` HTTP 상태 — **200** (2026-09-08, 배포 대기 후 첫 시도에서 확인)

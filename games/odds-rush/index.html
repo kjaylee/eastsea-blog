@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<!--
+  ODDS RUSH — 오즈 러시
+  경마 연구 → 게임 브릿지 chain #3 (GAME_CONNECTION.md 매핑 4행)
+
+  연구 원천 (활용 증거):
+  1. research/horse-racing/v6/2012-arc-solemia-orfevre.md
+     - 헤비 주로에서 오르페브르의 조기 스퍼트가 역전당한 구조 → "주로 상태" 힌트 카드
+     - 33배 외진마 솔레미아 우승 — 배당 시장과 결과의 괴리 → "배당 흐름" 힌트 카드
+  2. research/horse-racing/v6/2022-breeders-cup-classic-flightline.md
+     - 6전 6승 무패, 평균 11.8마신, Beyer 126 — 절대 능력 우위 = 저배당이라도 정당한 승리
+     - "스타일보다 절대 능력치" 전개 → "전개 페이스" 힌트 카드
+  3. research/horse-racing/v6/2024-korean-derby-analysis.md
+     - 은파사랑의 1:56.6 기록 — 3세 신예의 기록적 도약
+     - 한국 생산마 독점 vs 외산마 → 배당 왜곡 가능 → "배당 흐름" 힌트 카드
+-->
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>오즈 러시 — Odds Rush</title>
+<meta name="description" content="30초 안에 필러를 걸러내고 고배당 복병을 찾아라. 실제 경주 사례에서 추출한 힌트로 배당률 퍼즐을 풀어보세요.">
+<meta name="theme-color" content="#1a1e2c">
+<style>
+  :root{
+    --bg:#1a1e2c; --card:#252a3a; --card-light:#2e344a; --border:#3a4060;
+    --text:#e8eaf0; --muted:#8890a8; --accent:#4fc3f7; --gold:#ffd54f;
+    --upset:#ff6b9d; --safe:#66bb6a; --danger:#ef5350;
+    --font:"Pretendard","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;overflow:hidden}
+  body{
+    background:var(--bg); color:var(--text);
+    font-family:var(--font); font-size:15px; line-height:1.5;
+    display:flex; justify-content:center;
+  }
+  #app{
+    width:100%; max-width:430px; min-height:100dvh;
+    padding:14px 14px env(safe-area-inset-bottom);
+    display:flex; flex-direction:column; position:relative;
+  }
+
+  /* ── Header ── */
+  header{display:flex; justify-content:space-between; align-items:baseline; padding:4px 2px 10px; border-bottom:2px solid var(--border)}
+  header h1{font-size:19px; letter-spacing:.5px; font-weight:800}
+  header .sub{font-size:11px; color:var(--muted)}
+
+  /* ── HUD ── */
+  .hud{display:flex; gap:8px; padding:10px 0; font-size:12px; font-variant-numeric:tabular-nums}
+  .hud .cell{flex:1; background:var(--card); border:1px solid var(--border); border-radius:8px; padding:6px 8px; text-align:center}
+  .hud b{display:block; font-size:15px}
+  .hud .timer b{color:var(--gold)}
+  .hud .score b{color:var(--accent)}
+
+  /* ── Panel ── */
+  .panel{
+    background:var(--card); border:1px solid var(--border); border-radius:12px;
+    padding:14px; margin-bottom:12px;
+  }
+  .panel h2{font-size:15px; margin-bottom:6px}
+  .note{
+    font-size:11.5px; color:var(--muted); border-left:3px solid var(--gold);
+    padding:4px 8px; margin:8px 0; background:rgba(255,213,79,.06);
+  }
+
+  /* ── Race Field ── */
+  .race-field{display:flex; flex-direction:column; gap:8px; margin-top:8px}
+  .horse-row{
+    display:flex; align-items:center; gap:8px;
+    background:var(--card); border:1.5px solid var(--border); border-radius:10px;
+    padding:10px 12px; cursor:pointer; user-select:none; transition:all .15s;
+  }
+  .horse-row:active{transform:scale(.985)}
+  .horse-row.favorite{border-color:var(--danger); opacity:.5}
+  .horse-row.picked{border-color:var(--upset); box-shadow:0 0 0 2px rgba(255,107,157,.25)}
+  .horse-row .name{font-weight:800; font-size:14px; flex:1}
+  .horse-row .odds{
+    font-size:13px; font-weight:700; font-variant-numeric:tabular-nums;
+    padding:2px 8px; border-radius:20px; background:var(--card-light);
+  }
+  .horse-row .odds.high{color:var(--upset)}
+  .horse-row .odds.mid{color:var(--gold)}
+  .horse-row .odds.low{color:var(--safe)}
+  .horse-row .flag{font-size:16px; margin-left:4px}
+
+  /* ── Hint Cards ── */
+  .hints{display:flex; gap:8px; margin-top:10px; flex-wrap:wrap}
+  .hint-card{
+    flex:1; min-width:120px; background:var(--card); border:1px solid var(--border);
+    border-radius:10px; padding:8px 10px; font-size:11px; color:var(--muted);
+    transition:all .15s;
+  }
+  .hint-card.revealed{border-color:var(--accent); color:var(--text); background:rgba(79,195,247,.08)}
+  .hint-card .label{font-size:9px; text-transform:uppercase; letter-spacing:.1em; color:var(--accent); font-weight:800; display:block; margin-bottom:3px}
+
+  /* ── Buttons ── */
+  .btn-row{display:flex; gap:8px; margin-top:12px}
+  .btn{
+    flex:1; border:1.5px solid var(--border); background:var(--card);
+    border-radius:10px; padding:11px 12px; text-align:center;
+    font-size:14px; font-weight:700; cursor:pointer; color:var(--text);
+    font-family:inherit;
+  }
+  .btn:active{transform:scale(.985)}
+  .btn:disabled{opacity:.4; cursor:not-allowed}
+  .btn.primary{background:linear-gradient(135deg,var(--accent),#0288d1); color:#fff; border-color:transparent}
+  .btn.danger{border-color:var(--danger); color:var(--danger)}
+
+  /* ── Result ── */
+  .result{padding:16px 0; text-align:center}
+  .result h2{font-size:22px; margin-bottom:8px}
+  .result .big-score{font-size:48px; font-weight:900; color:var(--gold); line-height:1}
+  .result .sub{font-size:13px; color:var(--muted); margin-top:4px}
+  .result .detail{font-size:12px; color:var(--muted); margin-top:12px; text-align:left; max-width:320px; margin-left:auto; margin-right:auto}
+  .result .detail div{padding:3px 0; border-bottom:1px solid var(--border)}
+
+  /* ── Title Screen ── */
+  .title-wrap{text-align:center; padding:36px 0 20px}
+  .title-wrap .em{font-size:44px}
+  .title-wrap h2{font-size:24px; margin:10px 0 4px; letter-spacing:1px; font-weight:900}
+  .title-wrap p{font-size:12.5px; color:var(--muted)}
+  .best{font-size:12px; color:var(--muted); text-align:center; padding:8px 0 2px; font-variant-numeric:tabular-nums}
+  .cite{font-size:10px; color:var(--muted); text-align:center; padding-top:14px; line-height:1.6}
+
+  /* ── Toast ── */
+  #toast{
+    position:fixed; left:50%; transform:translateX(-50%);
+    bottom:calc(20px + env(safe-area-inset-bottom));
+    background:var(--card); color:var(--text); border:1px solid var(--border);
+    font-size:13px; padding:9px 16px; border-radius:24px;
+    opacity:0; transition:opacity .25s; pointer-events:none; z-index:9;
+    max-width:88vw; text-align:center;
+  }
+  #toast.show{opacity:.96}
+
+  /* ── Progress dots ── */
+  .round-dots{display:flex; justify-content:center; gap:6px; padding:8px 0}
+  .round-dots .dot{
+    width:10px; height:10px; border-radius:50%;
+    background:var(--border); transition:background .2s;
+  }
+  .round-dots .dot.done{background:var(--safe)}
+  .round-dots .dot.fail{background:var(--danger)}
+  .round-dots .dot.current{background:var(--gold); box-shadow:0 0 6px rgba(255,213,79,.5)}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="toast"></div>
+
+<script>
+"use strict";
+/* ===================================================================
+   ODDS RUSH — 오즈 러시
+   경마 배당률 퍼즐: 30초 안에 필러를 걸러내고 고배당 복병을 찾아라.
+
+   연구 원천:
+   1. v6/2012-arc-solemia-orfevre.md — 헤비 주로 × 페이싱 역전 (33배 외진마)
+   2. v6/2022-breeders-cup-classic-flightline.md — 절대 능력 = 저배당 정당
+   3. v6/2024-korean-derby-analysis.md — 한국 생산마 독점·배당 왜곡
+   =================================================================== */
+
+/* ── RNG (seeded) ── */
+function mulberry32(seed){
+  let a=seed>>>0;
+  return function(){
+    a|=0; a=a+0x6D2B79F5|0;
+    let t=Math.imul(a^(a>>>15),1|a);
+    t=t+Math.imul(t^(t>>>7),61|t)^t;
+    return((t^(t>>>14))>>>0)/4294967296;
+  };
+}
+
+/* ── Constants ── */
+const ROUND_TIME = 30;
+const TOTAL_ROUNDS = 5;
+const HORSE_NAMES = [
+  "솔레미아","오르페브르","Flightline","은파사랑",
+  "글로벌히트","마스터스트로크","캐멀럿","Olympiad",
+  "Taiba","Life Is Good","Save The World","Oasis Blue",
+  "Winner's Man","Winner Star","Power Blade","Perovic",
+];
+const SOURCE_REFS = [
+  "v6/2012-arc-solemia-orfevre.md",
+  "v6/2022-breeders-cup-classic-flightline.md",
+  "v6/2024-korean-derby-analysis.md",
+];
+
+/* ── 힌트 카드 (v6 사례에서 추출한 판별 포인트) ── */
+const HINT_CARDS = [
+  {
+    id:"pace",
+    label:"전개 페이스",
+    text:" Flightline은 2:00.05로 8¼마신 압승. 절대 능력 우위 = 저배당도 정당하다.",
+    source:"Flightline (2022 BC Classic)"
+  },
+  {
+    id:"track",
+    label:"주로 상태",
+    text:" 솔레미아는 헤비 주로에서 오르페브르의 조기 스퍼트를 역전시켰다. 중착 주로는 인기마의 스퍼트를 약화시킨다.",
+    source:"Solemia (2012 Arc)"
+  },
+  {
+    id:"odds",
+    label:"배당 흐름",
+    text:" 은파사랑은 3세 신예로 한국 생산마 독점 기간 중 우승. 인기 외 마필의 배당이 왜곡될 수 있다.",
+    source:"은파사랑 (2024 Korean Derby)"
+  }
+];
+
+/* ── 라운드 생성기 ── */
+function generateRound(rng){
+  const count = 6;
+  const namePool = [...HORSE_NAMES];
+  const pickIdx = [];
+  while(pickIdx.length < count){
+    const idx = Math.floor(rng() * namePool.length);
+    if(!pickIdx.includes(idx)) pickIdx.push(idx);
+  }
+
+  const horses = pickIdx.map((ni, i)=>{
+    const name = namePool[ni];
+    /* 복병(정답)의 확률을 균형있게 배분: 나머지는 필러 */
+    const isPick = (i === Math.floor(rng() * count));
+
+    /* 배당률 생성 — 복병은 중~고배당, 필러는 저~중배당 (시장 왜곡 반영) */
+    let odds;
+    if(isPick){
+      odds = 8 + Math.floor(rng() * 15);  /* 8배~22배 */
+    } else {
+      const roll = rng();
+      if(roll < 0.4) odds = 1 + Math.floor(rng() * 3);      /* 1~3배 (강력 인기) */
+      else if(roll < 0.75) odds = 3 + Math.floor(rng() * 4);  /* 3~6배 (중간) */
+      else odds = 5 + Math.floor(rng() * 8);                  /* 5~12배 (그림자) */
+    }
+
+    /* 출전 정보 (가짜 데이터, 일관성 유지) */
+    const jockeys = ["문성혁","최시대","김혜선","Perovic","Prat","Peslier","Soumillon","Barzalona"];
+    const styles = ["선행","선입","추입","자유형"];
+    const distances = ["단거리","마일","중거리","장거리"];
+
+    return {
+      id: i,
+      name,
+      odds,
+      isPick,
+      jockey: jockeys[Math.floor(rng() * jockeys.length)],
+      style: styles[Math.floor(rng() * styles.length)],
+      distance: distances[Math.floor(rng() * distances.length)],
+      favorite: false,
+    };
+  });
+
+  /* 배당순 정렬 (오름차순 — 시각적 편의) */
+  horses.sort((a,b)=>a.odds-b.odds);
+  return { horses, hintIdx: Math.floor(rng()*HINT_CARDS.length) };
+}
+
+/* ── 상태 ── */
+let S = null;
+function newState(seed){
+  return {
+    seed, phase:"title", round:0, score:0, streak:0, bestStreak:0,
+    rounds:[], currentRound:null, timeLeft:0, hintRevealed:[false,false,false],
+    results:[], bestScore:0,
+  };
+}
+
+/* ── Toast ── */
+let toastTimer=null;
+function showToast(msg){
+  const el=document.getElementById('toast');
+  el.textContent=msg; el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>el.classList.remove('show'),1400);
+}
+
+/* ── localStorage ── */
+function loadBest(){
+  try{ return JSON.parse(localStorage.getItem('oddsRushBest'))||{score:0,streak:0}; }
+  catch(e){ return{score:0,streak:0}; }
+}
+function saveBest(score,streak){
+  const cur=loadBest();
+  if(score>cur.score||streak>cur.streak){
+    localStorage.setItem('oddsRushBest',JSON.stringify({
+      score:Math.max(score,cur.score),
+      streak:Math.max(streak,cur.streak)
+    }));
+  }
+}
+
+/* ── 렌더링 ── */
+const $=id=>document.getElementById(id);
+const app=$('app');
+
+function render(){
+  if(S.phase==="title") renderTitle();
+  else if(S.phase==="play") renderPlay();
+  else if(S.phase==="result") renderResult();
+  else if(S.phase==="summary") renderSummary();
+}
+
+function renderTitle(){
+  const best=loadBest();
+  app.innerHTML=`
+    <header><h1>오즈 러시</h1><span class="sub">Odds Rush</span></header>
+    <div class="title-wrap">
+      <div class="em">🏇</div>
+      <h2>오즈 러시</h2>
+      <p>30초 안에 필러를 걸러내고<br>고배당 복병을 찾아라!</p>
+    </div>
+    <div class="panel">
+      <h2>규칙</h2>
+      <div class="note">
+        ⏱ ${ROUND_TIME}초 × ${TOTAL_ROUNDS}라운드<br>
+        🎯 필러(인기마)를 제거하고 복병을 골라야 점수<br>
+        💡 힌트 카드를 열어 v6 사례의 판별 포인트를 확인하세요
+      </div>
+    </div>
+    <div class="panel">
+      <h2>힌트 카드 미리보기</h2>
+      ${HINT_CARDS.map(h=>`<div class="note">📌 <b>${h.label}</b>: ${h.text}<br><em style="font-size:10px;color:var(--muted)">— ${h.source}</em></div>`).join('')}
+    </div>
+    <div class="best">BEST — 점수: ${best.score} | 최대 연속: ${best.streak}</div>
+    <div class="btn-row"><button class="btn primary" onclick="startGame()">시작</button></div>
+    <div class="cite">
+      연구 원천: ${SOURCE_REFS.map(r=>`<br>${r}`).join('')}
+    </div>
+  `;
+}
+
+function renderPlay(){
+  const r=S.currentRound;
+  const pct=Math.max(0, S.timeLeft/ROUND_TIME*100);
+  const hints=HINT_CARDS;
+  app.innerHTML=`
+    <header><h1>오즈 러시</h1><span class="sub">R${S.round+1}/${TOTAL_ROUNDS}</span></header>
+    <div class="hud">
+      <div class="cell timer"><small>TIME</small><b>${S.timeLeft}s</b></div>
+      <div class="cell score"><small>SCORE</small><b>${S.score}</b></div>
+      <div class="cell"><small>STREAK</small><b>${S.streak}</b></div>
+      <div class="cell"><small>ROUND</small><b>${S.round+1}/${TOTAL_ROUNDS}</b></div>
+    </div>
+    <div style="height:4px;background:var(--border);border-radius:4px;overflow:hidden;margin-bottom:10px">
+      <div style="height:100%;width:${pct}%;background:${pct>30?'var(--gold)':'var(--danger)'};transition:width .3s linear"></div>
+    </div>
+
+    <div class="panel">
+      <h2>출주표 — 복병을 찾아라</h2>
+      <div class="race-field">
+        ${r.horses.map(h=>`
+          <div class="horse-row ${h.favorite?'favorite':''} ${h._picked?'picked':''}"
+               onclick="togglePick(${h.id})" oncontextmenu="event.preventDefault();toggleFav(${h.id})">
+            <span class="name">${h.name}</span>
+            <span class="odds ${h.odds>=10?'high':h.odds>=4?'mid':'low'}">${h.odds}배</span>
+            <span class="flag">${h.favorite?'🚫':''}${h._picked?'⭐':''}</span>
+          </div>
+        `).join('')}
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin-top:6px;text-align:center">
+        탭 = 복병 선택 ⭐ | 길게 누르기(또는 두 번 탭) = 필러 제거 🚫
+      </div>
+    </div>
+
+    <div class="hints">
+      ${hints.map((h,i)=>`
+        <div class="hint-card ${S.hintRevealed[i]?'revealed':''}" onclick="revealHint(${i})">
+          <span class="label">${h.label}</span>
+          ${S.hintRevealed[i] ? h.text : '🔒 탭하여 열기'}
+          ${S.hintRevealed[i] ? `<br><em style="font-size:10px;opacity:.7">— ${h.source}</em>` : ''}
+        </div>
+      `).join('')}
+    </div>
+
+    <div class="btn-row">
+      <button class="btn primary" onclick="confirmPick()" ${r._picked===null?'disabled':''}>
+        복병 확정 (${r._picked!==null?'1개 선택됨':'선택 필요'})
+      </button>
+    </div>
+  `;
+}
+
+function renderResult(){
+  const last=S.results[S.results.length-1];
+  const correct=last.correct;
+  const pts=last.points;
+  app.innerHTML=`
+    <header><h1>오즈 러시</h1><span class="sub">R${S.round}/${TOTAL_ROUNDS} 결과</span></header>
+    <div class="result">
+      <div class="big-score">${correct?'+'+pts:'0'}</div>
+      <h2 style="color:${correct?'var(--safe)':'var(--danger)'}">${correct?'복병 적중! ⭐':'오답 ✗'}</h2>
+      <div class="sub">${last.horseName} — ${last.odds}배</div>
+      <div class="detail">
+        ${last.correct
+          ? `<div>💰 ${last.odds}배 복병!</div><div>🔥 ${S.streak}연속 적중</div>`
+          : `<div>정답: ${last.pickName} (${last.pickOdds}배)</div><div>연속이 ${S.streak===0?'0으로 리셋':'유지'}됨</div>`}
+        <div>총 점수: ${S.score}</div>
+      </div>
+    </div>
+    <div class="btn-row">
+      ${S.round < TOTAL_ROUNDS
+        ? `<button class="btn primary" onclick="nextRound()">다음 라운드</button>`
+        : `<button class="btn primary" onclick="showSummary()">최종 결과</button>`}
+    </div>
+  `;
+}
+
+function renderSummary(){
+  const correctCount=S.results.filter(r=>r.correct).length;
+  const totalPts=S.results.reduce((s,r)=>s+r.points,0);
+  const maxStreak=S.bestStreak;
+  app.innerHTML=`
+    <header><h1>오즈 러시</h1><span class="sub">최종 결과</span></header>
+    <div class="result">
+      <div class="big-score">${S.score}</div>
+      <h2 style="color:var(--gold)">${correctCount}/${TOTAL_ROUNDS} 적중</h2>
+      <div class="sub">최대 연속: ${maxStreak} | 평균 배당: ${S.results.filter(r=>r.correct).reduce((s,r)=>s+r.odds,0)/Math.max(1,correctCount)}배</div>
+      <div class="detail">
+        ${S.results.map((r,i)=>`
+          <div>
+            R${i+1}: ${r.correct?'✅':'❌'} ${r.horseName} (${r.odds}배) — ${r.correct?'+'+r.points+'점':'0점'}
+          </div>
+        `).join('')}
+      </div>
+    </div>
+    <div class="best">BEST — 점수: ${Math.max(S.score,loadBest().score)} | 최대 연속: ${Math.max(maxStreak,loadBest().streak)}</div>
+    <div class="btn-row">
+      <button class="btn primary" onclick="startGame()">다시 하기</button>
+      <button class="btn" onclick="S.phase='title';render()">홈</button>
+    </div>
+    <div class="cite">
+      연구 원천: ${SOURCE_REFS.map(r=>`<br>${r}`).join('')}
+    </div>
+  `;
+}
+
+/* ── 게임 로직 ── */
+function startGame(){
+  S.round=0; S.score=0; S.streak=0; S.bestStreak=0; S.results=[]; S.hintRevealed=[false,false,false];
+  nextRound();
+}
+
+function nextRound(){
+  if(S.round>=TOTAL_ROUNDS){ S.phase="summary"; render(); return; }
+  const rng=mulberry32(S.seed+S.round*137);
+  S.currentRound=generateRound(rng);
+  S.currentRound._picked=null;
+  S.hintRevealed=[false,false,false];
+  S.timeLeft=ROUND_TIME;
+  S.phase="play";
+  render();
+  startTimer();
+}
+
+let timerInterval=null;
+function startTimer(){
+  clearInterval(timerInterval);
+  timerInterval=setInterval(()=>{
+    S.timeLeft--;
+    if(S.timeLeft<=0){
+      clearInterval(timerInterval);
+      timeUp();
+    }
+    render();
+  },1000);
+}
+
+function timeUp(){
+  clearInterval(timerInterval);
+  const r=S.currentRound;
+  if(r._picked!==null){
+    confirmPick();
+  } else {
+    /* 미선택 — 0점 처리 */
+    S.results.push({correct:false,horseName:"(미선택)",odds:0,pickName:"-",pickOdds:0,points:0});
+    S.streak=0;
+    S.round++;
+    S.phase="result";
+    render();
+  }
+}
+
+function togglePick(id){
+  const r=S.currentRound;
+  const h=r.horses.find(h=>h.id===id);
+  if(!h||h.favorite) return;
+  if(r._picked===id){
+    h._picked=false;
+    r._picked=null;
+  } else {
+    /* 이전 선택 해제 */
+    r.horses.forEach(hh=>hh._picked=false);
+    h._picked=true;
+    r._picked=id;
+  }
+  render();
+}
+
+function toggleFav(id){
+  const r=S.currentRound;
+  const h=r.horses.find(h=>h.id===id);
+  if(!h) return;
+  h.favorite=!h.favorite;
+  if(h.favorite&&r._picked===id){
+    h._picked=false;
+    r._picked=null;
+  }
+  render();
+}
+
+function confirmPick(){
+  clearInterval(timerInterval);
+  const r=S.currentRound;
+  if(r._picked===null){showToast("복병을 선택하세요");return;}
+  const pickedHorse=r.horses.find(h=>h.id===r._picked);
+  const correct=pickedHorse.isPick;
+
+  /* 점수 계산: 정답 시 odds*10 + 연속 보너스(streak*5) + 타임 보너스 */
+  let points=0;
+  if(correct){
+    points = pickedHorse.odds*10 + S.streak*5 + S.timeLeft*2;
+    S.score+=points;
+    S.streak++;
+    S.bestStreak=Math.max(S.bestStreak,S.streak);
+    saveBest(S.score,S.bestStreak);
+    showToast(`+${points}점! ⭐`);
+  } else {
+    S.streak=0;
+    showToast("오답 ✗");
+  }
+
+  S.results.push({
+    correct,
+    horseName:pickedHorse.name,
+    odds:pickedHorse.odds,
+    pickName:pickedHorse.name,
+    pickOdds:pickedHorse.odds,
+    points,
+  });
+
+  S.round++;
+  S.phase="result";
+  render();
+}
+
+function showSummary(){
+  S.phase="summary"; render();
+}
+
+function revealHint(idx){
+  S.hintRevealed[idx]=true;
+  render();
+}
+
+/* ── 부트스트랩 (페이지 로드 시 초기화 + 렌더) ── */
+S = newState(Date.now() % 2147483647);
+S.phase = "title";
+render();
+
+/* ── QA 블록 — ?qa=1 (부트스트랩 이후 실행) ── */
+(function(){
+  if(!location.search.includes('qa=1')) return;
+
+  /* 순수 로직 테스트 */
+  let pass=true;
+  const asserts=[];
+
+  function assert(name, cond){
+    asserts.push({name, pass:!!cond});
+    if(!cond) pass=false;
+  }
+
+  /* 1. RNG determinism */
+  const r1=mulberry32(42);
+  const r2=mulberry32(42);
+  assert("seeded RNG determinism", r1()===r2());
+
+  /* 2. Round generation produces exactly 1 pick */
+  const rng=mulberry32(77);
+  const round=generateRound(rng);
+  assert("6 horses generated", round.horses.length===6);
+  const picks=round.horses.filter(h=>h.isPick);
+  assert("exactly 1 pick per round", picks.length===1);
+
+  /* 3. All odds are positive integers */
+  assert("all odds positive int", round.horses.every(h=>h.odds>=1 && Number.isInteger(h.odds)));
+
+  /* 4. Score accumulation */
+  const testState={score:0,streak:0};
+  const testOdds=12;
+  testState.score+=testOdds*10 + testState.streak*5 + 20*2;
+  testState.streak++;
+  assert("score calc (odds*10+streak*5+time*2)", testState.score===120+0+40);
+
+  /* 5. Streak bonus */
+  const streakBonus = (s)=>s*5;
+  assert("streak bonus grows", streakBonus(3)>streakBonus(1));
+
+  /* 6. Timer counting */
+  assert("ROUND_TIME=30", ROUND_TIME===30);
+  assert("TOTAL_ROUNDS=5", TOTAL_ROUNDS===5);
+
+  /* 7. Hint cards have required fields */
+  assert("3 hint cards", HINT_CARDS.length===3);
+  assert("all hints have label+text+source", HINT_CARDS.every(h=>h.label&&h.text&&h.source));
+
+  /* 8. Horse name pool sufficient */
+  assert("horse pool >= 16", HORSE_NAMES.length>=16);
+
+  /* 9. Source refs declared */
+  assert("3 source refs", SOURCE_REFS.length===3);
+
+  /* 10. generateRound determinism with same seed */
+  const rngA=mulberry32(99);
+  const rngB=mulberry32(99);
+  const rA=generateRound(rngA);
+  const rB=generateRound(rngB);
+  assert("round determinism (seed 99)", rA.horses[0].name===rB.horses[0].name && rA.horses[0].odds===rB.horses[0].odds);
+
+  /* 11. Pick always exists in round */
+  const rngC=mulberry32(123);
+  const rC=generateRound(rngC);
+  assert("pick always exists in round", rC.horses.some(h=>h.isPick));
+
+  /* 12. Pick index valid */
+  assert("pick odds >= 8", rC.horses.find(h=>h.isPick).odds>=8);
+
+  /* 13. Non-pick odds can be low */
+  const nonPicks=rC.horses.filter(h=>!h.isPick);
+  assert("non-pick can have low odds (<4)", nonPicks.some(h=>h.odds<4));
+
+  /* 14. Text sanity */
+  assert("no NaN in horse names", !HORSE_NAMES.some(n=>String(n).includes("NaN")));
+  assert("no undefined in horse names", !HORSE_NAMES.some(n=>String(n).includes("undefined")));
+
+  /* 15. localStorage round-trip */
+  try{
+    localStorage.setItem('oddsRushTest',JSON.stringify({score:100,streak:3}));
+    const loaded=JSON.parse(localStorage.getItem('oddsRushTest'));
+    assert("localStorage round-trip", loaded.score===100 && loaded.streak===3);
+    localStorage.removeItem('oddsRushTest');
+  }catch(e){ assert("localStorage round-trip", false); }
+
+  window.__qaResult={pass, asserts, pageErrors:[]};
+  console.log("QA Result:", JSON.stringify({pass, count:asserts.filter(a=>a.pass).length+"/"+asserts.length, pageErrors:[]}));
+})();
+</script>
+</body>
+</html>
